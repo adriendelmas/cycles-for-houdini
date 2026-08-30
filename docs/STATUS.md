@@ -47,6 +47,26 @@ Méthode : chaque résultat est contre-vérifié en rendant la même scène avec
 Karma. C'est ce qui a permis de distinguer un vrai bug du delegate (0003) d'une
 scène de test mal écrite.
 
+## Phase 4a — Nœuds Cycles natifs dans USD ✅
+
+![phase 4a](milestone-phase4-sdr.png)
+
+**161 nœuds Cycles** sont publiés dans le registre Sdr d'USD (patch 0004), avec
+leurs types, valeurs par défaut et options d'enum lues du registre Cycles.
+
+L'image ci-dessus est rendue depuis des matériaux authorés **en nœuds Cycles
+natifs** dans un fichier USD : `cycles_principled_bsdf` en or métallique
+(`metallic=1`, `roughness=0.12`) et en verre (`transmission_weight=1`,
+`ior=1.45`).
+
+Prérequis découvert : les meshes doivent porter le schéma appliqué
+`MaterialBindingAPI`. Sans lui, `rel material:binding` est silencieusement
+ignoré et la géométrie retombe sur `default_surface` — le rendu est correct
+mais sans aucun matériau, ce qui est trompeur.
+
+Reste à faire pour la phase 4 : la couche de traduction MaterialX
+(`src/mtlxCycles`), pas encore commencée.
+
 ## Anomalies ouvertes
 
 ### A1 — Surfaces implicites non supportées (confirmé)
@@ -78,3 +98,22 @@ RenderProduct + RenderVar → noir ; `husk:name = "color"` → OK.
 ### A3 — displayColor perdu sur les instances ✅ RÉSOLU (patch 0003)
 
 Index `_instances[0]` codé en dur. Voir `patches/README.md`.
+
+### A4 — Matériau à émission seule : invisible à la caméra
+
+Un `Material` dont le terminal `outputs:cycles:surface` est connecté
+directement à un nœud `cycles_emission` **émet bien de la lumière** (la lueur
+colorée est visible sur les surfaces alentour) mais l'objet lui-même est
+**totalement invisible aux rayons caméra**.
+
+La même émission passée par les entrées `emission_color` / `emission_strength`
+d'un `cycles_principled_bsdf` rend un objet lumineux visible, normalement.
+
+Le défaut est donc spécifique au nœud `emission` employé seul comme terminal de
+surface, et non à l'émission en général. Cause racine non déterminée — piste :
+la construction du graphe côté `material.cpp`, la fermeture d'émission étant
+visiblement prise en compte par l'arbre de lumières mais pas raccordée à la
+sortie de surface.
+
+Reproduction : `tests/usd/emit_test.usda` (invisible) contre
+`tests/usd/pemit_test.usda` (correct).

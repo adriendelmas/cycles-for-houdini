@@ -1,0 +1,187 @@
+#usda 1.0
+(
+    defaultPrim = "world"
+    metersPerUnit = 1
+    upAxis = "Y"
+    startTimeCode = 1
+    endTimeCode = 1
+)
+
+def Xform "world"
+{
+    def Camera "camera"
+    {
+        float focalLength = 30
+        float horizontalAperture = 36
+        float verticalAperture = 24
+        float2 clippingRange = (0.1, 1000)
+        matrix4d xformOp:transform = ( (1,0,0,0), (0,0.966,-0.259,0), (0,0.259,0.966,0), (0, 4, 11, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+
+    def Mesh "ground"
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(-20, 0, -20), (20, 0, -20), (20, 0, 20), (-20, 0, 20)]
+        color3f[] primvars:displayColor = [(0.4, 0.4, 0.42)]
+        uniform token subdivisionScheme = "none"
+    }
+
+    # --- subdivision Catmull-Clark : un cube doit devenir une sphere lisse ---
+    def Mesh "subdivcube" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </world/Materials/metal>
+        int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+        int[] faceVertexIndices = [0, 3, 2, 1,  4, 5, 6, 7,  3, 7, 6, 2,  0, 1, 5, 4,  0, 4, 7, 3,  1, 2, 6, 5]
+        point3f[] points = [(-1,-1,-1), (1,-1,-1), (1,-1,1), (-1,-1,1), (-1,1,-1), (1,1,-1), (1,1,1), (-1,1,1)]
+        color3f[] primvars:displayColor = [(0.9, 0.3, 0.15)]
+        uniform token subdivisionScheme = "catmullClark"
+        matrix4d xformOp:transform = ( (1,0,0,0), (0,1,0,0), (0,0,1,0), (-3.5, 1.2, 0, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+
+    # --- meme cube sans subdivision, pour comparaison directe ---
+    def Mesh "hardcube" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </world/Materials/emit>
+        int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+        int[] faceVertexIndices = [0, 3, 2, 1,  4, 5, 6, 7,  3, 7, 6, 2,  0, 1, 5, 4,  0, 4, 7, 3,  1, 2, 6, 5]
+        point3f[] points = [(-1,-1,-1), (1,-1,-1), (1,-1,1), (-1,-1,1), (-1,1,-1), (1,1,-1), (1,1,1), (-1,1,1)]
+        color3f[] primvars:displayColor = [(0.2, 0.5, 0.9)]
+        uniform token subdivisionScheme = "none"
+        matrix4d xformOp:transform = ( (1,0,0,0), (0,1,0,0), (0,0,1,0), (0, 1.2, 0, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+
+    # --- instancing : 5 copies d'un petit cube ---
+    def PointInstancer "instancer"
+    {
+        point3f[] positions = [(3, 0.4, 0), (4.2, 0.4, -1.2), (5.4, 0.4, 0.6), (3.6, 0.4, 1.8), (4.8, 0.4, 2.4)]
+        int[] protoIndices = [0, 0, 0, 0, 0]
+        rel prototypes = [</world/instancer/Prototypes/brick>]
+
+        def Scope "Prototypes"
+        {
+            def Mesh "brick" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+            )
+            {
+                rel material:binding = </world/Materials/emit>
+                int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+                int[] faceVertexIndices = [0, 3, 2, 1,  4, 5, 6, 7,  3, 7, 6, 2,  0, 1, 5, 4,  0, 4, 7, 3,  1, 2, 6, 5]
+                point3f[] points = [(-0.4,-0.4,-0.4), (0.4,-0.4,-0.4), (0.4,-0.4,0.4), (-0.4,-0.4,0.4), (-0.4,0.4,-0.4), (0.4,0.4,-0.4), (0.4,0.4,0.4), (-0.4,0.4,0.4)]
+                color3f[] primvars:displayColor = [(0.95, 0.8, 0.2)]
+                uniform token subdivisionScheme = "none"
+            }
+        }
+    }
+
+    # --- lumieres : rect, disk, sphere ---
+    def RectLight "keyRect"
+    {
+        float inputs:width = 4
+        float inputs:height = 4
+        float inputs:intensity = 12
+        color3f inputs:color = (1, 0.95, 0.85)
+        matrix4d xformOp:transform = ( (1,0,0,0), (0,0.5,-0.866,0), (0,0.866,0.5,0), (-4, 6, 5, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+
+    def DiskLight "fillDisk"
+    {
+        float inputs:radius = 2
+        float inputs:intensity = 8
+        color3f inputs:color = (0.4, 0.6, 1.0)
+        matrix4d xformOp:transform = ( (1,0,0,0), (0,0,-1,0), (0,1,0,0), (5, 5, 4, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+
+    def SphereLight "rimSphere"
+    {
+        float inputs:radius = 0.6
+        float inputs:intensity = 60
+        color3f inputs:color = (1.0, 0.4, 0.2)
+        matrix4d xformOp:transform = ( (1,0,0,0), (0,1,0,0), (0,0,1,0), (0, 2.5, -5, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+
+    def Scope "Materials"
+    {
+        def Material "metal"
+        {
+            token outputs:cycles:surface.connect = </world/Materials/metal/bsdf.outputs:BSDF>
+            def Shader "bsdf"
+            {
+                uniform token info:id = "cycles_principled_bsdf"
+                color3f inputs:base_color = (0.95, 0.75, 0.35)
+                float inputs:metallic = 1
+                float inputs:roughness = 0.12
+                token outputs:BSDF
+            }
+        }
+
+        def Material "glass"
+        {
+            token outputs:cycles:surface.connect = </world/Materials/glass/bsdf.outputs:BSDF>
+            def Shader "bsdf"
+            {
+                uniform token info:id = "cycles_principled_bsdf"
+                color3f inputs:base_color = (0.3, 0.75, 0.95)
+                float inputs:metallic = 0
+                float inputs:roughness = 0.05
+                float inputs:transmission_weight = 1
+                float inputs:ior = 1.45
+                token outputs:BSDF
+            }
+        }
+
+        def Material "emit"
+        {
+            token outputs:cycles:surface.connect = </world/Materials/emit/em.outputs:emission>
+            def Shader "em"
+            {
+                uniform token info:id = "cycles_emission"
+                color3f inputs:color = (1.0, 0.35, 0.1)
+                float inputs:strength = 1.2
+                token outputs:emission
+            }
+        }
+    }
+}
+
+def RenderSettings "rendersettings"
+{
+    rel camera = </world/camera>
+    uniform int2 resolution = (640, 360)
+    rel products = </Render/product>
+}
+
+def Scope "Render"
+{
+    def RenderProduct "product"
+    {
+        rel camera = </world/camera>
+        uniform token productType = "raster"
+        token productName = "phase4.exr"
+        rel orderedVars = [</Render/Vars/color>]
+    }
+
+    def Scope "Vars"
+    {
+        def RenderVar "color" (
+            apiSchemas = ["HuskRenderVarAPI"]
+        )
+        {
+            uniform token dataType = "color4f"
+            token driver:parameters:aov:husk:format = "color4f"
+            string driver:parameters:aov:husk:name = "C"
+            uniform string sourceName = "color"
+            uniform token sourceType = "raw"
+        }
+    }
+}

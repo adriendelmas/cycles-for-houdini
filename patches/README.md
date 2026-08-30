@@ -54,3 +54,32 @@ blanches, là où Karma les rend correctement toutes les 5. Après correctif, le
 deux moteurs concordent.
 
 **Candidat à une contribution amont.**
+
+## 0004 — Plugin Sdr : publier les nœuds Cycles dans le registre USD
+
+Ajoute `src/hydra/sdr_cycles.{h,cpp}` : un couple discovery + parser Sdr qui
+énumère `ccl::NodeType::type_names()` **au runtime** et publie chaque nœud de
+type `SHADER` dans le registre de définitions de shaders d'USD, sous
+l'identifiant `cycles_<nom>` — précisément ce que la traduction de matériaux du
+delegate accepte déjà (`material.cpp:442`).
+
+Choix d'implémentation :
+
+- **Runtime plutôt que génération de fichiers.** Les nœuds exposés sont
+  exactement ceux de la version de Cycles liée ; aucune désynchronisation
+  possible lors d'une mise à jour amont.
+- **Dans la DLL `hdCycles` existante**, déclaré dans le même `plugInfo.json`.
+  Évite de dupliquer les libs statiques Cycles et d'avoir deux registres de
+  nœuds dans le process. Les sources vont dans `SRC_HD_CYCLES_PLUGIN` (la lib
+  partagée) et non dans `cycles_hydra` (statique), sans quoi l'éditeur de liens
+  écarterait les `TF_REGISTRY_FUNCTION`.
+- `sdr` a dû être ajouté à `USD_LIBRARIES` dans `FindUSDHoudini.cmake`
+  (même omission que `hdsi`, cf. patch 0001).
+
+Piège rencontré : un résultat de découverte publié avec un `SdrVersion()` vide
+est parsable par identifiant mais **absent de l'énumération** du registre. Il
+faut une version valide marquée par défaut : `SdrVersion(1, 0).GetAsDefault()`.
+
+Vérifié : 161 nœuds Cycles enregistrés, avec types, valeurs par défaut et
+options d'enum correctes ; matériaux authorés en USD et rendus (métal, verre,
+émission).

@@ -1,0 +1,765 @@
+﻿husk.exe : ##################################################################
+At line:6 char:1
++ husk.exe --renderer HdCyclesPlugin --frame 1 --settings /rendersettin ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (###############...###############:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+#  CYCLES_LOGGING is overridden to 'true'.  Default is 'false'.  #
+##################################################################
+###########################################################################
+#  CYCLES_LOGGING_LEVEL is overridden to 'debug'.  Default is 'warning'.  #
+###########################################################################
+00:00.00 | Using AVX2 CPU kernels.
+00:00.01 | Using AVX2 CPU kernels.
+00:00.02 | Using tile size of (640, 360)
+00:00.02 | Adaptive sampling: automatic min samples = 64
+00:00.02 | Effective scene passes:
+00:00.02 | - type: combined, name: "C", mode: NOISY, is_written: True
+00:00.02 | - type: adaptive_aux_buffer, name: "", mode: NOISY, is_written: True
+00:00.02 | - type: sample_count, name: "", mode: NOISY, is_written: True
+00:00.02 | Requested features:
+00:00.02 | Use BSDF True
+00:00.02 | Use Emission True
+00:00.02 | Use Volume False
+00:00.02 | Use Bump False
+00:00.02 | Use Voronoi False
+00:00.02 | Use Shader Raytrace False
+00:00.02 | Use MNEE False
+00:00.02 | Use Transparent False
+00:00.02 | Use Denoising False
+00:00.02 | Use Path Tracing True
+00:00.02 | Use Hair False
+00:00.02 | Use Pointclouds False
+00:00.02 | Use Object Motion False
+00:00.02 | Use Baking False
+00:00.02 | Use Subsurface False
+00:00.02 | Use Volume False
+00:00.02 | Use Shadow Catcher False
+00:00.02 | Use Portal Node False
+00:00.02 | Total 11 shaders.
+00:00.02 | Compilation summary:
+00:00.02 | Compilation summary:
+00:00.02 | Shader name: default_background
+00:00.02 | Number of SVM nodes: 3
+00:00.02 | Peak stack usage:    0
+00:00.02 | Time (in seconds):
+00:00.02 | Generate:            0.000007
+00:00.02 |   Surface:           0.000005
+00:00.02 |   Bump:              0.000000
+00:00.02 |   Volume:            0.000001
+00:00.02 |   Displacement:      0.000002
+00:00.02 | Compilation summary:
+00:00.02 | Shader name: shader
+00:00.02 | Number of SVM nodes: 9
+00:00.02 | Peak stack usage:    0
+00:00.02 | Time (in seconds):
+00:00.02 | Generate:            0.000040
+00:00.02 |   Surface:           0.000020
+00:00.02 |   Bump:              0.000000
+00:00.02 |   Volume:            0.000001
+00:00.02 |   Displacement:      0.000019
+00:00.02 | Compilation summary:
+00:00.02 | Shader name: default_empty
+00:00.02 | Number of SVM nodes: 3
+00:00.02 | Peak stack usage:    0
+00:00.02 | Time (in seconds):
+00:00.02 | Generate:            0.000008
+00:00.02 |   Surface:           0.000006
+00:00.02 |   Bump:              0.000000
+00:00.02 |   Volume:            0.000001
+00:00.02 |   Displacement:      0.000001
+00:00.02 | Compilation summary:
+00:00.02 | Shader name: default_surface
+00:00.02 | Number of SVM nodes: 19
+00:00.02 | Peak stack usage:    6
+00:00.02 | Time (in seconds):
+00:00.02 | Generate:            0.000028
+00:00.02 |   Surface:           0.000027
+00:00.02 |   Bump:              0.000000
+00:00.02 |   Volume:            0.000001
+00:00.02 |   Displacement:      0.000001
+00:00.02 | Compilation summary:
+00:00.02 | Shader name: default_volume
+00:00.02 | Number of SVM nodes: 3
+00:00.02 | Peak stack usage:    0
+00:00.02 | Time (in seconds):
+00:00.02 | Generate:            0.000005
+00:00.02 |   Surface:           0.000004
+00:00.02 |   Bump:              0.000000
+00:00.02 |   Volume:            0.000001
+00:00.02 |   Displacement:      0.000001
+00:00.02 | Compilation summary:
+00:00.02 | Shader name: shader
+00:00.02 | Number of SVM nodes: 3
+00:00.02 | Peak stack usage:    0
+00:00.02 | Time (in seconds):
+00:00.02 | Generate:            0.000005
+00:00.02 |   Surface:           0.000003
+00:00.02 |   Bump:              0.000000
+00:00.02 |   Volume:            0.000001
+00:00.02 |   Displacement:      0.000001
+00:00.02 | Compilation summary:
+00:00.02 | Shader name: shader
+00:00.02 | Number of SVM nodes: 3
+00:00.02 | Peak stack usage:    0
+00:00.02 | Time (in seconds):
+00:00.02 | Generate:            0.000004
+00:00.02 |   Surface:           0.000003
+00:00.02 |   Bump:              0.000000
+00:00.02 |   Volume:            0.000000
+00:00.02 |   Displacement:      0.000001
+00:00.02 | Compilation summary:
+00:00.02 | Shader name: shader
+00:00.02 | Number of SVM nodes: 9
+00:00.02 | Peak stack usage:    0
+00:00.02 | Time (in seconds):
+00:00.02 | Generate:            0.000012
+00:00.02 |   Surface:           0.000010
+00:00.02 |   Bump:              0.000000
+00:00.02 |   Volume:            0.000001
+00:00.02 |   Displacement:      0.000002
+00:00.02 | Compilation summary:
+00:00.02 | Shader name: default_light
+00:00.02 | Number of SVM nodes: 3
+00:00.02 | Peak stack usage:    0
+00:00.02 | Time (in seconds):
+00:00.02 | Generate:            0.000005
+00:00.02 |   Surface:           0.000003
+00:00.02 |   Bump:              0.000000
+00:00.02 |   Volume:            0.000001
+00:00.02 |   Displacement:      0.000001
+00:00.02 | Compilation summary:
+00:00.02 | Shader name: shader
+00:00.02 | Number of SVM nodes: 3
+00:00.02 | Peak stack usage:    0
+00:00.02 | Time (in seconds):
+00:00.02 | Generate:            0.000009
+00:00.02 |   Surface:           0.000006
+00:00.02 |   Bump:              0.000000
+00:00.02 |   Volume:            0.000002
+00:00.02 |   Displacement:      0.000002
+00:00.02 | Shader name: shader
+00:00.02 | Number of SVM nodes: 9
+00:00.02 | Peak stack usage:    0
+00:00.02 | Time (in seconds):
+00:00.02 | Generate:            0.000016
+00:00.02 |   Surface:           0.000014
+00:00.02 |   Bump:              0.000000
+00:00.02 |   Volume:            0.000001
+00:00.02 |   Displacement:      0.000001
+00:00.03 | Shader manager updated 11 shaders in 0.0081282 seconds.
+00:00.03 | Global memory allocate: shaders, 352 bytes. (352B)
+00:00.03 | Global memory allocate: svm_nodes, 444 bytes. (444B)
+00:00.03 | Total 11 objects.
+00:00.03 | Global memory allocate: objects, 2,816 bytes. (2.75K)
+00:00.03 | Total 0 particle systems.
+00:00.03 | Global memory allocate: particles, 80 bytes. (80B)
+00:00.03 | Total 7 meshes.
+00:00.07 | Objects BVH build pool statistics:
+00:00.07 | Total time:    0.067962
+00:00.07 | Tasks handled: 7
+00:00.07 | Using EMBREE layout.
+00:00.07 | Global memory allocate: attributes_map, 1,120 bytes. (1.09K)
+00:00.07 | Global memory allocate: attributes_float, 32 bytes. (32B)
+00:00.07 | Global memory allocate: attributes_normal, 1,183,368 bytes. (1.13M)
+00:00.08 | Global memory allocate: tri_verts, 3,550,104 bytes. (3.38M)
+00:00.08 | Global memory allocate: objects, 2,816 bytes. (2.75K)
+00:00.08 | Global memory allocate: tri_shader, 2,366,664 bytes. (2.26M)
+00:00.08 | Global memory allocate: tri_vindex, 7,099,992 bytes. (6.77M)
+00:00.08 | Global memory allocate: object_flag, 44 bytes. (44B)
+00:00.08 | Global memory allocate: object_prim_offset, 44 bytes. (44B)
+00:00.08 | 0 volume octree(s) with a total of 0 nodes are built in 5e-07 seconds.
+00:00.08 | Total 10 lookup tables.
+00:00.08 | Global memory allocate: lookup_table, 97,280 bytes. (95.00K)
+00:00.08 | Total 3 lights.
+00:00.08 | Number of lights sent to the device: 3
+00:00.08 | Global memory allocate: lights, 336 bytes. (336B)
+00:00.08 | Use light tree with 3 emitters and 7 nodes.
+00:00.08 | Global memory allocate: light_tree_nodes, 560 bytes. (560B)
+00:00.08 | Global memory allocate: light_tree_emitters, 96 bytes. (96B)
+00:00.08 | Global memory allocate: light_to_tree, 44 bytes. (44B)
+00:00.08 | Global memory allocate: object_lookup_offset, 44 bytes. (44B)
+00:00.08 | Global memory allocate: sample_pattern_lut, 4,194,304 bytes. (4.00M)
+00:00.08 | Total 11 lookup tables.
+00:00.08 | Global memory allocate: lookup_table, 101,376 bytes. (99.00K)
+00:00.08 | Detected required volume stack size 2
+00:00.08 | System memory statistics after full device sync:
+00:00.08 |   Usage: 33,311,776 (31.77M)
+00:00.08 |   Peak: 33,413,152 (31.87M)
+00:00.08 | Adaptive sampling: automatic min samples = 64
+00:00.08 | Buffer allocate: RenderBuffers, 8,294,400 bytes. (7.91M)
+00:00.08 | Will path trace 1 samples at the resolution divider 1
+00:00.10 | Rendered 1 samples in 0.0155964 seconds (0.0155964 seconds per sample), occupancy: 1
+00:00.10 | Measured path tracing occupancy: 1
+00:00.10 | Average path tracing time: 0.0161305 seconds.
+00:00.10 | Invoke buffer update callback.
+00:00.10 | Average display update time: 0.001075 seconds.
+00:00.10 | Adaptive sampling: automatic min samples = 64
+00:00.10 | Will path trace 8 samples at the resolution divider 1
+00:00.15 | Rendered 8 samples in 0.0442921 seconds (0.00553651 seconds per sample), occupancy: 1
+00:00.15 | Measured path tracing occupancy: 1
+00:00.15 | Average path tracing time: 0.0067798 seconds.
+00:00.15 | Adaptive sampling: automatic min samples = 64
+00:00.15 | Will path trace 16 samples at the resolution divider 1
+00:00.24 | Rendered 16 samples in 0.0899389 seconds (0.00562118 seconds per sample), occupancy: 1
+00:00.24 | Measured path tracing occupancy: 1
+00:00.24 | Average path tracing time: 0.00606115 seconds.
+00:00.24 | Adaptive sampling: automatic min samples = 64
+00:00.24 | Will path trace 16 samples at the resolution divider 1
+00:00.33 | Rendered 16 samples in 0.0899705 seconds (0.00562316 seconds per sample), occupancy: 1
+00:00.33 | Measured path tracing occupancy: 1
+00:00.33 | Average path tracing time: 0.00590093 seconds.
+00:00.33 | Invoke buffer update callback.
+00:00.33 | Average display update time: 0.0006992 seconds.
+00:00.33 | Adaptive sampling: automatic min samples = 64
+00:00.33 | Will path trace 16 samples at the resolution divider 1
+00:00.42 | Rendered 16 samples in 0.0882543 seconds (0.00551589 seconds per sample), occupancy: 1
+00:00.42 | Measured path tracing occupancy: 1
+00:00.42 | Average path tracing time: 0.00580419 seconds.
+00:00.42 | Adaptive sampling: automatic min samples = 64
+00:00.42 | Will path trace 16 samples at the resolution divider 1
+00:00.51 | Rendered 16 samples in 0.0893075 seconds (0.00558172 seconds per sample), occupancy: 1
+00:00.51 | Measured path tracing occupancy: 1
+00:00.51 | Average path tracing time: 0.00576271 seconds.
+00:00.51 | Adaptive sampling: automatic min samples = 64
+00:00.51 | Will path trace 7 samples at the resolution divider 1
+00:00.55 | Rendered 7 samples in 0.0399179 seconds (0.00570256 seconds per sample), occupancy: 1
+00:00.55 | Measured path tracing occupancy: 1
+00:00.55 | Average path tracing time: 0.00576383 seconds.
+00:00.55 | Will filter adaptive stopping buffer, threshold 0.4
+00:00.55 | Average adaptive sampling filter  time: 7.24857e-05 seconds.
+00:00.55 | All pixels converged.
+00:00.55 | Continuing with lower threshold.
+00:00.55 | Will filter adaptive stopping buffer, threshold 0.2
+00:00.55 | Will re-calculate convergency flag for currently converged pixels.
+00:00.55 | Average adaptive sampling filter  time: 7.145e-05 seconds.
+00:00.55 | Rescheduling lower threshold.
+00:00.55 | Will filter adaptive stopping buffer, threshold 0.1
+00:00.55 | Will re-calculate convergency flag for currently converged pixels.
+00:00.55 | Average adaptive sampling filter  time: 7.3319e-05 seconds.
+00:00.55 | Invoke buffer update callback.
+00:00.55 | Average display update time: 0.000550667 seconds.
+00:00.55 | Adaptive sampling: automatic min samples = 64
+00:00.55 | Will path trace 16 samples at the resolution divider 1
+00:00.57 | Rendered 16 samples in 0.0191238 seconds (0.00119524 seconds per sample), occupancy: 1
+00:00.57 | Measured path tracing occupancy: 1
+00:00.57 | Average path tracing time: 0.00500868 seconds.
+00:00.57 | Will filter adaptive stopping buffer, threshold 0.1
+00:00.58 | Average adaptive sampling filter  time: 5.89297e-05 seconds.
+00:00.58 | Rescheduling lower threshold.
+00:00.58 | Will filter adaptive stopping buffer, threshold 0.05
+00:00.58 | Will re-calculate convergency flag for currently converged pixels.
+00:00.58 | Average adaptive sampling filter  time: 5.71434e-05 seconds.
+00:00.58 | Adaptive sampling: automatic min samples = 64
+00:00.58 | Will path trace 16 samples at the resolution divider 1
+00:00.64 | Rendered 16 samples in 0.0634187 seconds (0.00396367 seconds per sample), occupancy: 1
+00:00.64 | Measured path tracing occupancy: 1
+00:00.64 | Average path tracing time: 0.00486474 seconds.
+00:00.64 | Will filter adaptive stopping buffer, threshold 0.05
+00:00.64 | Average adaptive sampling filter  time: 5.21188e-05 seconds.
+00:00.64 | Adaptive sampling: automatic min samples = 64
+00:00.64 | Will path trace 16 samples at the resolution divider 1
+00:00.70 | Rendered 16 samples in 0.058742 seconds (0.00367138 seconds per sample), occupancy: 1
+00:00.70 | Measured path tracing occupancy: 1
+00:00.70 | Average path tracing time: 0.00471973 seconds.
+00:00.70 | Will filter adaptive stopping buffer, threshold 0.05
+00:00.70 | Average adaptive sampling filter  time: 4.95741e-05 seconds.
+00:00.70 | Adaptive sampling: automatic min samples = 64
+00:00.70 | Will path trace 16 samples at the resolution divider 1
+00:00.76 | Rendered 16 samples in 0.0544429 seconds (0.00340268 seconds per sample), occupancy: 1
+00:00.76 | Measured path tracing occupancy: 1
+00:00.76 | Average path tracing time: 0.00457693 seconds.
+00:00.76 | Will filter adaptive stopping buffer, threshold 0.05
+00:00.76 | Average adaptive sampling filter  time: 4.81129e-05 seconds.
+00:00.76 | Invoke buffer update callback.
+00:00.76 | Average display update time: 0.000479925 seconds.
+00:00.76 | Adaptive sampling: automatic min samples = 64
+00:00.76 | Will path trace 16 samples at the resolution divider 1
+00:00.81 | Rendered 16 samples in 0.0481396 seconds (0.00300872 seconds per sample), occupancy: 1
+00:00.81 | Measured path tracing occupancy: 1
+00:00.81 | Average path tracing time: 0.00442242 seconds.
+00:00.81 | Will filter adaptive stopping buffer, threshold 0.05
+00:00.81 | Average adaptive sampling filter  time: 4.68308e-05 seconds.
+00:00.81 | Adaptive sampling: automatic min samples = 64
+00:00.81 | Will path trace 16 samples at the resolution divider 1
+00:00.86 | Rendered 16 samples in 0.042785 seconds (0.00267406 seconds per sample), occupancy: 1
+00:00.86 | Measured path tracing occupancy: 1
+00:00.86 | Average path tracing time: 0.00426831 seconds.
+00:00.86 | Will filter adaptive stopping buffer, threshold 0.05
+00:00.86 | Average adaptive sampling filter  time: 4.54917e-05 seconds.
+00:00.86 | Rescheduling lower threshold.
+00:00.86 | Will filter adaptive stopping buffer, threshold 0.05
+00:00.86 | Will re-calculate convergency flag for currently converged pixels.
+00:00.86 | Average adaptive sampling filter  time: 4.58631e-05 seconds.
+00:00.86 | Adaptive sampling: automatic min samples = 64
+00:00.86 | Will path trace 16 samples at the resolution divider 1
+00:00.90 | Rendered 16 samples in 0.0387131 seconds (0.00241957 seconds per sample), occupancy: 1
+00:00.90 | Measured path tracing occupancy: 1
+00:00.90 | Average path tracing time: 0.00411801 seconds.
+00:00.90 | Will filter adaptive stopping buffer, threshold 0.05
+00:00.90 | Average adaptive sampling filter  time: 4.51339e-05 seconds.
+00:00.90 | Rescheduling is not possible: final threshold is reached.
+00:00.90 | Adaptive sampling: automatic min samples = 64
+00:00.90 | Will path trace 16 samples at the resolution divider 1
+00:00.94 | Rendered 16 samples in 0.0354054 seconds (0.00221284 seconds per sample), occupancy: 1
+00:00.94 | Measured path tracing occupancy: 1
+00:00.94 | Average path tracing time: 0.00397438 seconds.
+00:00.94 | Will filter adaptive stopping buffer, threshold 0.05
+00:00.94 | Average adaptive sampling filter  time: 4.47492e-05 seconds.
+00:00.94 | Rescheduling is not possible: final threshold is reached.
+00:00.94 | Invoke buffer update callback.
+00:00.94 | Average display update time: 0.00043588 seconds.
+00:00.94 | Adaptive sampling: automatic min samples = 64
+00:00.94 | Will path trace 16 samples at the resolution divider 1
+00:00.97 | Rendered 16 samples in 0.0322478 seconds (0.00201549 seconds per sample), occupancy: 1
+00:00.97 | Measured path tracing occupancy: 1
+00:00.97 | Average path tracing time: 0.00383624 seconds.
+00:00.97 | Will filter adaptive stopping buffer, threshold 0.05
+00:00.97 | Average adaptive sampling filter  time: 4.4402e-05 seconds.
+00:00.97 | Rescheduling is not possible: final threshold is reached.
+00:00.97 | Adaptive sampling: automatic min samples = 64
+00:00.97 | Will path trace 16 samples at the resolution divider 1
+00:01.00 | Rendered 16 samples in 0.0307721 seconds (0.00192326 seconds per sample), occupancy: 1
+00:01.00 | Measured path tracing occupancy: 1
+00:01.00 | Average path tracing time: 0.00371125 seconds.
+00:01.00 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.01 | Average adaptive sampling filter  time: 4.57573e-05 seconds.
+00:01.01 | Rescheduling is not possible: final threshold is reached.
+00:01.01 | Adaptive sampling: automatic min samples = 64
+00:01.01 | Will path trace 16 samples at the resolution divider 1
+00:01.03 | Rendered 16 samples in 0.0261363 seconds (0.00163352 seconds per sample), occupancy: 1
+00:01.03 | Measured path tracing occupancy: 1
+00:01.03 | Average path tracing time: 0.00358397 seconds.
+00:01.03 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.03 | Average adaptive sampling filter  time: 4.519e-05 seconds.
+00:01.03 | Rescheduling is not possible: final threshold is reached.
+00:01.03 | Adaptive sampling: automatic min samples = 64
+00:01.04 | Will path trace 16 samples at the resolution divider 1
+00:01.06 | Rendered 16 samples in 0.0237272 seconds (0.00148295 seconds per sample), occupancy: 1
+00:01.06 | Measured path tracing occupancy: 1
+00:01.06 | Average path tracing time: 0.00346213 seconds.
+00:01.06 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.06 | Average adaptive sampling filter  time: 4.49698e-05 seconds.
+00:01.06 | Rescheduling is not possible: final threshold is reached.
+00:01.06 | Adaptive sampling: automatic min samples = 64
+00:01.06 | Will path trace 16 samples at the resolution divider 1
+00:01.08 | Rendered 16 samples in 0.0214671 seconds (0.00134169 seconds per sample), occupancy: 1
+00:01.08 | Measured path tracing occupancy: 1
+00:01.08 | Average path tracing time: 0.00334559 seconds.
+00:01.08 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.08 | Average adaptive sampling filter  time: 4.44307e-05 seconds.
+00:01.08 | Rescheduling is not possible: final threshold is reached.
+00:01.08 | Invoke buffer update callback.
+00:01.09 | Average display update time: 0.0004043 seconds.
+00:01.09 | Adaptive sampling: automatic min samples = 64
+00:01.09 | Will path trace 16 samples at the resolution divider 1
+00:01.11 | Rendered 16 samples in 0.0201503 seconds (0.00125939 seconds per sample), occupancy: 1
+00:01.11 | Measured path tracing occupancy: 1
+00:01.11 | Average path tracing time: 0.00323778 seconds.
+00:01.11 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.11 | Average adaptive sampling filter  time: 4.47199e-05 seconds.
+00:01.11 | Rescheduling is not possible: final threshold is reached.
+00:01.11 | Adaptive sampling: automatic min samples = 64
+00:01.11 | Will path trace 16 samples at the resolution divider 1
+00:01.13 | Rendered 16 samples in 0.0173235 seconds (0.00108272 seconds per sample), occupancy: 1
+00:01.13 | Measured path tracing occupancy: 1
+00:01.13 | Average path tracing time: 0.00313164 seconds.
+00:01.13 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.13 | Average adaptive sampling filter  time: 4.44625e-05 seconds.
+00:01.13 | Rescheduling is not possible: final threshold is reached.
+00:01.13 | Adaptive sampling: automatic min samples = 64
+00:01.13 | Will path trace 16 samples at the resolution divider 1
+00:01.14 | Rendered 16 samples in 0.0163143 seconds (0.00101964 seconds per sample), occupancy: 1
+00:01.15 | Measured path tracing occupancy: 1
+00:01.15 | Average path tracing time: 0.00303289 seconds.
+00:01.15 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.15 | Average adaptive sampling filter  time: 4.38511e-05 seconds.
+00:01.15 | Rescheduling is not possible: final threshold is reached.
+00:01.15 | Adaptive sampling: automatic min samples = 64
+00:01.15 | Will path trace 16 samples at the resolution divider 1
+00:01.16 | Rendered 16 samples in 0.0158904 seconds (0.00099315 seconds per sample), occupancy: 1
+00:01.16 | Measured path tracing occupancy: 1
+00:01.16 | Average path tracing time: 0.00294164 seconds.
+00:01.16 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.16 | Average adaptive sampling filter  time: 4.34572e-05 seconds.
+00:01.16 | Rescheduling is not possible: final threshold is reached.
+00:01.16 | Adaptive sampling: automatic min samples = 64
+00:01.16 | Will path trace 16 samples at the resolution divider 1
+00:01.18 | Rendered 16 samples in 0.0141774 seconds (0.000886088 seconds per sample), occupancy: 1
+00:01.18 | Measured path tracing occupancy: 1
+00:01.18 | Average path tracing time: 0.00285366 seconds.
+00:01.18 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.18 | Average adaptive sampling filter  time: 4.32305e-05 seconds.
+00:01.18 | Rescheduling is not possible: final threshold is reached.
+00:01.18 | Adaptive sampling: automatic min samples = 64
+00:01.18 | Will path trace 16 samples at the resolution divider 1
+00:01.19 | Rendered 16 samples in 0.0131731 seconds (0.000823319 seconds per sample), occupancy: 1
+00:01.20 | Measured path tracing occupancy: 1
+00:01.20 | Average path tracing time: 0.0027702 seconds.
+00:01.20 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.20 | Average adaptive sampling filter  time: 4.25613e-05 seconds.
+00:01.20 | Rescheduling is not possible: final threshold is reached.
+00:01.20 | Adaptive sampling: automatic min samples = 64
+00:01.20 | Will path trace 16 samples at the resolution divider 1
+00:01.21 | Rendered 16 samples in 0.0120235 seconds (0.000751469 seconds per sample), occupancy: 1
+00:01.21 | Measured path tracing occupancy: 1
+00:01.21 | Average path tracing time: 0.0026906 seconds.
+00:01.21 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.21 | Average adaptive sampling filter  time: 4.2456e-05 seconds.
+00:01.21 | Rescheduling is not possible: final threshold is reached.
+00:01.21 | Adaptive sampling: automatic min samples = 64
+00:01.21 | Will path trace 16 samples at the resolution divider 1
+00:01.22 | Rendered 16 samples in 0.0119652 seconds (0.000747825 seconds per sample), occupancy: 1
+00:01.22 | Measured path tracing occupancy: 1
+00:01.22 | Average path tracing time: 0.00261741 seconds.
+00:01.22 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.23 | Average adaptive sampling filter  time: 4.25692e-05 seconds.
+00:01.23 | Rescheduling is not possible: final threshold is reached.
+00:01.23 | Adaptive sampling: automatic min samples = 64
+00:01.23 | Will path trace 16 samples at the resolution divider 1
+00:01.24 | Rendered 16 samples in 0.0114784 seconds (0.0007174 seconds per sample), occupancy: 1
+00:01.24 | Measured path tracing occupancy: 1
+00:01.24 | Average path tracing time: 0.00254822 seconds.
+00:01.24 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.24 | Average adaptive sampling filter  time: 4.23104e-05 seconds.
+00:01.24 | Rescheduling is not possible: final threshold is reached.
+00:01.24 | Adaptive sampling: automatic min samples = 64
+00:01.24 | Will path trace 16 samples at the resolution divider 1
+00:01.25 | Rendered 16 samples in 0.0097489 seconds (0.000609306 seconds per sample), occupancy: 1
+00:01.25 | Measured path tracing occupancy: 1
+00:01.25 | Average path tracing time: 0.00248027 seconds.
+00:01.25 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.25 | Average adaptive sampling filter  time: 4.17812e-05 seconds.
+00:01.25 | Rescheduling is not possible: final threshold is reached.
+00:01.25 | Adaptive sampling: automatic min samples = 64
+00:01.25 | Will path trace 16 samples at the resolution divider 1
+00:01.26 | Rendered 16 samples in 0.0090986 seconds (0.000568662 seconds per sample), occupancy: 1
+00:01.26 | Measured path tracing occupancy: 1
+00:01.26 | Average path tracing time: 0.00241535 seconds.
+00:01.26 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.26 | Average adaptive sampling filter  time: 4.15886e-05 seconds.
+00:01.26 | Rescheduling is not possible: final threshold is reached.
+00:01.26 | Adaptive sampling: automatic min samples = 64
+00:01.26 | Will path trace 16 samples at the resolution divider 1
+00:01.27 | Rendered 16 samples in 0.0095802 seconds (0.000598762 seconds per sample), occupancy: 1
+00:01.27 | Measured path tracing occupancy: 1
+00:01.27 | Average path tracing time: 0.00235581 seconds.
+00:01.27 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.27 | Average adaptive sampling filter  time: 4.14177e-05 seconds.
+00:01.27 | Rescheduling is not possible: final threshold is reached.
+00:01.27 | Adaptive sampling: automatic min samples = 64
+00:01.28 | Will path trace 16 samples at the resolution divider 1
+00:01.28 | Rendered 16 samples in 0.0089549 seconds (0.000559681 seconds per sample), occupancy: 1
+00:01.28 | Measured path tracing occupancy: 1
+00:01.28 | Average path tracing time: 0.00229885 seconds.
+00:01.28 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.29 | Average adaptive sampling filter  time: 4.11548e-05 seconds.
+00:01.29 | Rescheduling is not possible: final threshold is reached.
+00:01.29 | Adaptive sampling: automatic min samples = 64
+00:01.29 | Will path trace 16 samples at the resolution divider 1
+00:01.30 | Rendered 16 samples in 0.0090627 seconds (0.000566419 seconds per sample), occupancy: 1
+00:01.30 | Measured path tracing occupancy: 1
+00:01.30 | Average path tracing time: 0.00224561 seconds.
+00:01.30 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.30 | Average adaptive sampling filter  time: 4.06619e-05 seconds.
+00:01.30 | Rescheduling is not possible: final threshold is reached.
+00:01.30 | Adaptive sampling: automatic min samples = 64
+00:01.30 | Will path trace 16 samples at the resolution divider 1
+00:01.31 | Rendered 16 samples in 0.0086222 seconds (0.000538887 seconds per sample), occupancy: 1
+00:01.31 | Measured path tracing occupancy: 1
+00:01.31 | Average path tracing time: 0.0021948 seconds.
+00:01.31 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.31 | Average adaptive sampling filter  time: 4.08371e-05 seconds.
+00:01.31 | Rescheduling is not possible: final threshold is reached.
+00:01.31 | Adaptive sampling: automatic min samples = 64
+00:01.31 | Will path trace 16 samples at the resolution divider 1
+00:01.32 | Rendered 16 samples in 0.0069539 seconds (0.000434619 seconds per sample), occupancy: 1
+00:01.32 | Measured path tracing occupancy: 1
+00:01.32 | Average path tracing time: 0.00214415 seconds.
+00:01.32 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.32 | Average adaptive sampling filter  time: 4.05354e-05 seconds.
+00:01.32 | Rescheduling is not possible: final threshold is reached.
+00:01.32 | Adaptive sampling: automatic min samples = 64
+00:01.32 | Will path trace 16 samples at the resolution divider 1
+00:01.33 | Rendered 16 samples in 0.0075961 seconds (0.000474756 seconds per sample), occupancy: 1
+00:01.33 | Measured path tracing occupancy: 1
+00:01.33 | Average path tracing time: 0.00209741 seconds.
+00:01.33 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.33 | Average adaptive sampling filter  time: 4.03893e-05 seconds.
+00:01.33 | Rescheduling is not possible: final threshold is reached.
+00:01.33 | Adaptive sampling: automatic min samples = 64
+00:01.33 | Will path trace 16 samples at the resolution divider 1
+00:01.33 | Rendered 16 samples in 0.0069242 seconds (0.000432762 seconds per sample), occupancy: 1
+00:01.34 | Measured path tracing occupancy: 1
+00:01.34 | Average path tracing time: 0.00205202 seconds.
+00:01.34 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.34 | Average adaptive sampling filter  time: 4.00885e-05 seconds.
+00:01.34 | Rescheduling is not possible: final threshold is reached.
+00:01.34 | Adaptive sampling: automatic min samples = 64
+00:01.34 | Will path trace 16 samples at the resolution divider 1
+00:01.34 | Rendered 16 samples in 0.0059629 seconds (0.000372681 seconds per sample), occupancy: 1
+00:01.34 | Measured path tracing occupancy: 1
+00:01.34 | Average path tracing time: 0.00200752 seconds.
+00:01.34 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.34 | Average adaptive sampling filter  time: 3.99216e-05 seconds.
+00:01.34 | Rescheduling is not possible: final threshold is reached.
+00:01.34 | Invoke buffer update callback.
+00:01.35 | Average display update time: 0.000378843 seconds.
+00:01.35 | Adaptive sampling: automatic min samples = 64
+00:01.35 | Will path trace 16 samples at the resolution divider 1
+00:01.35 | Rendered 16 samples in 0.00549 seconds (0.000343125 seconds per sample), occupancy: 1
+00:01.35 | Measured path tracing occupancy: 1
+00:01.35 | Average path tracing time: 0.0019646 seconds.
+00:01.35 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.35 | Average adaptive sampling filter  time: 3.9615e-05 seconds.
+00:01.35 | Rescheduling is not possible: final threshold is reached.
+00:01.35 | Adaptive sampling: automatic min samples = 64
+00:01.35 | Will path trace 16 samples at the resolution divider 1
+00:01.36 | Rendered 16 samples in 0.005649 seconds (0.000353062 seconds per sample), occupancy: 1
+00:01.36 | Measured path tracing occupancy: 1
+00:01.36 | Average path tracing time: 0.00192408 seconds.
+00:01.36 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.36 | Average adaptive sampling filter  time: 3.97228e-05 seconds.
+00:01.36 | Rescheduling is not possible: final threshold is reached.
+00:01.36 | Adaptive sampling: automatic min samples = 64
+00:01.36 | Will path trace 16 samples at the resolution divider 1
+00:01.37 | Rendered 16 samples in 0.0054602 seconds (0.000341262 seconds per sample), occupancy: 1
+00:01.37 | Measured path tracing occupancy: 1
+00:01.37 | Average path tracing time: 0.00188512 seconds.
+00:01.37 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.37 | Average adaptive sampling filter  time: 3.96501e-05 seconds.
+00:01.37 | Rescheduling is not possible: final threshold is reached.
+00:01.37 | Adaptive sampling: automatic min samples = 64
+00:01.37 | Will path trace 16 samples at the resolution divider 1
+00:01.37 | Rendered 16 samples in 0.0051652 seconds (0.000322825 seconds per sample), occupancy: 1
+00:01.37 | Measured path tracing occupancy: 1
+00:01.37 | Average path tracing time: 0.00184782 seconds.
+00:01.38 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.38 | Average adaptive sampling filter  time: 3.95259e-05 seconds.
+00:01.38 | Rescheduling is not possible: final threshold is reached.
+00:01.38 | Adaptive sampling: automatic min samples = 64
+00:01.38 | Will path trace 16 samples at the resolution divider 1
+00:01.38 | Rendered 16 samples in 0.0052589 seconds (0.000328681 seconds per sample), occupancy: 1
+00:01.38 | Measured path tracing occupancy: 1
+00:01.38 | Average path tracing time: 0.00181243 seconds.
+00:01.38 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.38 | Average adaptive sampling filter  time: 3.95304e-05 seconds.
+00:01.38 | Rescheduling is not possible: final threshold is reached.
+00:01.38 | Adaptive sampling: automatic min samples = 64
+00:01.38 | Will path trace 16 samples at the resolution divider 1
+00:01.39 | Rendered 16 samples in 0.0050126 seconds (0.000313288 seconds per sample), occupancy: 1
+00:01.39 | Measured path tracing occupancy: 1
+00:01.39 | Average path tracing time: 0.00177833 seconds.
+00:01.39 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.39 | Average adaptive sampling filter  time: 3.96396e-05 seconds.
+00:01.39 | Rescheduling is not possible: final threshold is reached.
+00:01.39 | Adaptive sampling: automatic min samples = 64
+00:01.39 | Will path trace 16 samples at the resolution divider 1
+00:01.40 | Rendered 16 samples in 0.0050759 seconds (0.000317244 seconds per sample), occupancy: 1
+00:01.40 | Measured path tracing occupancy: 1
+00:01.40 | Average path tracing time: 0.00174584 seconds.
+00:01.40 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.40 | Average adaptive sampling filter  time: 3.95628e-05 seconds.
+00:01.40 | Rescheduling is not possible: final threshold is reached.
+00:01.40 | Adaptive sampling: automatic min samples = 64
+00:01.40 | Will path trace 16 samples at the resolution divider 1
+00:01.40 | Rendered 16 samples in 0.0042673 seconds (0.000266706 seconds per sample), occupancy: 1
+00:01.40 | Measured path tracing occupancy: 1
+00:01.40 | Average path tracing time: 0.00171369 seconds.
+00:01.40 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.41 | Average adaptive sampling filter  time: 3.94677e-05 seconds.
+00:01.41 | Rescheduling is not possible: final threshold is reached.
+00:01.41 | Adaptive sampling: automatic min samples = 64
+00:01.41 | Will path trace 16 samples at the resolution divider 1
+00:01.41 | Rendered 16 samples in 0.0045565 seconds (0.000284781 seconds per sample), occupancy: 1
+00:01.41 | Measured path tracing occupancy: 1
+00:01.41 | Average path tracing time: 0.00168333 seconds.
+00:01.41 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.41 | Average adaptive sampling filter  time: 3.96302e-05 seconds.
+00:01.41 | Rescheduling is not possible: final threshold is reached.
+00:01.41 | Adaptive sampling: automatic min samples = 64
+00:01.41 | Will path trace 16 samples at the resolution divider 1
+00:01.42 | Rendered 16 samples in 0.0042842 seconds (0.000267763 seconds per sample), occupancy: 1
+00:01.42 | Measured path tracing occupancy: 1
+00:01.42 | Average path tracing time: 0.00165381 seconds.
+00:01.42 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.42 | Average adaptive sampling filter  time: 3.98959e-05 seconds.
+00:01.42 | Rescheduling is not possible: final threshold is reached.
+00:01.42 | Adaptive sampling: automatic min samples = 64
+00:01.42 | Will path trace 16 samples at the resolution divider 1
+00:01.42 | Rendered 16 samples in 0.0039724 seconds (0.000248275 seconds per sample), occupancy: 1
+00:01.42 | Measured path tracing occupancy: 1
+00:01.43 | Average path tracing time: 0.00162528 seconds.
+00:01.43 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.43 | Average adaptive sampling filter  time: 3.98977e-05 seconds.
+00:01.43 | Rescheduling is not possible: final threshold is reached.
+00:01.43 | Adaptive sampling: automatic min samples = 64
+00:01.43 | Will path trace 16 samples at the resolution divider 1
+00:01.43 | Rendered 16 samples in 0.0039018 seconds (0.000243862 seconds per sample), occupancy: 1
+00:01.43 | Measured path tracing occupancy: 1
+00:01.43 | Average path tracing time: 0.00159759 seconds.
+00:01.43 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.43 | Average adaptive sampling filter  time: 3.98433e-05 seconds.
+00:01.43 | Rescheduling is not possible: final threshold is reached.
+00:01.43 | Adaptive sampling: automatic min samples = 64
+00:01.43 | Will path trace 16 samples at the resolution divider 1
+00:01.44 | Rendered 16 samples in 0.0040882 seconds (0.000255512 seconds per sample), occupancy: 1
+00:01.44 | Measured path tracing occupancy: 1
+00:01.44 | Average path tracing time: 0.00157136 seconds.
+00:01.44 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.44 | Average adaptive sampling filter  time: 3.98587e-05 seconds.
+00:01.44 | Rescheduling is not possible: final threshold is reached.
+00:01.44 | Adaptive sampling: automatic min samples = 64
+00:01.44 | Will path trace 16 samples at the resolution divider 1
+00:01.44 | Rendered 16 samples in 0.0036491 seconds (0.000228069 seconds per sample), occupancy: 1
+00:01.44 | Measured path tracing occupancy: 1
+00:01.44 | Average path tracing time: 0.00154565 seconds.
+00:01.44 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.44 | Average adaptive sampling filter  time: 3.99141e-05 seconds.
+00:01.45 | Rescheduling is not possible: final threshold is reached.
+00:01.45 | Adaptive sampling: automatic min samples = 64
+00:01.45 | Will path trace 16 samples at the resolution divider 1
+00:01.45 | Rendered 16 samples in 0.0037263 seconds (0.000232894 seconds per sample), occupancy: 1
+00:01.45 | Measured path tracing occupancy: 1
+00:01.45 | Average path tracing time: 0.00152095 seconds.
+00:01.45 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.45 | Average adaptive sampling filter  time: 3.98209e-05 seconds.
+00:01.45 | Rescheduling is not possible: final threshold is reached.
+00:01.45 | Adaptive sampling: automatic min samples = 64
+00:01.45 | Will path trace 16 samples at the resolution divider 1
+00:01.46 | Rendered 16 samples in 0.0037045 seconds (0.000231531 seconds per sample), occupancy: 1
+00:01.46 | Measured path tracing occupancy: 1
+00:01.46 | Average path tracing time: 0.00149724 seconds.
+00:01.46 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.46 | Average adaptive sampling filter  time: 3.98615e-05 seconds.
+00:01.46 | Rescheduling is not possible: final threshold is reached.
+00:01.46 | Adaptive sampling: automatic min samples = 64
+00:01.46 | Will path trace 16 samples at the resolution divider 1
+00:01.46 | Rendered 16 samples in 0.0036698 seconds (0.000229363 seconds per sample), occupancy: 1
+00:01.46 | Measured path tracing occupancy: 1
+00:01.46 | Average path tracing time: 0.00147424 seconds.
+00:01.46 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.46 | Average adaptive sampling filter  time: 3.99263e-05 seconds.
+00:01.46 | Rescheduling is not possible: final threshold is reached.
+00:01.46 | Adaptive sampling: automatic min samples = 64
+00:01.46 | Will path trace 16 samples at the resolution divider 1
+00:01.47 | Rendered 16 samples in 0.0029925 seconds (0.000187031 seconds per sample), occupancy: 1
+00:01.47 | Measured path tracing occupancy: 1
+00:01.47 | Average path tracing time: 0.0014514 seconds.
+00:01.47 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.47 | Average adaptive sampling filter  time: 3.97688e-05 seconds.
+00:01.47 | Rescheduling is not possible: final threshold is reached.
+00:01.47 | Adaptive sampling: automatic min samples = 64
+00:01.47 | Will path trace 16 samples at the resolution divider 1
+00:01.47 | Rendered 16 samples in 0.0033846 seconds (0.000211538 seconds per sample), occupancy: 1
+00:01.47 | Measured path tracing occupancy: 1
+00:01.47 | Average path tracing time: 0.00142982 seconds.
+00:01.47 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.47 | Average adaptive sampling filter  time: 3.98704e-05 seconds.
+00:01.47 | Rescheduling is not possible: final threshold is reached.
+00:01.48 | Adaptive sampling: automatic min samples = 64
+00:01.48 | Will path trace 16 samples at the resolution divider 1
+00:01.48 | Rendered 16 samples in 0.0031083 seconds (0.000194269 seconds per sample), occupancy: 1
+00:01.48 | Measured path tracing occupancy: 1
+00:01.48 | Average path tracing time: 0.00140869 seconds.
+00:01.48 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.48 | Average adaptive sampling filter  time: 4.00132e-05 seconds.
+00:01.48 | Rescheduling is not possible: final threshold is reached.
+00:01.48 | Adaptive sampling: automatic min samples = 64
+00:01.48 | Will path trace 16 samples at the resolution divider 1
+00:01.48 | Rendered 16 samples in 0.003206 seconds (0.000200375 seconds per sample), occupancy: 1
+00:01.48 | Measured path tracing occupancy: 1
+00:01.48 | Average path tracing time: 0.00138834 seconds.
+00:01.49 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.49 | Average adaptive sampling filter  time: 3.9909e-05 seconds.
+00:01.49 | Rescheduling is not possible: final threshold is reached.
+00:01.49 | Adaptive sampling: automatic min samples = 64
+00:01.49 | Will path trace 16 samples at the resolution divider 1
+00:01.49 | Rendered 16 samples in 0.0027449 seconds (0.000171556 seconds per sample), occupancy: 1
+00:01.49 | Measured path tracing occupancy: 1
+00:01.49 | Average path tracing time: 0.00136828 seconds.
+00:01.49 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.49 | Average adaptive sampling filter  time: 3.9905e-05 seconds.
+00:01.49 | Rescheduling is not possible: final threshold is reached.
+00:01.49 | Adaptive sampling: automatic min samples = 64
+00:01.49 | Will path trace 16 samples at the resolution divider 1
+00:01.49 | Rendered 16 samples in 0.002697 seconds (0.000168562 seconds per sample), occupancy: 1
+00:01.50 | Measured path tracing occupancy: 1
+00:01.50 | Average path tracing time: 0.001349 seconds.
+00:01.50 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.50 | Average adaptive sampling filter  time: 3.97348e-05 seconds.
+00:01.50 | Rescheduling is not possible: final threshold is reached.
+00:01.50 | Adaptive sampling: automatic min samples = 64
+00:01.50 | Will path trace 16 samples at the resolution divider 1
+00:01.50 | Rendered 16 samples in 0.0029609 seconds (0.000185056 seconds per sample), occupancy: 1
+00:01.50 | Measured path tracing occupancy: 1
+00:01.50 | Average path tracing time: 0.00133042 seconds.
+00:01.50 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.50 | Average adaptive sampling filter  time: 3.96476e-05 seconds.
+00:01.50 | Rescheduling is not possible: final threshold is reached.
+00:01.50 | Adaptive sampling: automatic min samples = 64
+00:01.50 | Will path trace 16 samples at the resolution divider 1
+00:01.50 | Rendered 16 samples in 0.0021407 seconds (0.000133794 seconds per sample), occupancy: 1
+00:01.50 | Measured path tracing occupancy: 1
+00:01.50 | Average path tracing time: 0.00131155 seconds.
+00:01.50 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.51 | Average adaptive sampling filter  time: 3.94322e-05 seconds.
+00:01.51 | Rescheduling is not possible: final threshold is reached.
+00:01.51 | Adaptive sampling: automatic min samples = 64
+00:01.51 | Will path trace 16 samples at the resolution divider 1
+00:01.51 | Rendered 16 samples in 0.0024246 seconds (0.000151537 seconds per sample), occupancy: 1
+00:01.51 | Measured path tracing occupancy: 1
+00:01.51 | Average path tracing time: 0.00129355 seconds.
+00:01.51 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.51 | Average adaptive sampling filter  time: 3.9389e-05 seconds.
+00:01.51 | Rescheduling is not possible: final threshold is reached.
+00:01.51 | Adaptive sampling: automatic min samples = 64
+00:01.51 | Will path trace 16 samples at the resolution divider 1
+00:01.51 | Rendered 16 samples in 0.0023006 seconds (0.000143788 seconds per sample), occupancy: 1
+00:01.51 | Measured path tracing occupancy: 1
+00:01.51 | Average path tracing time: 0.00127601 seconds.
+00:01.51 | Will filter adaptive stopping buffer, threshold 0.05
+00:01.51 | Average adaptive sampling filter  time: 3.93113e-05 seconds.
+00:01.51 | Rescheduling is not possible: final threshold is reached.
+00:01.51 | Write tile result.
+00:01.51 | Write tile result via buffer write callback.
+00:01.51 | Invoke buffer update callback.
+00:01.51 | Average display update time: 0.000361075 seconds.
+00:01.52 | Adaptive sampling: automatic min samples = 64
+00:01.52 | Rendering in main loop is done in 1.43344 seconds.
+00:01.52 | Full path tracing report:
+00:01.52 | 
+00:01.52 | Path tracing on: AMD Ryzen Threadripper PRO 3995WX 64-Cores (CPU) (128 threads) [CPU]
+00:01.52 |                      Hardware Ray-Tracing: Off
+00:01.52 | 
+00:01.52 | Render Scheduler Summary
+00:01.52 | 
+00:01.52 | Mode: Interactive
+00:01.52 | Resolution: 640x360
+00:01.52 | 
+00:01.52 | Adaptive sampling:
+00:01.52 |   Use: True
+00:01.52 |   Step: 16
+00:01.52 |   Min Samples: 64
+00:01.52 |   Threshold: 0.050000
+00:01.52 | 
+00:01.52 | Denoiser:
+00:01.52 |   Use: False
+00:01.52 | 
+00:01.52 | Time (in seconds):
+00:01.52 |                                        Wall              Average
+00:01.52 |           Path Tracing             1.306635             0.001276
+00:01.52 |        Adaptive Filter             0.039193             0.000039
+00:01.52 |         Display Update             0.002889             0.000361
+00:01.52 | 
+00:01.52 |   Total: 1.348717
+00:01.52 | 
+00:01.52 | Rendered 1024 samples in 1.433153 seconds
+00:01.70 | Adaptive sampling: automatic min samples = 64
+00:01.71 | Rendering was canceled.
+00:01.71 | Schedule work for cancel.
+00:01.71 | Invoke buffer update callback.
+00:01.71 | Average display update time: 0.000373556 seconds.
+00:01.71 | Handle full-frame render buffer work.
+00:01.71 | No tiles on disk.
