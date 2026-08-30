@@ -1,0 +1,68 @@
+#usda 1.0
+(
+    defaultPrim = "world"
+    metersPerUnit = 1
+    upAxis = "Y"
+    startTimeCode = 1
+    endTimeCode = 1
+)
+
+def Xform "world"
+{
+    def Camera "camera"
+    {
+        float focalLength = 35
+        float horizontalAperture = 36
+        float verticalAperture = 24
+        float2 clippingRange = (0.1, 1000)
+        matrix4d xformOp:transform = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 2, 8, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+
+    def Sphere "ball"
+    {
+        double radius = 1
+        color3f[] primvars:displayColor = [(0.8, 0.25, 0.1)]
+        matrix4d xformOp:transform = ( (1,0,0,0), (0,1,0,0), (0,0,1,0), (0, 1, 0, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+
+    def Mesh "ground"
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(-10, 0, -10), (10, 0, -10), (10, 0, 10), (-10, 0, 10)]
+        color3f[] primvars:displayColor = [(0.5, 0.5, 0.5)]
+        uniform token subdivisionScheme = "none"
+    }
+
+    def DistantLight "sun"
+    {
+        float inputs:intensity = 3
+        float inputs:angle = 1
+        matrix4d xformOp:transform = ( (1,0,0,0), (0,0.7071,-0.7071,0), (0,0.7071,0.7071,0), (0,0,0,1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+
+    def DomeLight "sky"
+    {
+        float inputs:intensity = 0.5
+        color3f inputs:color = (0.3, 0.45, 0.7)
+    }
+
+    def Mesh "box"
+    {
+        int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+        int[] faceVertexIndices = [0, 3, 2, 1,  4, 5, 6, 7,  3, 7, 6, 2,  0, 1, 5, 4,  0, 4, 7, 3,  1, 2, 6, 5]
+        point3f[] points = [(-0.75, 0.25, -0.75), (0.75, 0.25, -0.75), (0.75, 0.25, 0.75), (-0.75, 0.25, 0.75), (-0.75, 1.75, -0.75), (0.75, 1.75, -0.75), (0.75, 1.75, 0.75), (-0.75, 1.75, 0.75)]
+        color3f[] primvars:displayColor = [(0.85, 0.2, 0.1)]
+        uniform token subdivisionScheme = "none"
+    }
+}
+
+
+def RenderSettings "rendersettings"
+{
+    rel camera = </world/camera>
+    uniform int2 resolution = (480, 270)
+}

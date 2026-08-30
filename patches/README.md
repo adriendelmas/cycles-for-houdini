@@ -19,3 +19,21 @@ Correctif : ajouter `hdsi` à la liste.
 
 **Candidat à une contribution amont** — le bug touche toute build Houdini, pas
 seulement la 22.
+
+## 0002 — Hydra : accepter les noms d'AOV Houdini
+
+husk transmet la valeur de `driver:parameters:aov:husk:name` d'un `UsdRenderVar`
+comme **nom d'AOV Hydra**, au lieu d'un token `HdAovTokens` standard. La
+convention Houdini pour la beauty étant `"C"`, un RenderVar authoré normalement
+dans Solaris arrive non mappé dans `kAovToPass` (`src/hydra/session.cpp`).
+
+Le binding est alors ignoré, ce qui laisse le render pass **sans aucun binding** —
+et `HdCyclesRenderPass::IsConverged()` itérant sur une liste vide retourne `true`
+immédiatement. husk écrit donc une frame vierge : **image noire, sans erreur ni
+avertissement**.
+
+Correctif : ajouter les orthographes Houdini comme alias (`C`, `Cf`, `N`, `P`,
+`Pz`).
+
+**Candidat à une contribution amont** — sans ça, hdCycles est inutilisable avec
+des render settings Houdini standards, ce qui est le cas d'usage principal.
