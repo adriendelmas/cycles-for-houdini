@@ -117,3 +117,38 @@ sortie de surface.
 
 Reproduction : `tests/usd/emit_test.usda` (invisible) contre
 `tests/usd/pemit_test.usda` (correct).
+
+### A5 — Un matériau MaterialX fait planter husk (bloquant pour la phase 4b)
+
+**La simple présence d'un matériau MaterialX dans le stage provoque un
+segmentation fault**, que le matériau soit lié à une géométrie ou non.
+
+Reproduction minimale : `tests/usd/repro_mtlx_crash.usda` — 80 lignes, un
+`Material` avec `outputs:mtlx:surface` connecté à un
+`ND_standard_surface_surfaceshader`, non lié.
+
+- hdCycles : segfault
+- Karma, même fichier : exit 0
+
+La pile situe le crash dans `hdCycles.dll` sous `HdRenderIndex::SyncAll`, donc
+pendant la synchronisation du sprim matériau.
+
+Écarté pendant le diagnostic :
+
+- Ce n'est **pas** le chemin générique des types de nœuds inconnus : un
+  `info:id` bidon sur un terminal `cycles:surface` passe sans crash (exit 0).
+- Ce n'est **pas** le déréférencement non gardé de `node->type` dans la boucle
+  des terminaux : la garde a été ajoutée (patch 0005) et le crash persiste.
+- Ce n'est **pas** lié au binding : le crash survient sans aucune liaison.
+
+Cause racine non localisée — il faudrait une pile symbolisée (les PDB Release
+existent dans `external/cycles/build`).
+
+**Conséquence : la phase 4b (traduction MaterialX) est bloquée tant que ce
+crash n'est pas corrigé.** Il faut le résoudre avant d'écrire quoi que ce soit
+dans `src/mtlxCycles`, puisque tout test de la couche de traduction passera par
+un matériau MaterialX dans le stage.
+
+À noter aussi : `GetMaterialRenderContexts()` ne déclare que `cycles`. Pour
+recevoir des réseaux MaterialX il faudra y ajouter `mtlx` — mais c'est la suite
+du travail, pas la cause du crash.

@@ -1,0 +1,15 @@
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index f4e85f0e..9469c90b 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -500,6 +500,10 @@ void HdCyclesMaterial::PopulateShaderGraph(HdMaterialNetworkSchema network)
+     }
+ 
+     ShaderNode *const node = nodeIt->second.node;
++    if (node == nullptr || node->type == nullptr) {
++      TF_RUNTIME_ERROR("Terminal node '%s' has no Cycles node", upstreamNodePath.GetText());
++      continue;
++    }
+ 
+     const char *inputName = nullptr;
+     const char *outputName = nullptr;

@@ -83,3 +83,13 @@ faut une version valide marquée par défaut : `SdrVersion(1, 0).GetAsDefault()`
 Vérifié : 161 nœuds Cycles enregistrés, avec types, valeurs par défaut et
 options d'enum correctes ; matériaux authorés en USD et rendus (métal, verre,
 émission).
+
+## 0005 — Material : garde sur un nœud de terminal nul
+
+Dans la boucle des terminaux de `material.cpp`, le nœud récupéré était
+déréférencé sans vérification (`node->type->name`) alors que tout le reste de
+la fonction teste ses pointeurs.
+
+Correctif défensif. **Note : cela ne corrige pas le crash MaterialX (A5)** —
+la garde a été ajoutée pendant le diagnostic et le crash persiste, donc il est
+ailleurs. Elle reste juste en soi et est conservée.
