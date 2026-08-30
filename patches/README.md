@@ -84,12 +84,33 @@ Vérifié : 161 nœuds Cycles enregistrés, avec types, valeurs par défaut et
 options d'enum correctes ; matériaux authorés en USD et rendus (métal, verre,
 émission).
 
-## 0005 — Material : garde sur un nœud de terminal nul
+## 0005 — Crash : un Shader sans graphe fait tomber l'hôte
 
-Dans la boucle des terminaux de `material.cpp`, le nœud récupéré était
-déréférencé sans vérification (`node->type->name`) alors que tout le reste de
-la fonction teste ses pointeurs.
+`Shader::tag_update()` (`src/scene/shader.cpp`) lit `graph->output()` sans
+vérifier `graph`. Or `HdCyclesMaterial` crée son `Shader` dans `Initialize()`
+mais ne lui assigne un graphe que dans `PopulateShaderGraph()`, appelé
+uniquement si une network de matériau a pu être lue.
 
-Correctif défensif. **Note : cela ne corrige pas le crash MaterialX (A5)** —
-la garde a été ajoutée pendant le diagnostic et le crash persiste, donc il est
-ailleurs. Elle reste juste en soi et est conservée.
+Enchaînement du crash :
+
+1. Matériau dont la network n'est pas lisible par le delegate — typiquement un
+   matériau **MaterialX**, qui n'expose ni réseau `cycles` ni réseau universel.
+2. `Sync()` part dans la branche d'erreur ; `set_graph()` n'est jamais appelé.
+3. Le `Shader` fraîchement créé est marqué modifié, donc `tag_update()` est
+   appelé.
+4. `graph->output()` sur un pointeur nul -> **segmentation fault**.
+
+Conséquence : la simple présence d'un matériau MaterialX dans le stage faisait
+planter husk, que le matériau soit lié à une géométrie ou non.
+
+Correctif : semer un `ShaderGraph` vide dans `Initialize()`, pour qu'un `Shader`
+ne soit jamais dans un état invalide. Inclut aussi une garde sur le nœud de
+terminal nul dans la boucle des terminaux, ajoutée pendant le diagnostic et
+juste en soi.
+
+Vérifié : le repro minimal et la scène MaterialX liée passent en exit 0, et les
+matériaux Cycles natifs rendent des statistiques inchangées.
+
+**Candidat à une contribution amont**, et le plus important des cinq : c'est un
+crash de l'application hôte, atteignable par n'importe quelle scène USD
+contenant un matériau que le delegate ne sait pas lire.

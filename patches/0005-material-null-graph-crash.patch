@@ -1,0 +1,30 @@
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index f4e85f0e..25b2c0be 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -500,6 +500,10 @@ void HdCyclesMaterial::PopulateShaderGraph(HdMaterialNetworkSchema network)
+     }
+ 
+     ShaderNode *const node = nodeIt->second.node;
++    if (node == nullptr || node->type == nullptr) {
++      TF_RUNTIME_ERROR("Terminal node '%s' has no Cycles node", upstreamNodePath.GetText());
++      continue;
++    }
+ 
+     const char *inputName = nullptr;
+     const char *outputName = nullptr;
+@@ -597,6 +601,14 @@ void HdCyclesMaterial::Initialize(HdRenderParam *renderParam)
+   const SceneLock lock(renderParam);
+ 
+   _shader = lock.scene->create_node<Shader>();
++
++  /* A Shader with no graph is not a valid state: Shader::tag_update() reads
++   * graph->output() unconditionally. Sync() only assigns a graph once it has
++   * managed to read a material network, so a material whose network cannot be
++   * read - a MaterialX-only network, for instance - would otherwise reach
++   * tag_update() with a null graph and crash the host. Seed an empty graph so
++   * the shader is always well-formed. */
++  _shader->set_graph(make_unique<ShaderGraph>());
+ }
+ 
+ HDCYCLES_NAMESPACE_CLOSE_SCOPE

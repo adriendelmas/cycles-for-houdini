@@ -1,0 +1,86 @@
+MSBuild version 17.14.51+25f168cee for .NET Framework
+
+  1>Checking Build System
+  extern_hipew.vcxproj -> E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\lib\Release\extern_hipew.lib
+  extern_cuew.vcxproj -> E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\lib\Release\extern_cuew.lib
+  extern_sky.vcxproj -> E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\lib\Release\extern_sky.lib
+  zstd_compress.vcxproj -> E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\bin\Release\zstd_compress.exe
+  cycles_util.vcxproj -> E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\lib\Release\cycles_util.lib
+  cycles_graph.vcxproj -> E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\lib\Release\cycles_graph.lib
+  cycles_kernel_cpu.vcxproj -> E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\lib\Release\cycles_kernel_cpu.lib
+  cycles_device.vcxproj -> E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\lib\Release\cycles_device.lib
+  cycles_session.vcxproj -> E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\lib\Release\cycles_session.lib
+  cycles_integrator.vcxproj -> E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\lib\Release\cycles_integrator.lib
+  cycles_subd.vcxproj -> E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\lib\Release\cycles_subd.lib
+  cycles_scene.vcxproj -> E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\lib\Release\cycles_scene.lib
+  cycles_bvh.vcxproj -> E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\lib\Release\cycles_bvh.lib
+  material.cpp
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(243,21): error C2001: newline in constant [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(244,1): error C2001: newline in constant [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(245,5): error C2146: syntax error: missing ')' before identifier 'HdMaterialSchema' [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(245,5): error C2146: syntax error: missing ';' before identifier 'HdMaterialSchema' [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(252,21): error C2001: newline in constant [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(253,1): error C2001: newline in constant [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(254,5): error C2143: syntax error: missing ')' before 'if' [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(254,5): error C2143: syntax error: missing ';' before 'if' [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(422,19): error C2001: newline in constant [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(423,1): error C2001: newline in constant [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(424,3): error C2146: syntax error: missing ')' before identifier '_nodes' [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(424,3): error C2146: syntax error: missing ';' before identifier '_nodes' [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(463,23): error C2001: newline in constant [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(464,1): error C2001: newline in constant [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(466,7): error C2143: syntax error: missing ')' before 'if' [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(463,23): warning C4473: 'fprintf' : not enough arguments passed for format string [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+      E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(463,23):
+      placeholders and their parameters expect 1 variadic arguments, but 0 were provided
+      E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(463,23):
+      the missing variadic argument 1 is required by format string '%s'
+  
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(466,7): error C2143: syntax error: missing ';' before 'if' [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(494,19): error C2001: newline in constant [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(495,1): error C2001: newline in constant [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(496,3): error C2146: syntax error: missing ')' before identifier 'HdMaterialConnectionContainerSchema' [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(496,3): error C2146: syntax error: missing ';' before identifier 'HdMaterialConnectionContainerSchema' [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(574,19): error C2001: newline in constant [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(575,1): error C2001: newline in constant [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(578,5): error C2059: syntax error: 'const' [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(581,23): error C2065: 'instanceId': undeclared identifier [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(584,35): error C2065: 'instanceId': undeclared identifier [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(589,3): error C4430: missing type specifier - int assumed. Note: C++ does not support default-int [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(589,19): error C2001: newline in constant [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(590,1): error C2001: newline in constant [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(591,3): error C2146: syntax error: missing ')' before identifier '_shader' [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(591,39): error C2143: syntax error: missing ')' before ';' [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(594,6): error C2653: 'HdCyclesMaterial': is not a class or namespace name [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(594,24): error C2182: 'Finalize': this use of 'void' is not valid [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(594,33): error C2065: 'HdRenderParam': undeclared identifier [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(594,48): error C2065: 'renderParam': undeclared identifier [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(595,1): error C2143: syntax error: missing ';' before '{' [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(596,3): error C2059: syntax error: 'if' [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(596,17): error C2143: syntax error: missing ';' before '{' [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(596,17): error C2447: '{': missing function header (old-style formal list?) [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(600,3): error C4430: missing type specifier - int assumed. Note: C++ does not support default-int [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(600,19): error C2146: syntax error: missing ';' before identifier 'lock' [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(600,24): error C4430: missing type specifier - int assumed. Note: C++ does not support default-int [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(601,39): error C4430: missing type specifier - int assumed. Note: C++ does not support default-int [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(601,45): error C2146: syntax error: missing '>' before identifier 'HdCyclesSession' [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(603,3): error C3927: '->': trailing return type is not allowed after a non-function declarator [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(603,9): error C3484: syntax error: expected '->' before the return type [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(603,10): error C3613: missing return type after '->' ('int' assumed) [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(603,3): error C4430: missing type specifier - int assumed. Note: C++ does not support default-int [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(603,10): error C2146: syntax error: missing ';' before identifier 'clear' [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(605,3): error C2059: syntax error: 'if' [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(605,20): error C2143: syntax error: missing ';' before '{' [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(605,20): error C2447: '{': missing function header (old-style formal list?) [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(608,3): error C4430: missing type specifier - int assumed. Note: C++ does not support default-int [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(608,11): error C2440: 'initializing': cannot convert from 'nullptr' to 'int' [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+      E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(608,11):
+      A native nullptr can only be converted to bool or, using reinterpret_cast, to an integral type
+  
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(609,1): error C2059: syntax error: '}' [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(609,1): error C2143: syntax error: missing ';' before '}' [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(611,6): error C2653: 'HdCyclesMaterial': is not a class or namespace name [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(612,1): error C2143: syntax error: missing ';' before '{' [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(612,1): error C2447: '{': missing function header (old-style formal list?) [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(622,1): error C2059: syntax error: '}' [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
+E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\src\hydra\material.cpp(622,1): error C2143: syntax error: missing ';' before '}' [E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\cycles_hydra.vcxproj]
