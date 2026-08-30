@@ -1,3 +1,19 @@
+From 081cf387f4b7a7b1352ab0cb9c0ff0e26f16bacd Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Mon, 31 Aug 2026 01:38:53 +0200
+Subject: [PATCH] hydra: apply constant primvars to every instance
+
+A constant displayColor describes the whole prim, so it applies to all of
+its instances. Setting only _instances[0] left every instance of a point
+instancer prototype but the first on the default shader colour.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/curves.cpp     | 7 ++++++-
+ src/hydra/mesh.cpp       | 7 ++++++-
+ src/hydra/pointcloud.cpp | 7 ++++++-
+ 3 files changed, 18 insertions(+), 3 deletions(-)
+
 diff --git a/src/hydra/curves.cpp b/src/hydra/curves.cpp
 index eef3da4a..72e9ef0d 100644
 --- a/src/hydra/curves.cpp
@@ -52,3 +68,6 @@ index 820bd817..be640adc 100644
          }
        }
  
+-- 
+2.53.0.windows.2
+

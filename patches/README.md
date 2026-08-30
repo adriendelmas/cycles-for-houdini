@@ -1,116 +1,85 @@
-# Patches appliqués à `external/cycles`
+# Correctifs apportés à Cycles
 
-Le clone Cycles est gitignoré (il a son propre dépôt), donc nos modifications
-sont conservées ici sous forme de patchs, à réappliquer après un `git pull`
-amont :
+Le clone Cycles (`external/cycles`) est gitignoré ici — il a son propre dépôt.
+Nos modifications y vivent sur la branche **`houdini-fixes`**, en commits
+séparés par sujet, et sont exportées ici par `git format-patch`.
 
-    cd external/cycles && git apply ../../patches/*.patch
+Réappliquer après un pull amont :
 
-## 0001 — FindUSDHoudini : ajouter `hdsi`
+    cd external/cycles && git am ../../patches/*.patch
 
-`src/hydra/file_reader.cpp` référence
-`HdSiExtComputationPrimvarPruningSceneIndex::New`, qui vit dans la librairie
-USD `hdsi`. `FindUSDHoudini.cmake` ne listait pas `hdsi` dans `USD_LIBRARIES`,
-d'où un `LNK2019` au link de `cycles.exe` (l'app standalone) — et donc un échec
-de la cible `install`, alors même que `hdCycles.dll` se construisait bien.
+Régénérer les patchs après une nouvelle modification :
 
-Houdini 22 fournit pourtant `libpxr_hdsi.lib` dans `custom/houdini/dsolib/`.
-Correctif : ajouter `hdsi` à la liste.
+    cd external/cycles && git format-patch -o ../../patches 3b97e190..HEAD
 
-**Candidat à une contribution amont** — le bug touche toute build Houdini, pas
-seulement la 22.
+Base amont : `3b97e190` (branche `release/5.2`).
 
-## 0002 — Hydra : accepter les noms d'AOV Houdini
+Les six sont indépendants d'Houdini 22 et de cette machine — **tous sont des
+candidats à une contribution amont chez Blender**.
 
-husk transmet la valeur de `driver:parameters:aov:husk:name` d'un `UsdRenderVar`
-comme **nom d'AOV Hydra**, au lieu d'un token `HdAovTokens` standard. La
-convention Houdini pour la beauty étant `"C"`, un RenderVar authoré normalement
-dans Solaris arrive non mappé dans `kAovToPass` (`src/hydra/session.cpp`).
+---
 
-Le binding est alors ignoré, ce qui laisse le render pass **sans aucun binding** —
-et `HdCyclesRenderPass::IsConverged()` itérant sur une liste vide retourne `true`
-immédiatement. husk écrit donc une frame vierge : **image noire, sans erreur ni
-avertissement**.
+## 0001 — cmake : librairies USD manquantes pour le build Houdini
 
-Correctif : ajouter les orthographes Houdini comme alias (`C`, `Cf`, `N`, `P`,
-`Pz`).
+`FindUSDHoudini.cmake` ne listait pas `hdsi`, dont `src/hydra/file_reader.cpp` a
+besoin pour `HdSiExtComputationPrimvarPruningSceneIndex`. Résultat : `LNK2019`
+au link de l'exécutable standalone, et donc échec de la cible `install` — alors
+même que `hdCycles.dll` se construisait correctement. `sdr` est requis par le
+plugin de registre de nœuds (0005). Houdini fournit les deux.
 
-**Candidat à une contribution amont** — sans ça, hdCycles est inutilisable avec
-des render settings Houdini standards, ce qui est le cas d'usage principal.
+## 0002 — hydra : accepter les conventions de nommage d'AOV d'Houdini
 
-## 0003 — Hydra : primvar constant perdu sur les instances
+husk transmet le `driver:parameters:aov:husk:name` d'un `UsdRenderVar` comme
+**nom d'AOV Hydra**, et non un token `HdAovTokens` standard. Houdini nomme la
+beauty `"C"` : un render var authoré normalement dans Solaris arrivait donc non
+mappé, son binding était écarté, et le render pass se retrouvait **sans aucun
+binding**. Or `IsConverged()` itère sur cette liste — vide, elle retourne vrai
+immédiatement, et husk écrivait une frame vierge.
 
-`mesh.cpp`, `curves.cpp` et `pointcloud.cpp` appliquaient un `displayColor`
-d'interpolation *constant* avec un index codé en dur :
+Symptôme : **image noire, sans erreur ni avertissement**, pour toute scène
+Solaris normalement configurée.
 
-    _instances[0]->set_color(...);
+## 0003 — hydra : appliquer les primvars constants à toutes les instances
 
-Un primvar constant décrit le prim entier, donc toutes ses instances. Avec un
-`PointInstancer`, seule la première instance recevait la couleur du prototype ;
-toutes les autres retombaient sur la couleur par défaut du shader.
+Un `displayColor` d'interpolation constante décrit le prim entier, donc toutes
+ses instances. L'index `_instances[0]` était codé en dur : avec un
+`PointInstancer`, seule la première instance recevait la couleur du prototype,
+les autres retombaient sur la couleur par défaut du shader.
 
-Vérifié : sur une scène à 5 instances, hdCycles en colorait 1 et laissait 4
-blanches, là où Karma les rend correctement toutes les 5. Après correctif, les
-deux moteurs concordent.
+## 0004 — hydra : ne jamais laisser un Shader sans graphe
 
-**Candidat à une contribution amont.**
+**Crash de l'application hôte.** `Shader::tag_update()` lit `graph->output()`
+sans vérification, mais `HdCyclesMaterial` n'assigne un graphe qu'une fois une
+network de matériau lue avec succès. Un matériau dont la network est illisible
+par le delegate — un matériau MaterialX, par exemple — partait dans la branche
+d'erreur, et le shader fraîchement créé atteignait `tag_update()` avec un
+`graph` nul.
 
-## 0004 — Plugin Sdr : publier les nœuds Cycles dans le registre USD
+Conséquence : la simple présence d'un tel matériau dans le stage faisait
+segfaulter husk, que le matériau soit lié à une géométrie ou non.
 
-Ajoute `src/hydra/sdr_cycles.{h,cpp}` : un couple discovery + parser Sdr qui
-énumère `ccl::NodeType::type_names()` **au runtime** et publie chaque nœud de
-type `SHADER` dans le registre de définitions de shaders d'USD, sous
-l'identifiant `cycles_<nom>` — précisément ce que la traduction de matériaux du
-delegate accepte déjà (`material.cpp:442`).
+## 0005 — hydra : publier les nœuds Cycles dans le registre de shaders USD
 
-Choix d'implémentation :
+Couple discovery + parser Sdr qui énumère `NodeType::type_names()` **au
+runtime** et publie chaque nœud `SHADER` sous l'identifiant `cycles_<nom>` —
+celui que la traduction de matériaux du delegate accepte déjà. Lire le registre
+au runtime plutôt que générer des définitions à l'avance garantit que le jeu de
+nœuds exposé suit exactement la version de Cycles liée.
 
-- **Runtime plutôt que génération de fichiers.** Les nœuds exposés sont
-  exactement ceux de la version de Cycles liée ; aucune désynchronisation
-  possible lors d'une mise à jour amont.
-- **Dans la DLL `hdCycles` existante**, déclaré dans le même `plugInfo.json`.
-  Évite de dupliquer les libs statiques Cycles et d'avoir deux registres de
-  nœuds dans le process. Les sources vont dans `SRC_HD_CYCLES_PLUGIN` (la lib
-  partagée) et non dans `cycles_hydra` (statique), sans quoi l'éditeur de liens
-  écarterait les `TF_REGISTRY_FUNCTION`.
-- `sdr` a dû être ajouté à `USD_LIBRARIES` dans `FindUSDHoudini.cmake`
-  (même omission que `hdsi`, cf. patch 0001).
+Enregistré dans la DLL `hdCycles` existante pour ne pas dupliquer les libs
+statiques Cycles ni leur registre de nœuds dans le process.
 
-Piège rencontré : un résultat de découverte publié avec un `SdrVersion()` vide
-est parsable par identifiant mais **absent de l'énumération** du registre. Il
-faut une version valide marquée par défaut : `SdrVersion(1, 0).GetAsDefault()`.
+Piège : un résultat de découverte publié avec un `SdrVersion()` vide est
+parsable par identifiant mais **absent de l'énumération** du registre. Il faut
+`SdrVersion(1, 0).GetAsDefault()`.
 
-Vérifié : 161 nœuds Cycles enregistrés, avec types, valeurs par défaut et
-options d'enum correctes ; matériaux authorés en USD et rendus (métal, verre,
-émission).
+## 0006 — hydra : traduire les réseaux MaterialX en nœuds Cycles
 
-## 0005 — Crash : un Shader sans graphe fait tomber l'hôte
+Déclare `mtlx` comme contexte de rendu de matériau et remappe les identifiants
+de nodedef MaterialX vers des nœuds Cycles natifs, via la même machinerie que
+`UsdPreviewSurface`. Couvre `standard_surface`, `image`, `normalmap` et
+`texcoord`. Les noms de sockets ont été vérifiés contre le registre de nœuds
+Cycles, pas devinés.
 
-`Shader::tag_update()` (`src/scene/shader.cpp`) lit `graph->output()` sans
-vérifier `graph`. Or `HdCyclesMaterial` crée son `Shader` dans `Initialize()`
-mais ne lui assigne un graphe que dans `PopulateShaderGraph()`, appelé
-uniquement si une network de matériau a pu être lue.
-
-Enchaînement du crash :
-
-1. Matériau dont la network n'est pas lisible par le delegate — typiquement un
-   matériau **MaterialX**, qui n'expose ni réseau `cycles` ni réseau universel.
-2. `Sync()` part dans la branche d'erreur ; `set_graph()` n'est jamais appelé.
-3. Le `Shader` fraîchement créé est marqué modifié, donc `tag_update()` est
-   appelé.
-4. `graph->output()` sur un pointeur nul -> **segmentation fault**.
-
-Conséquence : la simple présence d'un matériau MaterialX dans le stage faisait
-planter husk, que le matériau soit lié à une géométrie ou non.
-
-Correctif : semer un `ShaderGraph` vide dans `Initialize()`, pour qu'un `Shader`
-ne soit jamais dans un état invalide. Inclut aussi une garde sur le nœud de
-terminal nul dans la boucle des terminaux, ajoutée pendant le diagnostic et
-juste en soi.
-
-Vérifié : le repro minimal et la scène MaterialX liée passent en exit 0, et les
-matériaux Cycles natifs rendent des statistiques inchangées.
-
-**Candidat à une contribution amont**, et le plus important des cinq : c'est un
-crash de l'application hôte, atteignable par n'importe quelle scène USD
-contenant un matériau que le delegate ne sait pas lire.
+Volontairement écrit en **un seul bloc auto-contenu**, supprimable d'une pièce
+le jour où Cycles comprendra MaterialX nativement.

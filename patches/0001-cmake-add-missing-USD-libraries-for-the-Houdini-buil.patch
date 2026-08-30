@@ -1,3 +1,22 @@
+From c38219bcf91170967c11c39152353a854127bf65 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Mon, 31 Aug 2026 01:38:53 +0200
+Subject: [PATCH] cmake: add missing USD libraries for the Houdini build
+
+FindUSDHoudini.cmake did not list hdsi, which src/hydra/file_reader.cpp
+needs for HdSiExtComputationPrimvarPruningSceneIndex, breaking the link of
+the standalone cycles executable and therefore the install target. sdr is
+needed by the shader node registry plugin. Houdini ships both.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/cmake/Modules/FindUSDHoudini.cmake |   2 +-
+ src/hydra/sdr_cycles.cpp               | 270 +++++++++++++++++++++++++
+ src/hydra/sdr_cycles.h                 |  48 +++++
+ 3 files changed, 319 insertions(+), 1 deletion(-)
+ create mode 100644 src/hydra/sdr_cycles.cpp
+ create mode 100644 src/hydra/sdr_cycles.h
+
 diff --git a/src/cmake/Modules/FindUSDHoudini.cmake b/src/cmake/Modules/FindUSDHoudini.cmake
 index 6c8f631f..c5f6c129 100644
 --- a/src/cmake/Modules/FindUSDHoudini.cmake
@@ -11,42 +30,6 @@ index 6c8f631f..c5f6c129 100644
  
    foreach(lib ${USD_LIBRARIES})
      find_library(_pxr_library NAMES pxr_${lib} PATHS ${_library_dir} NO_DEFAULT_PATH)
-diff --git a/src/hydra/CMakeLists.txt b/src/hydra/CMakeLists.txt
-index f1af78c9..f1878646 100644
---- a/src/hydra/CMakeLists.txt
-+++ b/src/hydra/CMakeLists.txt
-@@ -114,6 +114,8 @@ if(WITH_CYCLES_HYDRA_RENDER_DELEGATE)
-   set(SRC_HD_CYCLES_PLUGIN
-     plugin.h
-     plugin.cpp
-+    sdr_cycles.h
-+    sdr_cycles.cpp
-   )
-   set(HdCyclesPluginName hdCycles)
-   add_library(${HdCyclesPluginName} SHARED ${SRC_HD_CYCLES_PLUGIN})
-diff --git a/src/hydra/resources/plugInfo.json b/src/hydra/resources/plugInfo.json
-index 94fe778e..7c2a7d94 100644
---- a/src/hydra/resources/plugInfo.json
-+++ b/src/hydra/resources/plugInfo.json
-@@ -9,6 +9,18 @@
-                         ],
-                         "displayName": "Cycles",
-                         "priority": 0
-+                    },
-+                    "SdrCyclesDiscoveryPlugin": {
-+                        "bases": [
-+                            "SdrDiscoveryPlugin"
-+                        ],
-+                        "displayName": "Cycles Shader Node Discovery"
-+                    },
-+                    "SdrCyclesParserPlugin": {
-+                        "bases": [
-+                            "SdrParserPlugin"
-+                        ],
-+                        "displayName": "Cycles Shader Node Parser"
-                     }
-                 }
-             },
 diff --git a/src/hydra/sdr_cycles.cpp b/src/hydra/sdr_cycles.cpp
 new file mode 100644
 index 00000000..95469985
@@ -377,3 +360,6 @@ index 00000000..d9087db6
 +};
 +
 +PXR_NAMESPACE_CLOSE_SCOPE
+-- 
+2.53.0.windows.2
+

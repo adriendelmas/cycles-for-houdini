@@ -1,0 +1,1158 @@
+﻿cycles_principled_bsdf :: distribution, subsurface_method, base_color, metallic, roughness, ior, alpha, thin_wall, normal, diffuse_roughness, subsurface_weight, subsurface_scale, subsurface_radius, subsurface_ior, subsurface_anisotropy, specular_ior_level, specular_tint, anisotropic, anisotropic_rotation, tangent, transmission_weight, sheen_weight, sheen_roughness, sheen_tint, coat_weight, coat_roughness, coat_ior, coat_tint, coat_normal, emission_color, emission_strength, thin_film_thickness, thin_film_ior, surface_mix_weight
+
+hython.exe : 76052: Fatal error: Segmentation fault
+At line:4 char:1
++ hython.exe "$env:TEMP\q.py" *>&1 | Out-File -Encoding utf8 sockets.tx ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (76052: Fatal error: Segmentation fault:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+-- TRACEBACK BEGIN --
+Traceback from hython 22.0.368 (Compiled on windows-x86_64-cl19.42):
+CURRENT THREAD 20988
++0x7fff62d3d921 [strlen] C:\WINDOWS\System32\ucrtbase.dll
++0x7ffddad95d6f E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\install\houdini\dso\usd\hdCycles.dll
++0x7ffddad96347 E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\install\houdini\dso\usd\hdCycles.dll
++0x7ffddad951c2 E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\install\houdini\dso\usd\hdCycles.dll
++0x7ffed36b6ab8 [pxrInternal_v0_26_5__pxrReserved__::SdrRegistry::SetExtraParserPlugins] E:\Side Effects 
+Software\Houdini22.0.368\bin\libpxr_sdr.dll
++0x7ffed36b260c [pxrInternal_v0_26_5__pxrReserved__::SdrRegistry::GetShaderNodeByIdentifier] E:\Side Effects 
+Software\Houdini22.0.368\bin\libpxr_sdr.dll
++0x7ffe0121f4ba [PyInit_libsdr] E:\Side Effects Software\Houdini22.0.368\python313\Lib\site-packages\pxr\Sdr\_sdr.pyd
++0x7fff373ed79d [pxrInternal_v0_26_5__pxrReserved__::pxr_boost::python::objects::function::call] E:\Side Effects 
+Software\Houdini22.0.368\bin\libpxr_python.dll
++0x7fff373eb86b [pxrInternal_v0_26_5__pxrReserved__::pxr_boost::python::objects::enum_base::to_python] E:\Side Effects 
+Software\Houdini22.0.368\bin\libpxr_python.dll
++0x7fff373e60f3 [pxrInternal_v0_26_5__pxrReserved__::pxr_boost::python::detail::exception_handler::operator()] E:\Side 
+Effects Software\Houdini22.0.368\bin\libpxr_python.dll
++0x7ffe02589b58 [PyInit_libtf] E:\Side Effects Software\Houdini22.0.368\python313\Lib\site-packages\pxr\Tf\_tf.pyd
++0x7fff373e61e3 [pxrInternal_v0_26_5__pxrReserved__::pxr_boost::python::handle_exception_impl] E:\Side Effects 
+Software\Houdini22.0.368\bin\libpxr_python.dll
++0x7fff373eb94e [pxrInternal_v0_26_5__pxrReserved__::pxr_boost::python::objects::enum_base::to_python] E:\Side Effects 
+Software\Houdini22.0.368\bin\libpxr_python.dll
++0x7ffeaa44405b [PyObject_Vectorcall] E:\Side Effects Software\Houdini22.0.368\bin\python313.dll
++0x7ffeb32cc5d2 [pxrInternal_v0_26_5__pxrReserved__::Tf_PyInvokeImpl] E:\Side Effects 
+Software\Houdini22.0.368\bin\libpxr_tf.dll
++0x7fff373ed79d [pxrInternal_v0_26_5__pxrReserved__::pxr_boost::python::objects::function::call] E:\Side Effects 
+Software\Houdini22.0.368\bin\libpxr_python.dll
++0x7fff373eb86b [pxrInternal_v0_26_5__pxrReserved__::pxr_boost::python::objects::enum_base::to_python] E:\Side Effects 
+Software\Houdini22.0.368\bin\libpxr_python.dll
++0x7fff373e60f3 [pxrInternal_v0_26_5__pxrReserved__::pxr_boost::python::detail::exception_handler::operator()] E:\Side 
+Effects Software\Houdini22.0.368\bin\libpxr_python.dll
++0x7ffe02589b58 [PyInit_libtf] E:\Side Effects Software\Houdini22.0.368\python313\Lib\site-packages\pxr\Tf\_tf.pyd
++0x7fff373e61e3 [pxrInternal_v0_26_5__pxrReserved__::pxr_boost::python::handle_exception_impl] E:\Side Effects 
+Software\Houdini22.0.368\bin\libpxr_python.dll
++0x7fff373eb94e [pxrInternal_v0_26_5__pxrReserved__::pxr_boost::python::objects::enum_base::to_python] E:\Side Effects 
+Software\Houdini22.0.368\bin\libpxr_python.dll
++0x7ffeaa443bd7 [PyObject_MakeTpCall] E:\Side Effects Software\Houdini22.0.368\bin\python313.dll
++0x7ffeaa443f75 [PyObject_Vectorcall] E:\Side Effects Software\Houdini22.0.368\bin\python313.dll
++0x7ffeaa5ccf22 [PyEval_EvalFrameDefault] E:\Side Effects Software\Houdini22.0.368\bin\python313.dll
++0x7ffeaa5c814a [PyEval_EvalCode] E:\Side Effects Software\Houdini22.0.368\bin\python313.dll
++0x7ffeaa683378 [PyRun_FileExFlags] E:\Side Effects Software\Houdini22.0.368\bin\python313.dll
++0x7ffeaa6839fd [PyRun_FileExFlags] E:\Side Effects Software\Houdini22.0.368\bin\python313.dll
++0x7ffeaa68302b [PyRun_StringFlags] E:\Side Effects Software\Houdini22.0.368\bin\python313.dll
++0x7ffeaa680b72 [PyRun_InteractiveOneFlags] E:\Side Effects Software\Houdini22.0.368\bin\python313.dll
++0x7ffeaa67f59f [PyOS_double_to_string] E:\Side Effects Software\Houdini22.0.368\bin\python313.dll
++0x7ffeaa39e28e [Py_GetBuildInfo] E:\Side Effects Software\Houdini22.0.368\bin\python313.dll
++0x7ffeaa39f2e9 [Py_GetBuildInfo] E:\Side Effects Software\Houdini22.0.368\bin\python313.dll
++0x7ffeaa39f678 [Py_RunMain] E:\Side Effects Software\Houdini22.0.368\bin\python313.dll
++0x140110f61 E:\Side Effects Software\Houdini22.0.368\bin\hython.exe
++0x140111220 E:\Side Effects Software\Houdini22.0.368\bin\hython.exe
++0x1402cc120 E:\Side Effects Software\Houdini22.0.368\bin\hython.exe
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 81308
++0x7fff65ae4a74 [ZwWaitForWorkViaWorkerFactory] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff6599a65e [TpCallbackMayRunLong] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 79036
++0x7fff65ae4a74 [ZwWaitForWorkViaWorkerFactory] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff6599a65e [TpCallbackMayRunLong] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 77256
++0x7fff65ae4a74 [ZwWaitForWorkViaWorkerFactory] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff6599a65e [TpCallbackMayRunLong] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 83956
++0x7fff65ae1444 [NtDelayExecution] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff65a53924 [RtlDelayExecution] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff6302b631 [SleepEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x17e8df28 [UT_ThreadSafeCache<UT_SpinLockT<1,0> >::unsafe_end] E:\Side Effects Software\Houdini22.0.368\bin\libUT.dll
++0x17e8de73 [UT_ThreadSafeCache<UT_SpinLockT<1,0> >::unsafe_end] E:\Side Effects Software\Houdini22.0.368\bin\libUT.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 69868
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 77508
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 30852
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 34208
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 71568
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 69828
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 29560
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 78232
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 1648
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 82444
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 83852
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 75616
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 79748
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 83480
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 77004
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 70180
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 75552
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 5624
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 82984
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 41676
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 77520
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 22976
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 78888
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 34132
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 71916
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 74292
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 79548
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 23768
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 82188
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 61176
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 75532
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 51688
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 79956
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 83896
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 82920
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 4864
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 74552
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 12636
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 28784
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 73356
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 82676
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 83688
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 78488
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 29036
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 71432
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 79180
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 76824
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 25836
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 21584
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 5648
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 81984
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 77432
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 78336
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 75780
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 23708
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 61068
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 83744
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 44240
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 5604
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 54180
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 75584
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 65304
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 5628
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 78688
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 83608
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 76584
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 68696
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 61516
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 81924
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 76880
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 7252
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 55132
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 59756
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 75772
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 33844
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 75908
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 34120
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 77048
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 81140
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 69660
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 21404
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 83816
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 64712
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 41364
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 21216
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 75976
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 74172
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 78940
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 83424
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 1800
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 83476
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 46832
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 75760
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 33752
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 41604
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 70168
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 51748
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 41408
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 77428
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 83400
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 52908
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 20916
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 25048
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 43776
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 72280
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 78152
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 5112
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 20928
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 68808
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 17084
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 83960
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 69932
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 13648
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 37524
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 70908
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 12108
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 33980
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 1064
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 29412
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 81432
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 83500
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 22264
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 74328
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 71932
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 64624
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 29396
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 72844
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7ffef9b86980 [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7ffef9b8670b [tbb::detail::r1::set_end_of_input] E:\Side Effects Software\Houdini22.0.368\bin\tbb12.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 83020
++0x7fff65ae1914 [NtWaitForMultipleObjects] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fc2773 [WaitForMultipleObjectsEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7fff64cf0abe [Ordinal112] C:\WINDOWS\System32\combase.dll
++0x7fff64dc54df [RoParameterizedTypeExtraGetTypeSignature] C:\WINDOWS\System32\combase.dll
++0x7fff64dc53ef [RoParameterizedTypeExtraGetTypeSignature] C:\WINDOWS\System32\combase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 76904
++0x7fff65ae4a74 [ZwWaitForWorkViaWorkerFactory] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff6599a65e [TpCallbackMayRunLong] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 1832
++0x7fff65ae4a74 [ZwWaitForWorkViaWorkerFactory] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff6599a65e [TpCallbackMayRunLong] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 65980
++0x7fff65ae1444 [NtDelayExecution] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff65a53924 [RtlDelayExecution] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff6302b631 [SleepEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x34b344f5 [PDGD_LocalDataLayer::registerAlias] E:\Side Effects Software\Houdini22.0.368\bin\libPDGD.dll
++0x17e886b8 [UT_Thread::threadWrapper] E:\Side Effects Software\Houdini22.0.368\bin\libUT.dll
++0x17e88b59 [UT_ThreadSet::wait] E:\Side Effects Software\Houdini22.0.368\bin\libUT.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 59484
++0x7fff65ae0e44 [NtWaitForSingleObject] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff62fbbe9f [WaitForSingleObjectEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x2f5c4443 [NET_DownloadFileTask::executor] E:\Side Effects Software\Houdini22.0.368\bin\libNET.dll
++0x2f5c5395 [NET_DownloadFileTask::startWaitOp_] E:\Side Effects Software\Houdini22.0.368\bin\libNET.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 80244
++0x7fff65ae0ee4 [ZwRemoveIoCompletion] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff61dd6b1f [Tcpip6_WSHGetSockaddrType] C:\WINDOWS\SYSTEM32\MSWSOCK.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+OTHER THREAD 78920
++0x7fff65ae1444 [NtDelayExecution] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff65a53924 [RtlDelayExecution] C:\WINDOWS\SYSTEM32\ntdll.dll
++0x7fff6302b631 [SleepEx] C:\WINDOWS\System32\KERNELBASE.dll
++0x7fff3b395412 [pxrInternal_v0_26_5__pxrReserved__::Work_ShouldSynchronizeAsyncDestroyCalls] E:\Side Effects 
+Software\Houdini22.0.368\bin\libpxr_work.dll
++0x7fff3b395299 [pxrInternal_v0_26_5__pxrReserved__::Work_ShouldSynchronizeAsyncDestroyCalls] E:\Side Effects 
+Software\Houdini22.0.368\bin\libpxr_work.dll
++0x7fff3b39527b [pxrInternal_v0_26_5__pxrReserved__::Work_ShouldSynchronizeAsyncDestroyCalls] E:\Side Effects 
+Software\Houdini22.0.368\bin\libpxr_work.dll
++0x7fff62c7cd30 [wcsrchr] C:\WINDOWS\System32\ucrtbase.dll
++0x7fff636dccb7 [BaseThreadInitThunk] C:\WINDOWS\System32\KERNEL32.DLL
++0x7fff65a2caec [RtlUserThreadStart] C:\WINDOWS\SYSTEM32\ntdll.dll
+-- TRACEBACK END --

@@ -64,8 +64,29 @@ Prérequis découvert : les meshes doivent porter le schéma appliqué
 ignoré et la géométrie retombe sur `default_surface` — le rendu est correct
 mais sans aucun matériau, ce qui est trompeur.
 
-Reste à faire pour la phase 4 : la couche de traduction MaterialX
-(`src/mtlxCycles`), pas encore commencée.
+## Phase 4b — Traduction MaterialX ✅
+
+![phase 4b](milestone-phase4b-materialx.png)
+
+Les trois objets ci-dessus sont rendus depuis des matériaux **MaterialX**
+`ND_standard_surface_surfaceshader` : métal (`metalness=1`,
+`specular_roughness=0.14`), verre (`transmission=1`, `specular_IOR=1.45`) et
+émission (`emission=2.5`).
+
+Implémenté dans le patch 0006, en réutilisant la machinerie de mapping déjà
+présente pour `UsdPreviewSurface` plutôt qu'en créant une seconde. Les noms de
+sockets Cycles ont été relevés depuis le registre Sdr construit en phase 4a —
+pas devinés.
+
+La couche est volontairement un bloc auto-contenu dans `material.cpp` :
+supprimable d'une pièce le jour où Cycles absorbera MaterialX, comme prévu au
+départ. `src/mtlxCycles` n'a donc pas lieu d'être, la greffe sur l'existant
+étant plus courte et plus cohérente.
+
+Couvert : `standard_surface`, `image`, `normalmap`, `texcoord`. Les entrées
+MaterialX sans équivalent Cycles (`base`, `transmission_color`,
+`subsurface_color`, `transmission_extra_roughness`) sont délibérément non
+mappées et ignorées — c'est documenté dans le code.
 
 ## Anomalies ouvertes
 
@@ -133,7 +154,28 @@ avalé par husk), en bissectant jusqu'à l'instruction.
 
 Reproduction : `tests/usd/repro_mtlx_crash.usda`, 80 lignes.
 
-Reste pour la phase 4b : la traduction MaterialX elle-même n'est pas écrite.
-Un matériau MaterialX ne plante plus mais retombe silencieusement sur
-`default_surface`. Il faudra ajouter `mtlx` à `GetMaterialRenderContexts()`
-puis écrire `src/mtlxCycles`.
+Suite livrée en phase 4b : `mtlx` est désormais déclaré comme contexte de
+rendu et les réseaux MaterialX sont traduits (patch 0006).
+
+
+## Organisation des correctifs
+
+Les modifications de Cycles vivent sur la branche `houdini-fixes` du clone, en
+commits séparés par sujet, exportés dans `patches/` par `git format-patch`.
+Réapplication après un pull amont : `git am ../../patches/*.patch`.
+
+## Non-régression
+
+Batterie rejouée après chaque build, toutes en exit 0 :
+
+| Scène | Couvre |
+|---|---|
+| `phase4b_mtlx.usda` | MaterialX standard_surface (métal, verre, émission) |
+| `phase4_materials.usda` | nœuds Cycles natifs via Sdr |
+| `phase3.usda` | lumières, PointInstancer, subdivision |
+| `repro_mtlx_crash.usda` | non-régression du crash A5 |
+
+Méthode retenue tout du long : **contre-vérifier chaque résultat en rendant la
+même scène avec Karma**. C'est ce qui a permis de distinguer les vrais bugs du
+delegate de mes propres scènes de test mal écrites — et de rattraper au moins
+une conclusion erronée.
