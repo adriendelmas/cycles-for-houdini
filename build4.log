@@ -1,0 +1,27 @@
+MSBuild version 17.14.51+25f168cee for .NET Framework
+
+  1>Checking Build System
+  extern_sky.vcxproj -> E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\lib\Release\extern_sky.lib
+  extern_hipew.vcxproj -> E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\lib\Release\extern_hipew.lib
+  extern_cuew.vcxproj -> E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\lib\Release\extern_cuew.lib
+  zstd_compress.vcxproj -> E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\bin\Release\zstd_compress.exe
+  cycles_util.vcxproj -> E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\lib\Release\cycles_util.lib
+  cycles_graph.vcxproj -> E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\lib\Release\cycles_graph.lib
+  cycles_kernel_cpu.vcxproj -> E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\lib\Release\cycles_kernel_cpu.lib
+  cycles_device.vcxproj -> E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\lib\Release\cycles_device.lib
+  cycles_session.vcxproj -> E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\lib\Release\cycles_session.lib
+  cycles_integrator.vcxproj -> E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\lib\Release\cycles_integrator.lib
+  cycles_subd.vcxproj -> E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\lib\Release\cycles_subd.lib
+  cycles_scene.vcxproj -> E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\lib\Release\cycles_scene.lib
+  cycles_bvh.vcxproj -> E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\lib\Release\cycles_bvh.lib
+  curves.cpp
+  mesh.cpp
+  pointcloud.cpp
+  cycles_hydra.vcxproj -> E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\lib\Release\cycles_hydra.lib
+  hdCycles.vcxproj -> E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\src\hydra\Release\hdCycles.dll
+  cycles.vcxproj -> E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles\external\cycles\build\bin\Release\cycles.exe
+  Building Custom Rule E:/WORK/PERSONNAL STUFF/HOUDINI/hdCycles/external/cycles/CMakeLists.txt
+  1>
+  -- Install configuration: "Release"
+  -- Installing: E:/WORK/PERSONNAL STUFF/HOUDINI/hdCycles/install/houdini/dso/usd/hdCycles.dll
+  -- Installing: E:/WORK/PERSONNAL STUFF/HOUDINI/hdCycles/install/cycles.exe

@@ -29,6 +29,24 @@ Validé : mesh polygonaux, transforms, DomeLight (couleur + intensité),
 displayColor, ombres de contact, path tracing sur 128 threads
 (Threadripper 3995WX), échantillonnage adaptatif.
 
+## Phase 3 — Lumières, instancing, subdivision ✅
+
+![phase 3](milestone-phase3.png)
+
+Validé sur `tests/usd/phase3.usda` :
+
+- **Subdivision Catmull-Clark** — le cube de gauche est rendu comme une sphère
+  lisse, le cube central (`subdivisionScheme = "none"`) reste dur.
+- **PointInstancer** — les 5 instances sont rendues, avec la couleur du
+  prototype (après correctif 0003).
+- **RectLight, DiskLight, SphereLight** — les trois contribuent, avec leurs
+  couleurs et leurs ombres douces respectives.
+- **displayColor** par objet.
+
+Méthode : chaque résultat est contre-vérifié en rendant la même scène avec
+Karma. C'est ce qui a permis de distinguer un vrai bug du delegate (0003) d'une
+scène de test mal écrite.
+
 ## Anomalies ouvertes
 
 ### A1 — Surfaces implicites non supportées (confirmé)
@@ -46,19 +64,17 @@ Piste : s'assurer que `UsdImagingImplicitSurfaceSceneIndex` est bien inséré
 dans la pipeline husk d'Houdini 22, sinon déclarer les types et mailler
 nous-mêmes.
 
-### A2 — Chemin RenderSettings/RenderVar explicite → image noire (non résolu)
+### A2 — RenderVar Houdini → image noire ✅ RÉSOLU (patch 0002)
 
-Avec `--settings /rendersettings` et une RenderVar écrite à la main, le rendu
-sort noir (et sur 1 canal au lieu de 3), alors que la **même scène** rendue via
-les défauts de husk (`--camera` + `--res`, sans RenderSettings) sort correcte.
+husk transmet `driver:parameters:aov:husk:name` comme nom d'AOV Hydra. La
+convention Houdini pour la beauty étant `"C"`, le binding n'était pas mappé,
+la liste de bindings restait vide, `IsConverged()` retournait vrai
+immédiatement et husk écrivait une frame vierge — **sans le moindre
+avertissement**.
 
-Les erreurs de validation husk successives ont été corrigées une à une
-(`driver:parameters:aov:husk:name`, `:format` = `"float"`, `sourceType` en
-`token`, schémas `KarmaRenderVarAPI`/`HuskRenderVarAPI`), jusqu'à ne plus avoir
-d'erreur — mais l'image reste noire.
+Diagnostic obtenu par bissection : RenderSettings seuls → OK ; ajout du
+RenderProduct + RenderVar → noir ; `husk:name = "color"` → OK.
 
-Karma rend la **même** scène en noir également, ce qui indique que la RenderVar
-faite main reste non conforme, plutôt qu'un défaut de hdCycles.
+### A3 — displayColor perdu sur les instances ✅ RÉSOLU (patch 0003)
 
-Prochaine étape : générer les RenderSettings depuis Houdini (hython + LOP
-`karmarenderproperties`) plutôt que de les écrire à la main, et rejouer.
+Index `_instances[0]` codé en dur. Voir `patches/README.md`.

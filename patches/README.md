@@ -37,3 +37,20 @@ Correctif : ajouter les orthographes Houdini comme alias (`C`, `Cf`, `N`, `P`,
 
 **Candidat à une contribution amont** — sans ça, hdCycles est inutilisable avec
 des render settings Houdini standards, ce qui est le cas d'usage principal.
+
+## 0003 — Hydra : primvar constant perdu sur les instances
+
+`mesh.cpp`, `curves.cpp` et `pointcloud.cpp` appliquaient un `displayColor`
+d'interpolation *constant* avec un index codé en dur :
+
+    _instances[0]->set_color(...);
+
+Un primvar constant décrit le prim entier, donc toutes ses instances. Avec un
+`PointInstancer`, seule la première instance recevait la couleur du prototype ;
+toutes les autres retombaient sur la couleur par défaut du shader.
+
+Vérifié : sur une scène à 5 instances, hdCycles en colorait 1 et laissait 4
+blanches, là où Karma les rend correctement toutes les 5. Après correctif, les
+deux moteurs concordent.
+
+**Candidat à une contribution amont.**
