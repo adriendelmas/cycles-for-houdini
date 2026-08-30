@@ -1,0 +1,4 @@
+external/cycles/
+build/
+install/
+*.user
