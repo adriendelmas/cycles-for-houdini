@@ -2,3 +2,7 @@ external/cycles/
 build/
 install/
 *.user
+*.log
+tests/usd/*.exr
+tests/usd/*.png
+tests/usd/t?.exr
