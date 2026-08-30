@@ -1,0 +1,340 @@
+﻿[21:00:41] E:/Side Effects Software/Houdini22.0.368/bin/husk.exe version 22.0.368
+[21:00:41] Command Line: E:\Side Effects Software\Houdini22.0.368\bin\husk.exe --renderer HdCyclesPlugin --frame 1 --settings /rendersettings --output smoke.exr --verbose 9 smoke.usda
+[21:00:41] CPU AMD Ryzen Threadripper PRO 3995WX 64-Cores
+[21:00:41] Architecture - AMD64: mmx xmmx sse sse2 cmov fpcmov ht sse3 ssse3 sse4.1 sse4.2 avx avx2
+[21:00:41] System limit: 8192 file descriptors
+[21:00:41] Setting default OIIO config: OPENIMAGEIO_IMAGECACHE_OPTIONS=max_memory_MB=130986,max_open_files=4096,autotile=512,autoscanline=1
+[21:00:41] Setting MATERIALX_SEARCH_PATH to 'E:/Side Effects Software/Houdini22.0.368/houdini/materialx'
+[21:00:41] Setting PXR_MTLX_STDLIB_SEARCH_PATHS to 'E:/Side Effects Software/Houdini22.0.368/houdini/materialx/libraries'
+[21:00:42] Loading smoke.usda
+[21:00:42] Running prerender procedurals script: "E:/Side Effects Software/Houdini22.0.368/houdini/python3.13libs/husd/runprocedurals.py" --mode prerender --validategeo
+[21:00:42] Loading render settings: /rendersettings
+[21:00:42] /rendersettings: Loading product: /Render/product
+[21:00:42] /Render/product: Loading render var: /Render/Vars/color
+[21:00:42] /Render/product contains 1 render vars
+[21:00:42] /rendersettings contains 1 render products
+[21:00:42] Creating renderer plugin: HdCyclesPlugin
+husk.exe : ##################################################################
+At line:6 char:1
++ & "E:\Side Effects Software\Houdini22.0.368\bin\husk.exe" --renderer  ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (###############...###############:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+#  CYCLES_LOGGING is overridden to 'true'.  Default is 'false'.  #
+##################################################################
+###########################################################################
+#  CYCLES_LOGGING_LEVEL is overridden to 'debug'.  Default is 'warning'.  #
+###########################################################################
+00:00.00 | Using AVX2 CPU kernels.
+00:00.00 | Using AVX2 CPU kernels.
+[21:00:42] Adding AOV for color3f C (C)
+[21:00:42] {
+    "camera":"/world/camera",
+    "RenderSettings":{
+	"aspectRatioConformPolicy":"expandAperture",
+	"batchCommandLine":["E:\\Side Effects Software\\Houdini22.0.368\\bin\\husk.exe","--renderer","HdCyclesPlugin","--frame","1","--settings","/rendersettings","--output","smoke.exr","--verbose","9","smoke.usda"
+	],
+	"camera":["/world/camera"
+	],
+	"dataWindowNDC":[0,0,1,1],
+	"disableDepthOfField":false,
+	"disableMotionBlur":false,
+	"houdini:fps":24,
+	"houdini:frame":1,
+	"houdini:renderer":"husk",
+	"huskDelegateOptions":"",
+	"includedPurposes":["default","render"
+	],
+	"instantaneousShutter":false,
+	"materialBindingPurposes":["full","allPurpose"
+	],
+	"pixelAspectRatio":1,
+	"products":["/Render/product"
+	],
+	"renderCameraPath":"/world/camera",
+	"renderMode":"batch",
+	"resolution":[480,270],
+	"shutter:close":0,
+	"shutter:open":0,
+	"usdFileTimeStamp":1788116393,
+	"usdFilename":"smoke.usda",
+	"usdSettingsPrim":"/rendersettings"
+    },
+    "RenderProducts":[
+	{
+	    "settings":{
+		"camera":["/world/camera"
+		],
+		"orderedVars":["/Render/Vars/color"
+		],
+		"productName":"smoke.exr",
+		"productType":"raster",
+		"resolution":[480,270],
+		"sourcePrim":"/Render/product"
+	    },
+	    "expandedProductName":"",
+	    "RenderVariables":[
+		{
+		    "AOVName":"C",
+		    "AOVPixelFormat":"float32",
+		    "AOVChannelSize":3,
+		    "HdFormat":"HdFormatFloat32Vec3",
+		    "HdMultiSampled":false,
+		    "HdClearValue":[0,0,0],
+		    "settings":{
+			"dataType":"color3f",
+			"driver:parameters:aov:husk:name":"C",
+			"sourceName":"color",
+			"sourcePrim":"/Render/Vars/color",
+			"sourceType":"raw"
+		    }
+		}
+	    ]
+	}
+    ]
+}
+
+[21:00:42] Loading render settings: /rendersettings
+[21:00:42] /rendersettings contains 1 render products
+[21:00:42] Checking disk render product smoke.exr
+[21:00:42] Running preframe procedurals script: "E:/Side Effects Software/Houdini22.0.368/houdini/python3.13libs/husd/runprocedurals.py" --mode preframe --validategeo
+[21:00:42] Start Wall Clock Time: 0:00:01.55
+[21:00:42]   Start Memory Usage: 224.78 MB
+[21:00:42] >>> Render smoke.exr
+[21:00:42]   Load Wall Clock Time: 0:00:01.56
+00:00.02 | Using tile size of (480, 270)
+[21:00:42]          Load CPU Time: 0:00:07.65
+[21:00:42]   Load System CPU Time: 0:00:07.96
+[21:00:42]      Load Memory Usage: 226.16 MB
+00:00.02 | Adaptive sampling: automatic min samples = 64
+00:00.02 | Effective scene passes:
+00:00.02 | - type: combined, name: "", mode: NOISY, is_written: True
+00:00.02 | - type: adaptive_aux_buffer, name: "", mode: NOISY, is_written: True
+00:00.02 | - type: sample_count, name: "", mode: NOISY, is_written: True
+00:00.02 | Requested features:
+00:00.02 | Use BSDF True
+00:00.02 | Use Emission True
+00:00.02 | Use Volume False
+00:00.02 | Use Bump False
+00:00.02 | Use Voronoi False
+00:00.02 | Use Shader Raytrace False
+00:00.02 | Use MNEE False
+00:00.02 | Use Transparent False
+00:00.02 | Use Denoising False
+00:00.02 | Use Path Tracing True
+00:00.02 | Use Hair False
+00:00.02 | Use Pointclouds False
+00:00.02 | Use Object Motion False
+00:00.02 | Use Baking False
+00:00.02 | Use Subsurface False
+00:00.02 | Use Volume False
+00:00.02 | Use Shadow Catcher False
+00:00.02 | Use Portal Node False
+00:00.02 | Total 7 shaders.
+00:00.02 | Compilation summary:
+00:00.02 | Shader name: shader
+00:00.02 | Compilation summary:
+00:00.02 | Compilation summary:
+00:00.02 | Shader name: default_surface
+00:00.02 | Number of SVM nodes: 19
+00:00.02 | Peak stack usage:    6
+00:00.02 | Time (in seconds):
+00:00.02 | Generate:            0.000026
+00:00.02 |   Surface:           0.000025
+00:00.02 |   Bump:              0.000000
+00:00.02 |   Volume:            0.000001
+00:00.02 |   Displacement:      0.000001
+00:00.02 | Compilation summary:
+00:00.02 | Shader name: default_volume
+00:00.02 | Number of SVM nodes: 3
+00:00.02 | Peak stack usage:    0
+00:00.02 | Time (in seconds):
+00:00.02 | Generate:            0.000002
+00:00.02 |   Surface:           0.000002
+00:00.02 |   Bump:              0.000000
+00:00.02 |   Volume:            0.000000
+00:00.02 |   Displacement:      0.000000
+00:00.02 | Compilation summary:
+00:00.02 | Shader name: default_background
+00:00.02 | Number of SVM nodes: 9
+00:00.02 | Peak stack usage:    0
+00:00.02 | Time (in seconds):
+00:00.02 | Generate:            0.000012
+00:00.02 |   Surface:           0.000010
+00:00.02 |   Bump:              0.000000
+00:00.02 |   Volume:            0.000001
+00:00.02 |   Displacement:      0.000001
+00:00.02 | Compilation summary:
+00:00.02 | Shader name: default_light
+00:00.02 | Number of SVM nodes: 3
+00:00.02 | Peak stack usage:    0
+00:00.02 | Time (in seconds):
+00:00.02 | Generate:            0.000006
+00:00.02 |   Surface:           0.000005
+00:00.02 |   Bump:              0.000000
+00:00.02 |   Volume:            0.000001
+00:00.02 |   Displacement:      0.000001
+00:00.02 | Shader name: default_empty
+00:00.02 | Number of SVM nodes: 3
+00:00.02 | Peak stack usage:    0
+00:00.02 | Time (in seconds):
+00:00.02 | Generate:            0.000007
+00:00.02 |   Surface:           0.000005
+00:00.02 |   Bump:              0.000000
+00:00.02 |   Volume:            0.000001
+00:00.02 |   Displacement:      0.000001
+00:00.02 | Compilation summary:
+00:00.02 | Shader name: shader
+00:00.02 | Number of SVM nodes: 9
+00:00.02 | Peak stack usage:    0
+00:00.02 | Time (in seconds):
+00:00.02 | Generate:            0.000008
+00:00.02 |   Surface:           0.000006
+00:00.02 |   Bump:              0.000000
+00:00.02 |   Volume:            0.000001
+00:00.02 |   Displacement:      0.000001
+00:00.02 | Number of SVM nodes: 9
+00:00.02 | Peak stack usage:    0
+00:00.02 | Time (in seconds):
+00:00.02 | Generate:            0.000013
+00:00.02 |   Surface:           0.000011
+00:00.02 |   Bump:              0.000000
+00:00.02 |   Volume:            0.000001
+00:00.02 |   Displacement:      0.000001
+00:00.02 | Shader manager updated 7 shaders in 0.0031262 seconds.
+00:00.02 | Global memory allocate: shaders, 224 bytes. (224B)
+00:00.02 | Global memory allocate: svm_nodes, 332 bytes. (332B)
+00:00.02 | Total 3 objects.
+00:00.02 | Global memory allocate: objects, 768 bytes. (768B)
+00:00.02 | Total 0 particle systems.
+00:00.02 | Global memory allocate: particles, 80 bytes. (80B)
+00:00.03 | Total 3 meshes.
+00:00.03 | Objects BVH build pool statistics:
+00:00.03 | Total time:    0.024466
+00:00.03 | Tasks handled: 3
+00:00.03 | Using EMBREE layout.
+00:00.03 | Global memory allocate: attributes_map, 256 bytes. (256B)
+00:00.03 | Global memory allocate: attributes_float, 4 bytes. (4B)
+00:00.03 | Global memory allocate: attributes_normal, 16 bytes. (16B)
+00:00.03 | Global memory allocate: tri_verts, 48 bytes. (48B)
+00:00.03 | Global memory allocate: objects, 768 bytes. (768B)
+00:00.03 | Global memory allocate: tri_shader, 8 bytes. (8B)
+00:00.03 | Global memory allocate: tri_vindex, 24 bytes. (24B)
+00:00.03 | Global memory allocate: object_flag, 12 bytes. (12B)
+00:00.03 | Global memory allocate: object_prim_offset, 12 bytes. (12B)
+00:00.03 | 0 volume octree(s) with a total of 0 nodes are built in 1.5e-06 seconds.
+00:00.03 | Total 10 lookup tables.
+00:00.03 | Global memory allocate: lookup_table, 97,280 bytes. (95.00K)
+00:00.03 | Total 2 lights.
+00:00.03 | Background MIS has been disabled.
+00:00.03 | Number of lights sent to the device: 1
+00:00.03 | Global memory allocate: lights, 112 bytes. (112B)
+00:00.03 | Use light tree with 1 emitters and 3 nodes.
+00:00.03 | Global memory allocate: light_tree_nodes, 240 bytes. (240B)
+00:00.03 | Global memory allocate: light_tree_emitters, 32 bytes. (32B)
+00:00.03 | Global memory allocate: light_to_tree, 12 bytes. (12B)
+00:00.03 | Global memory allocate: object_lookup_offset, 12 bytes. (12B)
+00:00.03 | Global memory allocate: sample_pattern_lut, 4,194,304 bytes. (4.00M)
+00:00.03 | Total 11 lookup tables.
+00:00.03 | Global memory allocate: lookup_table, 101,376 bytes. (99.00K)
+00:00.03 | Detected required volume stack size 2
+00:00.03 | System memory statistics after full device sync:
+00:00.03 |   Usage: 4,313,802 (4.11M)
+00:00.03 |   Peak: 4,415,178 (4.21M)
+00:00.03 | Adaptive sampling: automatic min samples = 64
+00:00.03 | Buffer allocate: RenderBuffers, 4,665,600 bytes. (4.45M)
+00:00.03 | Will path trace 1 samples at the resolution divider 1
+00:00.05 | Rendered 1 samples in 0.0126732 seconds (0.0126732 seconds per sample), occupancy: 1
+00:00.05 | Measured path tracing occupancy: 1
+00:00.05 | Average path tracing time: 0.0129603 seconds.
+00:00.05 | Invoke buffer update callback.
+00:00.05 | Average display update time: 0.0004085 seconds.
+00:00.05 | Adaptive sampling: automatic min samples = 64
+00:00.05 | Will path trace 8 samples at the resolution divider 1
+00:00.05 | Rendered 8 samples in 0.0046184 seconds (0.0005773 seconds per sample), occupancy: 1
+00:00.05 | Measured path tracing occupancy: 1
+00:00.05 | Average path tracing time: 0.00198577 seconds.
+00:00.05 | Adaptive sampling: automatic min samples = 64
+00:00.05 | Will path trace 64 samples at the resolution divider 1
+00:00.09 | Rendered 64 samples in 0.0355611 seconds (0.000555642 seconds per sample), occupancy: 1
+00:00.09 | Measured path tracing occupancy: 1
+00:00.09 | Average path tracing time: 0.000734825 seconds.
+00:00.09 | Adaptive sampling: automatic min samples = 64
+00:00.09 | Will path trace 7 samples at the resolution divider 1
+00:00.09 | Rendered 7 samples in 0.0041295 seconds (0.000589929 seconds per sample), occupancy: 1
+00:00.09 | Measured path tracing occupancy: 1
+00:00.09 | Average path tracing time: 0.00072515 seconds.
+00:00.09 | Will filter adaptive stopping buffer, threshold 0.4
+00:00.10 | Average adaptive sampling filter  time: 9.49429e-05 seconds.
+00:00.10 | All pixels converged.
+00:00.10 | Continuing with lower threshold.
+00:00.10 | Will filter adaptive stopping buffer, threshold 0.2
+00:00.10 | Will re-calculate convergency flag for currently converged pixels.
+00:00.10 | Average adaptive sampling filter  time: 7.59286e-05 seconds.
+00:00.10 | All pixels converged.
+00:00.10 | Continuing with lower threshold.
+00:00.10 | Will filter adaptive stopping buffer, threshold 0.1
+00:00.10 | Will re-calculate convergency flag for currently converged pixels.
+00:00.10 | Average adaptive sampling filter  time: 6.37143e-05 seconds.
+00:00.10 | All pixels converged.
+00:00.10 | Continuing with lower threshold.
+00:00.19 | Will filter adaptive stopping buffer, threshold 0.05
+00:00.19 | Will re-calculate convergency flag for currently converged pixels.
+00:00.19 | Average adaptive sampling filter  time: 6.5975e-05 seconds.
+00:00.19 | All pixels converged.
+00:00.19 | Continuing with lower threshold.
+00:00.19 | Will filter adaptive stopping buffer, threshold 0.05
+00:00.19 | Will re-calculate convergency flag for currently converged pixels.
+00:00.19 | Average adaptive sampling filter  time: 5.98571e-05 seconds.
+00:00.19 | All pixels converged.
+00:00.19 | Invoke buffer update callback.
+00:00.19 | Average display update time: 0.0002386 seconds.
+00:00.19 | Adaptive sampling: automatic min samples = 64
+00:00.19 | Write tile result.
+00:00.19 | Write tile result via buffer write callback.
+00:00.19 | Invoke buffer update callback.
+00:00.19 | Average display update time: 0.000180267 seconds.
+00:00.19 | Adaptive sampling: automatic min samples = 64
+00:00.19 | Rendering in main loop is done in 0.156693 seconds.
+00:00.19 | Full path tracing report:
+00:00.19 | 
+00:00.19 | Path tracing on: AMD Ryzen Threadripper PRO 3995WX 64-Cores (CPU) (128 threads) [CPU]
+00:00.19 |                      Hardware Ray-Tracing: Off
+00:00.19 | 
+00:00.19 | Render Scheduler Summary
+00:00.19 | 
+00:00.19 | Mode: Interactive
+00:00.19 | Resolution: 480x270
+00:00.19 | 
+00:00.19 | Adaptive sampling:
+00:00.19 |   Use: True
+00:00.19 |   Step: 16
+00:00.19 |   Min Samples: 64
+00:00.19 |   Threshold: 0.050000
+00:00.19 | 
+00:00.19 | Denoiser:
+00:00.19 |   Use: False
+00:00.19 | 
+00:00.19 | Time (in seconds):
+00:00.19 |                                        Wall              Average
+00:00.19 |           Path Tracing             0.058012             0.000725
+00:00.19 |        Adaptive Filter             0.002095             0.000060
+00:00.19 |         Display Update             0.000541             0.000180
+00:00.19 | 
+00:00.19 |   Total: 0.060648
+00:00.19 | 
+00:00.19 | Rendered 80 samples in 0.156287 seconds
+[21:00:42] VEX module cache misses: 0
+[21:00:42] OCIO config: E:/Side Effects Software/Houdini22.0.368/packages/ocio/houdini-config-v3.0.0_aces-v2.0_ocio-v2.5.ocio
+[21:00:42] Image save time: 0:00:00.01
+[21:00:42] Saved Image: smoke.exr
+[21:00:42] Running postframe procedurals script: "E:/Side Effects Software/Houdini22.0.368/houdini/python3.13libs/husd/runprocedurals.py" --mode postframe --validategeo
+[21:00:42] Running postrender procedurals script: "E:/Side Effects Software/Houdini22.0.368/houdini/python3.13libs/husd/runprocedurals.py" --mode postrender --validategeo
+00:00.33 | Adaptive sampling: automatic min samples = 64
+00:00.33 | Rendering was canceled.
+00:00.33 | Schedule work for cancel.
+00:00.33 | Invoke buffer update callback.
+00:00.33 | Average display update time: 0.000161575 seconds.
+00:00.33 | Handle full-frame render buffer work.
+00:00.33 | No tiles on disk.
