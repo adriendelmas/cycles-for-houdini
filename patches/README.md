@@ -14,7 +14,7 @@ Régénérer les patchs après une nouvelle modification :
 
 Base amont : `3b97e190` (branche `release/5.2`).
 
-Les sept sont indépendants d'Houdini 22 et de cette machine — **tous sont des
+Les huit sont indépendants d'Houdini 22 et de cette machine — **tous sont des
 candidats à une contribution amont chez Blender**.
 
 ---
@@ -96,3 +96,15 @@ Symptôme trompeur : tout indique que le VDB est lu, et pourtant l'image est
 vide à cet endroit.
 
 Correctif : choisir `default_volume` pour une géométrie de type `Volume`.
+
+## 0008 — hydra : enregistrer le renderer auprès d'Houdini
+
+Ajoute un `UsdRenderers.json` (label de menu, purpose par défaut, valeurs par
+défaut de husk), installé à côté du package `cycles.json` déjà généré. Houdini
+fusionne ce fichier le long du `HOUDINI_PATH`, que le package pointe sur
+l'installation.
+
+Ajoute aussi un avertissement quand un réglage `cycles:integrator:<socket>`
+nomme un socket inexistant. L'ignorer en silence est un piège : un nom mal
+orthographié est indiscernable d'un réglage sans effet. À noter, husk avale les
+`TF_WARN` — l'avertissement remonte dans Solaris, pas en rendu batch.

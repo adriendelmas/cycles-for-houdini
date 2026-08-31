@@ -1,0 +1,84 @@
+From 298cd971611d498adf700ca22edf3a8cbdfadc83 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Mon, 31 Aug 2026 02:25:21 +0200
+Subject: [PATCH] hydra: register the renderer with Houdini and warn on unknown
+ integrator settings
+
+Adds UsdRenderers.json so Houdini gets a menu label, a default purpose and
+husk defaults for the delegate, installed next to the generated cycles.json
+package.
+
+Also warn when a cycles:integrator:<socket> setting names a socket that does
+not exist. Dropping it silently is a trap - a misspelled name is
+indistinguishable from a setting that had no effect. Note husk swallows
+TF_WARN, so this surfaces in Solaris rather than in batch renders.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/CMakeLists.txt              |  4 ++++
+ src/hydra/render_delegate.cpp         |  6 ++++++
+ src/hydra/resources/UsdRenderers.json | 13 +++++++++++++
+ 3 files changed, 23 insertions(+)
+ create mode 100644 src/hydra/resources/UsdRenderers.json
+
+diff --git a/src/hydra/CMakeLists.txt b/src/hydra/CMakeLists.txt
+index f1878646..31dc1948 100644
+--- a/src/hydra/CMakeLists.txt
++++ b/src/hydra/CMakeLists.txt
+@@ -219,6 +219,10 @@ if(WITH_CYCLES_HYDRA_RENDER_DELEGATE)
+   if (HOUDINI_FOUND)
+     delayed_install("${CMAKE_CURRENT_BINARY_DIR}/resources" "plugInfo.json" "${CYCLES_HYDRA_INSTALL_PATH}/usd_plugins/${HdCyclesPluginName}/resources")
+     delayed_install("${CMAKE_CURRENT_BINARY_DIR}/resources" "cycles.json" "${CMAKE_INSTALL_PREFIX}/houdini/packages")
++    # Renderer registration: menu label and husk defaults. Houdini merges
++    # UsdRenderers.json across HOUDINI_PATH, which the cycles.json package
++    # points at this install.
++    delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources" "UsdRenderers.json" "${CYCLES_INSTALL_PATH}/houdini")
+   else()
+     delayed_install("${CMAKE_CURRENT_BINARY_DIR}/resources" "plugInfo.json" "${CYCLES_HYDRA_INSTALL_PATH}/${HdCyclesPluginName}/resources")
+   endif()
+diff --git a/src/hydra/render_delegate.cpp b/src/hydra/render_delegate.cpp
+index 342aba4e..e67b503e 100644
+--- a/src/hydra/render_delegate.cpp
++++ b/src/hydra/render_delegate.cpp
+@@ -124,6 +124,7 @@ HdCyclesDelegate::HdCyclesDelegate(const HdRenderSettingsMap &settingsMap,
+                             std::make_unique<HdCyclesSession>(GetSessionParams(settingsMap));
+ 
+   for (const auto &setting : settingsMap) {
++    fprintf(stderr, "SETTING: %s\n", setting.first.GetText()); fflush(stderr);
+     // Skip over the settings known to be used for initialization only
+     if (setting.first == HdCyclesRenderSettingsTokens->device ||
+         setting.first == HdCyclesRenderSettingsTokens->threads)
+@@ -433,6 +434,11 @@ void HdCyclesDelegate::SetRenderSetting(const PXR_NS::TfToken &key, const PXR_NS
+         SetNodeValue(scene->integrator, *socket, value);
+         ++_settingsVersion;
+       }
++      else {
++        /* Silently dropping this is a trap: a misspelled socket name looks
++         * exactly like a setting that had no effect. */
++        TF_WARN("Unknown Cycles integrator setting '%s'", keyString.c_str());
++      }
+     }
+   }
+ }
+diff --git a/src/hydra/resources/UsdRenderers.json b/src/hydra/resources/UsdRenderers.json
+new file mode 100644
+index 00000000..2e8aec90
+--- /dev/null
++++ b/src/hydra/resources/UsdRenderers.json
+@@ -0,0 +1,13 @@
++{
++    "HdCyclesPlugin" : {
++        "valid" : true,
++        "menulabel" : "Cycles",
++        "menupriority" : 45,
++        "defaultpurposes" : [ "render" ],
++        "drawmodesupport" : false,
++        "needsdepth" : false,
++        "depthstyle" : "linear",
++        "husk.default_output" : "cycles.exr",
++        "husk.fast-exit" : 1
++    }
++}
+-- 
+2.53.0.windows.2
+

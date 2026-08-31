@@ -127,6 +127,46 @@ Les alias de nommage Houdini (`C`, `Pz`, `N`) passent par le patch 0002.
 
 Voir l'anomalie A7 ci-dessous.
 
+## Phase 9 — Réglages de rendu et packaging ✅
+
+### Réglages exposés
+
+Le delegate accepte, depuis un prim `RenderSettings` USD :
+
+| Clé | Effet |
+|---|---|
+| `cycles:samples` | nombre d'échantillons |
+| `cycles:device` | CPU / CUDA / OPTIX… |
+| `cycles:threads` | threads CPU |
+| `cycles:time_limit` | limite de temps |
+| `cycles:sample_offset` | décalage d'échantillons |
+| `cycles:integrator:<socket>` | **tout** socket de l'intégrateur |
+
+Vérifié : `cycles:samples = 24` rend bien 24 échantillons contre 1024 par
+défaut ; `cycles:integrator:max_bounce` à 0 contre 12 change la luminance
+moyenne comme attendu (perte de l'illumination indirecte).
+
+⚠️ Les noms de sockets sont ceux de Cycles, pas ceux de l'UI Blender :
+c'est **`max_bounce`** au singulier, pas `max_bounces`. Un nom erroné était
+ignoré sans un mot — le patch 0008 ajoute un avertissement.
+
+La liste complète des sockets disponibles se lit dans
+`external/cycles/src/scene/integrator.cpp`.
+
+### Packaging
+
+`install/houdini/` contient désormais :
+
+- `packages/cycles.json` — package Houdini (généré par le build amont)
+- `UsdRenderers.json` — label de menu et défauts husk (patch 0008)
+- `dso/usd/hdCycles.dll` + `dso/usd_plugins/hdCycles/` — le delegate et son manifeste
+
+Installation : copier `install/houdini/packages/cycles.json` dans
+`%USERPROFILE%/Documents/houdini22.0/packages/`.
+
+**Reste à vérifier par toi** : l'effet de `UsdRenderers.json` sur le menu de
+renderers de Solaris ne se constate que dans l'interface.
+
 ## Anomalies ouvertes
 
 ### A1 — Surfaces implicites non supportées (confirmé)
