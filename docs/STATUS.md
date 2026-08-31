@@ -313,11 +313,19 @@ aucun échantillon temporel supplémentaire au scene delegate : la vélocité
 arrive comme un primvar ordinaire à un seul instant. C'est aussi le plus utile
 en pratique, les simulations Houdini transportant `v` presque toujours.
 
-### A9 — Crash du viewport Solaris (en cours de vérification)
+### A9 — Crash du viewport Solaris ✅ CAUSE TROUVÉE (patch 0011)
 
-Rapporté sur une installation réelle : `PathTraceDisplay implementation could
-not begin update`, puis segfault. Le patch 0009 durcit la création du contexte
-GL et ajoute `CYCLES_DISPLAY_DRIVER=0` comme échappatoire.
+Verrouillage déséquilibré dans le display driver : `gl_context_disable()`
+déverrouillait `mutex_` même quand `gl_context_enable()` avait échoué **sans
+l'avoir verrouillé**. Déverrouiller un mutex non possédé est un comportement
+indéfini, et fait tomber Houdini.
 
-**Correctif non confirmé** — il n'est pas reproductible en CLI, la validation
-demande un test dans l'interface.
+Ce chemin n'est atteint que quand le contexte GL manque — donc exactement quand
+le driver signale `could not begin update`. Le message d'erreur et le segfault
+étaient **le même défaut**, pas deux.
+
+Ma première tentative (patch 0009) durcissait la création du contexte : utile,
+mais elle traitait la cause de l'erreur, pas celle du crash. Le crash a
+persisté, ce qui a permis de chercher au bon endroit.
+
+Détail dans `patches/README.md`. **Reste à confirmer en interface.**

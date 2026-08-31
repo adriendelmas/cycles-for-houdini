@@ -14,7 +14,7 @@ Régénérer les patchs après une nouvelle modification :
 
 Base amont : `3b97e190` (branche `release/5.2`).
 
-Les dix sont indépendants d'Houdini 22 et de cette machine — **tous sont des
+Les onze sont indépendants d'Houdini 22 et de cette machine — **tous sont des
 candidats à une contribution amont chez Blender**.
 
 ---
@@ -152,3 +152,31 @@ centré sur l'obturateur.
 Limite connue : c'est le flou de **transformation**. Le flou de déformation
 (points animés, ou attributs `velocities` / `accelerations` façon Karma) reste
 à faire — voir A8.
+
+## 0011 — Crash de l'hôte : verrouillage déséquilibré du display driver
+
+**C'est la cause du crash observé dans le viewport Solaris.**
+
+`gl_context_enable()` verrouille `mutex_` quand il réussit, mais retourne
+`false` **sans le verrouiller** quand aucun contexte GL utilisable n'existe.
+Deux appelants ignoraient cette valeur de retour — `flush()` et
+`graphics_interop_activate()` — et `gl_context_disable()` faisait
+`mutex_.unlock()` inconditionnellement.
+
+Déverrouiller un mutex que le thread ne possède pas est un **comportement
+indéfini**, et fait tomber l'application.
+
+Le point clé du diagnostic : ce chemin n'est atteint que lorsque le contexte
+manque, c'est-à-dire exactement quand le driver signale
+`PathTraceDisplay implementation could not begin update`. Le message d'erreur
+et le segfault qui le suivait n'étaient pas deux problèmes, mais **un seul**.
+
+Correctif en trois points :
+
+1. Suivre la possession du verrou pour que `gl_context_disable()` ne libère que
+   ce qui a effectivement été pris — robuste quelle que soit la discipline des
+   appelants.
+2. `flush()` renonce au lieu d'émettre des appels GL sans contexte.
+3. Créer le contexte partagé **dans le constructeur** plutôt qu'au premier
+   `draw()` : `draw()` a plusieurs sorties anticipées, le thread de rendu
+   pouvait donc atteindre `update_begin()` avant qu'aucun contexte n'existe.
