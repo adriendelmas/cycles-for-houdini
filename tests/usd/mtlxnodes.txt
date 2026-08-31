@@ -1,0 +1,8 @@
+﻿ND_noise3d_color4FA        amplitude, pivot, position
+ND_fractal3d_vector3       amplitude, octaves, lacunarity, diminish, position
+ND_checkerboard_color3     color1, color2, uvtiling, uvoffset, texcoord
+ND_gltf_image_color3_color3_1_0 file, factor, default, texcoord, pivot, scale, rotate, offset, operationorder, uaddressmode, vaddressmode, filtertype
+ND_gltf_normalmap_vector3_1_0 file, default, texcoord, pivot, scale, rotate, offset, operationorder, uaddressmode, vaddressmode, filtertype
+ND_position_vector3        space
+ND_multiply_float          in1, in2
+ND_mix_color3              fg, bg, mix
