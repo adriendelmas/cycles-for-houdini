@@ -23,6 +23,8 @@ INTEGRATOR = os.path.join(CYCLES, "src", "scene", "integrator.cpp")
 OUT = os.path.join(CYCLES, "src", "hydra", "resources", "HdCyclesPlugin_Global.ds")
 
 # Cycles socket macro -> (Houdini parm type, USD value type)
+NUMERIC = re.compile(r"^-?(\d+\.?\d*([eE][-+]?\d+)?|\.\d+)$")
+
 TYPES = {
     "SOCKET_INT": ("integer", "int"),
     "SOCKET_UINT": ("integer", "int"),
@@ -66,6 +68,11 @@ def parse_sockets():
         default = default.rstrip("f")
         if macro == "SOCKET_BOOLEAN":
             default = "1" if default == "true" else "0"
+        elif not NUMERIC.match(default):
+            # A C++ constant or a bit-or of flags. Emitting it verbatim makes
+            # Houdini complain about the default block; inventing a number
+            # would be worse, so let Houdini use its own type default.
+            default = None
         out.append((name, label, TYPES[macro][0], TYPES[macro][1], default))
     return out
 
@@ -75,6 +82,7 @@ def emit_parm(usd_name, label, parm_type, usd_type, default):
     value parm itself. Mirrors how Houdini writes Karma's own definitions."""
     encoded = hou.text.encode(usd_name)
     control = hou.text.encode(usd_name + "_control")
+    default_block = ("        default { %s }\n" % default) if default is not None else ""
     return f'''    parm {{
         name    "{control}"
         label   "{label}"
@@ -92,8 +100,7 @@ def emit_parm(usd_name, label, parm_type, usd_type, default):
         label   "{label}"
         type    {parm_type}
         size    1
-        default {{ {default} }}
-        parmtag {{ "spare_category" "Cycles" }}
+{default_block}        parmtag {{ "spare_category" "Cycles" }}
         parmtag {{ "usdvaluetype" "{usd_type}" }}
         disablewhen  R"({{ {control} == block }} {{ {control} == none }})"
     }}
@@ -143,7 +150,7 @@ def main():
     parmtag     {{ spare_classtags       "render" }}
 
     group {{
-        name "global"
+        name "cycles_global"
         label "Global"
 {"".join(body)}    }}
 }}

@@ -1,0 +1,186 @@
+From 15aa3c95570526efded032a06f471c02e2f7820c Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Mon, 31 Aug 2026 23:08:52 +0200
+Subject: [PATCH] hydra: material edits never reached the device, and
+ displacement was bump-only
+
+Shader::set_graph() does not mark the shader modified, so the branch that
+rebuilds a material's graph left is_modified() false and never called
+tag_update(). The shader manager was therefore never tagged, the scene never
+reported needing an update, and a material rendered correctly once and then
+ignored every subsequent edit. The sibling branch that only updates parameters
+tags it explicitly - the asymmetry was the bug.
+
+A shader also kept Cycles' default displacement method, which is bump only, so
+a connected displacement terminal merely perturbed normals and set_graph() did
+not even compute the displacement hash. Ask for real displacement when the
+network drives it, and map MaterialX's displacement nodes onto the Cycles
+equivalents.
+
+Also drop leftover debug output that printed every render setting to the host's
+console.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp                        | 37 +++++++++++++++++++
+ src/hydra/render_delegate.cpp                 |  1 -
+ .../resources/HdCyclesPluginGPU_Global.ds     |  4 +-
+ src/hydra/resources/HdCyclesPlugin_Global.ds  |  4 +-
+ 4 files changed, 39 insertions(+), 7 deletions(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index f0c38666..948d6eda 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -312,6 +312,24 @@ const UsdToCyclesMapping MtlxMix = {"mix_color",
+                                         {CyclesMaterialTokens->out, ustring("result")},
+                                     }};
+ 
++/* Displacement. MaterialX carries the amount on a dedicated node feeding the
++ * material's displacement terminal; Cycles has a direct equivalent. */
++const UsdToCyclesMapping MtlxDisplacement = {
++    "displacement",
++    {
++        {TfToken("displacement"), ustring("height")},
++        {TfToken("scale"), ustring("scale")},
++        {CyclesMaterialTokens->out, ustring("displacement")},
++    }};
++
++const UsdToCyclesMapping MtlxVectorDisplacement = {
++    "vector_displacement",
++    {
++        {TfToken("displacement"), ustring("vector")},
++        {TfToken("scale"), ustring("scale")},
++        {CyclesMaterialTokens->out, ustring("displacement")},
++    }};
++
+ /* Arithmetic. A single Cycles math (or vector_math) node covers all of these,
+  * selected through its mode enum - hence the fixed value. */
+ UsdToCyclesMapping MakeMtlxMath(const char *const mode, const bool vector)
+@@ -377,6 +395,12 @@ const UsdToCyclesMapping *FindMtlxMapping(const std::string &nodeTypeId)
+   if (nodeTypeId.starts_with("ND_tangent_")) {
+     return &MtlxTangentLookup;
+   }
++  if (nodeTypeId.starts_with("ND_displacement_vector3")) {
++    return &MtlxVectorDisplacement;
++  }
++  if (nodeTypeId.starts_with("ND_displacement_")) {
++    return &MtlxDisplacement;
++  }
+   if (nodeTypeId.starts_with("ND_mix_")) {
+     return &MtlxMix;
+   }
+@@ -498,6 +522,11 @@ void HdCyclesMaterial::Sync(HdSceneDelegate *sceneDelegate,
+       }
+       else {
+         PopulateShaderGraph(network);
++        /* Shader::set_graph() does not mark the shader modified, so a rebuilt
++         * graph would never reach tag_update() below - the material renders
++         * correctly the first time and then never changes again. The sibling
++         * branch above tags it for the same reason. */
++        _shader->tag_modified();
+       }
+     }
+     else {
+@@ -741,6 +770,7 @@ void HdCyclesMaterial::PopulateShaderGraph(HdMaterialNetworkSchema network)
+   }
+ 
+   /* Finally connect the terminals to the graph output (Surface, Volume, Displacement). */
++  bool hasDisplacement = false;
+   HdMaterialConnectionContainerSchema terminals = network.GetTerminals();
+   for (const TfToken &terminalName : terminals.GetNames()) {
+     HdMaterialConnectionSchema termSchema = terminals.Get(terminalName);
+@@ -786,6 +816,7 @@ void HdCyclesMaterial::PopulateShaderGraph(HdMaterialNetworkSchema network)
+              terminalName == CyclesMaterialTokens->cyclesDisplacement)
+     {
+       inputName = outputName = "Displacement";
++      hasDisplacement = true;
+     }
+     else if (terminalName == HdMaterialTerminalTokens->volume ||
+              terminalName == CyclesMaterialTokens->cyclesVolume)
+@@ -832,6 +863,12 @@ void HdCyclesMaterial::PopulateShaderGraph(HdMaterialNetworkSchema network)
+     graph->connect(instanceIdNode->output("Fac"), aovNode->input("Value"));
+   }
+ 
++  /* A shader keeps Cycles' default displacement method, which is bump only -
++   * so a connected displacement terminal would just perturb normals, and
++   * set_graph() would not even compute the displacement hash. Ask for real
++   * displacement alongside bump when the network actually drives it. */
++  _shader->set_displacement_method(hasDisplacement ? DISPLACE_BOTH : DISPLACE_BUMP);
++
+   _shader->set_graph(std::move(graph));
+ }
+ 
+diff --git a/src/hydra/render_delegate.cpp b/src/hydra/render_delegate.cpp
+index be00bac7..b02eef20 100644
+--- a/src/hydra/render_delegate.cpp
++++ b/src/hydra/render_delegate.cpp
+@@ -151,7 +151,6 @@ HdCyclesDelegate::HdCyclesDelegate(const HdRenderSettingsMap &settingsMap,
+                             std::make_unique<HdCyclesSession>(GetSessionParams(settingsMap));
+ 
+   for (const auto &setting : settingsMap) {
+-    fprintf(stderr, "SETTING: %s\n", setting.first.GetText()); fflush(stderr);
+     // Skip over the settings known to be used for initialization only
+     if (setting.first == HdCyclesRenderSettingsTokens->device ||
+         setting.first == HdCyclesRenderSettingsTokens->threads)
+diff --git a/src/hydra/resources/HdCyclesPluginGPU_Global.ds b/src/hydra/resources/HdCyclesPluginGPU_Global.ds
+index dc23f248..8690f327 100644
+--- a/src/hydra/resources/HdCyclesPluginGPU_Global.ds
++++ b/src/hydra/resources/HdCyclesPluginGPU_Global.ds
+@@ -9,7 +9,7 @@
+     parmtag     { spare_classtags       "render" }
+ 
+     group {
+-        name "global"
++        name "cycles_global"
+         label "Global"
+     groupcollapsible {
+         name "cycles_session"
+@@ -279,7 +279,6 @@
+         label   "Sample Subset Length"
+         type    integer
+         size    1
+-        default { MAX_SAMPLES }
+         parmtag { "spare_category" "Cycles" }
+         parmtag { "usdvaluetype" "int" }
+         disablewhen  R"({ xn__cyclesintegratorsample_subset_length_control_qdck == block } { xn__cyclesintegratorsample_subset_length_control_qdck == none })"
+@@ -827,7 +826,6 @@
+         label   "Denoiser Passes"
+         type    integer
+         size    1
+-        default { DENOISER_PASS_ALBEDO | DENOISER_PASS_NORMAL }
+         parmtag { "spare_category" "Cycles" }
+         parmtag { "usdvaluetype" "int" }
+         disablewhen  R"({ xn__cyclesintegratordenoiser_passes_control_l4bk == block } { xn__cyclesintegratordenoiser_passes_control_l4bk == none })"
+diff --git a/src/hydra/resources/HdCyclesPlugin_Global.ds b/src/hydra/resources/HdCyclesPlugin_Global.ds
+index dc23f248..8690f327 100644
+--- a/src/hydra/resources/HdCyclesPlugin_Global.ds
++++ b/src/hydra/resources/HdCyclesPlugin_Global.ds
+@@ -9,7 +9,7 @@
+     parmtag     { spare_classtags       "render" }
+ 
+     group {
+-        name "global"
++        name "cycles_global"
+         label "Global"
+     groupcollapsible {
+         name "cycles_session"
+@@ -279,7 +279,6 @@
+         label   "Sample Subset Length"
+         type    integer
+         size    1
+-        default { MAX_SAMPLES }
+         parmtag { "spare_category" "Cycles" }
+         parmtag { "usdvaluetype" "int" }
+         disablewhen  R"({ xn__cyclesintegratorsample_subset_length_control_qdck == block } { xn__cyclesintegratorsample_subset_length_control_qdck == none })"
+@@ -827,7 +826,6 @@
+         label   "Denoiser Passes"
+         type    integer
+         size    1
+-        default { DENOISER_PASS_ALBEDO | DENOISER_PASS_NORMAL }
+         parmtag { "spare_category" "Cycles" }
+         parmtag { "usdvaluetype" "int" }
+         disablewhen  R"({ xn__cyclesintegratordenoiser_passes_control_l4bk == block } { xn__cyclesintegratordenoiser_passes_control_l4bk == none })"
+-- 
+2.53.0.windows.2
+

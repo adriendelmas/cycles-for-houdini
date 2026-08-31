@@ -481,3 +481,57 @@ Corrige au passage : `node_util.cpp` faisait `GetResolvedPath()` sans repli, la
 ou les volumes et les lumieres retombent sur `GetAssetPath()`. Toute texture non
 resolue devenait une chaine vide - donc absente en silence, sans indication du
 chemin fautif.
+
+## Mises a jour de materiaux et displacement
+
+### Les editions de materiau ne repassaient jamais
+
+`Shader::set_graph()` **ne marque pas le shader comme modifie**. Or `Sync`
+faisait :
+
+    else { PopulateShaderGraph(network); }      // pas de tag_modified
+    ...
+    if (_shader->is_modified()) { _shader->tag_update(lock.scene); }
+
+Le graphe reconstruit laissait donc `is_modified()` faux, `tag_update()`
+n'etait jamais appele, le shader manager jamais notifie, et la scene ne se
+declarait pas a mettre a jour. Un materiau s'affichait correctement au premier
+rendu puis ignorait toute modification.
+
+La branche voisine, celle qui ne met a jour que les parametres, appelait bien
+`tag_modified()` : **l'asymetrie etait le bug**.
+
+### Displacement
+
+![displacement](milestone-displacement.png)
+
+Deux manques cumules :
+
+1. Le delegate ne posait **jamais** `displacement_method`. Il restait sur le
+   defaut de Cycles, `DISPLACE_BUMP` - donc un terminal de displacement
+   branche ne faisait que perturber les normales, et `set_graph()` ne calculait
+   meme pas le hash de displacement.
+2. Les noeuds `ND_displacement_float` / `_vector3` de MaterialX n'avaient pas
+   d'equivalent mappe, alors que Cycles a `displacement` et
+   `vector_displacement`.
+
+Corrige : la methode passe a `DISPLACE_BOTH` quand le reseau pilote
+effectivement un displacement, et les deux noeuds MaterialX sont mappes.
+
+### Fichier de proprietes de rendu
+
+Deux avertissements dans la console d'Houdini venaient de mon fichier genere :
+
+- `Warning(830): Too many defaults specified` - deux sockets ont pour defaut une
+  constante C++ (`MAX_SAMPLES`, un `|` de drapeaux) que la regex capturait
+  verbatim. On n'emet plus de bloc `default` quand il n'est pas numerique,
+  plutot que d'inventer une valeur.
+- `Duplicate folder name (global` - le groupe s'appelait `global`, comme celui
+  de Karma. Renomme en `cycles_global`.
+
+### Textures COP
+
+L'erreur `Image file op:/... does not exist` est desormais **visible** grace au
+repli sur le chemin authore : avant, le chemin devenait une chaine vide et la
+texture disparaissait sans un mot. Pour que ces textures fonctionnent, utiliser
+`tools/flatten_op_textures.py`.
