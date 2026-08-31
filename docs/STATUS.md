@@ -344,3 +344,20 @@ une version périmée.
 Toujours vérifier l'horodatage après installation :
 
     ls -la install/houdini/dso/usd/hdCycles.dll
+
+### A10 — Display driver GPU inutilisable dans le viewport Houdini
+
+Quatre défauts distincts trouvés dans `display_driver.cpp`, tous corrigés
+(patchs 0009, 0011, 0012, 0013), mais le blit lui-même produisait encore des
+pixels erronés — un rendu ressemblant à une passe de profondeur.
+
+**Décision : désactivé par défaut** (patch 0013). Le rendu interactif passe par
+l'output driver, le même chemin que tout rendu batch, correct sur l'ensemble de
+la batterie. Réactivable par `CYCLES_DISPLAY_DRIVER=1`.
+
+Reste à comprendre, pour qui voudra le réactiver : pourquoi le contenu blitté
+est incorrect. Piste — `GetDefaultAovDescriptor` force `HdFormatFloat16Vec4`
+quand le display driver est actif, et le driver l'exige
+(`TF_VERIFY(renderBuffer->GetFormat() == HdFormatFloat16Vec4)`) ; une
+inadéquation de format avec ce qu'attend le viewport d'Houdini expliquerait
+l'aspect « profondeur ».

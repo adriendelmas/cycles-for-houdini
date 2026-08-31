@@ -14,7 +14,7 @@ Régénérer les patchs après une nouvelle modification :
 
 Base amont : `3b97e190` (branche `release/5.2`).
 
-Les douze sont indépendants d'Houdini 22 et de cette machine — **tous sont des
+Les treize sont indépendants d'Houdini 22 et de cette machine — **tous sont des
 candidats à une contribution amont chez Blender**.
 
 ---
@@ -198,3 +198,30 @@ persistait.
 
 Sans le patch 0011, cette erreur menait au crash. Avec lui, elle n'était plus
 que du bruit ; ce patch supprime le bruit.
+
+## 0013 — Crash à la destruction, et display driver désactivé par défaut
+
+Le destructeur appelait `glDeleteBuffers()` **sans contexte GL courant**. Il
+s'exécute sur le thread où l'hôte détruit le delegate — changer de renderer
+dans le viewport, par exemple — qui n'a pas de contexte à lui : l'appel partait
+dans le vide et emportait l'application. `gl_context_dispose()` avait le même
+défaut, en tentant de détruire un contexte potentiellement encore courant.
+
+Correctif : rendre notre contexte courant le temps des suppressions, et le
+délier avant destruction.
+
+**Et le display driver est désormais désactivé par défaut.** Partager le
+contexte GL de l'hôte pour blitter les tuiles dans une texture a produit
+**quatre défauts distincts** dans le viewport d'Houdini :
+
+1. verrouillage déséquilibré → crash (0011)
+2. contexte créé trop tard → erreur à chaque frame (0012)
+3. pixels erronés — le viewport affichait quelque chose ressemblant à une passe
+   de profondeur plutôt qu'à la beauty
+4. appels GL sans contexte à la destruction → crash (celui-ci)
+
+Le chemin par l'output driver est celui qu'emploie déjà tout rendu batch, et il
+est correct sur l'ensemble de la batterie de tests. Un rafraîchissement moins
+efficace vaut mieux qu'un viewport qui affiche faux et qui tombe.
+
+`CYCLES_DISPLAY_DRIVER=1` permet de le réactiver pour qui veut y travailler.
