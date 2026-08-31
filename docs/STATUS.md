@@ -378,11 +378,64 @@ Trois obstacles levés :
 3. Les kernels s'installaient dans `install/lib`, hors de la racine Houdini sur
    laquelle le delegate enracine Cycles — donc jamais trouvés à l'exécution.
 
-**Limite : `Hardware Ray-Tracing: Off`.** Sans l'OptiX SDK, les cœurs RT de la
-carte ne sont pas exploités. Le gain mesuré sur une scène simple est modeste
-(3,8 s contre 4,5 s), mais le CPU de comparaison est un Threadripper 3995WX à
-128 threads — l'écart se creuserait sur une scène lourde, et bien davantage
-avec OptiX.
+### OptiX
+
+**Le SDK etait installe depuis le debut**, sous
+`C:/ProgramData/NVIDIA Corporation/OptiX SDK 9.1.0`. CMake ne fouille pas
+`ProgramData` : il ne manquait qu'un `-DOPTIX_ROOT_DIR`. Version 9.1.0 acceptee
+(minimum requis 8.0.0). Rien a mettre a jour.
+
+A propos de `Hardware Ray-Tracing: Off` affiche meme sous OptiX :
+`use_hardware_raytracing` n'est renseigne que par le device **HIP** (AMD
+RDNA2+, ou HIP-RT est optionnel). Le device OptiX ne le met jamais a vrai,
+parce que l'acceleration materielle y est **intrinseque a l'API**. Le message
+est cosmetique, pas un symptome.
+
+### Mesures
+
+Temps de rendu pur (hors demarrage du process), 1280x640, 1024 samples fixes,
+echantillonnage adaptatif desactive, sur `phase5.usda` :
+
+| Device | Temps | Rapport |
+|---|---|---|
+| CPU - Threadripper 3995WX, 128 threads | 29,8 s | reference |
+| CUDA - RTX 3090 | 12,1 s | **2,5x** |
+| OptiX - RTX 3090 | 12,0 s | 2,5x |
+
+Sorties identiques sur les trois devices.
+
+OptiX n'apporte rien **sur cette scene-la**, et c'est attendu : elle est
+dominee par un volume et des courbes, or les coeurs RT accelerent
+l'intersection rayon-triangle. L'ecart apparaitrait sur de la geometrie
+polygonale dense.
+
+Piege de mesure : au chronometre du process, sur une scene legere, OptiX
+ressortait *plus lent* (5,7 s contre 4,5 s) - uniquement a cause de son surcout
+d'initialisation, chargement des modules PTX et construction des structures
+d'acceleration. Il faut mesurer le rendu seul.
+
+## Noeud de reglages de rendu (livre)
+
+Les reglages Cycles apparaissent dans l'onglet du **Render Settings LOP**, au
+meme endroit que ceux de Karma - pas dans un noeud separe. Houdini peuple cet
+onglet depuis `$HOUDINI_PATH/soho/parameters/<Renderer>_Global.ds`.
+
+**59 proprietes en 9 onglets** : Session, Sampling, Light Paths, Volumes,
+Caustics, Denoising, Guiding, Ambient Occlusion, Advanced.
+
+Le fichier est **genere** depuis les declarations `SOCKET_*` de
+`integrator.cpp` par `tools/gen_render_properties.py`, pas tenu a la main : a
+relancer apres une mise a jour de Cycles pour que les nouveaux reglages
+apparaissent d'eux-memes.
+
+Les noms de parametres sont encodes par `hou.text.encode()`, dont j'ai verifie
+qu'elle reproduit exactement l'encodage punycode d'Houdini
+(`karma:global:imagemode` -> `xn__karmaglobalimagemode_m8ag`), plutot que de
+reimplementer cette transformation a l'aveugle.
+
+Chaque propriete porte son parm de controle set/block/none, donc rien n'est
+ecrit dans l'USD tant que l'utilisateur n'y touche pas.
+
 
 Ligne de configuration :
 
