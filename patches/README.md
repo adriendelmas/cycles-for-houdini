@@ -14,7 +14,7 @@ Régénérer les patchs après une nouvelle modification :
 
 Base amont : `3b97e190` (branche `release/5.2`).
 
-Les six sont indépendants d'Houdini 22 et de cette machine — **tous sont des
+Les sept sont indépendants d'Houdini 22 et de cette machine — **tous sont des
 candidats à une contribution amont chez Blender**.
 
 ---
@@ -83,3 +83,16 @@ Cycles, pas devinés.
 
 Volontairement écrit en **un seul bloc auto-contenu**, supprimable d'une pièce
 le jour où Cycles comprendra MaterialX nativement.
+
+## 0007 — hydra : donner aux volumes non liés le shader volumétrique par défaut
+
+Une géométrie sans matériau retombait sur `scene->default_surface` quel que
+soit son type. Or un `Volume` a besoin d'un shader portant une fermeture
+volumétrique : un volume non lié voyait sa grille **correctement chargée** — la
+texture NanoVDB est allouée et apparaît dans les statistiques mémoire — mais
+n'avait rien pour y diffuser, et rendait comme s'il n'existait pas.
+
+Symptôme trompeur : tout indique que le VDB est lu, et pourtant l'image est
+vide à cet endroit.
+
+Correctif : choisir `default_volume` pour une géométrie de type `Volume`.

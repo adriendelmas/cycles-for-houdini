@@ -88,6 +88,23 @@ MaterialX sans équivalent Cycles (`base`, `transmission_color`,
 `subsurface_color`, `transmission_extra_roughness`) sont délibérément non
 mappées et ignorées — c'est documenté dans le code.
 
+## Phase 5 — Curves, points, volumes ✅
+
+![phase 5](milestone-phase5.png)
+
+Validé sur `tests/usd/phase5.usda` :
+
+- **BasisCurves** — 60 courbes cubiques bspline, largeurs dégressives par
+  vertex, rendues comme des cheveux natifs Cycles.
+- **Points** — 900 points, largeurs variables.
+- **Volume OpenVDB** — le `cloud.vdb` livré avec Houdini, chargé via un prim
+  `OpenVDBAsset`, avec auto-ombrage et ombre portée.
+
+Le volume ne s'affichait pas au premier essai. Les logs montraient pourtant la
+texture NanoVDB allouée (3,45 Mo) — mais aussi `Use Volume False` et
+`0 volume octree(s)`. Cause : un volume sans matériau recevait le shader de
+surface par défaut. Corrigé par le patch 0007.
+
 ## Anomalies ouvertes
 
 ### A1 — Surfaces implicites non supportées (confirmé)
