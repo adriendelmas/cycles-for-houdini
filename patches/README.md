@@ -14,7 +14,7 @@ Régénérer les patchs après une nouvelle modification :
 
 Base amont : `3b97e190` (branche `release/5.2`).
 
-Les huit sont indépendants d'Houdini 22 et de cette machine — **tous sont des
+Les dix sont indépendants d'Houdini 22 et de cette machine — **tous sont des
 candidats à une contribution amont chez Blender**.
 
 ---
@@ -108,3 +108,47 @@ Ajoute aussi un avertissement quand un réglage `cycles:integrator:<socket>`
 nomme un socket inexistant. L'ignorer en silence est un piège : un nom mal
 orthographié est indiscernable d'un réglage sans effet. À noter, husk avale les
 `TF_WARN` — l'avertissement remonte dans Solaris, pas en rendu batch.
+
+## 0009 — hydra : ne pas fabriquer un contexte GL inutilisable
+
+`gl_context_create()` lit deux fois le contexte GL courant du thread appelant :
+via `wglGetCurrentDC()` pour le format de pixel, et pour `wglShareLists()`.
+Sans contexte courant, il produisait un contexte ni correctement formaté ni
+partagé avec celui de l'hôte, qui échouait à la première utilisation.
+
+Symptôme observé dans le viewport Solaris :
+`PathTraceDisplay implementation could not begin update`, suivi d'un crash.
+
+Correctif : renoncer s'il n'y a pas de contexte courant, et détruire le
+contexte si le partage échoue — `gl_context_enable()` signale alors proprement
+l'échec.
+
+Ajoute aussi un réglage d'environnement **`CYCLES_DISPLAY_DRIVER=0`** pour
+désactiver complètement le display driver. Les hôtes diffèrent sur le moment et
+le thread où un contexte GL est courant ; le rendu passe alors par l'output
+driver, plus lent à rafraîchir mais sans aucune exigence GL.
+
+## 0010 — hydra : motion blur des transforms d'objet animées
+
+Seule la caméra était échantillonnée sur l'obturateur ; la géométrie lisait une
+transform unique au temps zéro, donc tout ce qui bougeait rendait net.
+
+Trois points à ne pas rater :
+
+1. **L'obturateur est lu depuis les réglages de rendu**, pas depuis le prim
+   caméra — ça évite de dépendre de l'ordre de synchronisation entre sprims et
+   rprims, qui n'est pas garanti.
+2. **Les échantillons doivent être régulièrement espacés.** `Object::motion_time()`
+   répartit les étapes linéairement sur [-1, 1] ; utiliser les temps
+   d'échantillonnage que remonte USD, qui sont irréguliers, flouterait le long
+   d'une trajectoire déformée.
+3. **`Integrator::motion_blur` doit être activé.** `Scene::need_motion()` ne
+   renvoie `MOTION_BLUR` que dans ce cas — sans lui, les transforms de motion
+   sont posées mais purement ignorées.
+
+La transform statique est prise sur l'échantillon médian pour que le flou soit
+centré sur l'obturateur.
+
+Limite connue : c'est le flou de **transformation**. Le flou de déformation
+(points animés, ou attributs `velocities` / `accelerations` façon Karma) reste
+à faire — voir A8.

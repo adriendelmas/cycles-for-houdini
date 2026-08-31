@@ -259,7 +259,15 @@ même scène avec Karma**. C'est ce qui a permis de distinguer les vrais bugs du
 delegate de mes propres scènes de test mal écrites — et de rattraper au moins
 une conclusion erronée.
 
-### A7 — Motion blur d'objet non implémenté
+### A7 — Motion blur d'objet ✅ RÉSOLU (patch 0010)
+
+![motion blur](milestone-motionblur.png)
+
+Résolu. Détail dans `patches/README.md`. Ce qui suit décrit l'état initial.
+
+<details>
+<summary>Diagnostic d'origine</summary>
+
 
 Seule la **caméra** a du motion blur : `camera.cpp` échantillonne sa transform
 sur l'obturateur et appelle `cam->set_motion()`. Pour la géométrie,
@@ -286,3 +294,30 @@ Ce qu'il faut pour le corriger, et pourquoi ce n'est pas un petit patch :
 
 Un flou subtilement faux serait pire que pas de flou du tout, donc cette
 fonctionnalité mérite son propre créneau plutôt qu'un ajout en fin de phase.
+
+</details>
+
+### A8 — Flou de déformation et attributs de vélocité
+
+Le patch 0010 couvre le flou de **transformation** d'objet. Restent à faire :
+
+- le flou de **déformation** : points animés sur mesh et courbes, via les
+  attributs de motion Cycles (`ATTR_STD_MOTION_VERTEX_POSITION`) ;
+- le flou par **attributs `velocities` / `accelerations`**, comme le fait Karma.
+  Cycles n'a pas de notion native de vélocité : il faut synthétiser les
+  positions aux étapes de motion (`P + v·dt`, plus `½·a·dt²` si l'accélération
+  est présente) et remplir l'attribut de motion.
+
+C'est en réalité le chemin le plus **simple** des deux, puisqu'il ne demande
+aucun échantillon temporel supplémentaire au scene delegate : la vélocité
+arrive comme un primvar ordinaire à un seul instant. C'est aussi le plus utile
+en pratique, les simulations Houdini transportant `v` presque toujours.
+
+### A9 — Crash du viewport Solaris (en cours de vérification)
+
+Rapporté sur une installation réelle : `PathTraceDisplay implementation could
+not begin update`, puis segfault. Le patch 0009 durcit la création du contexte
+GL et ajoute `CYCLES_DISPLAY_DRIVER=0` comme échappatoire.
+
+**Correctif non confirmé** — il n'est pas reproductible en CLI, la validation
+demande un test dans l'interface.
