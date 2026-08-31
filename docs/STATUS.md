@@ -440,3 +440,44 @@ ecrit dans l'USD tant que l'utilisateur n'y touche pas.
 Ligne de configuration :
 
     cmake -B build -DHOUDINI_ROOT=... -DWITH_CYCLES_HYDRA_RENDER_DELEGATE=ON       -DWITH_CYCLES_CUDA_BINARIES=ON -DCYCLES_CUDA_BINARIES_ARCH=sm_86       -DWITH_CYCLES_DEVICE_OPTIX=OFF
+
+## Textures COP en `op:` (livre, cote Houdini)
+
+Houdini permet de pointer une texture directement sur un COP :
+`op:/img/net/OUT`. Ses propres renderers evaluent ca via sa bibliotheque
+d'imagerie ; un delegate tiers, lui, ne voit qu'une chaine qu'il ne sait pas
+ouvrir.
+
+**Ce qui a ete ecarte, et pourquoi.** Le resolveur d'assets d'Houdini accepte
+le chemin et rend un `ArAsset` - mais de **taille 0**, avec `GetBuffer()` a
+`None`. Un `op:` n'est pas un flux d'octets. J'avais commence a concevoir un
+`ImageLoader` Cycles lisant via `ArAsset` : ce test a deux lignes a evite
+d'ecrire le chargeur pour rien.
+
+**Ce qui a ete ecarte aussi.** Lier `libIMG` d'Houdini dans le delegate et
+appeler `IMG_File::open("op:...")`. Plausible - le delegate tourne dans le
+process d'Houdini - mais invérifiable sans ecrire un programme HDK, et surtout
+ca lierait un composant Cycles amont a l'ABI d'Houdini, qui casse a chaque
+version.
+
+**Ce qui est livre.** `tools/flatten_op_textures.py` : une pre-passe qui
+parcourt le stage, cuit chaque COP reference vers un fichier image et reecrit
+les chemins. A poser dans un Python LOP avant le noeud de rendu :
+
+    import flatten_op_textures
+    flatten_op_textures.run(hou.pwd())
+
+La reecriture se fait sur la couche du LOP, donc la scene d'origine est
+intacte et retirer le noeud restaure les `op:`.
+
+Verifie de bout en bout : COP -> aplatissement -> EXR de 35 Ko -> materiau
+MaterialX `ND_image_color3` -> `image_texture` Cycles -> rendu correct.
+
+**Limite : ce n'est pas live.** Le COP est aplati au moment ou le LOP cuit ;
+le modifier ensuite ne se repercute pas dans un IPR en cours sans recuire ce
+noeud.
+
+Corrige au passage : `node_util.cpp` faisait `GetResolvedPath()` sans repli, la
+ou les volumes et les lumieres retombent sur `GetAssetPath()`. Toute texture non
+resolue devenait une chaine vide - donc absente en silence, sans indication du
+chemin fautif.
