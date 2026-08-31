@@ -579,3 +579,54 @@ d'un meme noeud ne se telescopent pas.
   est protege et sort un avertissement nommant le chemin fautif, sans lever ni
   planter. Pour une ferme de rendu, il faut aplatir en amont - c'est a ca que
   sert `tools/flatten_op_textures.py`, conserve pour cet usage.
+
+## Copernicus : ce qu'il a fallu corriger, et les erreurs de methode
+
+Trois passes ont ete necessaires, chacune parce que j'avais valide une partie
+de la chaine en croyant l'avoir validee entiere.
+
+### 1. Le mauvais systeme de compositing
+
+Tous mes tests initiaux portaient sur `/img/...`, c'est-a-dire **COP2**. J'en ai
+conclu qu'aucune API Houdini ne donne les pixels d'un COP - une conclusion
+generale tiree d'un systeme qui n'etait pas celui utilise. Les noeuds
+**Copernicus** (categorie `Cop`, dans un `copnet`) n'ont pas `saveImage`, qui
+est une API COP2.
+
+### 2. Un noeud de sortie inutile
+
+Deuxieme correction : passer par un `rop_image`. Ca marchait, mais ca ajoutait
+un noeud a la scene de l'utilisateur - alors que Karma lit un COP reference sans
+rien poser du tout. `CopNode.layer()` donne un `hou.ImageLayer` avec un acces
+**direct** aux pixels : `bufferResolution()` et `allBufferElements()`.
+
+### 3. Les canaux
+
+`hou.saveImageDataToFile` prend une sequence de flottants et n'accepte **que du
+RGBA**. Elle rejette franchement un buffer a trois canaux :
+
+    the color+alpha data sequence must contain width*height*4 elements
+
+Mais un buffer a **un seul canal** passe : son nombre d'octets
+(`w * h * 1 * 4`) egale par coincidence le nombre d'elements attendu
+(`w * h * 4`). La fonction ecrit alors **chaque octet comme une valeur**. Un
+noise en niveaux de gris ressortait en jaune sature et blanc crame - ce n'etait
+pas l'image, c'etait sa representation binaire relue de travers.
+
+Correction : construire explicitement les quatre canaux. Un canal replique en
+RGB, trois canaux passes tels quels, alpha rempli de 1.
+
+Le buffer est **entrelace**, verifie en lisant un `constant` a valeurs
+distinctes par canal : `0.9, 0.2, 0.4, 0.9, 0.2, 0.4, ...`
+
+### La lecon de methode
+
+A chaque fois, le defaut etait de verifier qu'un fichier **apparaissait** plutot
+que ce qu'il **contenait**. La verification qui a finalement tenu :
+
+    source 0.35, un canal
+    -> EXR : 0.350000 0.350000 0.350000 1.000000
+
+Le script Python que le C++ assemble est aussi verifie a la compilation : une
+erreur de syntaxe ne serait pas rattrapee par le `try` qu'il contient, puisque
+celui-ci est a l'interieur.

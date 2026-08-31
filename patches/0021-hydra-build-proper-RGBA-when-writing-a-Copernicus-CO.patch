@@ -1,0 +1,66 @@
+From 649d11dbf9e2084c94b5969c39596ed612fdd0b7 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Tue, 1 Sep 2026 00:59:49 +0200
+Subject: [PATCH] hydra: build proper RGBA when writing a Copernicus COP layer
+
+hou.saveImageDataToFile takes a sequence of floats and only accepts RGBA -
+it rejects a three-channel buffer outright with 'the color+alpha data
+sequence must contain width*height*4 elements'. A single-channel buffer
+slipped through instead, because its byte count happens to equal the element
+count the function wants, and every byte was then written as a value. A plain
+greyscale COP came out as saturated garbage.
+
+Expand the layer to four channels explicitly: one channel replicated across
+RGB, three channels passed through, alpha filled with ones. The buffer is
+interleaved, verified by reading a constant with distinct per-channel values.
+
+Verified on the written file rather than on its existence: a source of 0.35
+reads back as 0.350000 0.350000 0.350000 1.000000.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/houdini_cop.cpp | 27 +++++++++++++++++++++++++--
+ 1 file changed, 25 insertions(+), 2 deletions(-)
+
+diff --git a/src/hydra/houdini_cop.cpp b/src/hydra/houdini_cop.cpp
+index f2a2c574..e745f01d 100644
+--- a/src/hydra/houdini_cop.cpp
++++ b/src/hydra/houdini_cop.cpp
+@@ -98,9 +98,32 @@ std::string ResolveHoudiniCopPath(const std::string &path)
+                            outPath +
+                            "')\n"
+                            "        else:\n"
++                           "            import array\n"
+                            "            _l = _n.layer()\n"
+-                           "            _r = _l.bufferResolution()\n"
+-                           "            hou.saveImageDataToFile(_l.allBufferElements(), _r[0], _r[1], '" +
++                           "            _w, _h = _l.bufferResolution()\n"
++                           "            _c = _l.channelCount()\n"
++                           "            _src = array.array('f')\n"
++                           "            _src.frombytes(_l.allBufferElements())\n"
++                           "            _px = _w * _h\n"
++                           /* saveImageDataToFile only accepts RGBA, and it takes a
++                            * sequence of floats - handing it the raw buffer lets a
++                            * single-channel image through on a coincidence of byte
++                            * count and then writes the bytes as if they were
++                            * values. Build the four channels explicitly. */
++                           "            if _c == 4:\n"
++                           "                _dst = _src\n"
++                           "            else:\n"
++                           "                _dst = array.array('f', bytes(_px * 16))\n"
++                           "                if _c == 1:\n"
++                           "                    _dst[0::4] = _src\n"
++                           "                    _dst[1::4] = _src\n"
++                           "                    _dst[2::4] = _src\n"
++                           "                else:\n"
++                           "                    _dst[0::4] = _src[0::_c]\n"
++                           "                    _dst[1::4] = _src[1::_c]\n"
++                           "                    _dst[2::4] = _src[2::_c] if _c > 2 else _src[1::_c]\n"
++                           "                _dst[3::4] = array.array('f', [1.0]) * _px\n"
++                           "            hou.saveImageDataToFile(_dst, _w, _h, '" +
+                            outPath +
+                            "')\n"
+                            "except Exception:\n"
+-- 
+2.53.0.windows.2
+
