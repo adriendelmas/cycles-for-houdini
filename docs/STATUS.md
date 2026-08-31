@@ -361,3 +361,29 @@ quand le display driver est actif, et le driver l'exige
 (`TF_VERIFY(renderBuffer->GetFormat() == HdFormatFloat16Vec4)`) ; une
 inadéquation de format avec ce qu'attend le viewport d'Houdini expliquerait
 l'aspect « profondeur ».
+
+## GPU (phase 8) — partiellement livré
+
+**Cycles GPU** est une entrée de menu distincte de **Cycles CPU**, et rend sur
+la RTX 3090 via CUDA. Sortie vérifiée **identique au pixel près** au rendu CPU.
+
+Trois obstacles levés :
+
+1. `nvcc fatal : Cannot find compiler 'cl.exe' in PATH` — Cycles compilait les
+   kernels à l'exécution, ce qui exige nvcc *et* le compilateur hôte MSVC dans
+   le PATH. Résolu en précompilant les kernels (`WITH_CYCLES_CUDA_BINARIES=ON`,
+   `CYCLES_CUDA_BINARIES_ARCH=sm_86`).
+2. Activer les binaires CUDA activait aussi la cible OptiX, qui échouait faute
+   de SDK. Il faut `-DWITH_CYCLES_DEVICE_OPTIX=OFF`.
+3. Les kernels s'installaient dans `install/lib`, hors de la racine Houdini sur
+   laquelle le delegate enracine Cycles — donc jamais trouvés à l'exécution.
+
+**Limite : `Hardware Ray-Tracing: Off`.** Sans l'OptiX SDK, les cœurs RT de la
+carte ne sont pas exploités. Le gain mesuré sur une scène simple est modeste
+(3,8 s contre 4,5 s), mais le CPU de comparaison est un Threadripper 3995WX à
+128 threads — l'écart se creuserait sur une scène lourde, et bien davantage
+avec OptiX.
+
+Ligne de configuration :
+
+    cmake -B build -DHOUDINI_ROOT=... -DWITH_CYCLES_HYDRA_RENDER_DELEGATE=ON       -DWITH_CYCLES_CUDA_BINARIES=ON -DCYCLES_CUDA_BINARIES_ARCH=sm_86       -DWITH_CYCLES_DEVICE_OPTIX=OFF
