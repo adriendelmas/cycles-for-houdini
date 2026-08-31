@@ -535,3 +535,47 @@ L'erreur `Image file op:/... does not exist` est desormais **visible** grace au
 repli sur le chemin authore : avant, le chemin devenait une chaine vide et la
 texture disparaissait sans un mot. Pour que ces textures fonctionnent, utiliser
 `tools/flatten_op_textures.py`.
+
+## Textures COP en `op:` - integre au delegate
+
+Un chemin de texture peut nommer un noeud de compositing plutot qu'un fichier.
+C'est desormais gere **dans hdCycles**, sans noeud a poser et sans rien
+installer ailleurs dans Houdini.
+
+### Ce qui a ete mesure avant de coder
+
+Deux voies ont ete fermees par l'experience, pas par principe :
+
+1. **Lire via le resolveur USD.** `ArAsset` pour un `op:` a une taille de 0 et
+   `GetBuffer()` rend `None`. Ce n'est pas un flux d'octets.
+2. **Lire via la couche image d'Houdini.** `hou.imageResolution` et
+   `hou.loadImageDataFromFile` fonctionnent sur un vrai fichier (1920x1080,
+   8,3 M de valeurs) et **echouent toutes les deux** sur un `op:`. Aucune API
+   de lecture d'image d'Houdini n'expose les pixels d'un COP, quel que soit ce
+   qu'on accepte de lier.
+
+Seule la **cuisson du noeud** produit des pixels.
+
+### Ou la cuisson a lieu, et pourquoi la
+
+Pendant la **synchronisation du prim**, pas pendant le chargement de l'image.
+Le chargement tourne sur les threads de travail de Cycles, et cuire un noeud
+Houdini depuis l'un d'eux ferait tomber l'application - un crash de la meme
+famille que ceux corriges plus haut, mais dependant du minutage.
+
+Le delegate remplace donc le `op:` par le fichier cuit avant que Cycles ne voie
+quoi que ce soit : **le chargeur natif reste inchange pour les chemins
+ordinaires**, exactement le partage demande.
+
+Resultats caches par chemin. Le suffixe de plan (`OUT_COLOR[1]`) est retire
+pour retrouver le noeud, mais conserve dans la cle de cache pour que deux plans
+d'un meme noeud ne se telescopent pas.
+
+### Limites
+
+- **Pas live.** Le COP est cuit quand le materiau se synchronise ; le modifier
+  ensuite ne se repercute qu'a la prochaine synchronisation de ce materiau.
+- **Rendu batch.** `husk` n'a pas de module `hou` et pas de session : l'appel
+  est protege et sort un avertissement nommant le chemin fautif, sans lever ni
+  planter. Pour une ferme de rendu, il faut aplatir en amont - c'est a ca que
+  sert `tools/flatten_op_textures.py`, conserve pour cet usage.
