@@ -329,3 +329,18 @@ mais elle traitait la cause de l'erreur, pas celle du crash. Le crash a
 persisté, ce qui a permis de chercher au bon endroit.
 
 Détail dans `patches/README.md`. **Reste à confirmer en interface.**
+
+Le message `could not begin update` qui l'accompagnait est traité séparément
+par le patch 0012 : le contexte GL n'était créé qu'après les sorties anticipées
+de `draw()`.
+
+### Piège d'installation
+
+Windows verrouille `hdCycles.dll` tant qu'Houdini tourne. L'étape `install`
+échoue alors avec un `Permission denied` **noyé dans une erreur MSB3073
+générique**, et l'ancienne DLL reste en place — on teste donc sans le savoir
+une version périmée.
+
+Toujours vérifier l'horodatage après installation :
+
+    ls -la install/houdini/dso/usd/hdCycles.dll

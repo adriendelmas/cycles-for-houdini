@@ -14,7 +14,7 @@ Régénérer les patchs après une nouvelle modification :
 
 Base amont : `3b97e190` (branche `release/5.2`).
 
-Les onze sont indépendants d'Houdini 22 et de cette machine — **tous sont des
+Les douze sont indépendants d'Houdini 22 et de cette machine — **tous sont des
 candidats à une contribution amont chez Blender**.
 
 ---
@@ -180,3 +180,21 @@ Correctif en trois points :
 3. Créer le contexte partagé **dans le constructeur** plutôt qu'au premier
    `draw()` : `draw()` a plusieurs sorties anticipées, le thread de rendu
    pouvait donc atteindre `update_begin()` avant qu'aucun contexte n'existe.
+
+## 0012 — Créer le contexte GL partagé avant les sorties anticipées de draw()
+
+`draw()` renonce dans trois cas — binding d'AOV d'affichage absent, dimensions
+qui ne correspondent pas, render buffer inutilisé — et `gl_context_create()`
+était placé **après** les trois. Or le thread de rendu Cycles appelle
+`update_begin()` dès le démarrage de la session : tant qu'un `draw()` n'était
+pas allé jusqu'au bout, aucun contexte n'existait et chaque frame signalait
+`PathTraceDisplay implementation could not begin update`.
+
+`draw()` s'exécute sur le thread où l'hôte rend son contexte GL courant, seul
+endroit où un contexte partageable peut être construit. Le faire depuis le
+constructeur du display driver **ne fonctionne pas** : le render pass n'est pas
+nécessairement construit sur ce thread — vérifié en pratique, l'erreur
+persistait.
+
+Sans le patch 0011, cette erreur menait au crash. Avec lui, elle n'était plus
+que du bruit ; ce patch supprime le bruit.
