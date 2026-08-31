@@ -105,6 +105,28 @@ texture NanoVDB allouée (3,45 Mo) — mais aussi `Use Volume False` et
 `0 volume octree(s)`. Cause : un volume sans matériau recevait le shader de
 surface par défaut. Corrigé par le patch 0007.
 
+## Phase 6 — AOVs ✅ / motion blur ⚠️
+
+### AOVs : validés
+
+`tests/usd/phase6_aov.usda` produit quatre RenderProducts distincts, tous
+corrects et non triviaux :
+
+| AOV | Canaux | Contrôle |
+|---|---|---|
+| `C` (color) | 4 (RGBA) | max 11,86 — le cube émissif |
+| `Pz` (depth) | 1 | max 1e10 sur le fond, la profondeur « infinie » standard |
+| `N` (normal) | 3 | valeurs bornées à ±1, normales normalisées |
+| `primId` | 1 | max 4 pour 5 prims, identifiants 0..4 |
+
+Les alias de nommage Houdini (`C`, `Pz`, `N`) passent par le patch 0002.
+
+### Motion blur d'objet : absent
+
+![motion blur](gap-motionblur.png)
+
+Voir l'anomalie A7 ci-dessous.
+
 ## Anomalies ouvertes
 
 ### A1 — Surfaces implicites non supportées (confirmé)
@@ -196,3 +218,31 @@ Méthode retenue tout du long : **contre-vérifier chaque résultat en rendant l
 même scène avec Karma**. C'est ce qui a permis de distinguer les vrais bugs du
 delegate de mes propres scènes de test mal écrites — et de rattraper au moins
 une conclusion erronée.
+
+### A7 — Motion blur d'objet non implémenté
+
+Seule la **caméra** a du motion blur : `camera.cpp` échantillonne sa transform
+sur l'obturateur et appelle `cam->set_motion()`. Pour la géométrie,
+`geometry.inl` ne lit qu'un seul échantillon :
+
+    _geomTransform = matrixDs->GetTypedValue(0.0f);
+
+Vérifié sur `tests/usd/phase6_mblur.usda` : un cube animé de x=-2,5 à x=+2,5
+sur l'obturateur est rendu **parfaitement net** par Cycles, à sa position
+d'ouverture, là où Karma l'étale sur toute sa trajectoire.
+
+Ce qu'il faut pour le corriger, et pourquoi ce n'est pas un petit patch :
+
+1. Faire remonter l'intervalle d'obturateur de la caméra jusqu'à la
+   synchronisation des rprim — ni `HdCyclesSession` ni `HdCyclesCamera` ne
+   l'exposent aujourd'hui.
+2. Gérer l'ordre de synchronisation : rien ne garantit que la caméra soit
+   synchronisée avant la géométrie, donc l'application du flou doit être
+   différée ou rejouée.
+3. Poser `Object::set_motion()`, `Geometry::set_use_motion_blur()` et
+   `set_motion_steps()` de façon cohérente.
+4. Le flou de déformation (points animés sur mesh et courbes) est un chantier
+   distinct de celui du flou de transformation.
+
+Un flou subtilement faux serait pire que pas de flou du tout, donc cette
+fonctionnalité mérite son propre créneau plutôt qu'un ajout en fin de phase.
