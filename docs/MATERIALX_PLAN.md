@@ -89,8 +89,11 @@ nœud absent, parce que rien ne signale l'erreur.
 - [ ] `constant` → `value` / `rgb` selon le type
 - [ ] `convert`, `swizzle`, `extract` → `separate_*` / `combine_*`
 - [~] `combine2`, `combine3`, `combine4` → `combine_color` / `combine_xyz`
-- [~] `separate2`, `separate3c`, `separate3v`, `separate4c`, `separate4v`
-      → `separate_color` / `separate_xyz`
+- [x] `separate2`, `separate3c`, `separate3v`, `separate4c`, `separate4v`
+      → `separate_color` / `separate_xyz` — vérifié. MaterialX nomme ses
+      sorties `outx`/`outy`/`outz` et `outr`/`outg`/`outb`, Cycles les nomme
+      `x`/`y`/`z` et `r`/`g`/`b` : sans la traduction des **noms de sortie**,
+      la connexion était perdue et le nœud aval gardait sa valeur par défaut.
 
 ---
 
@@ -99,9 +102,11 @@ nœud absent, parce que rien ne signale l'erreur.
 ### Arithmétique
 
 - [x] `add`, `subtract`, `multiply`, `divide` → `math` / `vector_math`
-- [~] `modulo`, `absval`, `sign`, `floor`, `ceil`, `round`, `fract`
+- [x] `modulo` — vérifié
+- [~] `absval`, `sign`, `floor`, `ceil`, `round`, `fract`
 - [~] `power`, `safepower`, `exp`, `ln`, `sqrt`
-- [~] `sin`, `cos`, `tan`, `asin`, `acos`, `atan2`
+- [x] `sin` — vérifié
+- [~] `cos`, `tan`, `asin`, `acos`, `atan2`
 - [~] `min`, `max`
 - [~] `normalize`, `magnitude`, `distance`
 - [~] `dotproduct`, `crossproduct`, `reflect`, `refract`
@@ -130,17 +135,19 @@ mécanisme de valeurs fixes est déjà en place.
 
 - [x] `noise3d`, `fractal3d` → `noise_texture`
 - [~] `noise2d`, `fractal2d` → `noise_texture` en 2D
-- [~] `cellnoise2d`, `cellnoise3d` → `voronoi_texture`
+- [x] `cellnoise2d`, `cellnoise3d` → `voronoi_texture` — vérifié
 - [x] `worleynoise2d`, `worleynoise3d` → `voronoi_texture.distance`
       (pas de sortie `fac` sur ce nœud, contrairement aux autres textures)
 - [~] `unifiednoise2d`, `unifiednoise3d` → `noise_texture`
 - [~] `flake2d`, `flake3d` → `voronoi_texture`
-- [~] `randomcolor`, `randomfloat` → `white_noise_texture`
+- [x] `randomcolor`, `randomfloat` → `white_noise_texture` — vérifié
 - [x] `checkerboard` → `checker_texture`
 - [ ] `grid`, `line`, `circle`, `cloverleaf`, `hexagon`, `crosshatch`,
       `tiledcircles`, `tiledcloverleafs`, `tiledhexagons`
       — motifs sans équivalent Cycles, à décomposer ou écarter
-- [~] `ramplr`, `ramptb`, `ramp_gradient` → `gradient_texture`
+- [ ] `ramplr`, `ramptb`, `ramp_gradient` — mapping **incomplet**. Cycles
+      `gradient_texture` n'a aucune entrée couleur, alors que MaterialX passe
+      `valuel`/`valuer`. Il faut composer avec un `color_ramp`.
 - [ ] `ramp`, `ramp4` → `color_ramp`
 - [ ] `splitlr`, `splittb` → `gradient_texture` + `math`
 
@@ -164,7 +171,8 @@ mécanisme de valeurs fixes est déjà en place.
 
 - [ ] `over`, `in`, `out`, `mask`, `matte`, `disjointover`, `inside`, `outside`
       — demandent une composition alpha explicite
-- [~] `plus`, `minus`, `difference`, `burn`, `dodge`, `screen`, `overlay`
+- [x] `screen` — vérifié
+- [~] `plus`, `minus`, `difference`, `burn`, `dodge`, `overlay`
 
 Tous se ramènent à `mix_color` avec le bon `blend_type`, sauf `over`/`in`/`out`
 qui demandent une composition alpha explicite.
