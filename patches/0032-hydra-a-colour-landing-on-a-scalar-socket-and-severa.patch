@@ -1,0 +1,382 @@
+From af35ff7da302e93cd8e515f404cc84cb0651eed4 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Tue, 1 Sep 2026 22:46:16 +0200
+Subject: [PATCH] hydra: a colour landing on a scalar socket, and several
+ helpers per mapping
+
+MaterialX's opacity is a colour where the Cycles alpha it maps to is a single
+number, and USD defines no cast between the two: the value fell through to the
+generic conversion's warning and came back as zero. Every material that wrote
+an opacity - white included, which is what Houdini's material builders author
+by default - was rendered fully transparent, which reads as transmission
+behaving like alpha. convertToCycles<float> now collapses a colour or a vector
+to the average of its components, which protects every scalar socket rather
+than just this one.
+
+A mapping can now carry more than one helper node, each named, and an input
+addressed to name:socket goes to that one. Fixed values learn to parse a vector
+so a helper can carry a colour default. That lifts the limit which had kept
+standard_surface's base unmapped: it is a weight on the diffuse colour and
+Cycles has no socket for it, so the colour is multiplied on the way in, the
+helper carrying MaterialX's own defaults for both.
+
+Measured parameter by parameter against a reference render: 27 of the 39
+standard_surface inputs are now honoured, and docs/STANDARD_SURFACE_AUDIT.md
+says which of the remaining twelve have no Cycles equivalent and which would be
+wrong if mapped.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp  | 146 ++++++++++++++++++++++++++--------------
+ src/hydra/material.h    |  10 +--
+ src/hydra/node_util.cpp |  40 +++++++++++
+ 3 files changed, 141 insertions(+), 55 deletions(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index 2971c50c..47497aa5 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -106,6 +106,9 @@ class UsdToCyclesMapping {
+    * equivalent - a left-to-right ramp is a gradient driving a mix - and this
+    * covers that without a general subgraph mechanism. */
+   struct Helper {
++    /* How a mapping addresses this helper's inputs: an input mapped to
++     * "<name>:<socket>" is written to this node rather than to the main one. */
++    const char *name = nullptr;
+     const char *nodeType = nullptr;
+     /* Wires from the helper's outputs to the main node's inputs, named the way
+      * Cycles names them when looking a socket up by hand: by interface name,
+@@ -114,18 +117,14 @@ class UsdToCyclesMapping {
+     FixedMap fixedValues;
+   };
+ 
+-  /* An input whose mapped name carries this prefix belongs to the helper node,
+-   * not to the main one. */
+-  static constexpr const char *kHelperPrefix = "helper:";
+-
+-  const Helper &helper() const
++  const std::vector<Helper> &helpers() const
+   {
+-    return _helper;
++    return _helpers;
+   }
+ 
+-  void setHelper(Helper helper)
++  void addHelper(Helper helper)
+   {
+-    _helper = std::move(helper);
++    _helpers.push_back(std::move(helper));
+   }
+ 
+   virtual std::string parameterName(const TfToken &name,
+@@ -174,9 +173,20 @@ class UsdToCyclesMapping {
+   const ustring _nodeType;
+   ParamMap _paramMap;
+   FixedMap _fixedValues;
+-  Helper _helper;
++  std::vector<Helper> _helpers;
+ };
+ 
++/* An input mapped to "<helper>:<socket>" is written to that helper node. No
++ * Cycles socket name contains a colon, so the split is unambiguous. */
++std::pair<std::string, std::string> SplitHelperTarget(const std::string &mapped)
++{
++  const size_t colon = mapped.find(':');
++  if (colon == std::string::npos) {
++    return {std::string(), mapped};
++  }
++  return {mapped.substr(0, colon), mapped.substr(colon + 1)};
++}
++
+ class UsdToCyclesTexture : public UsdToCyclesMapping {
+  public:
+   using UsdToCyclesMapping::UsdToCyclesMapping;
+@@ -231,6 +241,18 @@ VtValue FixedValue(const SocketType &socket, const char *const text)
+   if (socket.type == SocketType::FLOAT) {
+     return VtValue(float(strtod(text, nullptr)));
+   }
++  if (socket.type == SocketType::COLOR || socket.type == SocketType::VECTOR ||
++      socket.type == SocketType::POINT || socket.type == SocketType::NORMAL)
++  {
++    GfVec3f components(0.0f);
++    const char *cursor = text;
++    for (int i = 0; i < 3 && cursor != nullptr && *cursor != 0; ++i) {
++      char *end = nullptr;
++      components[i] = float(strtod(cursor, &end));
++      cursor = (end != nullptr && *end == ',') ? end + 1 : end;
++    }
++    return VtValue(components);
++  }
+   return VtValue(std::string(text));
+ }
+ 
+@@ -277,7 +299,8 @@ UsdToCyclesMapping MakeMtlxStandardSurface()
+   UsdToCyclesMapping mapping{
+     "principled_bsdf",
+     {
+-        {TfToken("base_color"), ustring("base_color")},
++        {TfToken("base_color"), ustring("basew:vector1")},
++        {TfToken("base"), ustring("basew:vector2")},
+         {TfToken("diffuse_roughness"), ustring("diffuse_roughness")},
+         {TfToken("metalness"), ustring("metallic")},
+         /* MaterialX's `specular` is a weight whose neutral value is 1, while
+@@ -286,7 +309,7 @@ UsdToCyclesMapping MakeMtlxStandardSurface()
+          * parameter into, which is all of them. Halved through a helper so that
+          * a weight of 1 reads as neutral and the whole range keeps its
+          * direction; measured against Karma at 1, 0.5 and unset. */
+-        {TfToken("specular"), ustring("helper:value1")},
++        {TfToken("specular"), ustring("spec:value1")},
+         {TfToken("specular_color"), ustring("specular_tint")},
+         {TfToken("specular_roughness"), ustring("roughness")},
+         {TfToken("specular_IOR"), ustring("ior")},
+@@ -318,11 +341,22 @@ UsdToCyclesMapping MakeMtlxStandardSurface()
+    * own default of 1 for the case where the network never writes `specular` at
+    * all - otherwise an unauthored input would be actively set to something
+    * wrong rather than left at the Cycles default. */
+-  mapping.setHelper({"math",
++  mapping.addHelper({"spec",
++                     "math",
+                      {{"Value", "Specular IOR Level"}},
+                      {{ustring("math_type"), "multiply"},
+                       {ustring("value1"), "1.0"},
+                       {ustring("value2"), "0.5"}}});
++  /* `base` is a weight on the diffuse colour and Cycles has no socket for it,
++   * so the colour is multiplied on the way in. Both MaterialX defaults are
++   * carried here - a base of 1 and a base_color of 0.8 grey - so a network that
++   * writes neither still gets what it would have got. */
++  mapping.addHelper({"basew",
++                     "vector_math",
++                     {{"Vector", "Base Color"}},
++                     {{ustring("math_type"), "multiply"},
++                      {ustring("vector1"), "0.8,0.8,0.8"},
++                      {ustring("vector2"), "1,1,1"}}});
+   return mapping;
+ }
+ 
+@@ -822,7 +856,8 @@ const std::vector<MtlxEntry> &MtlxTable()
+     m.setFixedValues({{ustring("blend_type"), "mix"}});
+     /* Cycles looks a socket up by its interface name, not its identifier: the
+      * gradient's output is "Fac" and the mix's input is "Factor". */
+-    m.setHelper({"gradient_texture", {{"Fac", "Factor"}}, {{ustring("gradient_type"), gradientType}}});
++    m.addHelper(
++        {"g", "gradient_texture", {{"Fac", "Factor"}}, {{ustring("gradient_type"), gradientType}}});
+     return m;
+   };
+   static const UsdToCyclesMapping kRampLR = makeRamp("linear");
+@@ -958,11 +993,12 @@ const std::vector<MtlxEntry> &MtlxTable()
+   auto makeColorConvert = [](const char *const from, const char *const to) {
+     UsdToCyclesMapping m{"combine_color",
+                          {
+-                             {TfToken("in"), ustring("helper:color")},
++                             {TfToken("in"), ustring("sep:color")},
+                              {CyclesMaterialTokens->out, ustring("color")},
+                          }};
+     m.setFixedValues({{ustring("color_type"), to}});
+-    m.setHelper({"separate_color",
++    m.addHelper({"sep",
++                 "separate_color",
+                  {{"Red", "Red"}, {"Green", "Green"}, {"Blue", "Blue"}},
+                  {{ustring("color_type"), from}}});
+     return m;
+@@ -980,8 +1016,8 @@ const std::vector<MtlxEntry> &MtlxTable()
+             /* Swapping the operands turns "greater" into "greater or equal":
+              * value1 >= value2 is exactly not(value2 > value1), and the branches
+              * swap with it. */
+-            {TfToken("value1"), ustring(invertTest ? "helper:value2" : "helper:value1")},
+-            {TfToken("value2"), ustring(invertTest ? "helper:value1" : "helper:value2")},
++            {TfToken("value1"), ustring(invertTest ? "cmp:value2" : "cmp:value1")},
++            {TfToken("value2"), ustring(invertTest ? "cmp:value1" : "cmp:value2")},
+             {TfToken("in1"), ustring(invertTest ? "a" : "b")},
+             {TfToken("in2"), ustring(invertTest ? "b" : "a")},
+             {CyclesMaterialTokens->out, ustring("result")},
+@@ -992,7 +1028,7 @@ const std::vector<MtlxEntry> &MtlxTable()
+     if (strcmp(mathType, "compare") == 0) {
+       helperValues.emplace_back(ustring("value3"), "1e-6");
+     }
+-    m.setHelper({"math", {{"Value", "Factor"}}, std::move(helperValues)});
++    m.addHelper({"cmp", "math", {{"Value", "Factor"}}, std::move(helperValues)});
+     /* The colour mix carries a blend mode the others do not have. */
+     if (strcmp(mixType, "mix_color") == 0) {
+       m.setFixedValues({{ustring("blend_type"), "mix"}});
+@@ -1375,14 +1411,18 @@ void HdCyclesMaterial::UpdateParameters(NodeDesc &nodeDesc,
+                                 inputMapping->parameterName(paramName, nullptr, &value) :
+                                 paramName.GetString();
+ 
+-    /* A composite mapping can send an input to its helper node instead. */
++    /* A composite mapping can send an input to one of its helper nodes. */
+     ShaderNode *target = nodeDesc.node;
+-    if (inputName.starts_with(UsdToCyclesMapping::kHelperPrefix)) {
+-      inputName.erase(0, strlen(UsdToCyclesMapping::kHelperPrefix));
+-      if (nodeDesc.helperNode == nullptr) {
+-        continue;
++    {
++      const std::pair<std::string, std::string> split = SplitHelperTarget(inputName);
++      if (!split.first.empty()) {
++        const auto it = nodeDesc.helperNodes.find(split.first);
++        if (it == nodeDesc.helperNodes.end()) {
++          continue;
++        }
++        target = it->second;
++        inputName = split.second;
+       }
+-      target = nodeDesc.helperNode;
+     }
+ 
+     /* Find the input to write the parameter value to. */
+@@ -1437,14 +1477,18 @@ void HdCyclesMaterial::UpdateConnections(NodeDesc &nodeDesc,
+     std::string inputName = inputMapping ? inputMapping->parameterName(dstSocketName, nullptr) :
+                                            dstSocketName.GetString();
+ 
+-    /* A composite mapping can send an input to its helper node instead. */
++    /* A composite mapping can send an input to one of its helper nodes. */
+     ShaderNode *target = nodeDesc.node;
+-    if (inputName.starts_with(UsdToCyclesMapping::kHelperPrefix)) {
+-      inputName.erase(0, strlen(UsdToCyclesMapping::kHelperPrefix));
+-      if (nodeDesc.helperNode == nullptr) {
+-        continue;
++    {
++      const std::pair<std::string, std::string> split = SplitHelperTarget(inputName);
++      if (!split.first.empty()) {
++        const auto it = nodeDesc.helperNodes.find(split.first);
++        if (it == nodeDesc.helperNodes.end()) {
++          continue;
++        }
++        target = it->second;
++        inputName = split.second;
+       }
+-      target = nodeDesc.helperNode;
+     }
+ 
+     /* Find the input to connect to on the passed in node. */
+@@ -1574,28 +1618,28 @@ void HdCyclesMaterial::PopulateShaderGraph(HdMaterialNetworkSchema network)
+             }
+           }
+ 
+-          /* Build the helper node this mapping asks for, and wire it in. */
+-          const UsdToCyclesMapping::Helper &helper = nodeDesc.mapping->helper();
+-          if (helper.nodeType != nullptr) {
+-            if (const NodeType *helperType = NodeType::find(ustring(helper.nodeType))) {
+-              ShaderNode *const helperNode = graph->create_node(helperType);
+-              for (const auto &fixed : helper.fixedValues) {
+-                if (const SocketType *socket = helperType->find_input(fixed.first)) {
+-                  SetNodeValue(helperNode, *socket, FixedValue(*socket, fixed.second));
+-                }
++          /* Build the helper nodes this mapping asks for, and wire them in. */
++          for (const UsdToCyclesMapping::Helper &helper : nodeDesc.mapping->helpers()) {
++            const NodeType *const helperType = NodeType::find(ustring(helper.nodeType));
++            if (helperType == nullptr) {
++              continue;
++            }
++            ShaderNode *const helperNode = graph->create_node(helperType);
++            for (const auto &fixed : helper.fixedValues) {
++              if (const SocketType *socket = helperType->find_input(fixed.first)) {
++                SetNodeValue(helperNode, *socket, FixedValue(*socket, fixed.second));
+               }
+-
+-              nodeDesc.helperNode = helperNode;
+-              for (const auto &wire : helper.wires) {
+-                ShaderOutput *const from = helperNode->output(wire.first);
+-                ShaderInput *const to = nodeDesc.node->input(wire.second);
+-                if (from != nullptr && to != nullptr) {
+-                  graph->connect(from, to);
+-                }
+-                else {
+-                  LOG_WARNING << "MaterialX: could not wire helper '" << helper.nodeType << "."
+-                              << wire.first << "' into '" << wire.second << "'.";
+-                }
++            }
++            nodeDesc.helperNodes[helper.name] = helperNode;
++            for (const auto &wire : helper.wires) {
++              ShaderOutput *const from = helperNode->output(wire.first);
++              ShaderInput *const to = nodeDesc.node->input(wire.second);
++              if (from != nullptr && to != nullptr) {
++                graph->connect(from, to);
++              }
++              else {
++                LOG_WARNING << "MaterialX: could not wire helper '" << helper.nodeType << "."
++                            << wire.first << "' into '" << wire.second << "'.";
+               }
+             }
+           }
+diff --git a/src/hydra/material.h b/src/hydra/material.h
+index 77d06e81..7afe3e6f 100644
+--- a/src/hydra/material.h
++++ b/src/hydra/material.h
+@@ -5,6 +5,8 @@
+ 
+ #pragma once
+ 
++#include <map>
++#include <string>
+ #include "hydra/config.h"
+ 
+ #include <pxr/imaging/hd/material.h>
+@@ -35,10 +37,10 @@ class HdCyclesMaterial final : public PXR_NS::HdMaterial {
+  private:
+   struct NodeDesc {
+     CCL_NS::ShaderNode *node;
+-    /* The auxiliary node a composite mapping asked for, if any: some MaterialX
+-     * nodes need two Cycles nodes, and some of their inputs belong to this one
+-     * rather than to `node`. */
+-    CCL_NS::ShaderNode *helperNode;
++    /* The auxiliary nodes a composite mapping asked for, by name: some
++     * MaterialX nodes need more than one Cycles node, and some of their inputs
++     * belong to those rather than to `node`. */
++    std::map<std::string, CCL_NS::ShaderNode *> helperNodes;
+     const class UsdToCyclesMapping *mapping;
+   };
+ 
+diff --git a/src/hydra/node_util.cpp b/src/hydra/node_util.cpp
+index 5bf1e91e..7fb85f67 100644
+--- a/src/hydra/node_util.cpp
++++ b/src/hydra/node_util.cpp
+@@ -57,6 +57,46 @@ static std::optional<float> convertToCyclesScalar(const VtValue &value)
+   return std::nullopt;
+ }
+ 
++/* A single number, from whatever shape the value arrives in.
++ *
++ * USD defines no cast from a GfVec3f to a float, so a colour landing on a
++ * scalar socket used to fall through to the warning at the bottom of the
++ * generic conversion and come back as zero. MaterialX's `opacity` is a colour
++ * and the Cycles `alpha` it maps to is a single number: every material that
++ * wrote an opacity - white included, which is what Houdini's material builders
++ * author by default - was turned fully transparent. Averaging the components
++ * is what a greyscale opacity means, and matches for the uniform values that
++ * make up nearly all of them. */
++template<> float convertToCycles<float>(const VtValue &value)
++{
++  if (value.IsHolding<float>()) {
++    return value.UncheckedGet<float>();
++  }
++  if (const std::optional<float> scalar = convertToCyclesScalar(value)) {
++    return *scalar;
++  }
++  if (value.IsHolding<GfVec3f>()) {
++    const GfVec3f v = value.UncheckedGet<GfVec3f>();
++    return (v[0] + v[1] + v[2]) / 3.0f;
++  }
++  if (value.IsHolding<GfVec4f>()) {
++    const GfVec4f v = value.UncheckedGet<GfVec4f>();
++    return (v[0] + v[1] + v[2]) / 3.0f;
++  }
++  if (value.IsHolding<GfVec2f>()) {
++    const GfVec2f v = value.UncheckedGet<GfVec2f>();
++    return (v[0] + v[1]) / 2.0f;
++  }
++
++  const VtValue castedValue = VtValue::Cast<float>(value);
++  if (castedValue.IsHolding<float>()) {
++    return castedValue.UncheckedGet<float>();
++  }
++
++  TF_WARN("Could not convert VtValue to float");
++  return 0.0f;
++}
++
+ template<> float2 convertToCycles<float2>(const VtValue &value)
+ {
+   if (const std::optional<float> scalar = convertToCyclesScalar(value)) {
+-- 
+2.53.0.windows.2
+

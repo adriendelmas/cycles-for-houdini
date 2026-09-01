@@ -1,0 +1,56 @@
+#usda 1.0
+(
+    doc = """Generated from Composed Stage of root layer 
+"""
+    framesPerSecond = 24
+    metersPerUnit = 1
+    timeCodesPerSecond = 24
+)
+
+def HoudiniLayerInfo "HoudiniLayerInfo" 
+{
+}
+
+def Scope "materials"
+{
+    def Material "mx_materialbuilder" 
+    {
+        token outputs:vex:displacement.connect = </materials/mx_materialbuilder/mx_materialbuilder_displace.outputs:displacement>
+        token outputs:vex:surface.connect = </materials/mx_materialbuilder/mx_materialbuilder_surface.outputs:surface>
+
+        def Shader "mx_materialbuilder_surface" 
+        {
+            uniform token info:implementationSource = "sourceCode"
+            uniform string info:sourceCode = """#ifndef VOP_SHADING
+#define VOP_SHADING
+#endif
+#ifndef VOP_SURFACE
+#define VOP_SURFACE
+#endif
+surface
+stage_materiallibrary1_mx_materialbuilder()
+{
+}
+"""
+            token outputs:surface
+        }
+
+        def Shader "mx_materialbuilder_displace"
+        {
+            uniform token info:implementationSource = "sourceCode"
+            uniform string info:sourceCode = """#ifndef VOP_SHADING
+#define VOP_SHADING
+#endif
+#ifndef VOP_DISPLACE
+#define VOP_DISPLACE
+#endif
+displace
+stage_materiallibrary1_mx_materialbuilder()
+{
+}
+"""
+            token outputs:displacement
+        }
+    }
+}
+

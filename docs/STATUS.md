@@ -698,3 +698,46 @@ celui de `standard_surface` sert désormais au `specular`.
 n'a pas d'équivalent : Cycles ne sait renvoyer que du noir. La correspondance
 qui l'envoyait vers `color` a été retirée — `color` est une **sortie** de
 `image_texture`, la correspondance ne pouvait qu'échouer.
+
+### A14 — `opacity` rendait tout matériau transparent ✅ CORRIGÉ
+
+`opacity` est un `color3` MaterialX ; l'`alpha` de Cycles sur lequel il atterrit
+est un flottant. USD ne définit aucun cast d'un `GfVec3f` vers un `float`, donc
+la conversion tombait dans son avertissement et renvoyait **0**.
+
+Conséquence : tout matériau écrivant une opacité — **blanche comprise**, ce que
+les builders de matériaux de Houdini écrivent par défaut — devenait **totalement
+transparent**. C'est très probablement ce qui se lisait comme « la transmission
+rend comme de l'alpha, ça baisse juste l'opacité » : ce n'était pas la
+transmission, c'était l'opacité qui annulait l'objet.
+
+Vérifié : `opacity = (1,1,1)` rend désormais **exactement** comme une opacité non
+renseignée (diff `PASS`), contre une sphère quasi invisible auparavant.
+
+Corrigé dans `convertToCycles<float>`, qui réduit maintenant une couleur ou un
+vecteur à la moyenne de ses composantes au lieu de renvoyer zéro. La correction
+est générale : elle protège tout socket scalaire nourri par une couleur, pas
+seulement `alpha`.
+
+### A15 — normale et displacement : vérifiés fonctionnels
+
+Signalés comme cassés, mais mesurés fonctionnels sur un réseau MaterialX USD
+écrit à la main :
+
+- **normalmap** : le relief est présent et son motif correspond à celui de
+  Karma. Testé en `ND_image_color3` et `ND_image_vector3`, en EXR et en PNG 8
+  bits — les deux variantes donnent la même image à 4·10⁻⁹ près, donc pas de
+  décodage sRGB parasite.
+- **displacement** : déformation géométrique réelle, silhouette identique à
+  celle de Karma sur la même scène.
+
+Deux causes restent plausibles côté utilisateur, dans cet ordre :
+
+1. **La DLL n'est pas rechargée.** Houdini verrouille `hdCycles.dll` tant qu'il
+   tourne ; l'installation échoue alors en `Permission denied` enfoui dans la
+   sortie de MSBuild. Il faut fermer Houdini, réinstaller, puis rouvrir.
+2. Une structure de réseau que je n'ai pas pu reproduire : le Karma Material
+   Builder n'est pas instanciable en ligne de commande dans cette installation
+   (ce n'est pas un type de nœud mais un outil d'étagère), et le
+   `materialbuilder` VEX exporte ses terminaux sous le contexte `vex` et non
+   `mtlx`. Pour trancher il faut l'USD exporté du matériau qui échoue.
