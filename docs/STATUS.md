@@ -741,3 +741,40 @@ Deux causes restent plausibles côté utilisateur, dans cet ordre :
    (ce n'est pas un type de nœud mais un outil d'étagère), et le
    `materialbuilder` VEX exporte ses terminaux sous le contexte `vex` et non
    `mtlx`. Pour trancher il faut l'USD exporté du matériau qui échoue.
+
+### A16 — Le displacement faisait disparaître l'objet ✅ CORRIGÉ
+
+Le nœud `displacement` de Cycles calcule `(height - midlevel) * scale` et
+prend **0,5** comme midlevel par défaut : c'est la convention d'une carte de
+hauteur lue dans une image, où le gris moyen ne déplace rien. MaterialX n'a
+aucun midlevel — son displacement vaut simplement `amount * scale`.
+
+Laissé au défaut de Cycles, un `mtlxdisplacement` dont l'amount n'est pas
+connecté — ce que Houdini écrit pour un nœud fraîchement posé — poussait chaque
+point d'une demi-unité le long de sa normale. Sur une sphère de rayon 0,5, la
+surface s'effondre : **l'objet disparaît**, puis réapparaît en grossissant dès
+qu'une valeur atteint la hauteur.
+
+C'est exactement le symptôme rapporté : « la sphère ne rend pas, et quand je
+bouge un paramètre elle rend et s'agrandit ».
+
+Corrigé en fixant `midlevel` à 0. Vérifié sur le fichier de l'utilisateur : un
+displacement non renseigné produit désormais une image identique à celle où le
+terminal de displacement est absent (écart 4,6·10⁻⁸).
+
+### A17 — Le Karma Material Builder tombe sur le repli UsdPreviewSurface
+
+Houdini écrit le réseau d'un **USD MaterialX Builder** sous le contexte de rendu
+`mtlx`, mais celui d'un **Karma Material Builder** sous son propre contexte
+`kma`, alors que ce sont les mêmes nœuds MaterialX. À côté, il écrit toujours un
+`UsdPreviewSurface` de repli.
+
+`kma` a été ajouté à `GetMaterialRenderContexts()`, mais **husk continue de
+livrer le repli** pour ces matériaux : le graphe traduit ne contient qu'un
+`principled_bsdf` nu, sans les nœuds auxiliaires qu'une traduction MaterialX
+crée, et les avertissements portent sur des noms UsdPreviewSurface
+(`clearcoat`, `specularColor`).
+
+Non résolu. La résolution du contexte semble se faire côté Houdini plutôt que
+par la liste que le delegate déclare. Sans effet sur un USD MaterialX Builder,
+qui est le cas le mieux couvert.
