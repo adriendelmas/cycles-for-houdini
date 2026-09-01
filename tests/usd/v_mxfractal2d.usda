@@ -32,7 +32,7 @@ def Xform "world"
         prepend apiSchemas = ["MaterialBindingAPI"]
     )
     {
-        rel material:binding = </world/Materials/mxMetal>
+        rel material:binding = </world/Materials/M>
         int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
         int[] faceVertexIndices = [0, 3, 2, 1,  4, 5, 6, 7,  3, 7, 6, 2,  0, 1, 5, 4,  0, 4, 7, 3,  1, 2, 6, 5]
         point3f[] points = [(-1,-1,-1), (1,-1,-1), (1,-1,1), (-1,-1,1), (-1,1,-1), (1,1,-1), (1,1,1), (-1,1,1)]
@@ -85,6 +85,38 @@ def Xform "world"
             }
         }
 
+
+        def Material "M"
+        {
+            token outputs:mtlx:surface.connect = </world/Materials/M/surf.outputs:out>
+            def Shader "coord"
+            {
+                uniform token info:id = "ND_texcoord_vector2"
+                token outputs:out
+            }
+            def Shader "scaled"
+            {
+                uniform token info:id = "ND_multiply_vector2FA"
+                float2 inputs:in1.connect = </world/Materials/M/coord.outputs:out>
+                float inputs:in2 = 4
+                token outputs:out
+            }
+            def Shader "op"
+            {
+                uniform token info:id = "ND_fractal2d_float"
+                float2 inputs:texcoord.connect = </world/Materials/M/scaled.outputs:out>
+                int inputs:octaves = 4
+                token outputs:out
+            }
+
+            def Shader "surf"
+            {
+                uniform token info:id = "ND_standard_surface_surfaceshader"
+                color3f inputs:base_color.connect = </world/Materials/M/op.outputs:out>
+                float inputs:specular_roughness = 0.5
+                token outputs:out
+            }
+        }
         def Material "mxGlass"
         {
             token outputs:mtlx:surface.connect = </world/Materials/mxGlass/s.outputs:surface>

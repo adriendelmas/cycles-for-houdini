@@ -140,15 +140,38 @@ mécanisme de valeurs fixes est déjà en place.
 
 ## P3 — Procéduraux
 
-- [x] `noise3d`, `fractal3d` → `noise_texture`
-- [~] `noise2d`, `fractal2d` → `noise_texture` en 2D
-- [x] `cellnoise2d`, `cellnoise3d` → `voronoi_texture` — vérifié
-- [x] `worleynoise2d`, `worleynoise3d` → `voronoi_texture.distance`
-      (pas de sortie `fac` sur ce nœud, contrairement aux autres textures)
-- [~] `unifiednoise2d`, `unifiednoise3d` → `noise_texture`
+Les dix familles ci-dessous ne sont plus des approximations : elles vont sur
+`mx_noise_texture`, un nœud Cycles qui implémente les algorithmes MaterialX
+eux-mêmes — mêmes fonctions de hachage, mêmes constantes de normalisation,
+même sémantique de paramètres. Origine et réserve : voir la note en fin de
+section.
+
+- [x] `noise2d`, `noise3d` → `mx_noise_texture` perlin — vérifiés
+- [x] `fractal2d`, `fractal3d` → `mx_noise_texture` fractal — vérifiés
+- [x] `cellnoise2d`, `cellnoise3d` → `mx_noise_texture` cell — vérifiés
+- [x] `worleynoise2d`, `worleynoise3d` → `mx_noise_texture` worley — vérifiés
+- [x] `unifiednoise2d`, `unifiednoise3d` → `mx_noise_texture` unified —
+      vérifiés, le sélecteur `type` étant transmis tel quel
 - [~] `flake2d`, `flake3d` → `voronoi_texture`
 - [x] `randomcolor`, `randomfloat` → `white_noise_texture` — vérifié
 - [x] `checkerboard` → `checker_texture`
+
+### D'où vient `mx_noise_texture`
+
+Le nœud n'est pas dans Cycles amont : il vient de la
+[PR Blender #158054](https://projects.blender.org/blender/blender/pulls/158054),
+dont la partie Cycles est isolée et purement additive, donc reprise telle
+quelle dans la série de patchs (à deux ajustements près, voir les patchs).
+
+**Réserve :** cette PR est *ouverte*, pas fusionnée. Elle peut encore changer ou
+être refusée. Le jour où elle atterrit en amont, ces patchs deviennent
+redondants et doivent être retirés plutôt que rebasés.
+
+Un détail qui coûte cher si on l'ignore : la variante du nodedef décide de la
+sortie lue. `ND_fractal3d_float` est un scalaire qui se diffuse sur les trois
+canaux, `ND_fractal3d_color3` est trois bruits différents. Décider d'après ce
+que la sortie alimente — l'entrée `base_color` est une couleur, donc lisons la
+sortie couleur — rend bariolé tout bruit gris pilotant une couleur.
 - [ ] `grid`, `line`, `circle`, `cloverleaf`, `hexagon`, `crosshatch`,
       `tiledcircles`, `tiledcloverleafs`, `tiledhexagons`
       — motifs sans équivalent Cycles, à décomposer ou écarter
