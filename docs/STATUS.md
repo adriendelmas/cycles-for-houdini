@@ -630,3 +630,18 @@ que ce qu'il **contenait**. La verification qui a finalement tenu :
 Le script Python que le C++ assemble est aussi verifie a la compilation : une
 erreur de syntaxe ne serait pas rattrapee par le `try` qu'il contient, puisque
 celui-ci est a l'interieur.
+
+### A11 — `position` MaterialX est en espace objet, Cycles le donne en monde
+
+`ND_position_vector3` a une entrée `space` qui vaut `object` par défaut. Elle
+est traduite vers la sortie `Position` du nœud `geometry` de Cycles, qui est en
+espace **monde**. Les deux coïncident pour un objet à l'origine et divergent
+dès qu'il est déplacé.
+
+Constaté en testant `clamp`/`remap` sur un objet translaté en x ≈ −3,2 : les
+bornes attendues entre −1 et 1 tombaient hors plage et la sphère sortait noire.
+Le graphe était pourtant correctement câblé — vérifié via `HD_CYCLES_DUMP_GRAPH`.
+
+Sans effet sur les bruits procéduraux, qui ne dépendent pas de l'origine, mais
+fausse tout ce qui compare une position à un seuil. Correction : intercaler un
+`vector_transform` monde → objet, ou lire `Object` du nœud `texture_coordinate`.

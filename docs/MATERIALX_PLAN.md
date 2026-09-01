@@ -117,19 +117,33 @@ nœud absent, parce que rien ne signale l'erreur.
 - [x] `normalize`, `magnitude`, `distance` — vérifiés
 - [x] `dotproduct`, `crossproduct` — vérifiés
 - [~] `reflect`, `refract`
-- [ ] `clamp`, `smoothstep`, `remap`, `range` — Cycles n'a pas de nœud
-      équivalent, à composer
-- [ ] `invert`, `trianglewave`, `luminance`, `atan2::2.0`
+- [x] `clamp` → `clamp` (mode `minmax`) — vérifié
+- [x] `remap` → `map_range` linéaire — vérifié
+- [x] `smoothstep` → `map_range` en mode `smoothstep` — vérifié
+- [~] `range` → `map_range`, mais son `gamma` n'a pas d'équivalent et reste
+      **non mappé** plutôt qu'approximé en silence
+- [~] `invert` → `invert` : Cycles inverse autour de 1 et mélange par `fac`,
+      ce qui ne coïncide avec MaterialX qu'à l'`amount` par défaut de 1
+- [~] `luminance` → `rgb_to_bw`, qui a le Rec.709 en dur : un graphe demandant
+      d'autres `lumacoeffs` obtient ceux-là
+- [ ] `trianglewave`, `atan2::2.0`
 
 Tous se ramènent à `math` ou `vector_math` avec la bonne valeur d'enum — le
 mécanisme de valeurs fixes est déjà en place.
 
 ### Couleur
 
-- [ ] `hsvtorgb`, `rgbtohsv` → `separate_hsv` / `combine_hsv`
-- [ ] `hsvadjust`, `saturate` → `hue_saturation`
+- [x] `rgbtohsv`, `hsvtorgb` → `separate_color` + `combine_color`, l'un dans
+      chaque espace — **vérifié par aller-retour** : l'enchaînement des deux
+      rend la couleur d'origine au pixel près
+- [ ] `hsvadjust`, `saturate` → le nœud `hsv` existe, mais ses saturation et
+      valeur sont des **multiplicateurs** là où MaterialX veut des décalages
+      additifs ; à composer plutôt qu'à mapper de travers
 - [ ] `colorcorrect` → chaîne à composer
-- [ ] `contrast`, `curveadjust` → `rgb_curves`
+- [ ] `contrast` — `brightness_contrast` calcule
+      `(c - 0.5) * (contraste + 1) + 0.5`, décalé d'une unité par rapport à
+      MaterialX et sans pivot réglable. Laissé de côté sciemment.
+- [ ] `curveadjust` → `rgb_curves`
 - [ ] `premult`, `unpremult` → `math`
 - [ ] Les 10 convertisseurs d'espace colorimétrique
       (`acescg_to_lin_rec709`, `srgb_texture_to_lin_rec709`, …)
@@ -180,8 +194,10 @@ sortie couleur — rend bariolé tout bruit gris pilotant une couleur.
 - [~] `ramptb` — même montage, mais le gradient de Cycles ne court que selon X.
       Mappé sur le type `diagonal` faute de mieux : **approximation assumée**,
       le vrai haut-bas demanderait un échange d'axes, donc un second auxiliaire.
-- [ ] `ramp`, `ramp4`, `ramp_gradient` → `color_ramp`
-- [ ] `ramp`, `ramp4` → `color_ramp`
+- [ ] `ramp4` → interpolation bilinéaire de quatre couleurs, soit trois mix :
+      hors de portée d'un seul nœud auxiliaire.
+      (Il n'existe pas de `ND_ramp` multi-arrêts dans la bibliothèque standard,
+      contrairement à ce que ce plan supposait.)
 - [ ] `splitlr`, `splittb` → `gradient_texture` + `math`
 
 ---
@@ -194,13 +210,15 @@ sortie couleur — rend bariolé tout bruit gris pilotant une couleur.
       — vérifiés
 - [ ] `transformmatrix`, `creatematrix`, `creatematrix3`, `transpose`,
       `determinant`, `invertmatrix` — pas d'équivalent, à écarter
-- [ ] `ifequal`, `ifgreater`, `ifgreatereq` et leurs variantes booléennes
-      — demandent une comparaison **et** une sélection, donc deux entrées
-      routées vers deux nœuds. Le mécanisme composite n'en gère qu'une.
+- [x] `ifequal`, `ifgreater`, `ifgreatereq` → une comparaison `math` pilotant
+      le facteur d'un mix — **table de vérité vérifiée au rendu**, branche vraie
+      et branche fausse, pour les trois. Un mix par type de donnée, sinon une
+      branche couleur ressort noire.
 - [~] `and` → `math multiply`, `or` → `math maximum` — approximations sur des
       valeurs 0/1
 - [ ] `not`, `xor` — pas d'équivalent direct
-- [ ] `switch` → chaîne de `mix`
+- [ ] `switch` → dix entrées, donc neuf mix en cascade : hors de portée d'un
+      seul nœud auxiliaire.
 
 ---
 
@@ -286,6 +304,12 @@ gauche-droite, par exemple, vaut un `gradient_texture` pilotant le facteur d'un
 `mix_color`. Une correspondance peut donc déclarer un **nœud auxiliaire** :
 type, sortie, entrée de destination, et ses valeurs fixes. Le delegate le crée
 et le câble à la construction du graphe.
+
+Le nœud auxiliaire peut recevoir **plusieurs fils** vers le nœud principal, et
+une entrée MaterialX peut lui être adressée en préfixant sa cible de
+`helper:`. C'est ce qui rend possibles les conversions colorimétriques (trois
+fils entre un `separate_color` et un `combine_color`) et les conditionnels
+(les deux valeurs comparées vont à l'auxiliaire, les deux branches au mix).
 
 Un piège à retenir : Cycles résout ses sockets par **nom d'interface**, pas par
 identifiant. La sortie du gradient est `"Fac"` et l'entrée du mix est
