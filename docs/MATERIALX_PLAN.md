@@ -152,9 +152,12 @@ mécanisme de valeurs fixes est déjà en place.
 - [ ] `grid`, `line`, `circle`, `cloverleaf`, `hexagon`, `crosshatch`,
       `tiledcircles`, `tiledcloverleafs`, `tiledhexagons`
       — motifs sans équivalent Cycles, à décomposer ou écarter
-- [ ] `ramplr`, `ramptb`, `ramp_gradient` — mapping **incomplet**. Cycles
-      `gradient_texture` n'a aucune entrée couleur, alors que MaterialX passe
-      `valuel`/`valuer`. Il faut composer avec un `color_ramp`.
+- [x] `ramplr` → `gradient_texture` pilotant un `mix_color` — **vérifié**,
+      le dégradé entre `valuel` et `valuer` s'affiche correctement.
+- [~] `ramptb` — même montage, mais le gradient de Cycles ne court que selon X.
+      Mappé sur le type `diagonal` faute de mieux : **approximation assumée**,
+      le vrai haut-bas demanderait un échange d'axes, donc un second auxiliaire.
+- [ ] `ramp`, `ramp4`, `ramp_gradient` → `color_ramp`
 - [ ] `ramp`, `ramp4` → `color_ramp`
 - [ ] `splitlr`, `splittb` → `gradient_texture` + `math`
 
@@ -162,14 +165,18 @@ mécanisme de valeurs fixes est déjà en place.
 
 ## P4 — Transformations et logique
 
-- [ ] `rotate2d`, `rotate3d` → `vector_rotate`
-- [ ] `place2d` → `mapping`
-- [ ] `transformpoint`, `transformvector`, `transformnormal` → `vector_transform`
+- [x] `rotate2d`, `rotate3d` → `vector_rotate` — vérifiés
+- [x] `place2d` → `mapping` — vérifié
+- [x] `transformpoint`, `transformvector`, `transformnormal` → `vector_transform`
+      — vérifiés
 - [ ] `transformmatrix`, `creatematrix`, `creatematrix3`, `transpose`,
       `determinant`, `invertmatrix` — pas d'équivalent, à écarter
 - [ ] `ifequal`, `ifgreater`, `ifgreatereq` et leurs variantes booléennes
-      → `math` en mode comparaison + `mix`
-- [ ] `and`, `or`, `not`, `xor` → `math`
+      — demandent une comparaison **et** une sélection, donc deux entrées
+      routées vers deux nœuds. Le mécanisme composite n'en gère qu'une.
+- [~] `and` → `math multiply`, `or` → `math maximum` — approximations sur des
+      valeurs 0/1
+- [ ] `not`, `xor` — pas d'équivalent direct
 - [ ] `switch` → chaîne de `mix`
 
 ---
@@ -248,6 +255,18 @@ La traduction est passée d'une chaîne de `if` à une **table de préfixes**
 (`MtlxTable()` dans `material.cpp`), où le préfixe le plus long l'emporte. Un
 nœud spécifique peut donc précéder sa famille — `ND_image_color` avant
 `ND_image_`, qui n'ont pas le même colorspace.
+
+### Correspondances composites
+
+Certains nœuds MaterialX n'ont pas d'équivalent Cycles **unique**. Un dégradé
+gauche-droite, par exemple, vaut un `gradient_texture` pilotant le facteur d'un
+`mix_color`. Une correspondance peut donc déclarer un **nœud auxiliaire** :
+type, sortie, entrée de destination, et ses valeurs fixes. Le delegate le crée
+et le câble à la construction du graphe.
+
+Un piège à retenir : Cycles résout ses sockets par **nom d'interface**, pas par
+identifiant. La sortie du gradient est `"Fac"` et l'entrée du mix est
+`"Factor"` — pas `fac` des deux côtés.
 
 Deux fabriques couvrent l'essentiel du volume :
 

@@ -86,11 +86,23 @@ def Xform "world"
         def Material "M"
         {
             token outputs:mtlx:surface.connect = </world/Materials/M/surf.outputs:out>
+            def Shader "uv"
+            {
+                uniform token info:id = "ND_texcoord_vector2"
+                token outputs:out
+            }
+            def Shader "pl"
+            {
+                uniform token info:id = "ND_place2d_vector2"
+                float inputs:rotate = 30
+                token outputs:out
+            }
             def Shader "op"
             {
-                uniform token info:id = "ND_ramplr_color3"
-                color3f inputs:valuel = (1, 0.1, 0)
-                color3f inputs:valuer = (0, 0.2, 1)
+                uniform token info:id = "ND_checkerboard_color3"
+                color3f inputs:color1 = (0.9, 0.2, 0.1)
+                color3f inputs:color2 = (0.1, 0.3, 0.9)
+                vector2f inputs:texcoord.connect = </world/Materials/M/pl.outputs:out>
                 token outputs:out
             }
 

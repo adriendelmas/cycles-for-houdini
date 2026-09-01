@@ -88,9 +88,9 @@ def Xform "world"
             token outputs:mtlx:surface.connect = </world/Materials/M/surf.outputs:out>
             def Shader "op"
             {
-                uniform token info:id = "ND_ramplr_color3"
-                color3f inputs:valuel = (1, 0.1, 0)
-                color3f inputs:valuer = (0, 0.2, 1)
+                uniform token info:id = "ND_ramptb_color3"
+                color3f inputs:valuet = (1, 0.9, 0)
+                color3f inputs:valueb = (0, 0.3, 0.9)
                 token outputs:out
             }
 

@@ -86,11 +86,21 @@ def Xform "world"
         def Material "M"
         {
             token outputs:mtlx:surface.connect = </world/Materials/M/surf.outputs:out>
+            def Shader "pos"
+            {
+                uniform token info:id = "ND_position_vector3"
+                token outputs:out
+            }
+            def Shader "tr"
+            {
+                uniform token info:id = "ND_transformpoint_vector3"
+                vector3f inputs:in.connect = </world/Materials/M/pos.outputs:out>
+                token outputs:out
+            }
             def Shader "op"
             {
-                uniform token info:id = "ND_ramplr_color3"
-                color3f inputs:valuel = (1, 0.1, 0)
-                color3f inputs:valuer = (0, 0.2, 1)
+                uniform token info:id = "ND_fractal3d_color3"
+                vector3f inputs:position.connect = </world/Materials/M/tr.outputs:out>
                 token outputs:out
             }
 
