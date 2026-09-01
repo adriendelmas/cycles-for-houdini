@@ -1,0 +1,171 @@
+#usda 1.0
+(
+    defaultPrim = "world"
+    metersPerUnit = 1
+    upAxis = "Y"
+    startTimeCode = 1
+    endTimeCode = 1
+)
+
+def Xform "world"
+{
+    def Camera "camera"
+    {
+        float focalLength = 30
+        float horizontalAperture = 36
+        float verticalAperture = 24
+        float2 clippingRange = (0.1, 1000)
+        matrix4d xformOp:transform = ( (1,0,0,0), (0,0.966,-0.259,0), (0,0.259,0.966,0), (0, 3.5, 10, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+
+    def Mesh "ground"
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(-20, 0, -20), (20, 0, -20), (20, 0, 20), (-20, 0, 20)]
+        color3f[] primvars:displayColor = [(0.35, 0.35, 0.38)]
+        uniform token subdivisionScheme = "none"
+    }
+
+    def Mesh "objMetal" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </world/Materials/M>
+        int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+        int[] faceVertexIndices = [0, 3, 2, 1,  4, 5, 6, 7,  3, 7, 6, 2,  0, 1, 5, 4,  0, 4, 7, 3,  1, 2, 6, 5]
+        point3f[] points = [(-1,-1,-1), (1,-1,-1), (1,-1,1), (-1,-1,1), (-1,1,-1), (1,1,-1), (1,1,1), (-1,1,1)]
+        uniform token subdivisionScheme = "catmullClark"
+        matrix4d xformOp:transform = ( (1,0,0,0), (0,1,0,0), (0,0,1,0), (-3.2, 1.1, 0, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+
+    def Mesh "objGlass" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </world/Materials/mxGlass>
+        int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+        int[] faceVertexIndices = [0, 3, 2, 1,  4, 5, 6, 7,  3, 7, 6, 2,  0, 1, 5, 4,  0, 4, 7, 3,  1, 2, 6, 5]
+        point3f[] points = [(-1,-1,-1), (1,-1,-1), (1,-1,1), (-1,-1,1), (-1,1,-1), (1,1,-1), (1,1,1), (-1,1,1)]
+        uniform token subdivisionScheme = "none"
+        matrix4d xformOp:transform = ( (1,0,0,0), (0,1,0,0), (0,0,1,0), (0, 1.1, 0, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+
+    def Mesh "objEmit" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </world/Materials/mxEmit>
+        int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+        int[] faceVertexIndices = [0, 3, 2, 1,  4, 5, 6, 7,  3, 7, 6, 2,  0, 1, 5, 4,  0, 4, 7, 3,  1, 2, 6, 5]
+        point3f[] points = [(-1,-1,-1), (1,-1,-1), (1,-1,1), (-1,-1,1), (-1,1,-1), (1,1,-1), (1,1,1), (-1,1,1)]
+        uniform token subdivisionScheme = "none"
+        matrix4d xformOp:transform = ( (1,0,0,0), (0,1,0,0), (0,0,1,0), (3.2, 1.1, 0, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+
+    def Scope "Materials"
+    {
+        def Material "mxMetal"
+        {
+            token outputs:mtlx:surface.connect = </world/Materials/mxMetal/s.outputs:surface>
+            def Shader "s"
+            {
+                uniform token info:id = "ND_standard_surface_surfaceshader"
+                color3f inputs:base_color = (0.95, 0.72, 0.3)
+                float inputs:metalness = 1
+                float inputs:specular_roughness = 0.14
+                token outputs:surface
+            }
+        }
+
+
+        def Material "M"
+        {
+            token outputs:mtlx:surface.connect = </world/Materials/M/op.outputs:out>
+            def Shader "op"
+            {
+                uniform token info:id = "ND_translucent_bsdf"
+                token outputs:out
+            }
+        }
+        def Material "mxGlass"
+        {
+            token outputs:mtlx:surface.connect = </world/Materials/mxGlass/s.outputs:surface>
+            def Shader "s"
+            {
+                uniform token info:id = "ND_standard_surface_surfaceshader"
+                color3f inputs:base_color = (0.35, 0.8, 0.95)
+                float inputs:metalness = 0
+                float inputs:transmission = 1
+                float inputs:specular_roughness = 0.04
+                float inputs:specular_IOR = 1.45
+                token outputs:surface
+            }
+        }
+
+        def Material "mxEmit"
+        {
+            token outputs:mtlx:surface.connect = </world/Materials/mxEmit/s.outputs:surface>
+            def Shader "s"
+            {
+                uniform token info:id = "ND_standard_surface_surfaceshader"
+                color3f inputs:base_color = (0.05, 0.05, 0.05)
+                float inputs:specular_roughness = 0.5
+                float inputs:emission = 2.5
+                color3f inputs:emission_color = (1.0, 0.4, 0.12)
+                token outputs:surface
+            }
+        }
+    }
+
+    def RectLight "key"
+    {
+        float inputs:width = 6
+        float inputs:height = 6
+        float inputs:intensity = 12
+        matrix4d xformOp:transform = ( (1,0,0,0), (0,0.5,-0.866,0), (0,0.866,0.5,0), (-4, 7, 6, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+
+    def DomeLight "sky"
+    {
+        float inputs:intensity = 0.35
+        color3f inputs:color = (0.35, 0.45, 0.6)
+    }
+}
+
+def RenderSettings "rendersettings"
+{
+    rel camera = </world/camera>
+    uniform int2 resolution = (720, 360)
+    rel products = </Render/product>
+}
+
+def Scope "Render"
+{
+    def RenderProduct "product"
+    {
+        rel camera = </world/camera>
+        uniform token productType = "raster"
+        token productName = "phase4b.exr"
+        rel orderedVars = [</Render/Vars/color>]
+    }
+
+    def Scope "Vars"
+    {
+        def RenderVar "color" (
+            apiSchemas = ["HuskRenderVarAPI"]
+        )
+        {
+            uniform token dataType = "color4f"
+            token driver:parameters:aov:husk:format = "color4f"
+            string driver:parameters:aov:husk:name = "C"
+            uniform string sourceName = "color"
+            uniform token sourceType = "raw"
+        }
+    }
+}

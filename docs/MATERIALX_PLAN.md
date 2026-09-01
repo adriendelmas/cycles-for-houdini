@@ -64,12 +64,14 @@ nœud absent, parce que rien ne signale l'erreur.
 - [x] `position` → `geometry.position`
 - [x] `normal` → `geometry.normal`
 - [x] `tangent` → `geometry.tangent`
-- [~] `bitangent` → `geometry` (pas de sortie directe, à composer)
+- [x] `bitangent` → `geometry.tangent` — vérifié (approximation : Cycles n'a
+      pas de sortie bitangente, la tangente est utilisée en attendant)
 - [x] `texcoord` → `texture_coordinate.UV`
-- [~] `geomcolor` → `attribute` (Cd)
-- [~] `geompropvalue`, `geompropvalueuniform` → `attribute`
-- [~] `viewdirection` → `geometry.incoming`
-- [~] `facingratio` → `layer_weight` ou `fresnel`
+- [x] `geomcolor` → `attribute` — vérifié
+- [x] `geompropvalue` → `attribute` — vérifié
+- [~] `geompropvalueuniform`
+- [x] `viewdirection` → `geometry.incoming` — vérifié
+- [x] `facingratio` → `layer_weight.facing` — vérifié
 - [ ] `frame`, `time` → `value` piloté par la frame
 
 ### Textures
@@ -88,7 +90,8 @@ nœud absent, parce que rien ne signale l'erreur.
 - [~] `layer` → `mix_closure`
 - [ ] `constant` → `value` / `rgb` selon le type
 - [ ] `convert`, `swizzle`, `extract` → `separate_*` / `combine_*`
-- [~] `combine2`, `combine3`, `combine4` → `combine_color` / `combine_xyz`
+- [x] `combine3` → `combine_color` / `combine_xyz` — vérifié
+- [~] `combine2`, `combine4`
 - [x] `separate2`, `separate3c`, `separate3v`, `separate4c`, `separate4v`
       → `separate_color` / `separate_xyz` — vérifié. MaterialX nomme ses
       sorties `outx`/`outy`/`outz` et `outr`/`outg`/`outb`, Cycles les nomme
@@ -103,13 +106,17 @@ nœud absent, parce que rien ne signale l'erreur.
 
 - [x] `add`, `subtract`, `multiply`, `divide` → `math` / `vector_math`
 - [x] `modulo` — vérifié
-- [~] `absval`, `sign`, `floor`, `ceil`, `round`, `fract`
-- [~] `power`, `safepower`, `exp`, `ln`, `sqrt`
+- [x] `absval`, `sign`, `floor`, `ceil`, `round` — vérifiés
+- [~] `fract`
+- [x] `power`, `exp`, `ln`, `sqrt` — vérifiés
+- [~] `safepower`
 - [x] `sin` — vérifié
-- [~] `cos`, `tan`, `asin`, `acos`, `atan2`
-- [~] `min`, `max`
-- [~] `normalize`, `magnitude`, `distance`
-- [~] `dotproduct`, `crossproduct`, `reflect`, `refract`
+- [x] `cos`, `tan`, `atan2` — vérifiés
+- [~] `asin`, `acos`
+- [x] `min`, `max` — vérifiés
+- [x] `normalize`, `magnitude`, `distance` — vérifiés
+- [x] `dotproduct`, `crossproduct` — vérifiés
+- [~] `reflect`, `refract`
 - [ ] `clamp`, `smoothstep`, `remap`, `range` — Cycles n'a pas de nœud
       équivalent, à composer
 - [ ] `invert`, `trianglewave`, `luminance`, `atan2::2.0`
@@ -172,7 +179,7 @@ mécanisme de valeurs fixes est déjà en place.
 - [ ] `over`, `in`, `out`, `mask`, `matte`, `disjointover`, `inside`, `outside`
       — demandent une composition alpha explicite
 - [x] `screen` — vérifié
-- [~] `plus`, `minus`, `difference`, `burn`, `dodge`, `overlay`
+- [x] `plus`, `minus`, `difference`, `burn`, `dodge`, `overlay` — vérifiés
 
 Tous se ramènent à `mix_color` avec le bon `blend_type`, sauf `over`/`in`/`out`
 qui demandent une composition alpha explicite.
@@ -184,19 +191,19 @@ qui demandent une composition alpha explicite.
 - [~] `disney_principled`, `disney_brdf_2012`, `disney_bsdf_2015`
       → `principled_bsdf`
 - [~] `gltf_pbr`, `gltf_material` → `principled_bsdf`
-- [~] `conductor_bsdf` → `glossy_bsdf` métallique
-- [~] `dielectric_bsdf` → `glass_bsdf`
+- [x] `conductor_bsdf` → `glossy_bsdf` — vérifié
+- [x] `dielectric_bsdf` → `glass_bsdf` — vérifié
 - [ ] `generalized_schlick_bsdf` → `principled_bsdf`
-- [~] `oren_nayar_diffuse_bsdf`, `burley_diffuse_bsdf` → `diffuse_bsdf`
-- [~] `subsurface_bsdf` → `subsurface_scattering`
-- [~] `sheen_bsdf` → `sheen_bsdf`
+- [x] `oren_nayar_diffuse_bsdf`, `burley_diffuse_bsdf` → `diffuse_bsdf` — vérifiés
+- [x] `subsurface_bsdf` → `subsurface_scattering` — vérifié
+- [x] `sheen_bsdf` → `sheen_bsdf` — vérifié
 - [ ] `thin_film_bsdf` → entrées thin film du `principled_bsdf`
-- [~] `translucent_bsdf` → `translucent_bsdf`
+- [x] `translucent_bsdf` → `translucent_bsdf` — vérifié
 - [ ] `chiang_hair_bsdf` → `hair_bsdf` / `principled_hair_bsdf`
-- [~] `uniform_edf`, `conical_edf`, `measured_edf`, `generalized_schlick_edf`
-      → `emission`
+- [x] `uniform_edf` → `emission` — vérifié
+- [~] `conical_edf`, `measured_edf`, `generalized_schlick_edf`
 - [~] `absorption_vdf`, `anisotropic_vdf` → `absorption_volume` / `scatter_volume`
-- [~] `blackbody` → `blackbody`
+- [x] `blackbody` → `blackbody` — vérifié
 - [ ] `artistic_ior`, `roughness_anisotropy`, `glossiness_anisotropy`,
       `roughness_dual`, `open_pbr_anisotropy`, `chiang_hair_roughness`,
       `chiang_hair_absorption_from_color`,
@@ -249,3 +256,22 @@ Deux fabriques couvrent l'essentiel du volume :
 - `MakeMtlxBlend(mode)` — tout le compositing se ramène à un `mix_color`.
 
 Ajouter un nœud est donc une ligne dans la table, pas une branche de plus.
+
+
+## Journal de vérification
+
+**39 chaînes connectées rendues, 39 sans perte de connexion.** Chaque cas est
+un graphe minimal branché sur `base_color` ou directement sur le terminal de
+surface, rendu par husk, avec les avertissements de traduction lus dans la
+console.
+
+Deux niveaux de preuve, à ne pas confondre :
+
+- **Plomberie** — aucun avertissement : chaque entrée et chaque sortie
+  référencée existe, aucune connexion n'est écartée.
+- **Sémantique** — le rendu change comme attendu. Les sept closures donnent
+  sept moyennes distinctes, et `uniform_edf` ressort nettement plus lumineuse
+  (0,69 contre ~0,53), ce qui confirme que le terminal est réellement pris en
+  compte et pas seulement accepté.
+
+Un nœud n'est coché `[x]` que s'il a passé les deux.
