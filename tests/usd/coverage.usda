@@ -1,0 +1,544 @@
+#usda 1.0
+(
+    defaultPrim = "world"
+    metersPerUnit = 1
+    upAxis = "Y"
+    startTimeCode = 1
+    endTimeCode = 1
+)
+
+def Xform "world"
+{
+    def Camera "camera"
+    {
+        float focalLength = 30
+        float horizontalAperture = 36
+        float verticalAperture = 24
+        float2 clippingRange = (0.1, 1000)
+        matrix4d xformOp:transform = ( (1,0,0,0), (0,0.966,-0.259,0), (0,0.259,0.966,0), (0, 3.5, 10, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+
+    def Mesh "ground"
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(-20, 0, -20), (20, 0, -20), (20, 0, 20), (-20, 0, 20)]
+        color3f[] primvars:displayColor = [(0.35, 0.35, 0.38)]
+        uniform token subdivisionScheme = "none"
+    }
+
+    def Mesh "objMetal" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </world/Materials/mxCover>
+        int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+        int[] faceVertexIndices = [0, 3, 2, 1,  4, 5, 6, 7,  3, 7, 6, 2,  0, 1, 5, 4,  0, 4, 7, 3,  1, 2, 6, 5]
+        point3f[] points = [(-1,-1,-1), (1,-1,-1), (1,-1,1), (-1,-1,1), (-1,1,-1), (1,1,-1), (1,1,1), (-1,1,1)]
+        uniform token subdivisionScheme = "catmullClark"
+        matrix4d xformOp:transform = ( (1,0,0,0), (0,1,0,0), (0,0,1,0), (-3.2, 1.1, 0, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+
+    def Mesh "objGlass" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </world/Materials/mxGlass>
+        int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+        int[] faceVertexIndices = [0, 3, 2, 1,  4, 5, 6, 7,  3, 7, 6, 2,  0, 1, 5, 4,  0, 4, 7, 3,  1, 2, 6, 5]
+        point3f[] points = [(-1,-1,-1), (1,-1,-1), (1,-1,1), (-1,-1,1), (-1,1,-1), (1,1,-1), (1,1,1), (-1,1,1)]
+        uniform token subdivisionScheme = "none"
+        matrix4d xformOp:transform = ( (1,0,0,0), (0,1,0,0), (0,0,1,0), (0, 1.1, 0, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+
+    def Mesh "objEmit" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </world/Materials/mxEmit>
+        int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+        int[] faceVertexIndices = [0, 3, 2, 1,  4, 5, 6, 7,  3, 7, 6, 2,  0, 1, 5, 4,  0, 4, 7, 3,  1, 2, 6, 5]
+        point3f[] points = [(-1,-1,-1), (1,-1,-1), (1,-1,1), (-1,-1,1), (-1,1,-1), (1,1,-1), (1,1,1), (-1,1,1)]
+        uniform token subdivisionScheme = "none"
+        matrix4d xformOp:transform = ( (1,0,0,0), (0,1,0,0), (0,0,1,0), (3.2, 1.1, 0, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+
+    def Scope "Materials"
+    {
+        def Material "mxMetal"
+        {
+            token outputs:mtlx:surface.connect = </world/Materials/mxMetal/s.outputs:surface>
+            def Shader "s"
+            {
+                uniform token info:id = "ND_standard_surface_surfaceshader"
+                color3f inputs:base_color = (0.95, 0.72, 0.3)
+                float inputs:metalness = 1
+                float inputs:specular_roughness = 0.14
+                token outputs:surface
+            }
+        }
+
+
+        def Material "mxCover"
+        {
+            token outputs:mtlx:surface.connect = </world/Materials/mxCover/surf.outputs:out>
+
+            def Shader "surf"
+            {
+                uniform token info:id = "ND_standard_surface_surfaceshader"
+                color3f inputs:base_color = (0.7, 0.5, 0.3)
+                token outputs:out
+            }
+
+        def Shader "n0"
+        {
+            uniform token info:id = "ND_modulo_float"
+            token outputs:out
+        }
+        def Shader "n1"
+        {
+            uniform token info:id = "ND_absval_float"
+            token outputs:out
+        }
+        def Shader "n2"
+        {
+            uniform token info:id = "ND_sign_float"
+            token outputs:out
+        }
+        def Shader "n3"
+        {
+            uniform token info:id = "ND_floor_float"
+            token outputs:out
+        }
+        def Shader "n4"
+        {
+            uniform token info:id = "ND_ceil_float"
+            token outputs:out
+        }
+        def Shader "n5"
+        {
+            uniform token info:id = "ND_round_float"
+            token outputs:out
+        }
+        def Shader "n6"
+        {
+            uniform token info:id = "ND_power_float"
+            token outputs:out
+        }
+        def Shader "n7"
+        {
+            uniform token info:id = "ND_exp_float"
+            token outputs:out
+        }
+        def Shader "n8"
+        {
+            uniform token info:id = "ND_ln_float"
+            token outputs:out
+        }
+        def Shader "n9"
+        {
+            uniform token info:id = "ND_sqrt_float"
+            token outputs:out
+        }
+        def Shader "n10"
+        {
+            uniform token info:id = "ND_sin_float"
+            token outputs:out
+        }
+        def Shader "n11"
+        {
+            uniform token info:id = "ND_cos_float"
+            token outputs:out
+        }
+        def Shader "n12"
+        {
+            uniform token info:id = "ND_tan_float"
+            token outputs:out
+        }
+        def Shader "n13"
+        {
+            uniform token info:id = "ND_asin_float"
+            token outputs:out
+        }
+        def Shader "n14"
+        {
+            uniform token info:id = "ND_acos_float"
+            token outputs:out
+        }
+        def Shader "n15"
+        {
+            uniform token info:id = "ND_min_float"
+            token outputs:out
+        }
+        def Shader "n16"
+        {
+            uniform token info:id = "ND_max_float"
+            token outputs:out
+        }
+        def Shader "n17"
+        {
+            uniform token info:id = "ND_add_float"
+            token outputs:out
+        }
+        def Shader "n18"
+        {
+            uniform token info:id = "ND_subtract_float"
+            token outputs:out
+        }
+        def Shader "n19"
+        {
+            uniform token info:id = "ND_multiply_float"
+            token outputs:out
+        }
+        def Shader "n20"
+        {
+            uniform token info:id = "ND_divide_float"
+            token outputs:out
+        }
+        def Shader "n21"
+        {
+            uniform token info:id = "ND_normalize_vector3"
+            token outputs:out
+        }
+        def Shader "n22"
+        {
+            uniform token info:id = "ND_magnitude_vector3"
+            token outputs:out
+        }
+        def Shader "n23"
+        {
+            uniform token info:id = "ND_distance_vector3"
+            token outputs:out
+        }
+        def Shader "n24"
+        {
+            uniform token info:id = "ND_dotproduct_vector3"
+            token outputs:out
+        }
+        def Shader "n25"
+        {
+            uniform token info:id = "ND_crossproduct_vector3"
+            token outputs:out
+        }
+        def Shader "n26"
+        {
+            uniform token info:id = "ND_reflect_vector3"
+            token outputs:out
+        }
+        def Shader "n27"
+        {
+            uniform token info:id = "ND_refract_vector3"
+            token outputs:out
+        }
+        def Shader "n28"
+        {
+            uniform token info:id = "ND_add_vector3"
+            token outputs:out
+        }
+        def Shader "n29"
+        {
+            uniform token info:id = "ND_multiply_vector3"
+            token outputs:out
+        }
+        def Shader "n30"
+        {
+            uniform token info:id = "ND_plus_color3"
+            token outputs:out
+        }
+        def Shader "n31"
+        {
+            uniform token info:id = "ND_minus_color3"
+            token outputs:out
+        }
+        def Shader "n32"
+        {
+            uniform token info:id = "ND_difference_color3"
+            token outputs:out
+        }
+        def Shader "n33"
+        {
+            uniform token info:id = "ND_burn_color3"
+            token outputs:out
+        }
+        def Shader "n34"
+        {
+            uniform token info:id = "ND_dodge_color3"
+            token outputs:out
+        }
+        def Shader "n35"
+        {
+            uniform token info:id = "ND_screen_color3"
+            token outputs:out
+        }
+        def Shader "n36"
+        {
+            uniform token info:id = "ND_overlay_color3"
+            token outputs:out
+        }
+        def Shader "n37"
+        {
+            uniform token info:id = "ND_noise3d_float"
+            token outputs:out
+        }
+        def Shader "n38"
+        {
+            uniform token info:id = "ND_fractal3d_float"
+            token outputs:out
+        }
+        def Shader "n39"
+        {
+            uniform token info:id = "ND_worleynoise3d_float"
+            token outputs:out
+        }
+        def Shader "n40"
+        {
+            uniform token info:id = "ND_cellnoise3d_float"
+            token outputs:out
+        }
+        def Shader "n41"
+        {
+            uniform token info:id = "ND_randomfloat_float_float"
+            token outputs:out
+        }
+        def Shader "n42"
+        {
+            uniform token info:id = "ND_checkerboard_color3"
+            token outputs:out
+        }
+        def Shader "n43"
+        {
+            uniform token info:id = "ND_ramplr_color3"
+            token outputs:out
+        }
+        def Shader "n44"
+        {
+            uniform token info:id = "ND_ramptb_color3"
+            token outputs:out
+        }
+        def Shader "n45"
+        {
+            uniform token info:id = "ND_position_vector3"
+            token outputs:out
+        }
+        def Shader "n46"
+        {
+            uniform token info:id = "ND_normal_vector3"
+            token outputs:out
+        }
+        def Shader "n47"
+        {
+            uniform token info:id = "ND_tangent_vector3"
+            token outputs:out
+        }
+        def Shader "n48"
+        {
+            uniform token info:id = "ND_bitangent_vector3"
+            token outputs:out
+        }
+        def Shader "n49"
+        {
+            uniform token info:id = "ND_texcoord_vector2"
+            token outputs:out
+        }
+        def Shader "n50"
+        {
+            uniform token info:id = "ND_geomcolor_color3"
+            token outputs:out
+        }
+        def Shader "n51"
+        {
+            uniform token info:id = "ND_geompropvalue_float"
+            token outputs:out
+        }
+        def Shader "n52"
+        {
+            uniform token info:id = "ND_viewdirection_vector3"
+            token outputs:out
+        }
+        def Shader "n53"
+        {
+            uniform token info:id = "ND_facingratio_float"
+            token outputs:out
+        }
+        def Shader "n54"
+        {
+            uniform token info:id = "ND_bump_vector3"
+            token outputs:out
+        }
+        def Shader "n55"
+        {
+            uniform token info:id = "ND_heighttonormal_vector3"
+            token outputs:out
+        }
+        def Shader "n56"
+        {
+            uniform token info:id = "ND_normalmap"
+            token outputs:out
+        }
+        def Shader "n57"
+        {
+            uniform token info:id = "ND_combine3_color3"
+            token outputs:out
+        }
+        def Shader "n58"
+        {
+            uniform token info:id = "ND_combine3_vector3"
+            token outputs:out
+        }
+        def Shader "n59"
+        {
+            uniform token info:id = "ND_separate3_color3"
+            token outputs:out
+        }
+        def Shader "n60"
+        {
+            uniform token info:id = "ND_mix_color3"
+            token outputs:out
+        }
+        def Shader "n61"
+        {
+            uniform token info:id = "ND_image_color3"
+            token outputs:out
+        }
+        def Shader "n62"
+        {
+            uniform token info:id = "ND_image_vector3"
+            token outputs:out
+        }
+        def Shader "n63"
+        {
+            uniform token info:id = "ND_uniform_edf"
+            token outputs:out
+        }
+        def Shader "n64"
+        {
+            uniform token info:id = "ND_conductor_bsdf"
+            token outputs:out
+        }
+        def Shader "n65"
+        {
+            uniform token info:id = "ND_dielectric_bsdf"
+            token outputs:out
+        }
+        def Shader "n66"
+        {
+            uniform token info:id = "ND_oren_nayar_diffuse_bsdf"
+            token outputs:out
+        }
+        def Shader "n67"
+        {
+            uniform token info:id = "ND_burley_diffuse_bsdf"
+            token outputs:out
+        }
+        def Shader "n68"
+        {
+            uniform token info:id = "ND_subsurface_bsdf"
+            token outputs:out
+        }
+        def Shader "n69"
+        {
+            uniform token info:id = "ND_sheen_bsdf"
+            token outputs:out
+        }
+        def Shader "n70"
+        {
+            uniform token info:id = "ND_translucent_bsdf"
+            token outputs:out
+        }
+        def Shader "n71"
+        {
+            uniform token info:id = "ND_absorption_vdf"
+            token outputs:out
+        }
+        def Shader "n72"
+        {
+            uniform token info:id = "ND_anisotropic_vdf"
+            token outputs:out
+        }
+        def Shader "n73"
+        {
+            uniform token info:id = "ND_blackbody"
+            token outputs:out
+        }
+        }
+        def Material "mxGlass"
+        {
+            token outputs:mtlx:surface.connect = </world/Materials/mxGlass/s.outputs:surface>
+            def Shader "s"
+            {
+                uniform token info:id = "ND_standard_surface_surfaceshader"
+                color3f inputs:base_color = (0.35, 0.8, 0.95)
+                float inputs:metalness = 0
+                float inputs:transmission = 1
+                float inputs:specular_roughness = 0.04
+                float inputs:specular_IOR = 1.45
+                token outputs:surface
+            }
+        }
+
+        def Material "mxEmit"
+        {
+            token outputs:mtlx:surface.connect = </world/Materials/mxEmit/s.outputs:surface>
+            def Shader "s"
+            {
+                uniform token info:id = "ND_standard_surface_surfaceshader"
+                color3f inputs:base_color = (0.05, 0.05, 0.05)
+                float inputs:specular_roughness = 0.5
+                float inputs:emission = 2.5
+                color3f inputs:emission_color = (1.0, 0.4, 0.12)
+                token outputs:surface
+            }
+        }
+    }
+
+    def RectLight "key"
+    {
+        float inputs:width = 6
+        float inputs:height = 6
+        float inputs:intensity = 12
+        matrix4d xformOp:transform = ( (1,0,0,0), (0,0.5,-0.866,0), (0,0.866,0.5,0), (-4, 7, 6, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+
+    def DomeLight "sky"
+    {
+        float inputs:intensity = 0.35
+        color3f inputs:color = (0.35, 0.45, 0.6)
+    }
+}
+
+def RenderSettings "rendersettings"
+{
+    rel camera = </world/camera>
+    uniform int2 resolution = (720, 360)
+    rel products = </Render/product>
+}
+
+def Scope "Render"
+{
+    def RenderProduct "product"
+    {
+        rel camera = </world/camera>
+        uniform token productType = "raster"
+        token productName = "phase4b.exr"
+        rel orderedVars = [</Render/Vars/color>]
+    }
+
+    def Scope "Vars"
+    {
+        def RenderVar "color" (
+            apiSchemas = ["HuskRenderVarAPI"]
+        )
+        {
+            uniform token dataType = "color4f"
+            token driver:parameters:aov:husk:format = "color4f"
+            string driver:parameters:aov:husk:name = "C"
+            uniform string sourceName = "color"
+            uniform token sourceType = "raw"
+        }
+    }
+}

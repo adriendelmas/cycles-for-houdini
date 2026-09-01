@@ -3,8 +3,22 @@
 Inventaire mesuré sur Houdini 22.0.368 : **239 VOP `mtlx*`** placeables dans
 l'interface, pour **161 nœuds Cycles** disponibles.
 
-Convention : `[x]` fait et vérifié au rendu, `[~]` mappé mais non vérifié,
+Convention : `[x]` fait et **vérifié au rendu**, `[~]` mappé mais non vérifié,
 `[ ]` à faire, `[-]` sans équivalent Cycles, écarté avec la raison.
+
+> **Comment vérifier, et deux pièges à ne pas répéter.**
+>
+> Un nœud n'est coché `[x]` que si un rendu montre son effet. Deux méthodes de
+> vérification se sont révélées vides :
+>
+> 1. **Compter les avertissements ne mesure rien** tant qu'ils passent par
+>    `TF_WARN` / `TF_RUNTIME_ERROR` : husk les avale. Ils passent désormais par
+>    le logger de Cycles, qui s'affiche.
+> 2. **Instancier des nœuds non connectés ne teste rien** : Hydra élague le
+>    réseau et ne transmet que ce qui est accessible depuis un terminal. Le
+>    delegate ne voit jamais ces nœuds.
+>
+> Seule une chaîne **connectée**, jugée sur les pixels, fait foi.
 
 ---
 
@@ -38,7 +52,7 @@ nœud absent, parce que rien ne signale l'erreur.
 ### Surfaces
 
 - [x] `standard_surface` → `principled_bsdf` (30 entrées mappées)
-- [ ] `open_pbr_surface` → `principled_bsdf`
+- [~] `open_pbr_surface` → `principled_bsdf`
 - [ ] `UsdPreviewSurface` → `principled_bsdf` *(déjà géré par le code amont)*
 - [ ] `surface` → `principled_bsdf` minimal
 - [ ] `surfacematerial` — terminal, à traiter avec les sorties de matériau
@@ -50,32 +64,32 @@ nœud absent, parce que rien ne signale l'erreur.
 - [x] `position` → `geometry.position`
 - [x] `normal` → `geometry.normal`
 - [x] `tangent` → `geometry.tangent`
-- [ ] `bitangent` → `geometry` (pas de sortie directe, à composer)
+- [~] `bitangent` → `geometry` (pas de sortie directe, à composer)
 - [x] `texcoord` → `texture_coordinate.UV`
-- [ ] `geomcolor` → `attribute` (Cd)
-- [ ] `geompropvalue`, `geompropvalueuniform` → `attribute`
-- [ ] `viewdirection` → `geometry.incoming`
-- [ ] `facingratio` → `layer_weight` ou `fresnel`
+- [~] `geomcolor` → `attribute` (Cd)
+- [~] `geompropvalue`, `geompropvalueuniform` → `attribute`
+- [~] `viewdirection` → `geometry.incoming`
+- [~] `facingratio` → `layer_weight` ou `fresnel`
 - [ ] `frame`, `time` → `value` piloté par la frame
 
 ### Textures
 
 - [x] `image` → `image_texture` (voir P0)
 - [x] `tiledimage` → `image_texture`
-- [ ] `latlongimage` → `environment_texture`
+- [~] `latlongimage` → `environment_texture`
 - [ ] `hextiledimage`, `hextilednormalmap` — pas d'équivalent, à décomposer
 - [ ] `triplanarprojection` → pas d'équivalent direct, à composer
 
 ### Utilitaires indispensables
 
-- [ ] `bump` → `bump`
-- [ ] `heighttonormal` → `bump` ou `normal_map`
+- [x] `bump` → `bump`
+- [~] `heighttonormal` → `bump` ou `normal_map`
 - [x] `mix` → `mix_color`
-- [ ] `layer` → `mix_closure`
+- [~] `layer` → `mix_closure`
 - [ ] `constant` → `value` / `rgb` selon le type
 - [ ] `convert`, `swizzle`, `extract` → `separate_*` / `combine_*`
-- [ ] `combine2`, `combine3`, `combine4` → `combine_color` / `combine_xyz`
-- [ ] `separate2`, `separate3c`, `separate3v`, `separate4c`, `separate4v`
+- [~] `combine2`, `combine3`, `combine4` → `combine_color` / `combine_xyz`
+- [~] `separate2`, `separate3c`, `separate3v`, `separate4c`, `separate4v`
       → `separate_color` / `separate_xyz`
 
 ---
@@ -85,13 +99,15 @@ nœud absent, parce que rien ne signale l'erreur.
 ### Arithmétique
 
 - [x] `add`, `subtract`, `multiply`, `divide` → `math` / `vector_math`
-- [ ] `modulo`, `absval`, `sign`, `floor`, `ceil`, `round`, `fract`
-- [ ] `power`, `safepower`, `exp`, `ln`, `sqrt`
-- [ ] `sin`, `cos`, `tan`, `asin`, `acos`, `atan2`, `atan2::2.0`
-- [ ] `min`, `max`, `clamp`, `smoothstep`, `remap`, `range`
-- [ ] `invert`, `normalize`, `magnitude`, `distance`
-- [ ] `dotproduct`, `crossproduct`, `reflect`, `refract`
-- [ ] `trianglewave`, `luminance`
+- [~] `modulo`, `absval`, `sign`, `floor`, `ceil`, `round`, `fract`
+- [~] `power`, `safepower`, `exp`, `ln`, `sqrt`
+- [~] `sin`, `cos`, `tan`, `asin`, `acos`, `atan2`
+- [~] `min`, `max`
+- [~] `normalize`, `magnitude`, `distance`
+- [~] `dotproduct`, `crossproduct`, `reflect`, `refract`
+- [ ] `clamp`, `smoothstep`, `remap`, `range` — Cycles n'a pas de nœud
+      équivalent, à composer
+- [ ] `invert`, `trianglewave`, `luminance`, `atan2::2.0`
 
 Tous se ramènent à `math` ou `vector_math` avec la bonne valeur d'enum — le
 mécanisme de valeurs fixes est déjà en place.
@@ -113,18 +129,19 @@ mécanisme de valeurs fixes est déjà en place.
 ## P3 — Procéduraux
 
 - [x] `noise3d`, `fractal3d` → `noise_texture`
-- [ ] `noise2d`, `fractal2d` → `noise_texture` en 2D
-- [ ] `cellnoise2d`, `cellnoise3d` → `voronoi_texture`
-- [ ] `worleynoise2d`, `worleynoise3d` → `voronoi_texture`
-- [ ] `unifiednoise2d`, `unifiednoise3d` → `noise_texture`
-- [ ] `flake2d`, `flake3d` → `voronoi_texture`
-- [ ] `randomcolor`, `randomfloat` → `white_noise_texture`
+- [~] `noise2d`, `fractal2d` → `noise_texture` en 2D
+- [~] `cellnoise2d`, `cellnoise3d` → `voronoi_texture`
+- [x] `worleynoise2d`, `worleynoise3d` → `voronoi_texture.distance`
+      (pas de sortie `fac` sur ce nœud, contrairement aux autres textures)
+- [~] `unifiednoise2d`, `unifiednoise3d` → `noise_texture`
+- [~] `flake2d`, `flake3d` → `voronoi_texture`
+- [~] `randomcolor`, `randomfloat` → `white_noise_texture`
 - [x] `checkerboard` → `checker_texture`
 - [ ] `grid`, `line`, `circle`, `cloverleaf`, `hexagon`, `crosshatch`,
       `tiledcircles`, `tiledcloverleafs`, `tiledhexagons`
       — motifs sans équivalent Cycles, à décomposer ou écarter
-- [ ] `ramp`, `ramp4`, `ramplr`, `ramptb`, `ramp_gradient` → `gradient_texture`
-      et `color_ramp`
+- [~] `ramplr`, `ramptb`, `ramp_gradient` → `gradient_texture`
+- [ ] `ramp`, `ramp4` → `color_ramp`
 - [ ] `splitlr`, `splittb` → `gradient_texture` + `math`
 
 ---
@@ -146,7 +163,8 @@ mécanisme de valeurs fixes est déjà en place.
 ## P5 — Compositing
 
 - [ ] `over`, `in`, `out`, `mask`, `matte`, `disjointover`, `inside`, `outside`
-- [ ] `plus`, `minus`, `difference`, `burn`, `dodge`, `screen`, `overlay`
+      — demandent une composition alpha explicite
+- [~] `plus`, `minus`, `difference`, `burn`, `dodge`, `screen`, `overlay`
 
 Tous se ramènent à `mix_color` avec le bon `blend_type`, sauf `over`/`in`/`out`
 qui demandent une composition alpha explicite.
@@ -155,28 +173,28 @@ qui demandent une composition alpha explicite.
 
 ## P6 — Surfaces alternatives et BSDF primitifs
 
-- [ ] `disney_principled`, `disney_brdf_2012`, `disney_bsdf_2015`
+- [~] `disney_principled`, `disney_brdf_2012`, `disney_bsdf_2015`
       → `principled_bsdf`
-- [ ] `gltf_pbr`, `gltf_material` → `principled_bsdf`
-- [ ] `conductor_bsdf` → `glossy_bsdf` métallique
-- [ ] `dielectric_bsdf` → `glass_bsdf`
+- [~] `gltf_pbr`, `gltf_material` → `principled_bsdf`
+- [~] `conductor_bsdf` → `glossy_bsdf` métallique
+- [~] `dielectric_bsdf` → `glass_bsdf`
 - [ ] `generalized_schlick_bsdf` → `principled_bsdf`
-- [ ] `oren_nayar_diffuse_bsdf`, `burley_diffuse_bsdf` → `diffuse_bsdf`
-- [ ] `subsurface_bsdf` → `subsurface_scattering`
-- [ ] `sheen_bsdf` → `sheen_bsdf`
+- [~] `oren_nayar_diffuse_bsdf`, `burley_diffuse_bsdf` → `diffuse_bsdf`
+- [~] `subsurface_bsdf` → `subsurface_scattering`
+- [~] `sheen_bsdf` → `sheen_bsdf`
 - [ ] `thin_film_bsdf` → entrées thin film du `principled_bsdf`
-- [ ] `translucent_bsdf` → `translucent_bsdf`
+- [~] `translucent_bsdf` → `translucent_bsdf`
 - [ ] `chiang_hair_bsdf` → `hair_bsdf` / `principled_hair_bsdf`
-- [ ] `uniform_edf`, `conical_edf`, `measured_edf`, `generalized_schlick_edf`
+- [~] `uniform_edf`, `conical_edf`, `measured_edf`, `generalized_schlick_edf`
       → `emission`
-- [ ] `absorption_vdf`, `anisotropic_vdf` → `absorption_volume` / `scatter_volume`
-- [ ] `blackbody` → `blackbody`
+- [~] `absorption_vdf`, `anisotropic_vdf` → `absorption_volume` / `scatter_volume`
+- [~] `blackbody` → `blackbody`
 - [ ] `artistic_ior`, `roughness_anisotropy`, `glossiness_anisotropy`,
       `roughness_dual`, `open_pbr_anisotropy`, `chiang_hair_roughness`,
       `chiang_hair_absorption_from_color`,
       `deon_hair_absorption_from_melanin` — nœuds de conversion de paramètres,
       à traduire en arithmétique
-- [ ] `ambientocclusion` → `ambient_occlusion`
+- [~] `ambientocclusion` → `ambient_occlusion`
 - [ ] `gooch_shade` — stylisé, pas d'équivalent
 
 ---
@@ -205,3 +223,21 @@ scène avant d'être coché. Les noms de sockets Cycles sont relevés dans le
 registre Sdr construit en phase 4a, jamais devinés — c'est ce qui a évité
 plusieurs erreurs (`max_bounce` au singulier, sorties `fac`/`color` selon le
 type de connexion).
+
+
+---
+
+## Structure du code
+
+La traduction est passée d'une chaîne de `if` à une **table de préfixes**
+(`MtlxTable()` dans `material.cpp`), où le préfixe le plus long l'emporte. Un
+nœud spécifique peut donc précéder sa famille — `ND_image_color` avant
+`ND_image_`, qui n'ont pas le même colorspace.
+
+Deux fabriques couvrent l'essentiel du volume :
+
+- `MakeMtlxOp(mode, vector, unary)` — toute l'arithmétique se ramène à un
+  `math` ou `vector_math` dont le mode est posé en valeur fixe.
+- `MakeMtlxBlend(mode)` — tout le compositing se ramène à un `mix_color`.
+
+Ajouter un nœud est donc une ligne dans la table, pas une branche de plus.
