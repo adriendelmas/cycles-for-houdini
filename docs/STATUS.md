@@ -662,3 +662,39 @@ par Cycles vaut exactement l'opposé de celle de Karma. La cause n'est pas une
 convention d'axes mais l'enroulement de mes quads, dont la normale géométrique
 pointe vers l'intérieur : Karma la rapporte telle quelle, Cycles la retourne
 vers le rayon. Sur une géométrie correctement enroulée il n'y a pas d'écart.
+
+
+### A12 — `specular` de standard_surface doublait le spéculaire ✅ CORRIGÉ
+
+`specular` est un **poids** MaterialX dont la valeur neutre est 1. Il était
+envoyé tel quel sur `specular_ior_level` de Cycles, dont le neutre est **0,5**.
+Tout matériau où Houdini écrit ce paramètre — c'est-à-dire à peu près tous —
+rendait donc un spéculaire deux fois trop fort.
+
+Mesuré contre Karma, pic de la tache spéculaire sur une sphère :
+
+| `specular`     | Karma | Cycles avant | Cycles après |
+|----------------|-------|--------------|--------------|
+| non renseigné  | 0,894 | 0,894        | 0,894        |
+| = 1 (défaut)   | 0,894 | **1,372**    | 0,894        |
+| = 0,5          | 0,629 | 0,894        | 0,658        |
+
+Corrigé par un nœud `math` auxiliaire qui divise le poids par deux. Il porte
+aussi le défaut MaterialX de 1, sans quoi un `specular` non écrit se retrouvait
+piloté vers une valeur fausse au lieu de rester au défaut de Cycles — c'est ce
+qu'une première version faisait, attrapé par le cas « non renseigné ».
+
+L'écart résiduel à 0,5 tient à ce que le poids MaterialX est linéaire là où le
+niveau de Cycles suit une courbe d'IOR : la direction et le neutre sont justes,
+la courbe intermédiaire reste approchée.
+
+### A13 — `base` et `default` d'image restent non honorés
+
+`base` de standard_surface est un poids multipliant `base_color` ; il faudrait
+un second nœud auxiliaire, or le mécanisme n'en gère qu'un par correspondance et
+celui de `standard_surface` sert désormais au `specular`.
+
+`default` du nœud image (la couleur rendue hors de l'image en mode `constant`)
+n'a pas d'équivalent : Cycles ne sait renvoyer que du noir. La correspondance
+qui l'envoyait vers `color` a été retirée — `color` est une **sortie** de
+`image_texture`, la correspondance ne pouvait qu'échouer.

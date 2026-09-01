@@ -343,6 +343,16 @@ Deux niveaux de preuve, à ne pas confondre :
 Un nœud n'est coché `[x]` que s'il a passé les deux.
 
 
+## Image : adressage et filtrage
+
+- [x] `uaddressmode`, `vaddressmode` → `extension` — `periodic`, `clamp` et
+      `mirror` portent le même nom des deux côtés ; `constant` devient `black`,
+      exact seulement si le `default` est noir. Les quatre modes vérifiés au
+      rendu.
+- [x] `filtertype` → `interpolation` — mêmes noms.
+- [ ] Cycles n'a qu'un `extension` pour les deux axes : un graphe enroulant U et
+      V différemment obtient celui que le réseau mentionne en dernier.
+
 ## Conventions d'espace — ce qu'il ne faut PAS reprendre
 
 L'importateur MaterialX pour Blender convertit toute direction et toute position
