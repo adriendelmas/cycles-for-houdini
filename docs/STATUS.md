@@ -631,7 +631,7 @@ Le script Python que le C++ assemble est aussi verifie a la compilation : une
 erreur de syntaxe ne serait pas rattrapee par le `try` qu'il contient, puisque
 celui-ci est a l'interieur.
 
-### A11 — `position` MaterialX est en espace objet, Cycles le donne en monde
+### A11 — `position` MaterialX est en espace objet ✅ CORRIGÉ
 
 `ND_position_vector3` a une entrée `space` qui vaut `object` par défaut. Elle
 est traduite vers la sortie `Position` du nœud `geometry` de Cycles, qui est en
@@ -643,5 +643,22 @@ bornes attendues entre −1 et 1 tombaient hors plage et la sphère sortait noir
 Le graphe était pourtant correctement câblé — vérifié via `HD_CYCLES_DUMP_GRAPH`.
 
 Sans effet sur les bruits procéduraux, qui ne dépendent pas de l'origine, mais
-fausse tout ce qui compare une position à un seuil. Correction : intercaler un
-`vector_transform` monde → objet, ou lire `Object` du nœud `texture_coordinate`.
+fausse tout ce qui compare une position à un seuil.
+
+**Corrigé** en lisant la sortie `Object` du nœud `texture_coordinate` au lieu de
+`geometry.Position`. Vérifié contre Karma sur le même USD, matériau purement
+émissif pour ne pas dépendre de l'éclairage : les deux moteurs s'accordent à
+0,002 près (bruit d'échantillonnage), contre une composante rouge négative
+auparavant.
+
+**Non corrigé, et volontairement :** `normal`, `tangent` et `bitangent`
+déclarent le même défaut `space = "object"` et sortent du nœud `geometry`, en
+espace monde. Pour une translation pure les deux coïncident ; seule une rotation
+de l'objet les sépare. À traiter avec un `vector_transform` monde → objet le
+jour où ça se voit.
+
+**Écart mesuré mais non corrigé :** sur mes maillages de test, la normale rendue
+par Cycles vaut exactement l'opposé de celle de Karma. La cause n'est pas une
+convention d'axes mais l'enroulement de mes quads, dont la normale géométrique
+pointe vers l'intérieur : Karma la rapporte telle quelle, Cycles la retourne
+vers le rayon. Sur une géométrie correctement enroulée il n'y a pas d'écart.

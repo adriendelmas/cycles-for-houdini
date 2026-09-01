@@ -341,3 +341,17 @@ Deux niveaux de preuve, à ne pas confondre :
   compte et pas seulement accepté.
 
 Un nœud n'est coché `[x]` que s'il a passé les deux.
+
+
+## Conventions d'espace — ce qu'il ne faut PAS reprendre
+
+L'importateur MaterialX pour Blender convertit toute direction et toute position
+entre la base Z-up de Blender et le Y-up de MaterialX, par `(x, y, z) → (x, z, −y)`.
+
+**Cette conversion ne s'applique pas ici et ne doit pas être portée.** Son
+contexte est un document `.mtlx` importé dans une scène Blender ; le nôtre est
+Houdini/USD via Hydra, où Cycles reçoit directement les axes de l'USD, sans
+aucune scène Blender dans la chaîne.
+
+Vérifié plutôt que supposé : sur un sol dont la normale vaut `(0, 1, 0)`, le
+rendu donne `(0.5, 1.0, 0.5)`. Un swizzle aurait donné `(0.5, 0.5, 0)`.

@@ -1,0 +1,50 @@
+From c051abe0a1d1b96f6cd20b3e4834205a42cc6b46 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Tue, 1 Sep 2026 17:29:00 +0200
+Subject: [PATCH] hydra: MaterialX position is in object space
+
+Every geometric nodedef declares space as object by default, and the Cycles
+geometry node's Position is in world space. For a normal or a tangent the two
+part company only once the object is rotated, but a position differs the moment
+it is moved: on an object three units off the origin, a graph comparing the
+position against a threshold got numbers nowhere near it, and the surface came
+out black.
+
+The texture coordinate node's Object output is the object-space position.
+Checked against Karma on the same USD with a purely emissive material, so the
+comparison does not depend on lighting: the two renderers now agree to within
+sampling noise, where the red channel used to come out negative.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp | 14 +++++++++++---
+ 1 file changed, 11 insertions(+), 3 deletions(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index 1aa366f5..7e57f363 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -361,9 +361,17 @@ const MtlxFacOrColor MtlxCheckerboard = {"checker_texture",
+                                          }};
+ 
+ /* Geometric lookups all come off the one Cycles geometry node, each picking a
+- * different output. */
+-const UsdToCyclesMapping MtlxPosition = {"geometry",
+-                                         {{CyclesMaterialTokens->out, ustring("position")}}};
++ * different output - except the position, which does not.
++ *
++ * Every one of these nodedefs declares `space` as "object" by default, and the
++ * geometry node's Position is in world space. For a normal or a tangent the two
++ * differ only once the object is rotated, but a position differs the moment it
++ * is moved at all: on an object sitting three units off the origin, a graph
++ * comparing the position against a threshold got numbers that were nowhere
++ * near it. The texture coordinate node's Object output is the object-space
++ * position, and matches what Karma gives for the same network. */
++const UsdToCyclesMapping MtlxPosition = {"texture_coordinate",
++                                         {{CyclesMaterialTokens->out, ustring("object")}}};
+ const UsdToCyclesMapping MtlxNormalLookup = {"geometry",
+                                              {{CyclesMaterialTokens->out, ustring("normal")}}};
+ const UsdToCyclesMapping MtlxTangentLookup = {"geometry",
+-- 
+2.53.0.windows.2
+
