@@ -227,12 +227,32 @@ PARM_FOLDERS = [
 ]
 
 
-def folder_of(socket):
-    """La section Blender d'un socket, ou None s'il reste en tete."""
+# Un préfixe partagé par au moins tant d'entrées mérite sa section, même sur un
+# nœud dont Blender ne montre pas de découpage : c'est ce qui rend lisible un
+# voronoi ou un sky, pas seulement le principled.
+FOLDER_THRESHOLD = 3
+
+
+def folder_of(socket, counts=None):
+    """La section d'un socket, ou None s'il reste en tête du nœud."""
     for prefix, label in PARM_FOLDERS:
         if label and socket.startswith(prefix + "_"):
             return label
+    if counts:
+        head = socket.split("_", 1)[0]
+        if "_" in socket and counts.get(head, 0) >= FOLDER_THRESHOLD:
+            return head.replace("_", " ").title()
     return None
+
+
+def folder_counts(names):
+    """Combien d'entrées partagent chaque préfixe."""
+    counts = {}
+    for name in names:
+        if "_" in name:
+            head = name.split("_", 1)[0]
+            counts[head] = counts.get(head, 0) + 1
+    return counts
 
 
 def menu_block(prop, indent):
@@ -261,13 +281,14 @@ def dialog_script(node_id, sdr_node):
            "    shadertype\t%s" % shader_type(sdr_node),
            "    externalshader\t1", ""]
 
-    # Un connecteur seulement pour ce que Cycles accepte de brancher. Les autres
-    # sont des menus, pas des sockets — c'est aussi ce que montre Blender, et un
-    # graphe qui brancherait ailleurs ne se rejouerait pas là-bas.
+    # Un connecteur pour chaque entrée. Cycles en refuse certaines - un nom de
+    # fichier, un espace colorimétrique, un mode de projection - parce que leur
+    # valeur doit être connue quand la scène est construite : une texture se
+    # charge en mémoire, elle ne s'évalue pas par échantillon, et Blender ne
+    # dessine pas de socket dessus non plus. Le fil est alors ignoré, mais le
+    # delegate le dit maintenant au lieu de le taire.
     for name in inputs:
         prop = sdr_node.GetShaderInput(name)
-        if not prop.IsConnectable():
-            continue
         conn = TYPES.get(str(prop.GetType()), ("float", "float", 1))[0]
         out.append('    input\t%s\t%s\t"%s"' % (conn, parm_name(name),
                                                 escape(prop.GetLabel() or name)))
@@ -303,13 +324,35 @@ def dialog_script(node_id, sdr_node):
         block.append(indent + "}")
         return block
 
+    counts = folder_counts(inputs)
     grouped = {}
+    order = []
     for name in inputs:
-        grouped.setdefault(folder_of(name), []).append(name)
+        label = folder_of(name, counts)
+        if label not in grouped:
+            grouped[label] = []
+            if label is not None:
+                order.append(label)
+        grouped[label].append(name)
 
-    for name in grouped.pop(None, []):
-        out += emit_parm(name, "    ")
-    for label in [l for _, l in PARM_FOLDERS if l]:
+    # Houdini range dans un groupe « Other » toute entrée hors section dès qu'il
+    # en existe une. Les principales vont donc dans une section « Base » placée
+    # en tête, ce que fait aussi Houdini pour ses propres nœuds MaterialX.
+    loose = grouped.pop(None, [])
+    if loose and grouped:
+        out.append("    groupcollapsible {")
+        out.append('        name    "folder_base"')
+        out.append('        label   "Base"')
+        out.append('        parmtag { "group_default" "1" }')
+        out.append("")
+        for name in loose:
+            out += emit_parm(name, "        ")
+        out.append("    }")
+    else:
+        for name in loose:
+            out += emit_parm(name, "    ")
+    known = [l for _, l in PARM_FOLDERS if l]
+    for label in known + [l for l in order if l not in known]:
         names = grouped.pop(label, None)
         if not names:
             continue
