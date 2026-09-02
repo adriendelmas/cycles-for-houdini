@@ -280,51 +280,12 @@ def build_material_node(template):
     definition.save(LIBRARY)
 
 
-BUILDER_NAME = "cycles_material_builder"
-
-BUILDER_TOOLS = """<?xml version="1.0" encoding="UTF-8"?>
-<shelfDocument>
-  <tool name="$HDA_DEFAULT_TOOL" label="$HDA_LABEL" icon="$HDA_ICON">
-    <toolMenuContext name="network">
-      <contextOpType>$HDA_TABLE_AND_NAME</contextOpType>
-    </toolMenuContext>
-    <toolSubmenu>Cycles</toolSubmenu>
-    <script scriptType="python"><![CDATA[import voptoolutils
-voptoolutils.genericTool(kwargs, '$HDA_NAME')]]></script>
-    <keywordList>
-      <keyword>Cycles</keyword>
-    </keywordList>
-  </tool>
-</shelfDocument>
-"""
-
-
-def build_builder(parent):
-    """Le Cycles Material Builder : un réseau à part, qui n'accepte que des
-    nœuds Cycles et expose les terminaux du matériau.
-
-    Contrairement aux nœuds de nuanceur, celui-ci EST un réseau — il doit
-    s'exporter en Material portant `outputs:cycles:surface`, pas en Shader."""
-    subnet = parent.createNode("subnet", BUILDER_NAME)
-    for child in subnet.children():
-        child.destroy()
-
-    # Le builder arrive prêt à l'emploi : le nœud terminal est déjà dedans.
-    material = subnet.createNode(MATERIAL_NAME, "output")
-    material.setPosition(hou.Vector2(4.0, 0.0))
-
-    asset = subnet.createDigitalAsset(name=BUILDER_NAME, hda_file_name=LIBRARY,
-                                      description="Cycles Material Builder",
-                                      ignore_external_references=True)
-    definition = asset.type().definition()
-    definition.addSection("Tools.shelf", BUILDER_TOOLS)
-    # Un actif est verrouillé par défaut : on ne peut rien créer dedans. Un
-    # builder n'a de sens que déverrouillé.
-    options = definition.options()
-    options.setUnlockNewInstances(True)
-    definition.setOptions(options)
-    definition.save(LIBRARY)
-    asset.destroy()
+# Le builder n'est PAS un type de nœud : c'est un `subnet` configuré, monté par
+# un outil du menu tab — voir `install/houdini/scripts/python/cycles_builder.py`
+# et `install/houdini/toolbar/CyclesTools.shelf`. C'est ainsi que Houdini
+# fabrique le Karma Material Builder, et une première tentative sous forme
+# d'actif ne produisait rien : la Material Library n'exporte un matériau que si
+# le drapeau `setMaterialFlag` est posé sur l'instance.
 
 
 def main():
@@ -363,8 +324,6 @@ def main():
             child.destroy()
         build_material_node(template)
         print("Cycles Material ecrit")
-        build_builder(stage.createNode("materiallibrary"))
-        print("Cycles Material Builder ecrit")
     except hou.Error as exc:
         print("builder: ECHEC %s" % str(exc).replace(chr(10), " ")[:70])
 
