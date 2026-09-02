@@ -246,12 +246,17 @@ def folder_of(socket, counts=None):
 
 
 def folder_counts(names):
-    """Combien d'entrées partagent chaque préfixe."""
+    """Combien d'entrées partagent chaque préfixe.
+
+    Celles qu'une section nommée réclame déjà ne comptent pas : sans ça
+    `thin_wall` se retrouvait groupé avec les deux `thin_film_*` sous un
+    « Thin » que Blender ne montre pas, alors qu'il y est une case en tête."""
     counts = {}
     for name in names:
-        if "_" in name:
-            head = name.split("_", 1)[0]
-            counts[head] = counts.get(head, 0) + 1
+        if "_" not in name or folder_of(name) is not None:
+            continue
+        head = name.split("_", 1)[0]
+        counts[head] = counts.get(head, 0) + 1
     return counts
 
 
@@ -281,14 +286,16 @@ def dialog_script(node_id, sdr_node):
            "    shadertype\t%s" % shader_type(sdr_node),
            "    externalshader\t1", ""]
 
-    # Un connecteur pour chaque entrée. Cycles en refuse certaines - un nom de
-    # fichier, un espace colorimétrique, un mode de projection - parce que leur
-    # valeur doit être connue quand la scène est construite : une texture se
-    # charge en mémoire, elle ne s'évalue pas par échantillon, et Blender ne
-    # dessine pas de socket dessus non plus. Le fil est alors ignoré, mais le
-    # delegate le dit maintenant au lieu de le taire.
+    # Un connecteur seulement pour ce que Cycles accepte de lier. Le reste - un
+    # nom de fichier, un espace colorimétrique, un mode de projection - doit
+    # être connu quand la scène est construite : une texture se charge en
+    # mémoire, elle ne s'évalue pas par échantillon, et Blender ne dessine pas
+    # de socket dessus non plus. Offrir l'entrée quand même laisserait tirer un
+    # fil qui ne fait rien, ce qui trompe plus que ça ne sert.
     for name in inputs:
         prop = sdr_node.GetShaderInput(name)
+        if not prop.IsConnectable():
+            continue
         conn = TYPES.get(str(prop.GetType()), ("float", "float", 1))[0]
         out.append('    input\t%s\t%s\t"%s"' % (conn, parm_name(name),
                                                 escape(prop.GetLabel() or name)))

@@ -102,11 +102,27 @@ détection se fait désormais sur le type Sdr.
 
 ## L'interface des nœuds
 
-**Un connecteur seulement pour ce que Cycles accepte de brancher.** Le registre
-dit d'un socket s'il est connectable, et cela recoupe exactement ce que Blender
+**Un connecteur seulement pour ce que Cycles accepte de lier.** Le registre dit
+d'un socket s'il est connectable, et cela recoupe exactement ce que Blender
 montre : sur le principled, `distribution` et `subsurface_method` sont des menus
-déroulants, pas des sockets. Les exposer en entrée aurait laissé construire des
-graphes qui ne se rejoueraient nulle part ailleurs.
+déroulants, pas des sockets.
+
+La raison est dans l'architecture, pas dans un caprice. Un nœud Cycles a deux
+sortes de valeurs : celles **connues à la construction de la scène**, qui
+servent à allouer des ressources — `ImageTextureNode::update_images()` charge
+l'image en mémoire avant que le nuanceur ne soit compilé — et celles qui sont
+**liées**, compilées en bytecode et évaluées par échantillon. Un fil signifie la
+seconde chose ; un chemin de texture exige la première. Blender ne dessine pas
+de socket dessus non plus.
+
+Offrir l'entrée quand même laisserait tirer un fil sans effet, ce qui trompe
+plus que ça ne sert. Pour piloter une de ces valeurs, une référence de canal ou
+une expression sur le paramètre fonctionne et part correctement en USD.
+
+Un fil qui arriverait tout de même là — d'un USD écrit à la main, ou venu d'un
+autre outil — n'est plus écarté en silence : le delegate dit lequel des deux cas
+s'est produit, socket inexistant ou socket que Cycles ne lie pas. Le message
+existait mais passait par `TF_WARN`, que husk avale.
 
 **`surface_mix_weight` est masqué.** C'est le poids de mélange interne que
 Cycles porte sur chaque fermeture ; Blender ne l'expose jamais, c'est le nœud
