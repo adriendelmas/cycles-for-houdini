@@ -99,3 +99,28 @@ banc qui avait tort : il reconnaissait une fermeture à son nom de sortie, or
 `emission` sort « emission » et `subsurface_scattering` sort « BSSRDF ». Ils
 partaient donc sur la couleur de base, où une fermeture ne fait rien. La
 détection se fait désormais sur le type Sdr.
+
+## L'interface des nœuds
+
+**Un connecteur seulement pour ce que Cycles accepte de brancher.** Le registre
+dit d'un socket s'il est connectable, et cela recoupe exactement ce que Blender
+montre : sur le principled, `distribution` et `subsurface_method` sont des menus
+déroulants, pas des sockets. Les exposer en entrée aurait laissé construire des
+graphes qui ne se rejoueraient nulle part ailleurs.
+
+**`surface_mix_weight` est masqué.** C'est le poids de mélange interne que
+Cycles porte sur chaque fermeture ; Blender ne l'expose jamais, c'est le nœud
+Mix Shader qui le pose. L'offrir n'aurait fait qu'égarer.
+
+**Un nom de fichier ouvre un sélecteur.** Le delegate marque désormais ces
+sockets comme des chemins d'actif dans le registre, ce dont le générateur tire
+un champ à parcourir plutôt qu'une chaîne à coller.
+
+**Un booléen est une case à cocher.** Un booléen de Cycles arrive en USD sous
+forme d'entier, et rien ne le distingue alors d'un compteur : le delegate le
+signale maintenant dans les métadonnées, et l'interface n'offre plus un champ
+libre là où seuls zéro et un ont un sens.
+
+**Les sections sont repliables, pas des onglets.** Le mot-clé de Houdini est
+`groupcollapsible` ; un simple `group` fabrique des onglets et rejette tout ce
+qui reste hors dossier dans un onglet « Other ».

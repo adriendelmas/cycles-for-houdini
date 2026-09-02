@@ -187,11 +187,34 @@ def shader_type(sdr_node):
     return "generic"
 
 
+# Cycles porte sur chaque fermeture un poids de mélange interne. Blender ne
+# l'expose jamais : c'est le nœud Mix Shader qui le pose. L'offrir ici ne ferait
+# qu'égarer, et un graphe qui s'en servirait ne se rejouerait pas ailleurs.
+INTERNAL_SOCKETS = {"surface_mix_weight"}
+
+
 def usable(prop):
     """Cycles publie son bloc de placement en sockets pointés
     (`tex_mapping.translation`) : un point est illégal dans un nom de
-    paramètre. Les sockets tableau sont écartés de même."""
-    return "." not in prop.GetName() and prop.GetArraySize() == 0
+    paramètre. Les sockets tableau et les sockets internes sont écartés."""
+    return ("." not in prop.GetName() and prop.GetArraySize() == 0
+            and prop.GetName() not in INTERNAL_SOCKETS)
+
+
+def parm_type_of(prop, fallback):
+    """Le widget que Houdini doit offrir pour cette entrée.
+
+    Un nom de fichier mérite un sélecteur, sans quoi il faut coller un chemin à
+    la main ; un booléen mérite une case à cocher, sans quoi rien ne dit que
+    seuls zéro et un ont un sens. Les deux se lisent dans les métadonnées que
+    le registre publie."""
+    if prop.IsAssetIdentifier():
+        # `image` plutôt que `file` : c'est le sélecteur d'image de Houdini,
+        # celui qu'il emploie pour ses propres nœuds de texture.
+        return "image"
+    if str(prop.GetWidget()) == "checkBox":
+        return "toggle"
+    return fallback
 
 
 # Blender range les entrees d'un nuanceur en sections repliables. Les sockets de
@@ -238,8 +261,13 @@ def dialog_script(node_id, sdr_node):
            "    shadertype\t%s" % shader_type(sdr_node),
            "    externalshader\t1", ""]
 
+    # Un connecteur seulement pour ce que Cycles accepte de brancher. Les autres
+    # sont des menus, pas des sockets — c'est aussi ce que montre Blender, et un
+    # graphe qui brancherait ailleurs ne se rejouerait pas là-bas.
     for name in inputs:
         prop = sdr_node.GetShaderInput(name)
+        if not prop.IsConnectable():
+            continue
         conn = TYPES.get(str(prop.GetType()), ("float", "float", 1))[0]
         out.append('    input\t%s\t%s\t"%s"' % (conn, parm_name(name),
                                                 escape(prop.GetLabel() or name)))
@@ -258,6 +286,9 @@ def dialog_script(node_id, sdr_node):
         conn, ptype, comps = TYPES.get(str(prop.GetType()), ("float", "float", 1))
         if ptype is None:
             return []
+        ptype = parm_type_of(prop, ptype)
+        if ptype in ("image", "toggle"):
+            comps = 1
         block = [indent + "parm {",
                  '%s    name    "%s"' % (indent, parm_name(name)),
                  '%s    label   "%s"' % (indent, escape(prop.GetLabel() or name)),
@@ -282,7 +313,7 @@ def dialog_script(node_id, sdr_node):
         names = grouped.pop(label, None)
         if not names:
             continue
-        out.append("    group {")
+        out.append("    groupcollapsible {")
         out.append('        name    "folder_%s"' % label.lower().replace(" ", "_"))
         out.append('        label   "%s"' % label)
         out.append("")
