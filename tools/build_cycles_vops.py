@@ -45,13 +45,72 @@ TYPES = {
     "normal": ("normal", "vector", 3),
     "vector": ("vector", "vector", 3),
     "matrix": ("matrix", "float", 16),
-    "terminal": ("bsdf", None, 0),
+    "terminal": ("surface", None, 0),
 }
 
 # Un paramètre ne peut pas porter le nom d'un type : le contexte VOP les
 # réserve et l'actif refuse alors de s'instancier. Mesuré sur `vector`.
 RESERVED = {"vector", "float", "color", "normal", "point", "matrix", "string",
             "int", "bsdf", "struct", "surface", "displacement", "light"}
+
+
+# Catégories du menu, calquées sur celles de Blender pour que les nœuds se
+# retrouvent là où on les cherche. L'ordre compte : la première règle qui
+# correspond gagne.
+CATEGORY_RULES = [
+    ("Output", ("output", "aov_output", "displacement", "vector_displacement")),
+    ("Shader", ("_bsdf", "emission", "background_shader", "holdout", "mix_closure",
+                "add_closure", "subsurface_scattering", "_volume", "volume_coefficients",
+                "ray_portal", "principled_hair")),
+    ("Texture", ("_texture", "ies_light", "sky", "environment")),
+    ("Color", ("brightness_contrast", "gamma", "hsv", "invert", "mix_color",
+               "rgb_curves", "rgb_ramp", "wavelength", "blackbody")),
+    ("Vector", ("bump", "mapping", "normal_map", "set_normal", "vector_curves",
+                "vector_rotate", "vector_transform", "vector_math", "vector_map_range",
+                "normal", "tangent")),
+    ("Converter", ("combine_", "separate_", "convert_", "math", "clamp", "map_range",
+                   "float_curve", "mix_float", "mix_vector", "mix", "rgb_to_bw",
+                   "blackbody")),
+    ("Input", ("attribute", "camera_info", "geometry", "light_path", "object_info",
+               "particle_info", "point_info", "texture_coordinate", "uvmap", "value",
+               "volume_info", "wireframe", "ambient_occlusion", "bevel", "fresnel",
+               "layer_weight", "hair_info", "vertex_color", "raycast", "scene_time",
+               "color", "curves_info")),
+]
+
+
+# Les `convert_*` sont insérés d'office par le compilateur de graphe de Cycles
+# pour raccorder deux types ; Blender ne les montre pas et poser l'un d'eux à la
+# main n'a pas de sens. Ils encombreraient le menu de soixante entrées.
+def exposed(node_id):
+    return not node_id.startswith(PREFIX + "convert_")
+
+
+def category(node_id):
+    """La sous-catégorie du menu tab pour un nœud."""
+    name = node_id[len(PREFIX):]
+    for label, patterns in CATEGORY_RULES:
+        for pattern in patterns:
+            if name.startswith(pattern) or name.endswith(pattern) or pattern == name:
+                return label
+    return "Other"
+
+
+TOOLS_SHELF = """<?xml version="1.0" encoding="UTF-8"?>
+<shelfDocument>
+  <tool name="$HDA_DEFAULT_TOOL" label="$HDA_LABEL" icon="$HDA_ICON">
+    <toolMenuContext name="network">
+      <contextOpType>$HDA_TABLE_AND_NAME</contextOpType>
+    </toolMenuContext>
+    <toolSubmenu>Cycles/%s</toolSubmenu>
+    <script scriptType="python"><![CDATA[import voptoolutils
+voptoolutils.genericTool(kwargs, '$HDA_NAME')]]></script>
+    <keywordList>
+      <keyword>Cycles</keyword>
+    </keywordList>
+  </tool>
+</shelfDocument>
+"""
 
 
 def parm_name(socket):
@@ -174,7 +233,98 @@ def build_one(node_id, sdr_node, template):
     node_type = hou.nodeType(hou.vopNodeTypeCategory(), node_id)
     definition = node_type.definition()
     definition.addSection("DialogScript", dialog_script(node_id, sdr_node))
+    # Sans ça le nœud hérite du menu du modèle et atterrit dans les catégories
+    # MaterialX, mêlé aux nœuds d'un autre moteur.
+    definition.addSection("Tools.shelf", TOOLS_SHELF % category(node_id))
     definition.save(LIBRARY)
+
+
+MATERIAL_NAME = "cycles_material"
+
+MATERIAL_DIALOG = """{
+    name	cycles_material
+    script	cycles_material
+    label	"Cycles Material"
+
+    rendermask	cycles
+    shadertype	material
+    externalshader	1
+
+    input	surface	surface	"Surface"
+    input	displacement	displacement	"Displacement"
+    input	surface	volume	"Volume"
+    output	material	out	"out"
+
+    parm {
+        name    "shader_rendercontextname"
+        label   "shader_rendercontextname"
+        type    string
+        default { "cycles" }
+        invisible
+    }
+}
+"""
+
+
+def build_material_node(template):
+    """Le nœud qui termine un réseau Cycles en matériau.
+
+    C'est `shadertype material` qui le distingue : sans lui, une bibliothèque de
+    matériaux ne reconnaît rien à exporter. C'est le rôle que joue
+    `mtlxsurfacematerial` du côté MaterialX."""
+    template.copyToHDAFile(LIBRARY, new_name=MATERIAL_NAME, new_menu_name=MATERIAL_NAME)
+    hou.hda.installFile(LIBRARY)
+    definition = hou.nodeType(hou.vopNodeTypeCategory(), MATERIAL_NAME).definition()
+    definition.addSection("DialogScript", MATERIAL_DIALOG)
+    definition.addSection("Tools.shelf", TOOLS_SHELF % "Output")
+    definition.save(LIBRARY)
+
+
+BUILDER_NAME = "cycles_material_builder"
+
+BUILDER_TOOLS = """<?xml version="1.0" encoding="UTF-8"?>
+<shelfDocument>
+  <tool name="$HDA_DEFAULT_TOOL" label="$HDA_LABEL" icon="$HDA_ICON">
+    <toolMenuContext name="network">
+      <contextOpType>$HDA_TABLE_AND_NAME</contextOpType>
+    </toolMenuContext>
+    <toolSubmenu>Cycles</toolSubmenu>
+    <script scriptType="python"><![CDATA[import voptoolutils
+voptoolutils.genericTool(kwargs, '$HDA_NAME')]]></script>
+    <keywordList>
+      <keyword>Cycles</keyword>
+    </keywordList>
+  </tool>
+</shelfDocument>
+"""
+
+
+def build_builder(parent):
+    """Le Cycles Material Builder : un réseau à part, qui n'accepte que des
+    nœuds Cycles et expose les terminaux du matériau.
+
+    Contrairement aux nœuds de nuanceur, celui-ci EST un réseau — il doit
+    s'exporter en Material portant `outputs:cycles:surface`, pas en Shader."""
+    subnet = parent.createNode("subnet", BUILDER_NAME)
+    for child in subnet.children():
+        child.destroy()
+
+    # Le builder arrive prêt à l'emploi : le nœud terminal est déjà dedans.
+    material = subnet.createNode(MATERIAL_NAME, "output")
+    material.setPosition(hou.Vector2(4.0, 0.0))
+
+    asset = subnet.createDigitalAsset(name=BUILDER_NAME, hda_file_name=LIBRARY,
+                                      description="Cycles Material Builder",
+                                      ignore_external_references=True)
+    definition = asset.type().definition()
+    definition.addSection("Tools.shelf", BUILDER_TOOLS)
+    # Un actif est verrouillé par défaut : on ne peut rien créer dedans. Un
+    # builder n'a de sens que déverrouillé.
+    options = definition.options()
+    options.setUnlockNewInstances(True)
+    definition.setOptions(options)
+    definition.save(LIBRARY)
+    asset.destroy()
 
 
 def main():
@@ -182,6 +332,7 @@ def main():
     registry = Sdr.Registry()
     ids = sorted(str(i) for i in registry.GetShaderNodeIdentifiers()
                  if str(i).startswith(PREFIX))
+    ids = [i for i in ids if exposed(i)]
     if only_sample:
         ids = [i for i in ids if i in SAMPLE]
 
@@ -205,6 +356,17 @@ def main():
             built += 1
         except hou.Error as exc:
             failed.append((node_id, str(exc).replace("\n", " ")[:60]))
+
+    try:
+        stage = hou.node("/stage")
+        for child in stage.children():
+            child.destroy()
+        build_material_node(template)
+        print("Cycles Material ecrit")
+        build_builder(stage.createNode("materiallibrary"))
+        print("Cycles Material Builder ecrit")
+    except hou.Error as exc:
+        print("builder: ECHEC %s" % str(exc).replace(chr(10), " ")[:70])
 
     print("%d noeuds ecrits, %d echecs" % (built, len(failed)))
     for node_id, why in failed[:10]:

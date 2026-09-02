@@ -1,0 +1,256 @@
+#usda 1.0
+(
+    doc = """Generated from Composed Stage of root layer 
+"""
+    framesPerSecond = 24
+    metersPerUnit = 1
+    timeCodesPerSecond = 24
+)
+
+def HoudiniLayerInfo "HoudiniLayerInfo" (
+    customData = {
+        int HoudiniCreatorNode = 10
+        int[] HoudiniEditorNodes = [10, 13, 14, 15, 16]
+        string HoudiniSaveControl = "Placeholder"
+    }
+)
+{
+}
+
+def Scope "materials"
+{
+    def Material "cyclesmat" (
+        customData = {
+            int[] HoudiniPrimEditorNodes = [11]
+        }
+    )
+    {
+        token outputs:cycles:surface.connect = </materials/cyclesmat/cyclesmat.outputs:BSDF>
+
+        def Shader "cyclesmat" (
+            apiSchemas = ["NodeGraphNodeAPI"]
+            customData = {
+                bool HoudiniHasAutoPreviewShader = 1
+            }
+        )
+        {
+            uniform token info:id = "cycles_principled_bsdf"
+            color3f inputs:base_color.connect = </materials/cyclesmat/noise.outputs:fac>
+            float inputs:roughness = 0.35
+            token outputs:BSDF
+            uniform float2 ui:nodegraph:node:pos = (0, 0)
+        }
+
+        def Shader "noise" (
+            apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            uniform token info:id = "cycles_noise_texture"
+            float inputs:scale = 8
+            float outputs:fac
+            uniform float2 ui:nodegraph:node:pos = (0, 0)
+        }
+    }
+}
+
+def Sphere "sphere1" (
+    customData = {
+        int[] HoudiniPrimEditorNodes = [13]
+    }
+)
+{
+    float3[] extent = [(-1, -1, -1), (1, 1, 1)]
+    double radius = 1 (
+        customData = {
+            int[] HoudiniPrimEditorNodes = [13]
+        }
+    )
+    float3 xformOp:rotateXYZ = (0, 0, 0)
+    float3 xformOp:scale = (1, 1, 1)
+    double3 xformOp:translate = (0, 0, 0)
+    float3 xformOp:translate:pivot = (0, 0, 0)
+    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:translate:pivot", "xformOp:rotateXYZ", "xformOp:scale", "!invert!xformOp:translate:pivot"] (
+        customData = {
+            int[] HoudiniPrimEditorNodes = [13]
+        }
+    )
+}
+
+def Xform "lights"
+{
+    def SphereLight "light1" (
+        apiSchemas = ["HoudiniViewportLightAPI", "HoudiniViewportGuideAPI"]
+        customData = {
+            int[] HoudiniPrimEditorNodes = [15]
+        }
+    )
+    {
+        float2 houdini:clippingRange = (0.001, 10000) (
+            customData = {
+                int[] HoudiniPrimEditorNodes = [15]
+            }
+        )
+        float houdini:guidescale = 1 (
+            customData = {
+                int[] HoudiniPrimEditorNodes = [15]
+            }
+        )
+        uniform bool houdini:inviewermenu = 1 (
+            customData = {
+                int[] HoudiniPrimEditorNodes = [15]
+            }
+        )
+        color3f inputs:color = (1, 1, 1) (
+            customData = {
+                int[] HoudiniPrimEditorNodes = [15]
+            }
+        )
+        float inputs:diffuse = 1 (
+            customData = {
+                int[] HoudiniPrimEditorNodes = [15]
+            }
+        )
+        bool inputs:enableColorTemperature = 0 (
+            customData = {
+                int[] HoudiniPrimEditorNodes = [15]
+            }
+        )
+        float inputs:exposure = 0 (
+            customData = {
+                int[] HoudiniPrimEditorNodes = [15]
+            }
+        )
+        float inputs:intensity = 1 (
+            customData = {
+                int[] HoudiniPrimEditorNodes = [15]
+            }
+        )
+        bool inputs:normalize = 0 (
+            customData = {
+                int[] HoudiniPrimEditorNodes = [15]
+            }
+        )
+        float inputs:specular = 1 (
+            customData = {
+                int[] HoudiniPrimEditorNodes = [15]
+            }
+        )
+        rel light:filters
+        bool treatAsPoint = 1 (
+            customData = {
+                int[] HoudiniPrimEditorNodes = [15]
+            }
+        )
+        float3 xformOp:rotateXYZ = (0, 0, 0)
+        float3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0, 0, 0)
+        float3 xformOp:translate:pivot = (0, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:translate:pivot", "xformOp:rotateXYZ", "xformOp:scale", "!invert!xformOp:translate:pivot"] (
+            customData = {
+                int[] HoudiniPrimEditorNodes = [15]
+            }
+        )
+    }
+}
+
+def Xform "cameras"
+{
+    def Camera "camera1" (
+        apiSchemas = ["HoudiniViewportGuideAPI", "HoudiniCameraPlateAPI"]
+        customData = {
+            int[] HoudiniPrimEditorNodes = [16]
+        }
+    )
+    {
+        float2 clippingRange = (1, 1000000) (
+            customData = {
+                int[] HoudiniPrimEditorNodes = [16]
+            }
+        )
+        float exposure = 0 (
+            customData = {
+                int[] HoudiniPrimEditorNodes = [16]
+            }
+        )
+        float focalLength = 0.5 (
+            customData = {
+                int[] HoudiniPrimEditorNodes = [16]
+            }
+        )
+        float focusDistance = 5 (
+            customData = {
+                int[] HoudiniPrimEditorNodes = [16]
+            }
+        )
+        float fStop = 0 (
+            customData = {
+                int[] HoudiniPrimEditorNodes = [16]
+            }
+        )
+        float horizontalAperture = 0.20955 (
+            customData = {
+                int[] HoudiniPrimEditorNodes = [16]
+            }
+        )
+        float horizontalApertureOffset = 0 (
+            customData = {
+                int[] HoudiniPrimEditorNodes = [16]
+            }
+        )
+        asset houdini:backgroundimage = @@ (
+            customData = {
+                int[] HoudiniPrimEditorNodes = [16]
+            }
+        )
+        asset houdini:foregroundimage = @@ (
+            customData = {
+                int[] HoudiniPrimEditorNodes = [16]
+            }
+        )
+        float houdini:guidescale = 1 (
+            customData = {
+                int[] HoudiniPrimEditorNodes = [16]
+            }
+        )
+        uniform bool houdini:inviewermenu = 1 (
+            customData = {
+                int[] HoudiniPrimEditorNodes = [16]
+            }
+        )
+        token projection = "perspective" (
+            customData = {
+                int[] HoudiniPrimEditorNodes = [16]
+            }
+        )
+        double shutter:close = 0.25 (
+            customData = {
+                int[] HoudiniPrimEditorNodes = [16]
+            }
+        )
+        double shutter:open = -0.25 (
+            customData = {
+                int[] HoudiniPrimEditorNodes = [16]
+            }
+        )
+        float verticalAperture = 0.11787187 (
+            customData = {
+                int[] HoudiniPrimEditorNodes = [16]
+            }
+        )
+        float verticalApertureOffset = 0 (
+            customData = {
+                int[] HoudiniPrimEditorNodes = [16]
+            }
+        )
+        float3 xformOp:rotateXYZ = (0, 0, 0)
+        float3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0, 0, 4)
+        float3 xformOp:translate:pivot = (0, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:translate:pivot", "xformOp:rotateXYZ", "xformOp:scale", "!invert!xformOp:translate:pivot"] (
+            customData = {
+                int[] HoudiniPrimEditorNodes = [16]
+            }
+        )
+    }
+}
+
