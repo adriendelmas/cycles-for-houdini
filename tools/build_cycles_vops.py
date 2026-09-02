@@ -217,47 +217,42 @@ def parm_type_of(prop, fallback):
     return fallback
 
 
-# Blender range les entrees d'un nuanceur en sections repliables. Les sockets de
-# Cycles n'en portent pas la trace, mais leur prefixe suffit a la retrouver.
-PARM_FOLDERS = [
-    ("diffuse", "Diffuse"), ("subsurface", "Subsurface"), ("specular", "Specular"),
-    ("transmission", "Transmission"), ("coat", "Coat"), ("sheen", "Sheen"),
-    ("emission", "Emission"), ("thin_film", "Thin Film"),
-    ("tex_mapping", "Mapping"), ("distribution", None),
-]
+# Les sections, relevees sur l'interface de Blender noeud par noeud. Deviner par
+# prefixe ne suffit pas : Blender range `tangent` et `anisotropic` dans
+# Specular, dont leurs noms ne portent aucune trace, et il laisse plats des
+# noeuds dont les entrees partagent pourtant un prefixe - le sky, le bump, le
+# principled volume. Une regle automatique se trompait donc des deux cotes.
+# Un motif termine par `*` prend tout ce qui commence ainsi.
+NODE_FOLDERS = {
+    "principled_bsdf": [
+        ("Diffuse", ["diffuse_roughness"]),
+        ("Subsurface", ["subsurface_*"]),
+        ("Specular", ["specular_*", "anisotropic", "anisotropic_rotation", "tangent"]),
+        ("Transmission", ["transmission_*"]),
+        ("Coat", ["coat_*"]),
+        ("Sheen", ["sheen_*"]),
+        ("Emission", ["emission_*"]),
+        ("Thin Film", ["thin_film_*"]),
+    ],
+    "glass_bsdf": [("Thin Film", ["thin_film_*"])],
+    "metallic_bsdf": [("Thin Film", ["thin_film_*"])],
+}
 
 
-# Un préfixe partagé par au moins tant d'entrées mérite sa section, même sur un
-# nœud dont Blender ne montre pas de découpage : c'est ce qui rend lisible un
-# voronoi ou un sky, pas seulement le principled.
-FOLDER_THRESHOLD = 3
+def folders_for(node_id):
+    return NODE_FOLDERS.get(node_id[len(PREFIX):], [])
 
 
-def folder_of(socket, counts=None):
-    """La section d'un socket, ou None s'il reste en tête du nœud."""
-    for prefix, label in PARM_FOLDERS:
-        if label and socket.startswith(prefix + "_"):
-            return label
-    if counts:
-        head = socket.split("_", 1)[0]
-        if "_" in socket and counts.get(head, 0) >= FOLDER_THRESHOLD:
-            return head.replace("_", " ").title()
+def folder_of(socket, folders):
+    """La section d'un socket, ou None s'il reste en tete du noeud."""
+    for label, patterns in folders:
+        for pattern in patterns:
+            if pattern.endswith("*"):
+                if socket.startswith(pattern[:-1]):
+                    return label
+            elif socket == pattern:
+                return label
     return None
-
-
-def folder_counts(names):
-    """Combien d'entrées partagent chaque préfixe.
-
-    Celles qu'une section nommée réclame déjà ne comptent pas : sans ça
-    `thin_wall` se retrouvait groupé avec les deux `thin_film_*` sous un
-    « Thin » que Blender ne montre pas, alors qu'il y est une case en tête."""
-    counts = {}
-    for name in names:
-        if "_" not in name or folder_of(name) is not None:
-            continue
-        head = name.split("_", 1)[0]
-        counts[head] = counts.get(head, 0) + 1
-    return counts
 
 
 def menu_block(prop, indent):
@@ -331,16 +326,10 @@ def dialog_script(node_id, sdr_node):
         block.append(indent + "}")
         return block
 
-    counts = folder_counts(inputs)
+    folders = folders_for(node_id)
     grouped = {}
-    order = []
     for name in inputs:
-        label = folder_of(name, counts)
-        if label not in grouped:
-            grouped[label] = []
-            if label is not None:
-                order.append(label)
-        grouped[label].append(name)
+        grouped.setdefault(folder_of(name, folders), []).append(name)
 
     # Houdini range dans un groupe « Other » toute entrée hors section dès qu'il
     # en existe une. Les principales vont donc dans une section « Base » placée
@@ -358,8 +347,7 @@ def dialog_script(node_id, sdr_node):
     else:
         for name in loose:
             out += emit_parm(name, "    ")
-    known = [l for _, l in PARM_FOLDERS if l]
-    for label in known + [l for l in order if l not in known]:
+    for label, _ in folders:
         names = grouped.pop(label, None)
         if not names:
             continue
