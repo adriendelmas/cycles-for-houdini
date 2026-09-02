@@ -113,6 +113,47 @@ voptoolutils.genericTool(kwargs, '$HDA_NAME')]]></script>
 """
 
 
+# Les noms internes de Cycles ne sont pas ceux que Blender affiche : un artiste
+# cherche « Color Ramp », pas « Rgb Ramp ». Ces libellés suivent l'interface de
+# Blender pour que les nœuds se retrouvent sous le nom qu'on leur connaît.
+LABEL_OVERRIDES = {
+    "rgb_ramp": "Color Ramp",
+    "rgb_curves": "RGB Curves",
+    "rgb_to_bw": "RGB to BW",
+    "color": "RGB",
+    "value": "Value",
+    "mix_closure": "Mix Shader",
+    "add_closure": "Add Shader",
+    "mix_closure_weight": "Mix Shader Weight",
+    "background_shader": "Background",
+    "camera_info": "Camera Data",
+    "invert": "Invert Color",
+    "brightness_contrast": "Bright/Contrast",
+    "hsv": "Hue/Saturation/Value",
+    "ies_light": "IES Texture",
+    "uvmap": "UV Map",
+    "scene_time": "Scene Time",
+    "aov_output": "AOV Output",
+    "mx_noise_texture": "MaterialX Noise",
+    "mx_hextiled_image_texture": "MaterialX Hextiled Image",
+    "volume_coefficients": "Volume Coefficients",
+    "point_info": "Point Info",
+}
+
+# Mots que le passage en capitales initiales abîmerait.
+LABEL_WORDS = {"bsdf": "BSDF", "rgb": "RGB", "hsv": "HSV", "ies": "IES",
+               "uv": "UV", "aov": "AOV", "id": "ID", "xyz": "XYZ",
+               "bw": "BW", "ao": "AO"}
+
+
+def node_label(name):
+    """Le libellé affiche, aligne sur les noms de Blender."""
+    if name in LABEL_OVERRIDES:
+        return "Cycles " + LABEL_OVERRIDES[name]
+    words = [LABEL_WORDS.get(w, w.title()) for w in name.split("_")]
+    return "Cycles " + " ".join(words)
+
+
 def parm_name(socket):
     return "cy_" + socket if socket in RESERVED else socket
 
@@ -153,10 +194,43 @@ def usable(prop):
     return "." not in prop.GetName() and prop.GetArraySize() == 0
 
 
+# Blender range les entrees d'un nuanceur en sections repliables. Les sockets de
+# Cycles n'en portent pas la trace, mais leur prefixe suffit a la retrouver.
+PARM_FOLDERS = [
+    ("diffuse", "Diffuse"), ("subsurface", "Subsurface"), ("specular", "Specular"),
+    ("transmission", "Transmission"), ("coat", "Coat"), ("sheen", "Sheen"),
+    ("emission", "Emission"), ("thin_film", "Thin Film"),
+    ("tex_mapping", "Mapping"), ("distribution", None),
+]
+
+
+def folder_of(socket):
+    """La section Blender d'un socket, ou None s'il reste en tete."""
+    for prefix, label in PARM_FOLDERS:
+        if label and socket.startswith(prefix + "_"):
+            return label
+    return None
+
+
+def menu_block(prop, indent):
+    """Une enumeration devient un menu deroulant.
+
+    Sans ca l'operation d'un noeud math n'est qu'un entier a deviner, et le
+    noeud parait inutilisable alors qu'il porte trente operations."""
+    options = list(prop.GetOptions() or [])
+    if not options:
+        return []
+    lines = [indent + "menu {"]
+    for name, value in sorted(options, key=lambda o: int(str(o[1]))):
+        lines.append('%s    "%s"  "%s"' % (indent, value, name))
+    lines.append(indent + "}")
+    return lines
+
+
 def dialog_script(node_id, sdr_node):
     inputs = [n for n in sdr_node.GetShaderInputNames() if usable(sdr_node.GetShaderInput(n))]
     outputs = [n for n in sdr_node.GetShaderOutputNames() if usable(sdr_node.GetShaderOutput(n))]
-    label = "Cycles " + sdr_node.GetName().replace("_", " ").title()
+    label = node_label(sdr_node.GetName())
 
     out = ["{", "    name\t%s" % node_id, "    script\t%s" % node_id,
            '    label\t"%s"' % escape(label), "",
@@ -179,22 +253,45 @@ def dialog_script(node_id, sdr_node):
                                                  escape(prop.GetLabel() or name)))
     out.append("")
 
-    for name in inputs:
+    def emit_parm(name, indent):
         prop = sdr_node.GetShaderInput(name)
         conn, ptype, comps = TYPES.get(str(prop.GetType()), ("float", "float", 1))
         if ptype is None:
-            continue
-        out.append("    parm {")
-        out.append('        name    "%s"' % parm_name(name))
-        out.append('        label   "%s"' % escape(prop.GetLabel() or name))
-        out.append("        type    %s" % ptype)
+            return []
+        block = [indent + "parm {",
+                 '%s    name    "%s"' % (indent, parm_name(name)),
+                 '%s    label   "%s"' % (indent, escape(prop.GetLabel() or name)),
+                 "%s    type    %s" % (indent, ptype)]
         if comps > 1 and ptype != "color":
-            out.append("        size    %d" % comps)
-        out.append("        default { %s }" % default_literal(prop, comps))
+            block.append("%s    size    %d" % (indent, comps))
+        block.append("%s    default { %s }" % (indent, default_literal(prop, comps)))
+        block += menu_block(prop, indent + "    ")
         # Le nom réel du socket Cycles, que le traducteur écrira en USD.
         if parm_name(name) != name:
-            out.append('        parmtag { "sidefx::shader_parmname" "%s" }' % name)
+            block.append('%s    parmtag { "sidefx::shader_parmname" "%s" }' % (indent, name))
+        block.append(indent + "}")
+        return block
+
+    grouped = {}
+    for name in inputs:
+        grouped.setdefault(folder_of(name), []).append(name)
+
+    for name in grouped.pop(None, []):
+        out += emit_parm(name, "    ")
+    for label in [l for _, l in PARM_FOLDERS if l]:
+        names = grouped.pop(label, None)
+        if not names:
+            continue
+        out.append("    group {")
+        out.append('        name    "folder_%s"' % label.lower().replace(" ", "_"))
+        out.append('        label   "%s"' % label)
+        out.append("")
+        for name in names:
+            out += emit_parm(name, "        ")
         out.append("    }")
+    for label, names in grouped.items():
+        for name in names:
+            out += emit_parm(name, "    ")
 
     # Les trois paramètres que lit le traducteur par défaut de Solaris.
     for pname, value in (("shader_rendercontextname", RENDER_CONTEXT),
@@ -228,7 +325,8 @@ def template_definition():
 
 
 def build_one(node_id, sdr_node, template):
-    template.copyToHDAFile(LIBRARY, new_name=node_id, new_menu_name=node_id)
+    template.copyToHDAFile(LIBRARY, new_name=node_id,
+                           new_menu_name=node_label(sdr_node.GetName()))
     hou.hda.installFile(LIBRARY)
     node_type = hou.nodeType(hou.vopNodeTypeCategory(), node_id)
     definition = node_type.definition()
