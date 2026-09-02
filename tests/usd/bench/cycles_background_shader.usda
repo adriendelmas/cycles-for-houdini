@@ -1,0 +1,46 @@
+#usda 1.0
+(
+    doc = """Generated from Composed Stage of root layer 
+"""
+    framesPerSecond = 24
+    metersPerUnit = 1
+    timeCodesPerSecond = 24
+)
+
+def HoudiniLayerInfo "HoudiniLayerInfo" (
+    customData = {
+        int HoudiniCreatorNode = 58
+        int[] HoudiniEditorNodes = [58]
+        string HoudiniSaveControl = "Placeholder"
+    }
+)
+{
+}
+
+def Scope "world"
+{
+    def Scope "Materials"
+    {
+        def Material "cyclesmat" (
+            customData = {
+                int[] HoudiniPrimEditorNodes = [59]
+            }
+        )
+        {
+            token outputs:cycles:surface.connect = </world/Materials/cyclesmat/probe.outputs:background>
+
+            def Shader "probe" (
+                apiSchemas = ["NodeGraphNodeAPI"]
+                customData = {
+                    bool HoudiniHasAutoPreviewShader = 1
+                }
+            )
+            {
+                uniform token info:id = "cycles_background_shader"
+                token outputs:background
+                uniform float2 ui:nodegraph:node:pos = (0, 0)
+            }
+        }
+    }
+}
+

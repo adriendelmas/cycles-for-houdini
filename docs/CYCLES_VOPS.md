@@ -72,3 +72,30 @@ dont la couleur vient d'un `noise_texture`, produit bien son motif à l'image.
 Les 100 types s'instancient avec leurs paramètres, mais **seule cette paire a
 été rendue**. Les autres reposent sur la même génération, pas sur une
 vérification individuelle.
+
+## Le banc d'essai
+
+Un matériau par nœud, monté dans Houdini avec les vrais VOP, exporté puis
+rendu. Passer par la chaîne complète est le seul moyen de tester les nœuds
+générés plutôt que le seul delegate.
+
+```
+hython tools/bench_export.py     # un USD par nœud
+python tools/bench_render.py     # un rendu par nœud
+python tools/bench_diff.py       # ce qui ne change rien à l'image
+```
+
+Trois choses sont surveillées, par ordre d'importance : un avertissement du
+delegate, qui trahirait un socket nommé autrement que dans Cycles ; une image
+absente ; une image noire.
+
+**Résultat : 97 nœuds rendus, 0 problème.** Comparés à une référence — le même
+matériau sans rien de branché — **96 modifient l'image**. Le seul qui ne la
+change pas est `principled_bsdf`, et c'est attendu : la référence en est un.
+
+Le banc a d'abord signalé cinq nœuds inertes — `emission`, `holdout`,
+`background_shader`, `subsurface_scattering`, `principled_bsdf`. C'était le
+banc qui avait tort : il reconnaissait une fermeture à son nom de sortie, or
+`emission` sort « emission » et `subsurface_scattering` sort « BSSRDF ». Ils
+partaient donc sur la couleur de base, où une fermeture ne fait rien. La
+détection se fait désormais sur le type Sdr.
