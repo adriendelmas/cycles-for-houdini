@@ -11,7 +11,7 @@ import sys
 import hou
 from pxr import Sdr
 
-ROOT = r"E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Quelle installation viser : `install` pour la 5.2, `install-53` pour la 5.3.
 INSTALL = os.environ.get("CYCLES_INSTALL_DIR", "install")
 sys.path.insert(0, os.path.join(ROOT, INSTALL, "houdini", "scripts", "python"))

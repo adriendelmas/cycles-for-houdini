@@ -1,0 +1,200 @@
+From a94d05c0766f5f024ad689e5a1ca1a9dba795240 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Tue, 1 Sep 2026 12:59:57 +0200
+Subject: [PATCH 24/39] hydra: composite mappings, plus the transform and ramp
+ nodes
+
+Some MaterialX nodes have no single Cycles equivalent: a left-to-right ramp is
+a gradient driving the factor of a mix. A mapping can now declare one helper
+node - type, output, destination input and its fixed values - which the
+delegate creates and wires up when building the graph.
+
+Cycles resolves a socket by its interface name rather than its identifier, so
+the gradient's output is Fac and the mix's input is Factor, not fac on both
+sides. Getting that wrong is silent apart from the warning this adds.
+
+Adds rotate2d and rotate3d onto vector_rotate, place2d onto mapping, the three
+transform nodes onto vector_transform, and and/or onto math as approximations.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp | 136 ++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 134 insertions(+), 2 deletions(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index c6e77d6f..d01e16cb 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -105,6 +105,27 @@ class UsdToCyclesMapping {
+     _fixedValues = std::move(fixedValues);
+   }
+ 
++  /* A helper node created alongside the main one, its output wired into one of
++   * the main node's inputs. Some MaterialX nodes have no single Cycles
++   * equivalent - a left-to-right ramp is a gradient driving a mix - and this
++   * covers that without a general subgraph mechanism. */
++  struct Helper {
++    const char *nodeType = nullptr;
++    const char *output = nullptr;
++    const char *input = nullptr;
++    FixedMap fixedValues;
++  };
++
++  const Helper &helper() const
++  {
++    return _helper;
++  }
++
++  void setHelper(Helper helper)
++  {
++    _helper = std::move(helper);
++  }
++
+   virtual std::string parameterName(const TfToken &name,
+                                     const ShaderInput *inputConnection,
+                                     VtValue * /*value*/ = nullptr) const
+@@ -151,6 +172,7 @@ class UsdToCyclesMapping {
+   const ustring _nodeType;
+   ParamMap _paramMap;
+   FixedMap _fixedValues;
++  Helper _helper;
+ };
+ 
+ class UsdToCyclesTexture : public UsdToCyclesMapping {
+@@ -651,6 +673,83 @@ const std::vector<MtlxEntry> &MtlxTable()
+           {CyclesMaterialTokens->out, ustring("ao")},
+       }};
+ 
++  /* Transformations. */
++  static const UsdToCyclesMapping kRotate2d = [] {
++    UsdToCyclesMapping m{"vector_rotate",
++                         {
++                             {TfToken("in"), ustring("vector")},
++                             {TfToken("amount"), ustring("angle")},
++                             {TfToken("pivot"), ustring("center")},
++                             {CyclesMaterialTokens->out, ustring("vector")},
++                         }};
++    m.setFixedValues({{ustring("rotate_type"), "z_axis"}});
++    return m;
++  }();
++  static const UsdToCyclesMapping kRotate3d = [] {
++    UsdToCyclesMapping m{"vector_rotate",
++                         {
++                             {TfToken("in"), ustring("vector")},
++                             {TfToken("amount"), ustring("angle")},
++                             {TfToken("axis"), ustring("axis")},
++                             {CyclesMaterialTokens->out, ustring("vector")},
++                         }};
++    m.setFixedValues({{ustring("rotate_type"), "axis"}});
++    return m;
++  }();
++  static const UsdToCyclesMapping kPlace2d = [] {
++    UsdToCyclesMapping m{"mapping",
++                         {
++                             {TfToken("texcoord"), ustring("vector")},
++                             {TfToken("offset"), ustring("location")},
++                             {TfToken("rotate"), ustring("rotation")},
++                             {TfToken("scale"), ustring("scale")},
++                             {CyclesMaterialTokens->out, ustring("vector")},
++                         }};
++    m.setFixedValues({{ustring("mapping_type"), "texture"}});
++    return m;
++  }();
++
++  auto makeTransform = [](const char *const kind) {
++    UsdToCyclesMapping m{"vector_transform",
++                         {
++                             {TfToken("in"), ustring("vector")},
++                             {CyclesMaterialTokens->out, ustring("vector")},
++                         }};
++    m.setFixedValues({{ustring("transform_type"), kind}});
++    return m;
++  };
++  static const UsdToCyclesMapping kTransformPoint = makeTransform("point");
++  static const UsdToCyclesMapping kTransformVector = makeTransform("vector");
++  static const UsdToCyclesMapping kTransformNormal = makeTransform("normal");
++
++  /* Logic, as close as Cycles' math node gets. */
++  static const UsdToCyclesMapping kAnd = MakeMtlxOp("multiply", false, false);
++  static const UsdToCyclesMapping kOr = MakeMtlxOp("maximum", false, false);
++
++  /* Ramps. A left-to-right ramp is a linear gradient driving a mix between the
++   * two colours; the gradient's vector input, left unconnected, falls back to
++   * the surface's texture coordinate, which is what MaterialX means by the
++   * default texcoord. */
++  auto makeRamp = [](const char *const gradientType) {
++    UsdToCyclesMapping m{"mix_color",
++                         {
++                             {TfToken("valuel"), ustring("a")},
++                             {TfToken("valuet"), ustring("a")},
++                             {TfToken("valuer"), ustring("b")},
++                             {TfToken("valueb"), ustring("b")},
++                             {CyclesMaterialTokens->out, ustring("result")},
++                         }};
++    m.setFixedValues({{ustring("blend_type"), "mix"}});
++    /* Cycles looks a socket up by its interface name, not its identifier: the
++     * gradient's output is "Fac" and the mix's input is "Factor". */
++    m.setHelper({"gradient_texture", "Fac", "Factor", {{ustring("gradient_type"), gradientType}}});
++    return m;
++  };
++  static const UsdToCyclesMapping kRampLR = makeRamp("linear");
++  /* Cycles' gradient runs along X only, so a top-to-bottom ramp is mapped to
++   * the diagonal type as the nearest available - documented as approximate. */
++  static const UsdToCyclesMapping kRampTB = makeRamp("diagonal");
++
+   /* Longest prefix wins, so the specific entries come before their family. */
+   static const std::vector<MtlxEntry> table = {
+       /* Surfaces and terminals. */
+@@ -682,10 +781,20 @@ const std::vector<MtlxEntry> &MtlxTable()
+       {"ND_randomcolor", &kWhiteNoise},
+       {"ND_randomfloat", &kWhiteNoise},
+       {"ND_checkerboard", &MtlxCheckerboard},
+-      {"ND_ramplr", &kGradient},
+-      {"ND_ramptb", &kGradient},
++      {"ND_ramplr", &kRampLR},
++      {"ND_ramptb", &kRampTB},
+       {"ND_ramp_gradient", &kGradient},
+ 
++      /* Transformations et logique. */
++      {"ND_rotate2d", &kRotate2d},
++      {"ND_rotate3d", &kRotate3d},
++      {"ND_place2d", &kPlace2d},
++      {"ND_transformpoint", &kTransformPoint},
++      {"ND_transformvector", &kTransformVector},
++      {"ND_transformnormal", &kTransformNormal},
++      {"ND_and_", &kAnd},
++      {"ND_or_", &kOr},
++
+       /* Geometry. */
+       {"ND_position_", &MtlxPosition},
+       {"ND_normal_", &MtlxNormalLookup},
+@@ -1193,6 +1302,29 @@ unique_ptr<ShaderGraph> HdCyclesMaterial::BuildShaderGraph(HdMaterialNetworkSche
+               SetNodeValue(nodeDesc.node, *socket, VtValue(std::string(fixed.second)));
+             }
+           }
++
++          /* Build the helper node this mapping asks for, and wire it in. */
++          const UsdToCyclesMapping::Helper &helper = nodeDesc.mapping->helper();
++          if (helper.nodeType != nullptr) {
++            if (const NodeType *helperType = NodeType::find(ustring(helper.nodeType))) {
++              ShaderNode *const helperNode = graph->create_node(helperType);
++              for (const auto &fixed : helper.fixedValues) {
++                if (const SocketType *socket = helperType->find_input(fixed.first)) {
++                  SetNodeValue(helperNode, *socket, VtValue(std::string(fixed.second)));
++                }
++              }
++
++              ShaderOutput *const from = helperNode->output(helper.output);
++              ShaderInput *const to = nodeDesc.node->input(helper.input);
++              if (from != nullptr && to != nullptr) {
++                graph->connect(from, to);
++              }
++              else {
++                LOG_WARNING << "MaterialX: could not wire helper '" << helper.nodeType << "."
++                            << helper.output << "' into '" << helper.input << "'.";
++              }
++            }
++          }
+         }
+ 
+         _nodes.emplace(nodePath, nodeDesc);

@@ -1,0 +1,45 @@
+From 027fe517bcac6cb72035a6ed323ae41906f2e089 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Mon, 31 Aug 2026 01:38:53 +0200
+Subject: [PATCH 02/39] hydra: accept Houdini AOV naming conventions
+
+husk passes a UsdRenderVar's driver:parameters:aov:husk:name through as the
+Hydra AOV name rather than a standard HdAovTokens value. Houdini spells the
+beauty pass "C", so a render var authored normally in Solaris arrived
+unmapped, its binding was dropped, and the render pass was left with no
+bindings at all - IsConverged() iterating an empty list returns true, so
+husk wrote out an empty frame with no warning.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/session.cpp | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+diff --git a/src/hydra/session.cpp b/src/hydra/session.cpp
+index ae1ede13..50248a1b 100644
+--- a/src/hydra/session.cpp
++++ b/src/hydra/session.cpp
+@@ -24,6 +24,23 @@ const std::unordered_map<TfToken, PassType, TfToken::HashFunctor> kAovToPass = {
+     {HdAovTokens->normal, PASS_NORMAL},
+     {HdAovTokens->primId, PASS_OBJECT_ID},
+     {HdAovTokens->instanceId, PASS_AOV_VALUE},
++
++    /* Houdini AOV naming conventions.
++     *
++     * Houdini's husk passes the `driver:parameters:aov:husk:name` attribute of a
++     * UsdRenderVar through as the Hydra AOV name, rather than a standard
++     * HdAovTokens value. A RenderVar authored with the usual Houdini names
++     * therefore arrives here unmapped, and the resulting binding is dropped -
++     * which leaves the render pass with no bindings at all, so it reports itself
++     * converged immediately and husk writes out an empty (black) frame.
++     *
++     * Accept the Houdini spellings as aliases so that render settings authored
++     * normally in Solaris work without modification. */
++    {TfToken("C"), PASS_COMBINED},
++    {TfToken("Cf"), PASS_COMBINED},
++    {TfToken("N"), PASS_NORMAL},
++    {TfToken("P"), PASS_POSITION},
++    {TfToken("Pz"), PASS_DEPTH},
+ };
+ 
+ }  // namespace

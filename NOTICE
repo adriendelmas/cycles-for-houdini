@@ -1,0 +1,16 @@
+Cycles for Houdini
+Copyright 2026 Adrien Delmas
+
+This product includes software developed by the Blender Foundation and
+contributors as part of the Cycles renderer:
+
+    Cycles -- https://projects.blender.org/blender/cycles
+    Copyright 2011-2026 Blender Foundation
+    Licensed under the Apache License, Version 2.0
+
+The Hydra render delegate this project builds upon lives in Cycles' own tree,
+under src/hydra. The modifications this repository carries are distributed as
+patches against that source (see patches/), not as a copy of it.
+
+Some of those patches port work from Blender's own development, in which case
+the patch message names the upstream pull request it comes from.

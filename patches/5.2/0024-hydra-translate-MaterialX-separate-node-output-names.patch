@@ -1,0 +1,48 @@
+From 7bd8da0f2921832af8c3df921b37848c19e9bc76 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Tue, 1 Sep 2026 12:47:20 +0200
+Subject: [PATCH 24/38] hydra: translate MaterialX separate node output names
+
+MaterialX names a separate node's outputs outx/outy/outz and outr/outg/outb;
+Cycles names them x/y/z and r/g/b. Without the rename the connection was
+dropped and whatever it fed silently kept its default value - a chain through
+a separate node simply had no effect.
+
+Found by the translation warnings now going through Cycles' logger, which is
+what made the dropped connection visible at all.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp | 17 +++++++++++++++--
+ 1 file changed, 15 insertions(+), 2 deletions(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index ddf124e9..ffc022f8 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -495,10 +495,23 @@ const std::vector<MtlxEntry> &MtlxTable()
+           {TfToken("in3"), ustring("z")},
+           {CyclesMaterialTokens->out, ustring("vector")},
+       }};
++  /* MaterialX names a separate node's outputs outr/outg/outb and outx/outy/outz;
++   * Cycles names them r/g/b and x/y/z. Without the rename the connection is
++   * dropped and the downstream node silently keeps its default. */
+   static const UsdToCyclesMapping kSeparateColor = {"separate_color",
+-                                                    {{TfToken("in"), ustring("color")}}};
++                                                    {
++                                                        {TfToken("in"), ustring("color")},
++                                                        {TfToken("outr"), ustring("r")},
++                                                        {TfToken("outg"), ustring("g")},
++                                                        {TfToken("outb"), ustring("b")},
++                                                    }};
+   static const UsdToCyclesMapping kSeparateXYZ = {"separate_xyz",
+-                                                  {{TfToken("in"), ustring("vector")}}};
++                                                  {
++                                                      {TfToken("in"), ustring("vector")},
++                                                      {TfToken("outx"), ustring("x")},
++                                                      {TfToken("outy"), ustring("y")},
++                                                      {TfToken("outz"), ustring("z")},
++                                                  }};
+   static const UsdToCyclesMapping kAttribute = {
+       "attribute",
+       {

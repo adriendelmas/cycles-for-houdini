@@ -1,0 +1,184 @@
+From 9c4606bbd40f8ad27e6f4f648986ced980f18d61 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Mon, 31 Aug 2026 01:39:06 +0200
+Subject: [PATCH 05/39] hydra: translate MaterialX networks to Cycles nodes
+
+Declares mtlx as a material render context and remaps MaterialX nodedef
+identifiers onto native Cycles nodes using the same mapping machinery as
+UsdPreviewSurface. Covers standard_surface, image, normalmap and texcoord;
+socket names were verified against the Cycles node registry.
+
+Kept as one self-contained block so it can be removed in a single piece once
+Cycles understands MaterialX natively.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp        | 112 ++++++++++++++++++++++++++++++++++
+ src/hydra/render_delegate.cpp |   3 +-
+ 2 files changed, 114 insertions(+), 1 deletion(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index ea14ff8f..8a79ed23 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -39,6 +39,7 @@ static SdfPath MaterialNodeNameToSdfPath(const TfToken &nodeName)
+ // clang-format off
+ TF_DEFINE_PRIVATE_TOKENS(CyclesMaterialTokens,
+     (cycles)
++    (mtlx)
+     ((cyclesSurface, "cycles:surface"))
+     ((cyclesDisplacement, "cycles:displacement"))
+     ((cyclesVolume, "cycles:volume"))
+@@ -159,6 +160,110 @@ class UsdToCyclesTexture : public UsdToCyclesMapping {
+ 
+ namespace {
+ 
++/* ------------------------------------------------------------------------
++ * MaterialX -> Cycles translation.
++ *
++ * Hydra hands us a MaterialX network under the "mtlx" render context, with
++ * node identifiers being MaterialX nodedef names ("ND_standard_surface_
++ * surfaceshader", "ND_image_color3", ...). These are remapped onto native
++ * Cycles nodes with the same UsdToCyclesMapping machinery used for
++ * UsdPreviewSurface.
++ *
++ * This whole block, and the mtlx lookup in HdCyclesMaterial::Sync, is meant to
++ * be removable in one piece: once Cycles understands MaterialX natively, the
++ * translation is no longer needed and the "mtlx" render context can be dropped.
++ * Keep it self-contained.
++ * ------------------------------------------------------------------------ */
++
++/* MaterialX standard_surface -> Cycles principled_bsdf.
++ *
++ * Socket names verified against the Cycles node registry. Inputs with no
++ * Cycles counterpart are deliberately left unmapped and are ignored:
++ *  - base / specular / transmission_color / coat_affect_*: weights and tints
++ *    that Cycles folds into other inputs,
++ *  - subsurface_color: Cycles derives it from base_color,
++ *  - transmission_extra_roughness, transmission_dispersion. */
++const UsdToCyclesMapping MtlxStandardSurface = {
++    "principled_bsdf",
++    {
++        {TfToken("base_color"), ustring("base_color")},
++        {TfToken("diffuse_roughness"), ustring("diffuse_roughness")},
++        {TfToken("metalness"), ustring("metallic")},
++        {TfToken("specular"), ustring("specular_ior_level")},
++        {TfToken("specular_color"), ustring("specular_tint")},
++        {TfToken("specular_roughness"), ustring("roughness")},
++        {TfToken("specular_IOR"), ustring("ior")},
++        {TfToken("specular_anisotropy"), ustring("anisotropic")},
++        {TfToken("specular_rotation"), ustring("anisotropic_rotation")},
++        {TfToken("transmission"), ustring("transmission_weight")},
++        {TfToken("subsurface"), ustring("subsurface_weight")},
++        {TfToken("subsurface_radius"), ustring("subsurface_radius")},
++        {TfToken("subsurface_scale"), ustring("subsurface_scale")},
++        {TfToken("subsurface_anisotropy"), ustring("subsurface_anisotropy")},
++        {TfToken("sheen"), ustring("sheen_weight")},
++        {TfToken("sheen_color"), ustring("sheen_tint")},
++        {TfToken("sheen_roughness"), ustring("sheen_roughness")},
++        {TfToken("coat"), ustring("coat_weight")},
++        {TfToken("coat_color"), ustring("coat_tint")},
++        {TfToken("coat_roughness"), ustring("coat_roughness")},
++        {TfToken("coat_IOR"), ustring("coat_ior")},
++        {TfToken("coat_normal"), ustring("coat_normal")},
++        {TfToken("emission"), ustring("emission_strength")},
++        {TfToken("emission_color"), ustring("emission_color")},
++        {TfToken("opacity"), ustring("alpha")},
++        {TfToken("thin_walled"), ustring("thin_wall")},
++        {TfToken("thin_film_thickness"), ustring("thin_film_thickness")},
++        {TfToken("thin_film_IOR"), ustring("thin_film_ior")},
++        {TfToken("normal"), ustring("normal")},
++        {TfToken("tangent"), ustring("tangent")},
++    }};
++
++/* MaterialX image nodes -> Cycles image_texture. Covers every ND_image_*
++ * variant; the output type difference is handled by the connection code. */
++const UsdToCyclesMapping MtlxImage = {
++    "image_texture",
++    {
++        {TfToken("file"), ustring("filename")},
++        {TfToken("texcoord"), ustring("vector")},
++        {TfToken("default"), ustring("color")},
++    }};
++
++/* MaterialX <-> Cycles for the handful of utility nodes that show up in almost
++ * every graph. */
++const UsdToCyclesMapping MtlxNormalMap = {"normal_map",
++                                          {
++                                              {TfToken("in"), ustring("color")},
++                                              {TfToken("scale"), ustring("strength")},
++                                          }};
++
++const UsdToCyclesMapping MtlxTexCoord = {"texture_coordinate", {}};
++
++const UsdToCyclesMapping MtlxConstant = {"rgb_ramp", {}};
++
++/* Returns the mapping for a MaterialX nodedef identifier, or null if that node
++ * has no Cycles counterpart yet. */
++const UsdToCyclesMapping *FindMtlxMapping(const std::string &nodeTypeId)
++{
++  if (!nodeTypeId.starts_with("ND_")) {
++    return nullptr;
++  }
++
++  if (nodeTypeId.starts_with("ND_standard_surface_surfaceshader")) {
++    return &MtlxStandardSurface;
++  }
++  if (nodeTypeId.starts_with("ND_image_")) {
++    return &MtlxImage;
++  }
++  if (nodeTypeId.starts_with("ND_normalmap")) {
++    return &MtlxNormalMap;
++  }
++  if (nodeTypeId.starts_with("ND_texcoord_")) {
++    return &MtlxTexCoord;
++  }
++
++  return nullptr;
++}
++
+ class UsdToCycles {
+   const UsdToCyclesMapping UsdPreviewSurface = {
+       "principled_bsdf",
+@@ -256,6 +361,10 @@ void HdCyclesMaterial::Sync(HdSceneDelegate *sceneDelegate,
+     HdMaterialSchema matSchema = HdMaterialSchema::GetFromParent(primDs);
+     /* Prefer cycles network if it exists, otherwise use universal network. */
+     HdMaterialNetworkSchema network = matSchema.GetMaterialNetwork(CyclesMaterialTokens->cycles);
++    if (!network) {
++      /* MaterialX networks are translated to Cycles nodes, see sMtlxToCycles. */
++      network = matSchema.GetMaterialNetwork(CyclesMaterialTokens->mtlx);
++    }
+     if (!network) {
+       network = matSchema.GetMaterialNetwork();
+     }
+@@ -497,6 +606,9 @@ unique_ptr<ShaderGraph> HdCyclesMaterial::BuildShaderGraph(HdMaterialNetworkSche
+       else {
+         /* Check if any remapping is needed (e.g. for USDPreviewSurface to Cycles nodes). */
+         nodeDesc.mapping = sUsdToCyles->findUsd(nodeTypeIdToken);
++        if (!nodeDesc.mapping) {
++          nodeDesc.mapping = FindMtlxMapping(nodeTypeId);
++        }
+         if (nodeDesc.mapping) {
+           cyclesType = nodeDesc.mapping->nodeType();
+         }
+diff --git a/src/hydra/render_delegate.cpp b/src/hydra/render_delegate.cpp
+index 3cda4a57..65aaef86 100644
+--- a/src/hydra/render_delegate.cpp
++++ b/src/hydra/render_delegate.cpp
+@@ -31,6 +31,7 @@ TF_DEFINE_PUBLIC_TOKENS(HdCyclesRenderSettingsTokens, HD_CYCLES_RENDER_SETTINGS_
+ // clang-format off
+ TF_DEFINE_PRIVATE_TOKENS(_tokens,
+     (cycles)
++    (mtlx)
+     (openvdbAsset)
+ );
+ // clang-format on
+@@ -316,7 +317,7 @@ TfToken HdCyclesDelegate::GetMaterialBindingPurpose() const
+ 
+ TfTokenVector HdCyclesDelegate::GetMaterialRenderContexts() const
+ {
+-  return {_tokens->cycles};
++  return {_tokens->cycles, _tokens->mtlx};
+ }
+ 
+ VtDictionary HdCyclesDelegate::GetRenderStats() const

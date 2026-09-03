@@ -1,0 +1,78 @@
+From b32619b1136f1be6a56db4a85c769d6b7260e711 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Tue, 1 Sep 2026 16:49:43 +0200
+Subject: [PATCH 26/39] hydra: spread a scalar across a vector socket
+
+USD defines no cast from a float to a GfVec3f, so convertToCycles<float3> fell
+through to its warning and returned zero. Every MaterialX node that combines a
+vector with a number - multiply_vector3FA and its family, which is how anyone
+tiles a texture - therefore got zero for that operand, and a multiply erased
+the coordinate it was meant to scale.
+
+The failure was silent: the warning goes through TF_WARN, which husk swallows.
+Found by rendering a cell noise whose texture coordinates were scaled by eight
+and getting the unscaled image back, byte for byte.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/node_util.cpp | 31 +++++++++++++++++++++++++++++++
+ 1 file changed, 31 insertions(+)
+
+diff --git a/src/hydra/node_util.cpp b/src/hydra/node_util.cpp
+index 4d77793c..5bf1e91e 100644
+--- a/src/hydra/node_util.cpp
++++ b/src/hydra/node_util.cpp
+@@ -3,6 +3,7 @@
+  *
+  * SPDX-License-Identifier: Apache-2.0 */
+ 
++#include <optional>
+ #include "hydra/node_util.h"
+ 
+ #ifdef WITH_HOUDINI_COP
+@@ -38,8 +39,29 @@ template<typename DstType> DstType convertToCycles(const VtValue &value)
+   return DstType(0);
+ }
+ 
++/* The scalar a value holds, if it holds one at all. */
++static std::optional<float> convertToCyclesScalar(const VtValue &value)
++{
++  if (value.IsHolding<float>()) {
++    return value.UncheckedGet<float>();
++  }
++  if (value.IsHolding<double>()) {
++    return float(value.UncheckedGet<double>());
++  }
++  if (value.IsHolding<GfHalf>()) {
++    return float(value.UncheckedGet<GfHalf>());
++  }
++  if (value.IsHolding<int>()) {
++    return float(value.UncheckedGet<int>());
++  }
++  return std::nullopt;
++}
++
+ template<> float2 convertToCycles<float2>(const VtValue &value)
+ {
++  if (const std::optional<float> scalar = convertToCyclesScalar(value)) {
++    return make_float2(*scalar, *scalar);
++  }
+   const GfVec2f convertedValue = convertToCycles<GfVec2f>(value);
+   return make_float2(convertedValue[0], convertedValue[1]);
+ }
+@@ -55,6 +77,15 @@ template<> float3 convertToCycles<float3>(const VtValue &value)
+     return make_float3(convertedValue[0], convertedValue[1], convertedValue[2]);
+   }
+ 
++  /* A scalar spreads across the components. USD defines no cast from a float to
++   * a GfVec3f, so without this a MaterialX node that scales a vector by a
++   * number - `multiply_vector3FA` and its family, which is how anyone tiles a
++   * texture - would silently get zero for the operand and multiply the
++   * coordinate away. */
++  if (const std::optional<float> scalar = convertToCyclesScalar(value)) {
++    return make_float3(*scalar, *scalar, *scalar);
++  }
++
+   if (value.CanCast<GfVec3f>()) {
+     const GfVec3f convertedValue = VtValue::Cast<GfVec3f>(value).UncheckedGet<GfVec3f>();
+     return make_float3(convertedValue[0], convertedValue[1], convertedValue[2]);

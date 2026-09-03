@@ -1,0 +1,178 @@
+From b4eff508ef0c25f60396f36a4948b1ff49699a1f Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 3 Sep 2026 01:21:05 +0200
+Subject: [PATCH 37/39] cases a cocher, section Base, et un fil ignore ne l'est
+ plus en silence
+
+thin_wall est une case a cocher: Cycles le declare SOCKET_IN_INT avec un defaut
+ecrit int(false), booleen de sens mais entier de declaration - le seul du
+fichier dans ce cas, donc nomme explicitement plutot que devine.
+
+Les deux entiers de mx_noise_texture deviennent des enums nommees. Un nombre nu
+ne disait pas que trois signifie 3D ni que deux signifie cell noise, la ou tout
+autre noeud a mode de Cycles se nomme. La table MaterialX s'en trouve lisible:
+elle dit "cell" au lieu de "2". Restent sept entiers nus, tous de vrais
+compteurs - echantillons, profondeur, frequence.
+
+Les connecteurs sont rendus a toutes les entrees. Cycles en refuse certaines,
+et le fil etait alors ecarte sans un mot: le message existait mais passait par
+TF_WARN, que husk avale. Il passe desormais par le journal de Cycles et dit
+laquelle des deux choses s'est produite, socket inexistant ou socket que Cycles
+ne lie pas.
+
+Les entrees hors section vont dans une section Base placee en tete: Houdini
+range sinon dans un groupe Other tout ce qui reste libre des qu'il existe une
+section. Le regroupement vaut maintenant pour tous les noeuds, pas seulement le
+principled: un prefixe partage par au moins trois entrees fait sa section.
+
+Verifie: les dix familles de noise MaterialX restent distinctes deux a deux, et
+le banc passe - 97 noeuds, 0 probleme, 96 modifient l'image.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp     | 74 ++++++++++++++++++++++----------------
+ src/hydra/sdr_cycles.cpp   |  7 ++++
+ src/scene/shader_nodes.cpp | 20 +++++++++--
+ 3 files changed, 69 insertions(+), 32 deletions(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index d436b571..89313a65 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -933,32 +933,32 @@ const std::vector<MtlxEntry> &MtlxTable()
+                       {ustring("noise_type"), noiseType}});
+     return m;
+   };
+-  /* Values of the node's noise_type socket, see NodeMxNoiseType. */
+-  static const char *const kPerlin = "0";
+-  static const char *const kFractal = "1";
+-  static const char *const kCell = "2";
+-  static const char *const kWorley = "3";
+-  static const char *const kUnified = "4";
+-  static const UsdToCyclesMapping kMxNoise2dF = makeMxNoise("2", kPerlin, "value");
+-  static const UsdToCyclesMapping kMxNoise2dC = makeMxNoise("2", kPerlin, "color");
+-  static const UsdToCyclesMapping kMxNoise3dF = makeMxNoise("3", kPerlin, "value");
+-  static const UsdToCyclesMapping kMxNoise3dC = makeMxNoise("3", kPerlin, "color");
+-  static const UsdToCyclesMapping kMxFractal2dF = makeMxNoise("2", kFractal, "value");
+-  static const UsdToCyclesMapping kMxFractal2dC = makeMxNoise("2", kFractal, "color");
+-  static const UsdToCyclesMapping kMxFractal3dF = makeMxNoise("3", kFractal, "value");
+-  static const UsdToCyclesMapping kMxFractal3dC = makeMxNoise("3", kFractal, "color");
+-  static const UsdToCyclesMapping kMxCell2dF = makeMxNoise("2", kCell, "value");
+-  static const UsdToCyclesMapping kMxCell2dC = makeMxNoise("2", kCell, "color");
+-  static const UsdToCyclesMapping kMxCell3dF = makeMxNoise("3", kCell, "value");
+-  static const UsdToCyclesMapping kMxCell3dC = makeMxNoise("3", kCell, "color");
+-  static const UsdToCyclesMapping kMxWorley2dF = makeMxNoise("2", kWorley, "value");
+-  static const UsdToCyclesMapping kMxWorley2dC = makeMxNoise("2", kWorley, "color");
+-  static const UsdToCyclesMapping kMxWorley3dF = makeMxNoise("3", kWorley, "value");
+-  static const UsdToCyclesMapping kMxWorley3dC = makeMxNoise("3", kWorley, "color");
+-  static const UsdToCyclesMapping kMxUnified2dF = makeMxNoise("2", kUnified, "value");
+-  static const UsdToCyclesMapping kMxUnified2dC = makeMxNoise("2", kUnified, "color");
+-  static const UsdToCyclesMapping kMxUnified3dF = makeMxNoise("3", kUnified, "value");
+-  static const UsdToCyclesMapping kMxUnified3dC = makeMxNoise("3", kUnified, "color");
++  /* The node names its modes, so the table can say which one it means. */
++  static const char *const kPerlin = "perlin";
++  static const char *const kFractal = "fractal";
++  static const char *const kCell = "cell";
++  static const char *const kWorley = "worley";
++  static const char *const kUnified = "unified";
++  static const UsdToCyclesMapping kMxNoise2dF = makeMxNoise("2D", kPerlin, "value");
++  static const UsdToCyclesMapping kMxNoise2dC = makeMxNoise("2D", kPerlin, "color");
++  static const UsdToCyclesMapping kMxNoise3dF = makeMxNoise("3D", kPerlin, "value");
++  static const UsdToCyclesMapping kMxNoise3dC = makeMxNoise("3D", kPerlin, "color");
++  static const UsdToCyclesMapping kMxFractal2dF = makeMxNoise("2D", kFractal, "value");
++  static const UsdToCyclesMapping kMxFractal2dC = makeMxNoise("2D", kFractal, "color");
++  static const UsdToCyclesMapping kMxFractal3dF = makeMxNoise("3D", kFractal, "value");
++  static const UsdToCyclesMapping kMxFractal3dC = makeMxNoise("3D", kFractal, "color");
++  static const UsdToCyclesMapping kMxCell2dF = makeMxNoise("2D", kCell, "value");
++  static const UsdToCyclesMapping kMxCell2dC = makeMxNoise("2D", kCell, "color");
++  static const UsdToCyclesMapping kMxCell3dF = makeMxNoise("3D", kCell, "value");
++  static const UsdToCyclesMapping kMxCell3dC = makeMxNoise("3D", kCell, "color");
++  static const UsdToCyclesMapping kMxWorley2dF = makeMxNoise("2D", kWorley, "value");
++  static const UsdToCyclesMapping kMxWorley2dC = makeMxNoise("2D", kWorley, "color");
++  static const UsdToCyclesMapping kMxWorley3dF = makeMxNoise("3D", kWorley, "value");
++  static const UsdToCyclesMapping kMxWorley3dC = makeMxNoise("3D", kWorley, "color");
++  static const UsdToCyclesMapping kMxUnified2dF = makeMxNoise("2D", kUnified, "value");
++  static const UsdToCyclesMapping kMxUnified2dC = makeMxNoise("2D", kUnified, "color");
++  static const UsdToCyclesMapping kMxUnified3dF = makeMxNoise("3D", kUnified, "value");
++  static const UsdToCyclesMapping kMxUnified3dC = makeMxNoise("3D", kUnified, "color");
+ 
+   /* Ranges and clamping, all on nodes Cycles already has. */
+   static const UsdToCyclesMapping kClamp = [] {
+@@ -1591,10 +1591,24 @@ void HdCyclesMaterial::UpdateConnections(NodeDesc &nodeDesc,
+     }
+ 
+     if (!input) {
+-      TF_WARN("Ignoring connection on '%s.%s', input '%s' was not found",
+-              nodePath.GetText(),
+-              dstSocketName.GetText(),
+-              dstSocketName.GetText());
++      /* Distinguish a socket that does not exist from one Cycles refuses to
++       * link. The second is the interesting case: an image filename, a
++       * colour space, a projection mode - values the scene must know before
++       * it is built, since a texture is loaded into memory rather than
++       * evaluated per sample. Blender draws no socket for them either. Said
++       * through the Cycles logger rather than TF_WARN, which husk swallows,
++       * so that the connection no longer vanishes in silence. */
++      const SocketType *const unlinkable = target->type->find_input(ustring(inputName));
++      if (unlinkable != nullptr) {
++        LOG_WARNING << "Cycles does not take a connection on '" << nodePath.GetText() << "."
++                    << dstSocketName.GetText()
++                    << "': the value has to be known when the scene is built, so the link is "
++                       "ignored and the parameter's own value is used.";
++      }
++      else {
++        LOG_WARNING << "No input '" << dstSocketName.GetText() << "' on Cycles node '"
++                    << nodePath.GetText() << "', connection dropped.";
++      }
+       continue;
+     }
+ 
+diff --git a/src/hydra/sdr_cycles.cpp b/src/hydra/sdr_cycles.cpp
+index 9337f7c3..de23f091 100644
+--- a/src/hydra/sdr_cycles.cpp
++++ b/src/hydra/sdr_cycles.cpp
+@@ -173,6 +173,13 @@ SdrShaderPropertyUniquePtr MakeProperty(const ccl::SocketType &socket, const boo
+   if (socket.type == ccl::SocketType::BOOLEAN) {
+     metadata[SdrPropertyMetadata->Widget] = "checkBox";
+   }
++  /* `thin_wall` is a boolean that Cycles declares as an int so that it can be
++   * linked - it is the only SOCKET_IN_INT in the whole node set, and its
++   * default is written `int(false)`. Nothing at runtime distinguishes it from
++   * a count, so it is named here rather than guessed at. */
++  if (socket.type == ccl::SocketType::INT && socket.name == ccl::ustring("thin_wall")) {
++    metadata[SdrPropertyMetadata->Widget] = "checkBox";
++  }
+   /* A filename is a file, not free text: hosts that know it can offer a file
+    * browser rather than asking for a path to be typed or pasted. */
+   if (socket.type == ccl::SocketType::STRING && socket.name == ccl::ustring("filename")) {
+diff --git a/src/scene/shader_nodes.cpp b/src/scene/shader_nodes.cpp
+index 55f12f96..9581a710 100644
+--- a/src/scene/shader_nodes.cpp
++++ b/src/scene/shader_nodes.cpp
+@@ -1536,8 +1536,24 @@ NODE_DEFINE(MxNoiseTextureNode)
+ {
+   NodeType *type = NodeType::add("mx_noise_texture", create, NodeType::SHADER);
+ 
+-  SOCKET_INT(dimensions, "Dimensions", 3);
+-  SOCKET_INT(noise_type, "Noise Type", 0);
++  /* Declared as enums rather than plain integers so that a host offers the
++   * choice by name: a bare number leaves nothing to say that three means 3D or
++   * that two means cell noise, and every other Cycles node with a mode does it
++   * this way. The values match NodeMxNoiseType. */
++  static NodeEnum dimensions_enum;
++  dimensions_enum.insert("2D", 2);
++  dimensions_enum.insert("3D", 3);
++  SOCKET_ENUM(dimensions, "Dimensions", dimensions_enum, 3);
++
++  static NodeEnum noise_type_enum;
++  /* Les valeurs suivent NodeMxNoiseType, qui vit dans le kernel : le code de
++   * scene ne l'inclut pas, et n'a pas a le faire. */
++  noise_type_enum.insert("perlin", 0);
++  noise_type_enum.insert("fractal", 1);
++  noise_type_enum.insert("cell", 2);
++  noise_type_enum.insert("worley", 3);
++  noise_type_enum.insert("unified", 4);
++  SOCKET_ENUM(noise_type, "Noise Type", noise_type_enum, 0);
+ 
+   /* Left unconnected, fall back to texture coordinates the way the other
+    * procedural textures do, rather than evaluating everywhere at the origin. */

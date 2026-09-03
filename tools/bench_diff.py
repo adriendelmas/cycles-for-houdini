@@ -3,8 +3,8 @@
 Un noeud qui n'y change rien n'est pas forcement casse - une valeur constante
 egale au defaut ne se voit pas - mais il merite d'etre regarde de pres."""
 import os, subprocess
-ROOT = r"E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles"
-HFS = r"E:\Side Effects Software\Houdini22.0.368\bin"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+HFS = os.path.join(os.environ.get("HFS", "E:/Side Effects Software/Houdini22.0.368"), "bin")
 INSTALL = os.environ.get("CYCLES_INSTALL_DIR", "install")
 IMG = os.path.join(ROOT, "tests", "usd", "bench" if INSTALL == "install" else "bench-53", "images")
 base = os.path.join(IMG, "_baseline.exr")

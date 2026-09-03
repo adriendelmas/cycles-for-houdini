@@ -1,0 +1,58 @@
+From e111a8c2bbc86a9ce953e68e5f29bedb7f564539 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Mon, 31 Aug 2026 01:38:54 +0200
+Subject: [PATCH 05/38] hydra: publish Cycles shader nodes to the USD shader
+ registry
+
+Adds an Sdr discovery and parser plugin pair that enumerates
+NodeType::type_names() at runtime and publishes every SHADER node as
+cycles_<name> - the identifier the delegate's material translation already
+accepts. Reading the registry at runtime rather than generating definitions
+ahead of time keeps the exposed node set exactly in step with the linked
+Cycles version.
+
+Registered in the existing hdCycles library so the Cycles static libraries
+and their node registry are not duplicated in the process.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/CMakeLists.txt          |  2 ++
+ src/hydra/resources/plugInfo.json | 12 ++++++++++++
+ 2 files changed, 14 insertions(+)
+
+diff --git a/src/hydra/CMakeLists.txt b/src/hydra/CMakeLists.txt
+index f1af78c9..f1878646 100644
+--- a/src/hydra/CMakeLists.txt
++++ b/src/hydra/CMakeLists.txt
+@@ -114,6 +114,8 @@ if(WITH_CYCLES_HYDRA_RENDER_DELEGATE)
+   set(SRC_HD_CYCLES_PLUGIN
+     plugin.h
+     plugin.cpp
++    sdr_cycles.h
++    sdr_cycles.cpp
+   )
+   set(HdCyclesPluginName hdCycles)
+   add_library(${HdCyclesPluginName} SHARED ${SRC_HD_CYCLES_PLUGIN})
+diff --git a/src/hydra/resources/plugInfo.json b/src/hydra/resources/plugInfo.json
+index 94fe778e..7c2a7d94 100644
+--- a/src/hydra/resources/plugInfo.json
++++ b/src/hydra/resources/plugInfo.json
+@@ -9,6 +9,18 @@
+                         ],
+                         "displayName": "Cycles",
+                         "priority": 0
++                    },
++                    "SdrCyclesDiscoveryPlugin": {
++                        "bases": [
++                            "SdrDiscoveryPlugin"
++                        ],
++                        "displayName": "Cycles Shader Node Discovery"
++                    },
++                    "SdrCyclesParserPlugin": {
++                        "bases": [
++                            "SdrParserPlugin"
++                        ],
++                        "displayName": "Cycles Shader Node Parser"
+                     }
+                 }
+             },

@@ -1,0 +1,155 @@
+From aa813d8b44c43d91db12a48328adb8b07f81469d Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Tue, 1 Sep 2026 17:40:16 +0200
+Subject: [PATCH 30/39] hydra: standard_surface specular weight, and image
+ wrapping
+
+MaterialX's specular is a weight whose neutral value is 1; the Cycles level it
+was being sent straight across to is neutral at 0.5. Every material Houdini
+writes the parameter into - which is all of them - rendered with twice the
+specular it asked for. Measured against Karma on the same USD: the peak of the
+highlight was 1.372 against Karma's 0.894, and now matches. A helper halves the
+weight, and carries MaterialX's own default of 1 so that a network which never
+writes specular is left neutral rather than driven somewhere wrong.
+
+Image nodes now honour uaddressmode, vaddressmode and filtertype. Three of the
+four address modes are spelled the same on both sides; constant becomes black,
+which is exact only when the default is black, because Cycles has nothing else
+to return outside the image. Cycles has one extension for both axes, so a graph
+wrapping U and V differently gets whichever comes last - the same limitation
+UsdUVTexture's wrapS and wrapT already had.
+
+Drops the image node's default mapping: it pointed at color, which is an output
+of image_texture rather than an input, so it could only ever warn.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp | 82 +++++++++++++++++++++++++++++++++++-------
+ 1 file changed, 69 insertions(+), 13 deletions(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index 5cb38e7d..a27a300d 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -273,13 +273,25 @@ class MtlxFacOrColor : public UsdToCyclesMapping {
+  *    other inputs,
+  *  - subsurface_color: Cycles derives it from base_color,
+  *  - transmission_extra_roughness, transmission_dispersion. */
+-const UsdToCyclesMapping MtlxStandardSurface = {
++UsdToCyclesMapping MakeMtlxStandardSurface();
++
++const UsdToCyclesMapping MtlxStandardSurface = MakeMtlxStandardSurface();
++
++UsdToCyclesMapping MakeMtlxStandardSurface()
++{
++  UsdToCyclesMapping mapping{
+     "principled_bsdf",
+     {
+         {TfToken("base_color"), ustring("base_color")},
+         {TfToken("diffuse_roughness"), ustring("diffuse_roughness")},
+         {TfToken("metalness"), ustring("metallic")},
+-        {TfToken("specular"), ustring("specular_ior_level")},
++        /* MaterialX's `specular` is a weight whose neutral value is 1, while
++         * the Cycles level it lands on is neutral at 0.5 - sending it straight
++         * across doubled the specular of every material Houdini writes the
++         * parameter into, which is all of them. Halved through a helper so that
++         * a weight of 1 reads as neutral and the whole range keeps its
++         * direction; measured against Karma at 1, 0.5 and unset. */
++        {TfToken("specular"), ustring("helper:value1")},
+         {TfToken("specular_color"), ustring("specular_tint")},
+         {TfToken("specular_roughness"), ustring("roughness")},
+         {TfToken("specular_IOR"), ustring("ior")},
+@@ -307,14 +319,56 @@ const UsdToCyclesMapping MtlxStandardSurface = {
+         {TfToken("normal"), ustring("normal")},
+         {TfToken("tangent"), ustring("tangent")},
+     }};
++  /* The helper drives the level unconditionally, so it has to carry MaterialX's
++   * own default of 1 for the case where the network never writes `specular` at
++   * all - otherwise an unauthored input would be actively set to something
++   * wrong rather than left at the Cycles default. */
++  mapping.setHelper({"math",
++                     {{"Value", "Specular IOR Level"}},
++                     {{ustring("math_type"), "multiply"},
++                      {ustring("value1"), "1.0"},
++                      {ustring("value2"), "0.5"}}});
++  return mapping;
++}
++
++/* An image node, with the wrapping and filtering MaterialX asks for.
++ *
++ * Three of the four address modes are spelled the same on both sides, so the
++ * name mapping carries them; `constant` is the exception - MaterialX returns
++ * the node's `default` outside the image where Cycles can only return black,
++ * so it is translated to that and is exact only when the default is black.
++ *
++ * Cycles has one extension for both axes, so a graph wrapping U and V
++ * differently gets whichever the network mentions last. The same limitation
++ * already applies to UsdUVTexture's wrapS and wrapT. */
++class MtlxImageTexture : public MtlxFacOrColor {
++ public:
++  using MtlxFacOrColor::MtlxFacOrColor;
++
++  std::string parameterName(const TfToken &name,
++                            const ShaderInput *inputConnection,
++                            VtValue *value) const override
++  {
++    if (value && (name == TfToken("uaddressmode") || name == TfToken("vaddressmode")) &&
++        value->CanCast<std::string>())
++    {
++      if (VtValue::Cast<std::string>(*value).Get<std::string>() == "constant") {
++        *value = VtValue(std::string("black"));
++      }
++    }
++    return MtlxFacOrColor::parameterName(name, inputConnection, value);
++  }
++};
+ 
+ /* Covers every ND_image_* and ND_tiledimage_* variant. */
+-const MtlxFacOrColor MtlxImage = {
++const MtlxImageTexture MtlxImage = {
+     "image_texture",
+     {
+         {TfToken("file"), ustring("filename")},
+         {TfToken("texcoord"), ustring("vector")},
+-        {TfToken("default"), ustring("color")},
++        {TfToken("uaddressmode"), ustring("extension")},
++        {TfToken("vaddressmode"), ustring("extension")},
++        {TfToken("filtertype"), ustring("interpolation")},
+     }};
+ 
+ /* The float and vector variants of the image nodes carry data, not colour -
+@@ -322,15 +376,17 @@ const MtlxFacOrColor MtlxImage = {
+  * which applies an sRGB decode to an 8 bit file and quietly corrupts anything
+  * that is not a colour, so those variants are read raw. MaterialX makes the
+  * distinction in the nodedef name, which is why it can be honoured here. */
+-UsdToCyclesMapping MakeMtlxImageData()
++MtlxImageTexture MakeMtlxImageData()
+ {
+-  UsdToCyclesMapping mapping{"image_texture",
+-                             {
+-                                 {TfToken("file"), ustring("filename")},
+-                                 {TfToken("texcoord"), ustring("vector")},
+-                                 {TfToken("default"), ustring("color")},
+-                                 {CyclesMaterialTokens->out, ustring("color")},
+-                             }};
++  MtlxImageTexture mapping{"image_texture",
++                           {
++                               {TfToken("file"), ustring("filename")},
++                               {TfToken("texcoord"), ustring("vector")},
++                               {TfToken("uaddressmode"), ustring("extension")},
++                               {TfToken("vaddressmode"), ustring("extension")},
++                               {TfToken("filtertype"), ustring("interpolation")},
++                               {CyclesMaterialTokens->out, ustring("color")},
++                           }};
+   mapping.setFixedValues({{ustring("colorspace"), "data"}});
+   return mapping;
+ }
+@@ -469,7 +525,7 @@ struct MtlxEntry {
+ 
+ const std::vector<MtlxEntry> &MtlxTable()
+ {
+-  static const UsdToCyclesMapping kImageData = MakeMtlxImageData();
++  static const MtlxImageTexture kImageData = MakeMtlxImageData();
+ 
+   /* Arithmetic, scalar then vector. */
+   static const UsdToCyclesMapping kAdd = MakeMtlxOp("add", false, false);

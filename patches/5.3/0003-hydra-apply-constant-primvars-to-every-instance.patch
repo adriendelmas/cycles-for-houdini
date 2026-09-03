@@ -1,0 +1,70 @@
+From 0b18ae01348ca9254fddf90a156bb7912deccb15 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Mon, 31 Aug 2026 01:38:53 +0200
+Subject: [PATCH 03/39] hydra: apply constant primvars to every instance
+
+A constant displayColor describes the whole prim, so it applies to all of
+its instances. Setting only _instances[0] left every instance of a point
+instancer prototype but the first on the default shader colour.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/curves.cpp     | 7 ++++++-
+ src/hydra/mesh.cpp       | 7 ++++++-
+ src/hydra/pointcloud.cpp | 7 ++++++-
+ 3 files changed, 18 insertions(+), 3 deletions(-)
+
+diff --git a/src/hydra/curves.cpp b/src/hydra/curves.cpp
+index eef3da4a..72e9ef0d 100644
+--- a/src/hydra/curves.cpp
++++ b/src/hydra/curves.cpp
+@@ -154,7 +154,12 @@ void HdCyclesCurves::PopulatePrimvars(HdSceneDelegate *sceneDelegate)
+       {
+         if (value.IsHolding<VtVec3fArray>() && value.GetArraySize() == 1) {
+           const GfVec3f color = value.UncheckedGet<VtVec3fArray>()[0];
+-          _instances[0]->set_color(make_float3(color[0], color[1], color[2]));
++          /* A constant primvar describes the whole prim, so it applies to every
++           * instance of it. Setting only the first instance leaves all the
++           * others of a point instancer prototype on the default shader color. */
++          for (auto *const instance : _instances) {
++            instance->set_color(make_float3(color[0], color[1], color[2]));
++          }
+         }
+       }
+ 
+diff --git a/src/hydra/mesh.cpp b/src/hydra/mesh.cpp
+index 34b69838..cf578426 100644
+--- a/src/hydra/mesh.cpp
++++ b/src/hydra/mesh.cpp
+@@ -298,7 +298,12 @@ void HdCyclesMesh::PopulatePrimvars(HdSceneDelegate *sceneDelegate)
+       {
+         if (value.IsHolding<VtVec3fArray>() && value.GetArraySize() == 1) {
+           const GfVec3f color = value.UncheckedGet<VtVec3fArray>()[0];
+-          _instances[0]->set_color(make_float3(color[0], color[1], color[2]));
++          /* A constant primvar describes the whole prim, so it applies to every
++           * instance of it. Setting only the first instance leaves all the
++           * others of a point instancer prototype on the default shader color. */
++          for (auto *const instance : _instances) {
++            instance->set_color(make_float3(color[0], color[1], color[2]));
++          }
+         }
+       }
+ 
+diff --git a/src/hydra/pointcloud.cpp b/src/hydra/pointcloud.cpp
+index 820bd817..be640adc 100644
+--- a/src/hydra/pointcloud.cpp
++++ b/src/hydra/pointcloud.cpp
+@@ -154,7 +154,12 @@ void HdCyclesPoints::PopulatePrimvars(HdSceneDelegate *sceneDelegate)
+       {
+         if (value.IsHolding<VtVec3fArray>() && value.GetArraySize() == 1) {
+           const GfVec3f color = value.UncheckedGet<VtVec3fArray>()[0];
+-          _instances[0]->set_color(make_float3(color[0], color[1], color[2]));
++          /* A constant primvar describes the whole prim, so it applies to every
++           * instance of it. Setting only the first instance leaves all the
++           * others of a point instancer prototype on the default shader color. */
++          for (auto *const instance : _instances) {
++            instance->set_color(make_float3(color[0], color[1], color[2]));
++          }
+         }
+       }
+ 

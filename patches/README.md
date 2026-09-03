@@ -1,21 +1,74 @@
-# Correctifs apportés à Cycles
+# Correctifs apportes a Cycles
 
-Le clone Cycles (`external/cycles`) est gitignoré ici — il a son propre dépôt.
-Nos modifications y vivent sur la branche **`houdini-fixes`**, en commits
-séparés par sujet, et sont exportées ici par `git format-patch`.
+Cycles n'est pas recopie ici : il a son propre depot, et nos modifications y
+vivent sur une branche a nous, en commits separes par sujet. Cette serie en est
+l'export par `git format-patch`.
 
-Réappliquer après un pull amont :
+    patches/5.2/   38 correctifs, base 3b97e190 (branche release/5.2)
+    patches/5.3/   39 correctifs, base 8424ed53 (branche main)
 
-    cd external/cycles && git am ../../patches/*.patch
+`tools/bootstrap.py` fait le chemin complet -- clone, `git am`, compilation.
+A la main, sur un clone deja pose :
 
-Régénérer les patchs après une nouvelle modification :
+    cd external/cycles-53 && git am ../../patches/5.3/*.patch
 
-    cd external/cycles && git format-patch -o ../../patches 3b97e190..HEAD
+Regenerer la serie apres une nouvelle modification :
 
-Base amont : `3b97e190` (branche `release/5.2`).
+    cd external/cycles-53 && git format-patch --no-signature -o ../../patches/5.3 8424ed53..HEAD
 
-Les treize sont indépendants d'Houdini 22 et de cette machine — **tous sont des
-candidats à une contribution amont chez Blender**.
+Les deux series different peu. Le passage a la 5.3 a rejoue 37 correctifs sur
+38 : `hydra: never leave a Shader without a graph` n'a plus lieu d'etre, l'amont
+ayant resolu le probleme de son cote. S'y ajoutent la dispersion, reprise de la
+PR Blender 162041, et le retrait des sauvegardes d'HDA du suivi. **La
+numerotation a donc glisse d'un cran** a partir du cinquieme : les notes plus
+bas suivent celle de la 5.2.
+
+La plupart de ces correctifs sont independants d'Houdini et de cette machine --
+**autant de candidats a une contribution amont chez Blender**.
+
+## Serie 5.3
+
+| | |
+|---|---|
+| `0001` | cmake: add missing USD libraries for the Houdini build |
+| `0002` | hydra: accept Houdini AOV naming conventions |
+| `0003` | hydra: apply constant primvars to every instance |
+| `0004` | hydra: publish Cycles shader nodes to the USD shader registry |
+| `0005` | hydra: translate MaterialX networks to Cycles nodes |
+| `0006` | hydra: give unbound volumes the default volume shader |
+| `0007` | hydra: register the renderer with Houdini and warn on unknown integrator settings |
+| `0008` | hydra: do not build an unusable GL context for the display driver |
+| `0009` | hydra: motion blur for animated object transforms |
+| `0010` | hydra: fix host crash from unbalanced display driver locking |
+| `0011` | hydra: create the shared GL context before draw() can return early |
+| `0012` | hydra: fix GL teardown crash, and stop using the display driver by default |
+| `0013` | hydra: restart the render on scene edits, and translate more MaterialX nodes |
+| `0014` | hydra: take the scene lock rather than trying it, and add a GPU renderer entry |
+| `0015` | hydra: OptiX kernel install path, and Houdini render property definitions |
+| `0016` | hydra: tag a light's object for update, and keep unresolvable asset paths |
+| `0017` | hydra: material edits never reached the device, and displacement was bump-only |
+| `0018` | hydra: read Houdini op: texture paths by cooking the COP during sync |
+| `0019` | hydra: read Copernicus COP pixels live rather than through an output node |
+| `0020` | hydra: build proper RGBA when writing a Copernicus COP layer |
+| `0021` | hydra: read MaterialX data image variants without an sRGB decode |
+| `0022` | hydra: translate the bulk of the MaterialX node library |
+| `0023` | hydra: translate MaterialX separate node output names |
+| `0024` | hydra: composite mappings, plus the transform and ramp nodes |
+| `0025` | kernel/scene: MaterialX-exact procedural noise nodes |
+| `0026` | hydra: spread a scalar across a vector socket |
+| `0027` | hydra: translate MaterialX noise onto the MaterialX noise node |
+| `0028` | hydra: eleven more MaterialX families, and a general composite mechanism |
+| `0029` | hydra: MaterialX position is in object space |
+| `0030` | hydra: standard_surface specular weight, and image wrapping |
+| `0031` | hydra: a colour landing on a scalar socket, and several helpers per mapping |
+| `0032` | hydra: MaterialX displacement has no midlevel |
+| `0033` | hydra: do not write a parameter that carries no value |
+| `0034` | hydra: shade a mesh flat unless its normals say otherwise, and refresh the UsdPreviewSurface names |
+| `0035` | hydra: an empty string default crashed the Sdr parser |
+| `0036` | interface des noeuds: connecteurs, selecteurs de fichier, cases a cocher |
+| `0037` | cases a cocher, section Base, et un fil ignore ne l'est plus en silence |
+| `0038` | dispersion sur le principled bsdf, reprise de la PR blender 162041 |
+| `0039` | otls: ne plus suivre les sauvegardes automatiques d'Houdini |
 
 ---
 

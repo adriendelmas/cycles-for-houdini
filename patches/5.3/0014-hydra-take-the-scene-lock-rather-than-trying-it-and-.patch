@@ -1,0 +1,256 @@
+From 3d31a03ce9b70a14382b53bcadd86965e92e7087 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Mon, 31 Aug 2026 18:16:47 +0200
+Subject: [PATCH 14/39] hydra: take the scene lock rather than trying it, and
+ add a GPU renderer entry
+
+The render pass only reset the session when a try_lock on the scene mutex
+succeeded, with no retry. A batch render re-executes everything every frame and
+papers over a miss, but an interactive session may execute only once per
+change, and that change then never reached the renderer - moving an object or
+editing a material did nothing until the render was restarted by hand. Sync
+already takes the same mutex blocking, immediately before, so taking it here
+costs nothing extra. Also recover from a cancelled session instead of
+returning for good.
+
+Add HdCyclesPluginGPU next to the CPU plugin: hosts pick a renderer from a
+menu rather than by editing a render setting, so the two have to be separate
+entries to be selectable. The GPU one asks for device "GPU", which resolves to
+the best backend this build and machine offer - OptiX, CUDA, HIP, oneAPI -
+rather than naming one that goes stale as soon as an SDK is installed.
+
+Install precompiled GPU kernels inside the Houdini tree. The delegate roots
+Cycles there, so kernels installed beside it were never found, and rendering
+fell back to compiling them at runtime - which needs nvcc *and* a host
+compiler on PATH, and failed with 'Cannot find compiler cl.exe'.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/plugin.cpp                  | 15 +++++++++++++-
+ src/hydra/plugin.h                    | 26 +++++++++++++++++++++++-
+ src/hydra/render_delegate.cpp         | 29 ++++++++++++++++++++++-----
+ src/hydra/render_pass.cpp             | 13 ++++++++++--
+ src/hydra/resources/UsdRenderers.json | 14 ++++++++++++-
+ src/hydra/resources/plugInfo.json     |  9 ++++++++-
+ src/kernel/device/cuda/CMakeLists.txt | 11 +++++++++-
+ 7 files changed, 105 insertions(+), 12 deletions(-)
+
+diff --git a/src/hydra/plugin.cpp b/src/hydra/plugin.cpp
+index c8a1f885..9e3f8c59 100644
+--- a/src/hydra/plugin.cpp
++++ b/src/hydra/plugin.cpp
+@@ -59,9 +59,21 @@ HdRenderDelegate *HdCyclesPlugin::CreateRenderDelegate()
+ 
+ HdRenderDelegate *HdCyclesPlugin::CreateRenderDelegate(const HdRenderSettingsMap &settingsMap)
+ {
+-  return new HD_CYCLES_NS::HdCyclesDelegate(settingsMap);
++  /* Seed the device from the plugin variant, but let an explicit
++   * cycles:device setting win - a host that asks for a specific device means
++   * it. */
++  HdRenderSettingsMap settings = settingsMap;
++  const TfToken &deviceKey = HD_CYCLES_NS::HdCyclesRenderSettingsTokens->device;
++  if (settings.find(deviceKey) == settings.end()) {
++    settings[deviceKey] = VtValue(std::string(DefaultDevice()));
++  }
++
++  return new HD_CYCLES_NS::HdCyclesDelegate(settings);
+ }
+ 
++HdCyclesPluginGPU::HdCyclesPluginGPU() = default;
++HdCyclesPluginGPU::~HdCyclesPluginGPU() = default;
++
+ void HdCyclesPlugin::DeleteRenderDelegate(HdRenderDelegate *renderDelegate)
+ {
+   delete renderDelegate;
+@@ -74,6 +86,7 @@ void HdCyclesPlugin::DeleteRenderDelegate(HdRenderDelegate *renderDelegate)
+ TF_REGISTRY_FUNCTION(TfType)
+ {
+   HdRendererPluginRegistry::Define<PXR_NS::HdCyclesPlugin>();
++  HdRendererPluginRegistry::Define<PXR_NS::HdCyclesPluginGPU>();
+ }
+ 
+ PXR_NAMESPACE_CLOSE_SCOPE
+diff --git a/src/hydra/plugin.h b/src/hydra/plugin.h
+index 44d88de6..f002f0ba 100644
+--- a/src/hydra/plugin.h
++++ b/src/hydra/plugin.h
+@@ -10,7 +10,7 @@
+ 
+ PXR_NAMESPACE_OPEN_SCOPE
+ 
+-class HdCyclesPlugin final : public PXR_NS::HdRendererPlugin {
++class HdCyclesPlugin : public PXR_NS::HdRendererPlugin {
+  public:
+   HdCyclesPlugin();
+   ~HdCyclesPlugin() override;
+@@ -26,6 +26,30 @@ class HdCyclesPlugin final : public PXR_NS::HdRendererPlugin {
+       const PXR_NS::HdRenderSettingsMap & /*settingsMap*/) override;
+ 
+   void DeleteRenderDelegate(PXR_NS::HdRenderDelegate *) override;
++
++ protected:
++  /* Device the created delegate starts on, unless the host overrides it
++   * through the cycles:device render setting. */
++  virtual const char *DefaultDevice() const
++  {
++    return "CPU";
++  }
++};
++
++/* Same delegate, started on the best available GPU. Hosts pick a renderer from
++ * a menu rather than by editing a render setting, so CPU and GPU have to be
++ * separate entries to be selectable - which is how Karma exposes its own
++ * variants too. */
++class HdCyclesPluginGPU final : public HdCyclesPlugin {
++ public:
++  HdCyclesPluginGPU();
++  ~HdCyclesPluginGPU() override;
++
++ protected:
++  const char *DefaultDevice() const override
++  {
++    return "GPU";
++  }
+ };
+ 
+ PXR_NAMESPACE_CLOSE_SCOPE
+diff --git a/src/hydra/render_delegate.cpp b/src/hydra/render_delegate.cpp
+index 821ac668..9f664ab7 100644
+--- a/src/hydra/render_delegate.cpp
++++ b/src/hydra/render_delegate.cpp
+@@ -108,12 +108,31 @@ SessionParams GetSessionParams(const HdRenderSettingsMap &settings)
+   std::transform(deviceType.begin(), deviceType.end(), deviceType.begin(), ::toupper);
+ 
+   vector<DeviceInfo> devices;
+-  for (const DeviceInfo &info :
+-       Device::available_devices(DEVICE_MASK(Device::type_from_string(deviceType.c_str()))))
+-  {
+-    if (info.meets_driver_requirement) {
+-      devices.push_back(info);
++  /* L'amont ne retient qu'un peripherique dont le pilote convient : le filtre
++   * vaut pour les deux chemins. */
++  auto collect = [&devices](const DeviceType type) {
++    for (const DeviceInfo &info : Device::available_devices(DEVICE_MASK(type))) {
++      if (info.meets_driver_requirement) {
++        devices.push_back(info);
++      }
+     }
++  };
++
++  if (deviceType == "GPU") {
++    /* Resolve to whatever GPU backend this build and machine actually offer,
++     * best first. Naming a concrete backend in the host's renderer menu would
++     * go stale the moment a driver or SDK is installed. */
++    for (const DeviceType type :
++         {DEVICE_OPTIX, DEVICE_CUDA, DEVICE_HIP, DEVICE_ONEAPI, DEVICE_METAL})
++    {
++      collect(type);
++      if (!devices.empty()) {
++        break;
++      }
++    }
++  }
++  else {
++    collect(Device::type_from_string(deviceType.c_str()));
+   }
+   if (devices.empty()) {
+     devices = Device::available_devices(DEVICE_MASK_CPU);
+diff --git a/src/hydra/render_pass.cpp b/src/hydra/render_pass.cpp
+index 7cdfc0b7..fa0d66f0 100644
+--- a/src/hydra/render_pass.cpp
++++ b/src/hydra/render_pass.cpp
+@@ -78,10 +78,19 @@ void HdCyclesRenderPass::_Execute(const HdRenderPassStateSharedPtr &renderPassSt
+   Session *const session = _renderParam->session;
+ 
+   if (session->progress.get_cancel()) {
+-    return;  // Something went wrong and cannot continue without recreating the session
++    /* A host that supports stopping the render cancels it before applying
++     * scene edits. Clear that state here rather than returning for good, so
++     * the edits are picked up on this very execution. */
++    session->progress.reset();
+   }
+ 
+-  if (scene->mutex.try_lock()) {
++  {
++    /* Take the lock rather than trying it. A failed try_lock used to skip the
++     * session reset below with no retry, which silently dropped the edit: a
++     * batch render re-executes everything every frame and papers over it, but
++     * an interactive session may only execute once per change, and the change
++     * then never reached the renderer. */
++    scene->mutex.lock();
+     auto *const renderDelegate = static_cast<HdCyclesDelegate *>(
+         GetRenderIndex()->GetRenderDelegate());
+ 
+diff --git a/src/hydra/resources/UsdRenderers.json b/src/hydra/resources/UsdRenderers.json
+index 2e8aec90..7633f371 100644
+--- a/src/hydra/resources/UsdRenderers.json
++++ b/src/hydra/resources/UsdRenderers.json
+@@ -1,7 +1,7 @@
+ {
+     "HdCyclesPlugin" : {
+         "valid" : true,
+-        "menulabel" : "Cycles",
++        "menulabel" : "Cycles CPU",
+         "menupriority" : 45,
+         "defaultpurposes" : [ "render" ],
+         "drawmodesupport" : false,
+@@ -9,5 +9,17 @@
+         "depthstyle" : "linear",
+         "husk.default_output" : "cycles.exr",
+         "husk.fast-exit" : 1
++    },
++
++    "HdCyclesPluginGPU" : {
++        "valid" : true,
++        "menulabel" : "Cycles GPU",
++        "menupriority" : 44,
++        "defaultpurposes" : [ "render" ],
++        "drawmodesupport" : false,
++        "needsdepth" : false,
++        "depthstyle" : "linear",
++        "husk.default_output" : "cycles.exr",
++        "husk.fast-exit" : 1
+     }
+ }
+diff --git a/src/hydra/resources/plugInfo.json b/src/hydra/resources/plugInfo.json
+index 7c2a7d94..f5862216 100644
+--- a/src/hydra/resources/plugInfo.json
++++ b/src/hydra/resources/plugInfo.json
+@@ -7,7 +7,14 @@
+                         "bases": [
+                             "HdRendererPlugin"
+                         ],
+-                        "displayName": "Cycles",
++                        "displayName": "Cycles CPU",
++                        "priority": 0
++                    },
++                    "HdCyclesPluginGPU": {
++                        "bases": [
++                            "HdRendererPlugin"
++                        ],
++                        "displayName": "Cycles GPU",
+                         "priority": 0
+                     },
+                     "SdrCyclesDiscoveryPlugin": {
+diff --git a/src/kernel/device/cuda/CMakeLists.txt b/src/kernel/device/cuda/CMakeLists.txt
+index ac63c2cc..12d0d6d7 100644
+--- a/src/kernel/device/cuda/CMakeLists.txt
++++ b/src/kernel/device/cuda/CMakeLists.txt
+@@ -155,7 +155,16 @@ if(WITH_CYCLES_CUDA_BINARIES)
+       DEPENDS ${cuda_file})
+ 
+     unset(_cuda_nvcc_args)
+-    delayed_install("${CMAKE_CURRENT_BINARY_DIR}" "${cuda_file_compressed}" ${CYCLES_INSTALL_PATH}/lib)
++    # The delegate roots Cycles at the Houdini tree, so its precompiled GPU
++    # kernels have to be installed inside that tree rather than beside it -
++    # otherwise they are simply never found at runtime and rendering silently
++    # falls back to compiling them on the fly, which needs a host compiler.
++    if(HOUDINI_FOUND)
++      set(_cycles_kernel_install_path ${CYCLES_INSTALL_PATH}/houdini/lib)
++    else()
++      set(_cycles_kernel_install_path ${CYCLES_INSTALL_PATH}/lib)
++    endif()
++    delayed_install("${CMAKE_CURRENT_BINARY_DIR}" "${cuda_file_compressed}" ${_cycles_kernel_install_path})
+     list(APPEND cuda_cubins ${cuda_file_compressed})
+     set(cuda_cubins "${cuda_cubins}" PARENT_SCOPE)
+   endfunction()

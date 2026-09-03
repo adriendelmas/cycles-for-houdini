@@ -1,0 +1,1638 @@
+From 881a25477bb087a5dd81a8a5b478acff6f7dfdc5 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Tue, 1 Sep 2026 16:49:43 +0200
+Subject: [PATCH 25/39] kernel/scene: MaterialX-exact procedural noise nodes
+
+Imported from Blender PR #158054 (materialx-noise-nodes), Cycles side only -
+the Blender node, RNA and EEVEE parts are left out, as is blender/shader.cpp
+which standalone Cycles does not have. Blender's own Noise, Voronoi and White
+Noise do not share MaterialX's hash functions, normalisation constants or
+parameter semantics, so a MaterialX graph remapped onto them never matches the
+reference; these nodes are an exact target instead.
+
+Two changes against the original: compile_begin takes the owning node in this
+branch, and the Vector input now falls back to texture coordinates the way the
+other procedural textures do rather than evaluating everywhere at the origin.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/kernel/osl/shaders/CMakeLists.txt         |   1 +
+ .../osl/shaders/node_mx_noise_texture.osl     | 312 +++++++++
+ src/kernel/svm/mx_hextile.h                   | 219 ++++++
+ src/kernel/svm/mx_noise.h                     | 640 ++++++++++++++++++
+ src/kernel/svm/node_types.h                   |  49 ++
+ src/kernel/svm/node_types_template.h          |   2 +
+ src/kernel/svm/svm.h                          |  16 +
+ src/scene/shader_nodes.cpp                    | 212 ++++++
+ src/scene/shader_nodes.h                      |  57 ++
+ 9 files changed, 1508 insertions(+)
+ create mode 100644 src/kernel/osl/shaders/node_mx_noise_texture.osl
+ create mode 100644 src/kernel/svm/mx_hextile.h
+ create mode 100644 src/kernel/svm/mx_noise.h
+
+diff --git a/src/kernel/osl/shaders/CMakeLists.txt b/src/kernel/osl/shaders/CMakeLists.txt
+index 29977b3f..c0dd3e67 100644
+--- a/src/kernel/osl/shaders/CMakeLists.txt
++++ b/src/kernel/osl/shaders/CMakeLists.txt
+@@ -63,6 +63,7 @@ set(SRC_OSL
+   node_mix_float.osl
+   node_mix_vector.osl
+   node_mix_vector_non_uniform.osl
++  node_mx_noise_texture.osl
+   node_noise_texture.osl
+   node_normal.osl
+   node_normal_map.osl
+diff --git a/src/kernel/osl/shaders/node_mx_noise_texture.osl b/src/kernel/osl/shaders/node_mx_noise_texture.osl
+new file mode 100644
+index 00000000..ad07dc4c
+--- /dev/null
++++ b/src/kernel/osl/shaders/node_mx_noise_texture.osl
+@@ -0,0 +1,312 @@
++/* SPDX-FileCopyrightText: 2026 Blender Authors
++ *
++ * SPDX-License-Identifier: Apache-2.0 */
++
++/* MaterialX-compatible procedural noise for Cycles OSL.
++ *
++ * The OSL path follows MaterialX's genosl library: Perlin and fractal noise use
++ * OSL "snoise" and cell/Worley use OSL cellnoise-derived feature points.
++ */
++
++#include "stdcycles.h"
++#include "vector2.h"
++
++#define vector3 point
++
++float mx_fbm(float x, float y, int octaves, float lacunarity, float diminish)
++{
++  float result = 0.0;
++  float amplitude = 1.0;
++  float xx = x;
++  float yy = y;
++  for (int i = 0; i < octaves; i += 1) {
++    result += amplitude * noise("snoise", xx, yy);
++    amplitude *= diminish;
++    xx *= lacunarity;
++    yy *= lacunarity;
++  }
++  return result;
++}
++
++color mx_fbm_color(float x, float y, int octaves, float lacunarity, float diminish)
++{
++  color result = 0.0;
++  float amplitude = 1.0;
++  float xx = x;
++  float yy = y;
++  for (int i = 0; i < octaves; i += 1) {
++    result += amplitude * (color)noise("snoise", xx, yy);
++    amplitude *= diminish;
++    xx *= lacunarity;
++    yy *= lacunarity;
++  }
++  return result;
++}
++
++float mx_fbm(point p, int octaves, float lacunarity, float diminish)
++{
++  float result = 0.0;
++  float amplitude = 1.0;
++  point pp = p;
++  for (int i = 0; i < octaves; i += 1) {
++    result += amplitude * noise("snoise", pp);
++    amplitude *= diminish;
++    pp *= lacunarity;
++  }
++  return result;
++}
++
++color mx_fbm_color(point p, int octaves, float lacunarity, float diminish)
++{
++  color result = 0.0;
++  float amplitude = 1.0;
++  point pp = p;
++  for (int i = 0; i < octaves; i += 1) {
++    result += amplitude * (color)noise("snoise", pp);
++    amplitude *= diminish;
++    pp *= lacunarity;
++  }
++  return result;
++}
++
++vector2 mx_worley_cell_position(int x, int y, int xoff, int yoff, float jitter)
++{
++  vector tmp = cellnoise(x + xoff, y + yoff);
++  vector2 off = vector2(tmp.x, tmp.y);
++  off = (off - vector2(0.5, 0.5)) * jitter + vector2(0.5, 0.5);
++  return vector2(x, y) + off;
++}
++
++vector mx_worley_cell_position(int x, int y, int z, int xoff, int yoff, int zoff, float jitter)
++{
++  vector off = cellnoise(vector(x + xoff, y + yoff, z + zoff));
++  off = (off - 0.5) * jitter + 0.5;
++  return vector(x, y, z) + off;
++}
++
++float mx_worley_distance(vector2 p, int x, int y, int xoff, int yoff, float jitter)
++{
++  vector2 diff = mx_worley_cell_position(x, y, xoff, yoff, jitter) - p;
++  return dot(diff, diff);
++}
++
++float mx_worley_distance(vector p, int x, int y, int z, int xoff, int yoff, int zoff, float jitter)
++{
++  vector diff = mx_worley_cell_position(x, y, z, xoff, yoff, zoff, jitter) - p;
++  return dot(diff, diff);
++}
++
++float mx_worley_noise_float(vector2 p, float jitter, int style)
++{
++  int X = (int)floor(p.x);
++  int Y = (int)floor(p.y);
++  vector2 localpos = vector2(p.x - X, p.y - Y);
++  float sqdist = 1.0e6;
++  vector2 minpos = vector2(0.0, 0.0);
++  for (int x = -1; x <= 1; x += 1) {
++    for (int y = -1; y <= 1; y += 1) {
++      float dist = mx_worley_distance(localpos, x, y, X, Y, jitter);
++      vector2 cellpos = mx_worley_cell_position(x, y, X, Y, jitter) - localpos;
++      if (dist < sqdist) {
++        sqdist = dist;
++        minpos = cellpos;
++      }
++    }
++  }
++  if (style == 1) {
++    return cellnoise(minpos.x + p.x, minpos.y + p.y);
++  }
++  return sqrt(sqdist);
++}
++
++float mx_worley_noise_float(vector p, float jitter, int style)
++{
++  int X = (int)floor(p.x);
++  int Y = (int)floor(p.y);
++  int Z = (int)floor(p.z);
++  vector localpos = vector(p.x - X, p.y - Y, p.z - Z);
++  float sqdist = 1.0e6;
++  vector minpos = vector(0.0, 0.0, 0.0);
++  for (int x = -1; x <= 1; x += 1) {
++    for (int y = -1; y <= 1; y += 1) {
++      for (int z = -1; z <= 1; z += 1) {
++        float dist = mx_worley_distance(localpos, x, y, z, X, Y, Z, jitter);
++        vector cellpos = mx_worley_cell_position(x, y, z, X, Y, Z, jitter) - localpos;
++        if (dist < sqdist) {
++          sqdist = dist;
++          minpos = cellpos;
++        }
++      }
++    }
++  }
++  if (style == 1) {
++    return cellnoise(minpos + p);
++  }
++  return sqrt(sqdist);
++}
++
++color mx_worley_noise_color(vector2 p, float jitter, int style)
++{
++  return color(mx_worley_noise_float(p, jitter, style),
++               mx_worley_noise_float(p + vector2(19.0, 193.0), jitter, style),
++               mx_worley_noise_float(p + vector2(73.0, 29.0), jitter, style));
++}
++
++color mx_worley_noise_color(vector p, float jitter, int style)
++{
++  return color(mx_worley_noise_float(p, jitter, style),
++               mx_worley_noise_float(p + vector(19.0, 193.0, 17.0), jitter, style),
++               mx_worley_noise_float(p + vector(73.0, 29.0, 113.0), jitter, style));
++}
++
++vector2 mx_rotate2d(vector2 in_vector, float amount)
++{
++  float radians = amount * M_PI / 180.0;
++  float sa = sin(radians);
++  float ca = cos(radians);
++  return vector2(ca * in_vector.x + sa * in_vector.y, -sa * in_vector.x + ca * in_vector.y);
++}
++
++vector mx_rotate3d(vector in_vector, float amount)
++{
++  vector axis = normalize(vector(0.1, 1.0, 0.0));
++  float radians = amount * M_PI / 180.0;
++  float s = sin(radians);
++  float c = cos(radians);
++  return in_vector * c + cross(axis, in_vector) * s + axis * dot(axis, in_vector) * (1.0 - c);
++}
++
++float mx_range_float(float value, float out_min, float out_max, int clamp_output)
++{
++  float result = out_min + value * (out_max - out_min);
++  return clamp_output != 0 ? clamp(result, min(out_min, out_max), max(out_min, out_max)) : result;
++}
++
++shader node_mx_noise_texture(int dimensions = 3,
++                             int noise_type = 0,
++                             point VectorIn = point(0.0, 0.0, 0.0),
++                             float Amplitude = 1.0,
++                             float Pivot = 0.0,
++                             float Octaves = 3.0,
++                             float Lacunarity = 2.0,
++                             float Diminish = 0.5,
++                             float Jitter = 1.0,
++                             float Style = 0.0,
++                             float Type = 0.0,
++                             vector Frequency = vector(1.0, 1.0, 1.0),
++                             vector Offset = vector(0.0, 0.0, 0.0),
++                             float OutMin = 0.0,
++                             float OutMax = 1.0,
++                             float ClampOutput = 1.0,
++                             output float Value = 0.0,
++                             output color Color = 0.0,
++                             output vector VectorOut = vector(0.0, 0.0, 0.0))
++{
++  int octaves = clamp((int)Octaves, 0, 32);
++  int style = (int)Style;
++  int unified_type = (int)Type;
++  int clamp_output = (ClampOutput != 0.0) ? 1 : 0;
++  int is_2d = (dimensions == 2) ? 1 : 0;
++
++  if (noise_type == 4) {
++    float cell_jitter = (Jitter - 1.0) * 90000.0;
++    if (is_2d) {
++      vector2 apply_offset = vector2(VectorIn[0] * Frequency[0], VectorIn[1] * Frequency[1]) +
++                             vector2(Offset[0], Offset[1]);
++      vector2 apply_cell_jitter = mx_rotate2d(apply_offset, cell_jitter);
++      if (unified_type == 1) {
++        Value = cellnoise(apply_cell_jitter.x, apply_cell_jitter.y);
++        Color = (color)cellnoise(apply_cell_jitter.x, apply_cell_jitter.y);
++      }
++      else if (unified_type == 2) {
++        Value = mx_worley_noise_float(apply_offset, Jitter, style);
++        Color = mx_worley_noise_color(apply_offset, Jitter, style);
++      }
++      else if (unified_type == 3) {
++        point fractal_position = point(apply_offset.x, apply_offset.y, cell_jitter);
++        Value = mx_fbm(fractal_position, octaves, Lacunarity, Diminish);
++        Color = mx_fbm_color(fractal_position, octaves, Lacunarity, Diminish);
++      }
++      else {
++        Value = noise("snoise", apply_cell_jitter.x, apply_cell_jitter.y) * 0.5 + 0.5;
++        Color = (color)noise("snoise", apply_cell_jitter.x, apply_cell_jitter.y) * 0.5 + 0.5;
++      }
++    }
++    else {
++      vector apply_offset = vector(VectorIn[0], VectorIn[1], VectorIn[2]) * Frequency + Offset;
++      vector apply_cell_jitter = mx_rotate3d(apply_offset, cell_jitter);
++      if (unified_type == 1) {
++        Value = cellnoise(apply_cell_jitter);
++        Color = (color)cellnoise(apply_cell_jitter);
++      }
++      else if (unified_type == 2) {
++        Value = mx_worley_noise_float(apply_offset, Jitter, style);
++        Color = mx_worley_noise_color(apply_offset, Jitter, style);
++      }
++      else if (unified_type == 3) {
++        point fractal_position = point(apply_cell_jitter[0],
++                                       apply_cell_jitter[1],
++                                       apply_cell_jitter[2]);
++        Value = mx_fbm(fractal_position, octaves, Lacunarity, Diminish);
++        Color = mx_fbm_color(fractal_position, octaves, Lacunarity, Diminish);
++      }
++      else {
++        point perlin_position = point(apply_cell_jitter[0],
++                                      apply_cell_jitter[1],
++                                      apply_cell_jitter[2]);
++        Value = noise("snoise", perlin_position) * 0.5 + 0.5;
++        Color = (color)noise("snoise", perlin_position) * 0.5 + 0.5;
++      }
++    }
++    Value = mx_range_float(Value, OutMin, OutMax, clamp_output);
++    Color = color(mx_range_float(Color[0], OutMin, OutMax, clamp_output),
++                  mx_range_float(Color[1], OutMin, OutMax, clamp_output),
++                  mx_range_float(Color[2], OutMin, OutMax, clamp_output));
++  }
++  else if (noise_type == 2) {
++    if (is_2d) {
++      Value = cellnoise(VectorIn[0], VectorIn[1]);
++      Color = (color)cellnoise(VectorIn[0], VectorIn[1]);
++    }
++    else {
++      Value = cellnoise(VectorIn);
++      Color = (color)cellnoise(VectorIn);
++    }
++  }
++  else if (noise_type == 3) {
++    if (is_2d) {
++      vector2 p = vector2(VectorIn[0], VectorIn[1]);
++      Value = mx_worley_noise_float(p, Jitter, style);
++      Color = mx_worley_noise_color(p, Jitter, style);
++    }
++    else {
++      Value = mx_worley_noise_float(vector(VectorIn[0], VectorIn[1], VectorIn[2]), Jitter, style);
++      Color = mx_worley_noise_color(vector(VectorIn[0], VectorIn[1], VectorIn[2]), Jitter, style);
++    }
++  }
++  else if (noise_type == 1) {
++    if (is_2d) {
++      Value = mx_fbm(VectorIn[0], VectorIn[1], octaves, Lacunarity, Diminish);
++      Color = mx_fbm_color(VectorIn[0], VectorIn[1], octaves, Lacunarity, Diminish);
++    }
++    else {
++      Value = mx_fbm(VectorIn, octaves, Lacunarity, Diminish);
++      Color = mx_fbm_color(VectorIn, octaves, Lacunarity, Diminish);
++    }
++    Value *= Amplitude;
++    Color *= Amplitude;
++  }
++  else {
++    if (is_2d) {
++      Value = noise("snoise", VectorIn[0], VectorIn[1]);
++      Color = (color)noise("snoise", VectorIn[0], VectorIn[1]);
++    }
++    else {
++      Value = noise("snoise", VectorIn);
++      Color = (color)noise("snoise", VectorIn);
++    }
++    Value = Value * Amplitude + Pivot;
++    Color = Color * Amplitude + Pivot;
++  }
++  VectorOut = (vector)Color;
++}
+diff --git a/src/kernel/svm/mx_hextile.h b/src/kernel/svm/mx_hextile.h
+new file mode 100644
+index 00000000..5e94c8c5
+--- /dev/null
++++ b/src/kernel/svm/mx_hextile.h
+@@ -0,0 +1,219 @@
++/* SPDX-FileCopyrightText: 2026 Blender Authors
++ *
++ * SPDX-License-Identifier: Apache-2.0 */
++
++#pragma once
++
++#include "kernel/svm/image.h"
++#include "kernel/svm/node_types.h"
++#include "kernel/svm/util.h"
++
++#include "util/math_dual.h"
++
++CCL_NAMESPACE_BEGIN
++
++ccl_device_inline float2 mx_hextile_hash(const float2 p)
++{
++  float3 p3 = make_float3(fractf(p.x * 0.1031f), fractf(p.y * 0.1030f), fractf(p.x * 0.0973f));
++  p3 += make_float3(dot(p3, make_float3(p3.y, p3.z, p3.x) + make_float3(33.33f)));
++  const float2 value = (make_float2(p3.x, p3.x) + make_float2(p3.y, p3.z)) *
++                       make_float2(p3.z, p3.y);
++  return make_float2(fractf(value.x), fractf(value.y));
++}
++
++ccl_device_inline float mx_hextile_schlick_gain(const float x, const float r)
++{
++  const float rr = clamp(r, 0.001f, 0.999f);
++  const float a = (1.0f / rr - 2.0f) * (1.0f - 2.0f * x);
++  return (x < 0.5f) ? x / (a + 1.0f) : (a - x) / (a - 1.0f);
++}
++
++ccl_device_inline float3 mx_hextile_normalize_weights(const float3 weights)
++{
++  return weights / dot(weights, one_float3());
++}
++
++ccl_device_inline float3 mx_hextile_compute_blend_weights(const float3 luminance_weights,
++                                                          const float3 tile_weights,
++                                                          const float falloff)
++{
++  float3 w = luminance_weights * power(tile_weights, 7.0f);
++  w = mx_hextile_normalize_weights(w);
++  if (falloff != 0.5f) {
++    w = make_float3(mx_hextile_schlick_gain(w.x, falloff),
++                    mx_hextile_schlick_gain(w.y, falloff),
++                    mx_hextile_schlick_gain(w.z, falloff));
++    w = mx_hextile_normalize_weights(w);
++  }
++  return w;
++}
++
++ccl_device_inline float2 mx_hextile_rotate2d(const float2 point, const float angle)
++{
++  const float sine = sinf(angle);
++  const float cosine = cosf(angle);
++  return make_float2(cosine * point.x - sine * point.y, sine * point.x + cosine * point.y);
++}
++
++ccl_device_inline dual2 mx_hextile_rotate2d(const dual2 point, const float angle)
++{
++  const float sine = sinf(angle);
++  const float cosine = cosf(angle);
++  return make_float2(point.x() * cosine - point.y() * sine,
++                     point.x() * sine + point.y() * cosine);
++}
++
++ccl_device_inline float2 mx_hextile_to_texture_space(const float2 coord)
++{
++  return make_float2(coord.x, 1.0f - coord.y);
++}
++
++ccl_device_inline dual2 mx_hextile_to_texture_space(const dual2 coord)
++{
++  return make_float2(coord.x(), 1.0f - coord.y());
++}
++
++ccl_device_inline float2 mx_hextile_from_texture_space(const float2 coord)
++{
++  return make_float2(coord.x, 1.0f - coord.y);
++}
++
++ccl_device_inline dual2 mx_hextile_from_texture_space(const dual2 coord)
++{
++  return make_float2(coord.x(), 1.0f - coord.y());
++}
++
++ccl_device_inline float2 mx_hextile_base_value(const float2 v)
++{
++  return v;
++}
++
++ccl_device_inline float2 mx_hextile_base_value(const dual2 v)
++{
++  return v.val;
++}
++
++template<class Float2Type>
++ccl_device_inline void mx_hextile_coord(const Float2Type coord,
++                                        const float rotation,
++                                        const float2 rotation_range,
++                                        const float scale,
++                                        const float2 scale_range,
++                                        const float offset,
++                                        const float2 offset_range,
++                                        ccl_private Float2Type coords[3],
++                                        ccl_private float3 *weights)
++{
++  const float sqrt3_2 = sqrtf(3.0f) * 2.0f;
++  const float2 coord_value = mx_hextile_base_value(coord);
++  const float2 st = coord_value * sqrt3_2;
++  const float2 st_skewed = make_float2(st.x - 0.57735027f * st.y, 1.15470054f * st.y);
++  const float2 st_frac = make_float2(fractf(st_skewed.x), fractf(st_skewed.y));
++  const float tx = st_frac.x;
++  const float ty = st_frac.y;
++  const float tz = 1.0f - tx - ty;
++
++  const float s = (-tz < 0.0f) ? 0.0f : 1.0f;
++  const float s2 = 2.0f * s - 1.0f;
++  *weights = make_float3(-tz * s2, s - ty * s2, s - tx * s2);
++
++  const float2 base_id = floor(st_skewed);
++  const float2 id1 = base_id + make_float2(s, s);
++  const float2 id2 = base_id + make_float2(s, 1.0f - s);
++  const float2 id3 = base_id + make_float2(1.0f - s, s);
++
++  const float2 ctr1 = make_float2(id1.x / sqrt3_2 + 0.5f * id1.y / sqrt3_2,
++                                  0.8660254f * id1.y / sqrt3_2);
++  const float2 ctr2 = make_float2(id2.x / sqrt3_2 + 0.5f * id2.y / sqrt3_2,
++                                  0.8660254f * id2.y / sqrt3_2);
++  const float2 ctr3 = make_float2(id3.x / sqrt3_2 + 0.5f * id3.y / sqrt3_2,
++                                  0.8660254f * id3.y / sqrt3_2);
++
++  const float2 seed_offset = make_float2(0.12345f);
++  const float2 rand1 = mx_hextile_hash(id1 + seed_offset);
++  const float2 rand2 = mx_hextile_hash(id2 + seed_offset);
++  const float2 rand3 = mx_hextile_hash(id3 + seed_offset);
++
++  const float2 rr = rotation_range * (M_PI_F / 180.0f);
++  const float3 rotations = make_float3(interp(rr.x, rr.y, rand1.x * rotation),
++                                       interp(rr.x, rr.y, rand2.x * rotation),
++                                       interp(rr.x, rr.y, rand3.x * rotation));
++  const float3 random_scales = make_float3(interp(scale_range.x, scale_range.y, rand1.y),
++                                           interp(scale_range.x, scale_range.y, rand2.y),
++                                           interp(scale_range.x, scale_range.y, rand3.y));
++  const float3 scales = max(interp(one_float3(), random_scales, scale), make_float3(1e-6f));
++
++  const float2 offset1 = make_float2(interp(offset_range.x, offset_range.y, rand1.x * offset),
++                                     interp(offset_range.x, offset_range.y, rand1.y * offset));
++  const float2 offset2 = make_float2(interp(offset_range.x, offset_range.y, rand2.x * offset),
++                                     interp(offset_range.x, offset_range.y, rand2.y * offset));
++  const float2 offset3 = make_float2(interp(offset_range.x, offset_range.y, rand3.x * offset),
++                                     interp(offset_range.x, offset_range.y, rand3.y * offset));
++
++  coords[0] = mx_hextile_rotate2d(coord - ctr1, rotations.x) * (1.0f / scales.x) + ctr1 +
++              offset1;
++  coords[1] = mx_hextile_rotate2d(coord - ctr2, rotations.y) * (1.0f / scales.y) + ctr2 +
++              offset2;
++  coords[2] = mx_hextile_rotate2d(coord - ctr3, rotations.z) * (1.0f / scales.z) + ctr3 +
++              offset3;
++}
++
++template<class Float3Type>
++ccl_device_noinline void svm_node_tex_mx_hextiled_image(
++    KernelGlobals kg,
++    ccl_private ShaderData *sd,
++    ccl_private float *ccl_restrict stack,
++    const ccl_global SVMNodeTexMxHextiledImage &ccl_restrict node)
++{
++  const Float3Type vector = stack_load<Float3Type>(stack, node.vector_offset);
++  const float3 tiling = stack_load(stack, node.tiling);
++  const float rotation = stack_load(stack, node.rotation);
++  const float3 rotation_range = stack_load(stack, node.rotation_range);
++  const float scale = stack_load(stack, node.scale);
++  const float3 scale_range = stack_load(stack, node.scale_range);
++  const float offset = stack_load(stack, node.offset);
++  const float3 offset_range = stack_load(stack, node.offset_range);
++  const float falloff = stack_load(stack, node.falloff);
++  const float falloff_contrast = stack_load(stack, node.falloff_contrast);
++  const float3 luma_coeffs = stack_load(stack, node.luma_coeffs);
++
++  auto coord = mx_hextile_to_texture_space(make_float2(vector) * make_float2(tiling.x, tiling.y));
++  decltype(coord) coords[3];
++  float3 tile_weights;
++  mx_hextile_coord(coord,
++                   rotation,
++                   make_float2(rotation_range.x, rotation_range.y),
++                   scale,
++                   make_float2(scale_range.x, scale_range.y),
++                   offset,
++                   make_float2(offset_range.x, offset_range.y),
++                   coords,
++                   &tile_weights);
++
++  const float4 c1 = svm_image_texture(
++      kg, sd, node.id, dual2(mx_hextile_from_texture_space(coords[0])), node.flags);
++  const float4 c2 = svm_image_texture(
++      kg, sd, node.id, dual2(mx_hextile_from_texture_space(coords[1])), node.flags);
++  const float4 c3 = svm_image_texture(
++      kg, sd, node.id, dual2(mx_hextile_from_texture_space(coords[2])), node.flags);
++
++  const float falloff_contrast_weight = falloff_contrast * 0.5f;
++  const float3 cw = interp(one_float3(),
++                           make_float3(dot(make_float3(c1), luma_coeffs),
++                                       dot(make_float3(c2), luma_coeffs),
++                                       dot(make_float3(c3), luma_coeffs)),
++                           falloff_contrast_weight);
++  const float3 w = mx_hextile_compute_blend_weights(cw, tile_weights, falloff);
++  const float3 aw = mx_hextile_compute_blend_weights(one_float3(), tile_weights, falloff);
++  const float4 result = make_float4(w.x * make_float3(c1) + w.y * make_float3(c2) + w.z * make_float3(c3),
++                                    aw.x * c1.w + aw.y * c2.w + aw.z * c3.w);
++
++  if (stack_valid(node.out_offset)) {
++    stack_store_float3(stack, node.out_offset, make_float3(result));
++  }
++  if (stack_valid(node.alpha_offset)) {
++    stack_store_float(stack, node.alpha_offset, result.w);
++  }
++}
++
++CCL_NAMESPACE_END
+diff --git a/src/kernel/svm/mx_noise.h b/src/kernel/svm/mx_noise.h
+new file mode 100644
+index 00000000..d1c798d5
+--- /dev/null
++++ b/src/kernel/svm/mx_noise.h
+@@ -0,0 +1,640 @@
++/* SPDX-FileCopyrightText: 2026 Blender Authors
++ *
++ * SPDX-License-Identifier: Apache-2.0 */
++
++#pragma once
++
++#include "kernel/svm/fractal_noise.h"
++#include "kernel/svm/node_types.h"
++#include "kernel/svm/util.h"
++
++CCL_NAMESPACE_BEGIN
++
++enum NodeMxNoiseType {
++  NODE_MX_NOISE_PERLIN = 0,
++  NODE_MX_NOISE_FRACTAL = 1,
++  NODE_MX_NOISE_CELL = 2,
++  NODE_MX_NOISE_WORLEY = 3,
++  NODE_MX_NOISE_UNIFIED = 4,
++};
++
++ccl_device_inline float mx_select(const bool b, const float t, const float f)
++{
++  return b ? t : f;
++}
++
++ccl_device_inline float mx_negate_if(const float val, const bool b)
++{
++  return b ? -val : val;
++}
++
++ccl_device_inline float mx_floorfrac(const float x, ccl_private int *i)
++{
++  *i = floor_to_int(x);
++  return x - float(*i);
++}
++
++ccl_device_inline float mx_bilerp(const float v0,
++                                  const float v1,
++                                  const float v2,
++                                  const float v3,
++                                  const float s,
++                                  const float t)
++{
++  const float s1 = 1.0f - s;
++  return (1.0f - t) * (v0 * s1 + v1 * s) + t * (v2 * s1 + v3 * s);
++}
++
++ccl_device_inline float3 mx_bilerp(const float3 v0,
++                                   const float3 v1,
++                                   const float3 v2,
++                                   const float3 v3,
++                                   const float s,
++                                   const float t)
++{
++  const float s1 = 1.0f - s;
++  return (1.0f - t) * (v0 * s1 + v1 * s) + t * (v2 * s1 + v3 * s);
++}
++
++ccl_device_inline float mx_trilerp(const float v0,
++                                   const float v1,
++                                   const float v2,
++                                   const float v3,
++                                   const float v4,
++                                   const float v5,
++                                   const float v6,
++                                   const float v7,
++                                   const float s,
++                                   const float t,
++                                   const float r)
++{
++  const float s1 = 1.0f - s;
++  const float t1 = 1.0f - t;
++  const float r1 = 1.0f - r;
++  return r1 * (t1 * (v0 * s1 + v1 * s) + t * (v2 * s1 + v3 * s)) +
++         r * (t1 * (v4 * s1 + v5 * s) + t * (v6 * s1 + v7 * s));
++}
++
++ccl_device_inline float3 mx_trilerp(const float3 v0,
++                                    const float3 v1,
++                                    const float3 v2,
++                                    const float3 v3,
++                                    const float3 v4,
++                                    const float3 v5,
++                                    const float3 v6,
++                                    const float3 v7,
++                                    const float s,
++                                    const float t,
++                                    const float r)
++{
++  const float s1 = 1.0f - s;
++  const float t1 = 1.0f - t;
++  const float r1 = 1.0f - r;
++  return r1 * (t1 * (v0 * s1 + v1 * s) + t * (v2 * s1 + v3 * s)) +
++         r * (t1 * (v4 * s1 + v5 * s) + t * (v6 * s1 + v7 * s));
++}
++
++ccl_device_inline float mx_gradient_float(const uint hash, const float x, const float y)
++{
++  const uint h = hash & 7u;
++  const float u = mx_select(h < 4u, x, y);
++  const float v = 2.0f * mx_select(h < 4u, y, x);
++  return mx_negate_if(u, bool(h & 1u)) + mx_negate_if(v, bool(h & 2u));
++}
++
++ccl_device_inline float mx_gradient_float(const uint hash,
++                                          const float x,
++                                          const float y,
++                                          const float z)
++{
++  const uint h = hash & 15u;
++  const float u = mx_select(h < 8u, x, y);
++  const float v = mx_select(h < 4u, y, mx_select((h == 12u) || (h == 14u), x, z));
++  return mx_negate_if(u, bool(h & 1u)) + mx_negate_if(v, bool(h & 2u));
++}
++
++struct MxHash3 {
++  uint x, y, z;
++};
++
++ccl_device_inline float3 mx_gradient_vec3(const MxHash3 hash, const float x, const float y)
++{
++  return make_float3(mx_gradient_float(hash.x, x, y),
++                     mx_gradient_float(hash.y, x, y),
++                     mx_gradient_float(hash.z, x, y));
++}
++
++ccl_device_inline float3 mx_gradient_vec3(const MxHash3 hash,
++                                          const float x,
++                                          const float y,
++                                          const float z)
++{
++  return make_float3(mx_gradient_float(hash.x, x, y, z),
++                     mx_gradient_float(hash.y, x, y, z),
++                     mx_gradient_float(hash.z, x, y, z));
++}
++
++ccl_device_inline uint mx_rotl32(const uint x, const int k)
++{
++  return (x << k) | (x >> (32 - k));
++}
++
++ccl_device_inline void mx_bjmix(ccl_private uint *a, ccl_private uint *b, ccl_private uint *c)
++{
++  *a -= *c;
++  *a ^= mx_rotl32(*c, 4);
++  *c += *b;
++  *b -= *a;
++  *b ^= mx_rotl32(*a, 6);
++  *a += *c;
++  *c -= *b;
++  *c ^= mx_rotl32(*b, 8);
++  *b += *a;
++  *a -= *c;
++  *a ^= mx_rotl32(*c, 16);
++  *c += *b;
++  *b -= *a;
++  *b ^= mx_rotl32(*a, 19);
++  *a += *c;
++  *c -= *b;
++  *c ^= mx_rotl32(*b, 4);
++  *b += *a;
++}
++
++ccl_device_inline uint mx_bjfinal(uint a, uint b, uint c)
++{
++  c ^= b;
++  c -= mx_rotl32(b, 14);
++  a ^= c;
++  a -= mx_rotl32(c, 11);
++  b ^= a;
++  b -= mx_rotl32(a, 25);
++  c ^= b;
++  c -= mx_rotl32(b, 16);
++  a ^= c;
++  a -= mx_rotl32(c, 4);
++  b ^= a;
++  b -= mx_rotl32(a, 14);
++  c ^= b;
++  c -= mx_rotl32(b, 24);
++  return c;
++}
++
++ccl_device_inline float mx_fade(const float t)
++{
++  return t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f);
++}
++
++ccl_device_inline MxHash3 mx_hash_vec3(const int x, const int y)
++{
++  const uint h = hash_uint2(uint(x), uint(y));
++  MxHash3 result = {h & 0xffu, (h >> 8) & 0xffu, (h >> 16) & 0xffu};
++  return result;
++}
++
++ccl_device_inline MxHash3 mx_hash_vec3(const int x, const int y, const int z)
++{
++  const uint h = hash_uint3(uint(x), uint(y), uint(z));
++  MxHash3 result = {h & 0xffu, (h >> 8) & 0xffu, (h >> 16) & 0xffu};
++  return result;
++}
++
++ccl_device float3 mx_perlin_noise_vec3(const float2 p)
++{
++  int X, Y;
++  const float fx = mx_floorfrac(p.x, &X);
++  const float fy = mx_floorfrac(p.y, &Y);
++  const float u = mx_fade(fx);
++  const float v = mx_fade(fy);
++  return 0.6616f *
++         mx_bilerp(mx_gradient_vec3(mx_hash_vec3(X, Y), fx, fy),
++                   mx_gradient_vec3(mx_hash_vec3(X + 1, Y), fx - 1.0f, fy),
++                   mx_gradient_vec3(mx_hash_vec3(X, Y + 1), fx, fy - 1.0f),
++                   mx_gradient_vec3(mx_hash_vec3(X + 1, Y + 1), fx - 1.0f, fy - 1.0f),
++                   u,
++                   v);
++}
++
++ccl_device float3 mx_perlin_noise_vec3(const float3 p)
++{
++  int X, Y, Z;
++  const float fx = mx_floorfrac(p.x, &X);
++  const float fy = mx_floorfrac(p.y, &Y);
++  const float fz = mx_floorfrac(p.z, &Z);
++  const float u = mx_fade(fx);
++  const float v = mx_fade(fy);
++  const float w = mx_fade(fz);
++  return 0.9820f *
++         mx_trilerp(mx_gradient_vec3(mx_hash_vec3(X, Y, Z), fx, fy, fz),
++                    mx_gradient_vec3(mx_hash_vec3(X + 1, Y, Z), fx - 1.0f, fy, fz),
++                    mx_gradient_vec3(mx_hash_vec3(X, Y + 1, Z), fx, fy - 1.0f, fz),
++                    mx_gradient_vec3(mx_hash_vec3(X + 1, Y + 1, Z), fx - 1.0f, fy - 1.0f, fz),
++                    mx_gradient_vec3(mx_hash_vec3(X, Y, Z + 1), fx, fy, fz - 1.0f),
++                    mx_gradient_vec3(mx_hash_vec3(X + 1, Y, Z + 1), fx - 1.0f, fy, fz - 1.0f),
++                    mx_gradient_vec3(mx_hash_vec3(X, Y + 1, Z + 1), fx, fy - 1.0f, fz - 1.0f),
++                    mx_gradient_vec3(mx_hash_vec3(X + 1, Y + 1, Z + 1), fx - 1.0f, fy - 1.0f, fz - 1.0f),
++                    u,
++                    v,
++                    w);
++}
++
++ccl_device_inline float mx_cell_noise_float(const float2 p)
++{
++  return uint_to_float_incl(hash_uint2(uint(floor_to_int(p.x)), uint(floor_to_int(p.y))));
++}
++
++ccl_device_inline float mx_cell_noise_float(const float3 p)
++{
++  return uint_to_float_incl(
++      hash_uint3(uint(floor_to_int(p.x)), uint(floor_to_int(p.y)), uint(floor_to_int(p.z))));
++}
++
++ccl_device_inline float3 mx_cell_noise_vec3(const float2 p)
++{
++  const int ix = floor_to_int(p.x);
++  const int iy = floor_to_int(p.y);
++  return make_float3(uint_to_float_incl(hash_uint3(uint(ix), uint(iy), 0u)),
++                     uint_to_float_incl(hash_uint3(uint(ix), uint(iy), 1u)),
++                     uint_to_float_incl(hash_uint3(uint(ix), uint(iy), 2u)));
++}
++
++ccl_device_inline float3 mx_cell_noise_vec3(const float3 p)
++{
++  uint a, b, c;
++  a = b = c = 0xdeadbeefu + (4u << 2u) + 13u;
++  a += uint(floor_to_int(p.x));
++  b += uint(floor_to_int(p.y));
++  c += uint(floor_to_int(p.z));
++  mx_bjmix(&a, &b, &c);
++  return make_float3(uint_to_float_incl(mx_bjfinal(a, b, c)),
++                     uint_to_float_incl(mx_bjfinal(a + 1u, b, c)),
++                     uint_to_float_incl(mx_bjfinal(a + 2u, b, c)));
++}
++
++ccl_device float3 mx_fractal_noise_vec3(float2 p,
++                                        const int octaves,
++                                        const float lacunarity,
++                                        const float diminish)
++{
++  float3 result = zero_float3();
++  float amplitude = 1.0f;
++  for (int i = 0; i < octaves; ++i) {
++    result += amplitude * mx_perlin_noise_vec3(p);
++    amplitude *= diminish;
++    p *= lacunarity;
++  }
++  return result;
++}
++
++ccl_device float3 mx_fractal_noise_vec3(float3 p,
++                                        const int octaves,
++                                        const float lacunarity,
++                                        const float diminish)
++{
++  float3 result = zero_float3();
++  float amplitude = 1.0f;
++  for (int i = 0; i < octaves; ++i) {
++    result += amplitude * mx_perlin_noise_vec3(p);
++    amplitude *= diminish;
++    p *= lacunarity;
++  }
++  return result;
++}
++
++ccl_device_inline float2 mx_worley_cell_position(const int x,
++                                                 const int y,
++                                                 const int xoff,
++                                                 const int yoff,
++                                                 const float jitter)
++{
++  float3 tmp = mx_cell_noise_vec3(make_float2(float(x + xoff), float(y + yoff)));
++  float2 off = make_float2(tmp.x, tmp.y);
++  off = (off - make_float2(0.5f, 0.5f)) * jitter + make_float2(0.5f, 0.5f);
++  return make_float2(float(x), float(y)) + off;
++}
++
++ccl_device_inline float3 mx_worley_cell_position(const int x,
++                                                 const int y,
++                                                 const int z,
++                                                 const int xoff,
++                                                 const int yoff,
++                                                 const int zoff,
++                                                 const float jitter)
++{
++  float3 off = mx_cell_noise_vec3(
++      make_float3(float(x + xoff), float(y + yoff), float(z + zoff)));
++  off = (off - make_float3(0.5f, 0.5f, 0.5f)) * jitter + make_float3(0.5f, 0.5f, 0.5f);
++  return make_float3(float(x), float(y), float(z)) + off;
++}
++
++ccl_device_inline float mx_worley_distance(const float2 p,
++                                           const int x,
++                                           const int y,
++                                           const int xoff,
++                                           const int yoff,
++                                           const float jitter,
++                                           const int metric)
++{
++  const float2 diff = mx_worley_cell_position(x, y, xoff, yoff, jitter) - p;
++  if (metric == 2) {
++    return fabsf(diff.x) + fabsf(diff.y);
++  }
++  if (metric == 3) {
++    return fmaxf(fabsf(diff.x), fabsf(diff.y));
++  }
++  return dot(diff, diff);
++}
++
++ccl_device_inline float mx_worley_distance(const float3 p,
++                                           const int x,
++                                           const int y,
++                                           const int z,
++                                           const int xoff,
++                                           const int yoff,
++                                           const int zoff,
++                                           const float jitter,
++                                           const int metric)
++{
++  const float3 diff = mx_worley_cell_position(x, y, z, xoff, yoff, zoff, jitter) - p;
++  if (metric == 2) {
++    return fabsf(diff.x) + fabsf(diff.y) + fabsf(diff.z);
++  }
++  if (metric == 3) {
++    return fmaxf(fmaxf(fabsf(diff.x), fabsf(diff.y)), fabsf(diff.z));
++  }
++  return dot(diff, diff);
++}
++
++ccl_device float mx_worley_noise_float(const float2 p,
++                                       const float jitter,
++                                       const int style,
++                                       const int metric)
++{
++  int X, Y;
++  const float2 localpos = make_float2(mx_floorfrac(p.x, &X), mx_floorfrac(p.y, &Y));
++  float sqdist = 1e6f;
++  float2 minpos = zero_float2();
++  for (int x = -1; x <= 1; ++x) {
++    for (int y = -1; y <= 1; ++y) {
++      const float dist = mx_worley_distance(localpos, x, y, X, Y, jitter, metric);
++      const float2 cellpos = mx_worley_cell_position(x, y, X, Y, jitter) - localpos;
++      if (dist < sqdist) {
++        sqdist = dist;
++        minpos = cellpos;
++      }
++    }
++  }
++  if (style == 1) {
++    return mx_cell_noise_float(minpos + p);
++  }
++  return metric == 0 ? sqrtf(sqdist) : sqdist;
++}
++
++ccl_device float mx_worley_noise_float(const float3 p,
++                                       const float jitter,
++                                       const int style,
++                                       const int metric)
++{
++  int X, Y, Z;
++  const float3 localpos = make_float3(
++      mx_floorfrac(p.x, &X), mx_floorfrac(p.y, &Y), mx_floorfrac(p.z, &Z));
++  float sqdist = 1e6f;
++  float3 minpos = zero_float3();
++  for (int x = -1; x <= 1; ++x) {
++    for (int y = -1; y <= 1; ++y) {
++      for (int z = -1; z <= 1; ++z) {
++        const float dist = mx_worley_distance(localpos, x, y, z, X, Y, Z, jitter, metric);
++        const float3 cellpos = mx_worley_cell_position(x, y, z, X, Y, Z, jitter) - localpos;
++        if (dist < sqdist) {
++          sqdist = dist;
++          minpos = cellpos;
++        }
++      }
++    }
++  }
++  if (style == 1) {
++    return mx_cell_noise_float(minpos + p);
++  }
++  return metric == 0 ? sqrtf(sqdist) : sqdist;
++}
++
++ccl_device float3 mx_worley_noise_vec3(const float2 p,
++                                       const float jitter,
++                                       const int style,
++                                       const int metric)
++{
++  int X, Y;
++  const float2 localpos = make_float2(mx_floorfrac(p.x, &X), mx_floorfrac(p.y, &Y));
++  float3 sqdist = make_float3(1e6f, 1e6f, 1e6f);
++  float2 minpos = zero_float2();
++  for (int x = -1; x <= 1; ++x) {
++    for (int y = -1; y <= 1; ++y) {
++      const float dist = mx_worley_distance(localpos, x, y, X, Y, jitter, metric);
++      const float2 cellpos = mx_worley_cell_position(x, y, X, Y, jitter) - localpos;
++      if (dist < sqdist.x) {
++        sqdist.z = sqdist.y;
++        sqdist.y = sqdist.x;
++        sqdist.x = dist;
++        minpos = cellpos;
++      }
++      else if (dist < sqdist.y) {
++        sqdist.z = sqdist.y;
++        sqdist.y = dist;
++      }
++      else if (dist < sqdist.z) {
++        sqdist.z = dist;
++      }
++    }
++  }
++  if (style == 1) {
++    return mx_cell_noise_vec3(minpos + p);
++  }
++  return metric == 0 ? make_float3(sqrtf(sqdist.x), sqrtf(sqdist.y), sqrtf(sqdist.z)) : sqdist;
++}
++
++ccl_device float3 mx_worley_noise_vec3(const float3 p,
++                                       const float jitter,
++                                       const int style,
++                                       const int metric)
++{
++  int X, Y, Z;
++  const float3 localpos = make_float3(
++      mx_floorfrac(p.x, &X), mx_floorfrac(p.y, &Y), mx_floorfrac(p.z, &Z));
++  float3 sqdist = make_float3(1e6f, 1e6f, 1e6f);
++  float3 minpos = zero_float3();
++  for (int x = -1; x <= 1; ++x) {
++    for (int y = -1; y <= 1; ++y) {
++      for (int z = -1; z <= 1; ++z) {
++        const float dist = mx_worley_distance(localpos, x, y, z, X, Y, Z, jitter, metric);
++        const float3 cellpos = mx_worley_cell_position(x, y, z, X, Y, Z, jitter) - localpos;
++        if (dist < sqdist.x) {
++          sqdist.z = sqdist.y;
++          sqdist.y = sqdist.x;
++          sqdist.x = dist;
++          minpos = cellpos;
++        }
++        else if (dist < sqdist.y) {
++          sqdist.z = sqdist.y;
++          sqdist.y = dist;
++        }
++        else if (dist < sqdist.z) {
++          sqdist.z = dist;
++        }
++      }
++    }
++  }
++  if (style == 1) {
++    return mx_cell_noise_vec3(minpos + p);
++  }
++  return metric == 0 ? make_float3(sqrtf(sqdist.x), sqrtf(sqdist.y), sqrtf(sqdist.z)) : sqdist;
++}
++
++ccl_device_inline float2 mx_rotate2d(const float2 in, const float amount)
++{
++  const float radians = amount * M_PI_F / 180.0f;
++  const float sa = sinf(radians);
++  const float ca = cosf(radians);
++  return make_float2(ca * in.x + sa * in.y, -sa * in.x + ca * in.y);
++}
++
++ccl_device_inline float3 mx_rotate3d(const float3 in, const float amount)
++{
++  const float3 axis = normalize(make_float3(0.1f, 1.0f, 0.0f));
++  const float radians = amount * M_PI_F / 180.0f;
++  const float s = sinf(radians);
++  const float c = cosf(radians);
++  return in * c + cross(axis, in) * s + axis * dot(axis, in) * (1.0f - c);
++}
++
++ccl_device_inline float mx_range_float(const float value,
++                                       const float out_min,
++                                       const float out_max,
++                                       const bool clamp_output)
++{
++  const float result = out_min + value * (out_max - out_min);
++  return clamp_output ? clamp(result, fminf(out_min, out_max), fmaxf(out_min, out_max)) : result;
++}
++
++ccl_device_noinline void svm_node_tex_mx_noise(ccl_private float *ccl_restrict stack,
++                                               const ccl_global SVMNodeTexMxNoise &ccl_restrict node)
++{
++  const float3 vector = stack_load(stack, node.vector);
++  const float amplitude = stack_load(stack, node.amplitude);
++  const float pivot = stack_load(stack, node.pivot);
++  const int octaves = clamp(float_to_int(stack_load(stack, node.octaves)), 0, 32);
++  const float lacunarity = stack_load(stack, node.lacunarity);
++  const float diminish = stack_load(stack, node.diminish);
++  const float jitter = stack_load(stack, node.jitter);
++  const int style = float_to_int(stack_load(stack, node.style));
++  const float3 freq = stack_load(stack, node.freq);
++  const float3 offset = stack_load(stack, node.offset);
++  const float out_min = stack_load(stack, node.out_min);
++  const float out_max = stack_load(stack, node.out_max);
++  const bool clamp_output = stack_load(stack, node.clamp_output) != 0.0f;
++
++  const bool is_2d = node.dimensions == 2;
++  const float2 p2 = make_float2(vector.x, vector.y);
++  const float3 p3 = vector;
++
++  float value = 0.0f;
++  float3 color = zero_float3();
++  int noise_type = int(node.noise_type);
++
++  if (noise_type == NODE_MX_NOISE_UNIFIED) {
++    const int unified_type = float_to_int(stack_load(stack, node.unified_type));
++    const float cell_jitter = (jitter - 1.0f) * 90000.0f;
++    if (is_2d) {
++      const float2 apply_offset = make_float2(vector.x * freq.x, vector.y * freq.y) +
++                                  make_float2(offset.x, offset.y);
++      const float2 apply_cell_jitter = mx_rotate2d(apply_offset, cell_jitter);
++      if (unified_type == 1) {
++        value = mx_cell_noise_float(apply_cell_jitter);
++        color = mx_cell_noise_vec3(apply_cell_jitter);
++      }
++      else if (unified_type == 2) {
++        value = mx_worley_noise_float(apply_offset, jitter, style, 0);
++        color = mx_worley_noise_vec3(apply_offset, jitter, style, 0);
++      }
++      else if (unified_type == 3) {
++        const float3 fractal_position = make_float3(apply_offset.x, apply_offset.y, cell_jitter);
++        /* MaterialX mx_fractal_noise_float, using Blender's equivalent wrapped fBM. */
++        value = octaves > 0 ?
++                    noise_fbm(fractal_position, float(octaves - 1), diminish, lacunarity, false) :
++                    0.0f;
++        color = mx_fractal_noise_vec3(fractal_position, octaves, lacunarity, diminish);
++      }
++      else {
++        /* MaterialX mx_perlin_noise_float, using Blender's equivalent wrapped noise. */
++        value = snoise_2d(apply_cell_jitter) * 0.5f + 0.5f;
++        color = mx_perlin_noise_vec3(apply_cell_jitter) * 0.5f + make_float3(0.5f, 0.5f, 0.5f);
++      }
++    }
++    else {
++      const float3 apply_offset = vector * freq + offset;
++      const float3 apply_cell_jitter = mx_rotate3d(apply_offset, cell_jitter);
++      if (unified_type == 1) {
++        value = mx_cell_noise_float(apply_cell_jitter);
++        color = mx_cell_noise_vec3(apply_cell_jitter);
++      }
++      else if (unified_type == 2) {
++        value = mx_worley_noise_float(apply_offset, jitter, style, 0);
++        color = mx_worley_noise_vec3(apply_offset, jitter, style, 0);
++      }
++      else if (unified_type == 3) {
++        /* MaterialX mx_fractal_noise_float, using Blender's equivalent wrapped fBM. */
++        value = octaves > 0 ?
++                    noise_fbm(apply_cell_jitter, float(octaves - 1), diminish, lacunarity, false) :
++                    0.0f;
++        color = mx_fractal_noise_vec3(apply_cell_jitter, octaves, lacunarity, diminish);
++      }
++      else {
++        /* MaterialX mx_perlin_noise_float, using Blender's equivalent wrapped noise. */
++        value = snoise_3d(apply_cell_jitter) * 0.5f + 0.5f;
++        color = mx_perlin_noise_vec3(apply_cell_jitter) * 0.5f + make_float3(0.5f, 0.5f, 0.5f);
++      }
++    }
++    value = mx_range_float(value, out_min, out_max, clamp_output);
++    color = make_float3(mx_range_float(color.x, out_min, out_max, clamp_output),
++                        mx_range_float(color.y, out_min, out_max, clamp_output),
++                        mx_range_float(color.z, out_min, out_max, clamp_output));
++  }
++  else if (noise_type == NODE_MX_NOISE_CELL) {
++    value = is_2d ? mx_cell_noise_float(p2) : mx_cell_noise_float(p3);
++    color = is_2d ? mx_cell_noise_vec3(p2) : mx_cell_noise_vec3(p3);
++  }
++  else if (noise_type == NODE_MX_NOISE_WORLEY) {
++    value = is_2d ? mx_worley_noise_float(p2, jitter, style, 0) :
++                    mx_worley_noise_float(p3, jitter, style, 0);
++    color = is_2d ? mx_worley_noise_vec3(p2, jitter, style, 0) :
++                    mx_worley_noise_vec3(p3, jitter, style, 0);
++  }
++  else if (noise_type == NODE_MX_NOISE_FRACTAL) {
++    /* MaterialX mx_fractal_noise_float, using Blender's equivalent wrapped fBM. */
++    value = octaves <= 0 ? 0.0f :
++                           (is_2d ? noise_fbm(p2, float(octaves - 1), diminish, lacunarity, false) :
++                                    noise_fbm(p3, float(octaves - 1), diminish, lacunarity, false));
++    color = is_2d ? mx_fractal_noise_vec3(p2, octaves, lacunarity, diminish) :
++                    mx_fractal_noise_vec3(p3, octaves, lacunarity, diminish);
++    value *= amplitude;
++    color *= amplitude;
++  }
++  else {
++    /* MaterialX mx_perlin_noise_float, using Blender's equivalent wrapped noise. */
++    value = is_2d ? snoise_2d(p2) : snoise_3d(p3);
++    color = is_2d ? mx_perlin_noise_vec3(p2) : mx_perlin_noise_vec3(p3);
++    value = value * amplitude + pivot;
++    color = color * amplitude + make_float3(pivot, pivot, pivot);
++  }
++
++  if (stack_valid(node.value_offset)) {
++    stack_store_float(stack, node.value_offset, value);
++  }
++  if (stack_valid(node.color_offset)) {
++    stack_store_float3(stack, node.color_offset, color);
++  }
++  if (stack_valid(node.vector_offset)) {
++    stack_store_float3(stack, node.vector_offset, color);
++  }
++}
++
++CCL_NAMESPACE_END
+diff --git a/src/kernel/svm/node_types.h b/src/kernel/svm/node_types.h
+index a8c5ea15..866d5c4f 100644
+--- a/src/kernel/svm/node_types.h
++++ b/src/kernel/svm/node_types.h
+@@ -715,6 +715,55 @@ struct SVMNodeTexWhiteNoise {
+ static_assert(alignof(SVMNodeTexWhiteNoise) <= alignof(uint));
+ static_assert(sizeof(SVMNodeTexWhiteNoise) % sizeof(uint) == 0);
+ 
++/* NODE_TEX_MX_NOISE */
++struct SVMNodeTexMxNoise {
++  uint dimensions;
++  uint noise_type;
++  SVMInputFloat3 vector;
++  SVMInputFloat amplitude;
++  SVMInputFloat pivot;
++  SVMInputFloat octaves;
++  SVMInputFloat lacunarity;
++  SVMInputFloat diminish;
++  SVMInputFloat jitter;
++  SVMInputFloat style;
++  SVMInputFloat unified_type;
++  SVMInputFloat3 freq;
++  SVMInputFloat3 offset;
++  SVMInputFloat out_min;
++  SVMInputFloat out_max;
++  SVMInputFloat clamp_output;
++  SVMStackOffset value_offset;
++  SVMStackOffset color_offset;
++  SVMStackOffset vector_offset;
++  uint8_t _pad[1];
++};
++static_assert(alignof(SVMNodeTexMxNoise) <= alignof(uint));
++static_assert(sizeof(SVMNodeTexMxNoise) % sizeof(uint) == 0);
++
++/* NODE_TEX_MX_HEXTILED_IMAGE / NODE_TEX_MX_HEXTILED_IMAGE_DERIVATIVE */
++struct SVMNodeTexMxHextiledImage {
++  int id;
++  uint8_t flags;
++  uint8_t _pad[3];
++  SVMInputFloat3 tiling;
++  SVMInputFloat rotation;
++  SVMInputFloat3 rotation_range;
++  SVMInputFloat scale;
++  SVMInputFloat3 scale_range;
++  SVMInputFloat offset;
++  SVMInputFloat3 offset_range;
++  SVMInputFloat falloff;
++  SVMInputFloat falloff_contrast;
++  SVMInputFloat3 luma_coeffs;
++  SVMStackOffset vector_offset;
++  SVMStackOffset out_offset;
++  SVMStackOffset alpha_offset;
++  uint8_t _pad2[1];
++};
++static_assert(alignof(SVMNodeTexMxHextiledImage) <= alignof(uint));
++static_assert(sizeof(SVMNodeTexMxHextiledImage) % sizeof(uint) == 0);
++
+ /* NODE_TEX_GRADIENT */
+ struct SVMNodeTexGradient {
+   NodeGradientType gradient_type;
+diff --git a/src/kernel/svm/node_types_template.h b/src/kernel/svm/node_types_template.h
+index d855af0f..cf156b28 100644
+--- a/src/kernel/svm/node_types_template.h
++++ b/src/kernel/svm/node_types_template.h
+@@ -72,6 +72,8 @@ SHADER_NODE_TYPE(NODE_TEX_MAGIC)
+ SHADER_NODE_TYPE(NODE_TEX_CHECKER)
+ SHADER_NODE_TYPE(NODE_TEX_BRICK)
+ SHADER_NODE_TYPE(NODE_TEX_WHITE_NOISE)
++SHADER_NODE_TYPE(NODE_TEX_MX_NOISE)
++SHADER_NODE_TYPE_DERIVATIVE(NODE_TEX_MX_HEXTILED_IMAGE)
+ SHADER_NODE_TYPE(NODE_NORMAL)
+ SHADER_NODE_TYPE(NODE_LIGHT_FALLOFF)
+ SHADER_NODE_TYPE(NODE_IES)
+diff --git a/src/kernel/svm/svm.h b/src/kernel/svm/svm.h
+index 52372951..607e7124 100644
+--- a/src/kernel/svm/svm.h
++++ b/src/kernel/svm/svm.h
+@@ -60,6 +60,8 @@
+ #include "kernel/svm/mapping.h"
+ #include "kernel/svm/math.h"
+ #include "kernel/svm/mix.h"
++#include "kernel/svm/mx_hextile.h"
++#include "kernel/svm/mx_noise.h"
+ #include "kernel/svm/noisetex.h"
+ #include "kernel/svm/normal.h"
+ #include "kernel/svm/radial_tiling.h"
+@@ -299,6 +301,17 @@ ccl_device void svm_eval_nodes(KernelGlobals kg,
+             kg, sd, stack, svm_node_get<SVMNodeTexImageBox>(kg, &offset));
+       }
+       break;
++      SVM_CASE(NODE_TEX_MX_HEXTILED_IMAGE)
++      svm_node_tex_mx_hextiled_image<float3>(
++          kg, sd, stack, svm_node_get<SVMNodeTexMxHextiledImage>(kg, &offset));
++      break;
++      SVM_CASE(NODE_TEX_MX_HEXTILED_IMAGE_DERIVATIVE)
++      IF_NOT_KERNEL_NODES_FEATURE(VOLUME)
++      {
++        svm_node_tex_mx_hextiled_image<dual3>(
++            kg, sd, stack, svm_node_get<SVMNodeTexMxHextiledImage>(kg, &offset));
++      }
++      break;
+       SVM_CASE(NODE_TEX_NOISE)
+       svm_node_tex_noise(stack, svm_node_get<SVMNodeTexNoise>(kg, &offset));
+       break;
+@@ -476,6 +489,9 @@ ccl_device void svm_eval_nodes(KernelGlobals kg,
+       SVM_CASE(NODE_TEX_WHITE_NOISE)
+       svm_node_tex_white_noise(stack, svm_node_get<SVMNodeTexWhiteNoise>(kg, &offset));
+       break;
++      SVM_CASE(NODE_TEX_MX_NOISE)
++      svm_node_tex_mx_noise(stack, svm_node_get<SVMNodeTexMxNoise>(kg, &offset));
++      break;
+       SVM_CASE(NODE_NORMAL)
+       svm_node_normal(stack, svm_node_get<SVMNodeNormal>(kg, &offset));
+       break;
+diff --git a/src/scene/shader_nodes.cpp b/src/scene/shader_nodes.cpp
+index 32584ed5..55f12f96 100644
+--- a/src/scene/shader_nodes.cpp
++++ b/src/scene/shader_nodes.cpp
+@@ -1530,6 +1530,218 @@ void WhiteNoiseTextureNode::compile(OSLCompiler &compiler)
+   compiler.add(this, "node_white_noise_texture");
+ }
+ 
++/* MaterialX Noise Texture */
++
++NODE_DEFINE(MxNoiseTextureNode)
++{
++  NodeType *type = NodeType::add("mx_noise_texture", create, NodeType::SHADER);
++
++  SOCKET_INT(dimensions, "Dimensions", 3);
++  SOCKET_INT(noise_type, "Noise Type", 0);
++
++  /* Left unconnected, fall back to texture coordinates the way the other
++   * procedural textures do, rather than evaluating everywhere at the origin. */
++  SOCKET_IN_POINT(vector, "Vector", zero_float3(), SocketType::LINK_TEXTURE_GENERATED);
++  SOCKET_IN_FLOAT(amplitude, "Amplitude", 1.0f);
++  SOCKET_IN_FLOAT(pivot, "Pivot", 0.0f);
++  SOCKET_IN_FLOAT(octaves, "Octaves", 3.0f);
++  SOCKET_IN_FLOAT(lacunarity, "Lacunarity", 2.0f);
++  SOCKET_IN_FLOAT(diminish, "Diminish", 0.5f);
++  SOCKET_IN_FLOAT(jitter, "Jitter", 1.0f);
++  SOCKET_IN_FLOAT(style, "Style", 0.0f);
++  SOCKET_IN_FLOAT(unified_type, "Type", 0.0f);
++  SOCKET_IN_VECTOR(freq, "Frequency", one_float3());
++  SOCKET_IN_VECTOR(offset, "Offset", zero_float3());
++  SOCKET_IN_FLOAT(out_min, "Out Min", 0.0f);
++  SOCKET_IN_FLOAT(out_max, "Out Max", 1.0f);
++  SOCKET_IN_FLOAT(clamp_output, "Clamp Output", 1.0f);
++
++  SOCKET_OUT_FLOAT(value, "Value");
++  SOCKET_OUT_COLOR(color, "Color");
++  SOCKET_OUT_VECTOR(vector_out, "Vector");
++
++  return type;
++}
++
++MxNoiseTextureNode::MxNoiseTextureNode() : ShaderNode(get_node_type()) {}
++
++void MxNoiseTextureNode::compile(SVMCompiler &compiler)
++{
++  compiler.add_node(this,
++                    NODE_TEX_MX_NOISE,
++                    SVMNodeTexMxNoise{
++                        .dimensions = uint(dimensions),
++                        .noise_type = uint(noise_type),
++                        .vector = compiler.input_float3("Vector"),
++                        .amplitude = compiler.input_float("Amplitude"),
++                        .pivot = compiler.input_float("Pivot"),
++                        .octaves = compiler.input_float("Octaves"),
++                        .lacunarity = compiler.input_float("Lacunarity"),
++                        .diminish = compiler.input_float("Diminish"),
++                        .jitter = compiler.input_float("Jitter"),
++                        .style = compiler.input_float("Style"),
++                        .unified_type = compiler.input_float("Type"),
++                        .freq = compiler.input_float3("Frequency"),
++                        .offset = compiler.input_float3("Offset"),
++                        .out_min = compiler.input_float("Out Min"),
++                        .out_max = compiler.input_float("Out Max"),
++                        .clamp_output = compiler.input_float("Clamp Output"),
++                        .value_offset = compiler.output("Value"),
++                        .color_offset = compiler.output("Color"),
++                        .vector_offset = compiler.output("Vector"),
++                    });
++}
++
++void MxNoiseTextureNode::compile(OSLCompiler &compiler)
++{
++  compiler.parameter(this, "dimensions");
++  compiler.parameter(this, "noise_type");
++  compiler.add(this, "node_mx_noise_texture");
++}
++
++/* MaterialX Hextiled Image Texture */
++
++NODE_DEFINE(MxHextiledImageTextureNode)
++{
++  NodeType *type = NodeType::add("mx_hextiled_image_texture", create, NodeType::SHADER);
++
++  TEXTURE_MAPPING_DEFINE(MxHextiledImageTextureNode);
++
++  SOCKET_STRING(filename, "Filename", ustring());
++  SOCKET_STRING(colorspace, "Colorspace", u_colorspace_auto);
++
++  static NodeEnum alpha_type_enum;
++  alpha_type_enum.insert("auto", IMAGE_ALPHA_AUTO);
++  alpha_type_enum.insert("unassociated", IMAGE_ALPHA_UNASSOCIATED);
++  alpha_type_enum.insert("associated", IMAGE_ALPHA_ASSOCIATED);
++  alpha_type_enum.insert("channel_packed", IMAGE_ALPHA_CHANNEL_PACKED);
++  alpha_type_enum.insert("ignore", IMAGE_ALPHA_IGNORE);
++  SOCKET_ENUM(alpha_type, "Alpha Type", alpha_type_enum, IMAGE_ALPHA_AUTO);
++
++  static NodeEnum interpolation_enum;
++  interpolation_enum.insert("closest", INTERPOLATION_CLOSEST);
++  interpolation_enum.insert("linear", INTERPOLATION_LINEAR);
++  interpolation_enum.insert("cubic", INTERPOLATION_CUBIC);
++  interpolation_enum.insert("smart", INTERPOLATION_SMART);
++  SOCKET_ENUM(interpolation, "Interpolation", interpolation_enum, INTERPOLATION_LINEAR);
++
++  static NodeEnum extension_enum;
++  extension_enum.insert("periodic", EXTENSION_REPEAT);
++  extension_enum.insert("clamp", EXTENSION_EXTEND);
++  extension_enum.insert("black", EXTENSION_CLIP);
++  extension_enum.insert("mirror", EXTENSION_MIRROR);
++  SOCKET_ENUM(extension, "Extension", extension_enum, EXTENSION_REPEAT);
++
++  SOCKET_INT_ARRAY(tiles, "Tiles", array<int>());
++  SOCKET_BOOLEAN(animated, "Animated", false);
++
++  SOCKET_IN_POINT(vector, "Vector", zero_float3(), SocketType::LINK_TEXTURE_UV);
++  SOCKET_IN_VECTOR(tiling, "Tiling", make_float3(1.0f, 1.0f, 0.0f));
++  SOCKET_IN_FLOAT(rotation, "Rotation", 1.0f);
++  SOCKET_IN_VECTOR(rotation_range, "Rotation Range", make_float3(0.0f, 360.0f, 0.0f));
++  SOCKET_IN_FLOAT(scale, "Scale", 1.0f);
++  SOCKET_IN_VECTOR(scale_range, "Scale Range", make_float3(0.5f, 2.0f, 0.0f));
++  SOCKET_IN_FLOAT(offset, "Offset", 1.0f);
++  SOCKET_IN_VECTOR(offset_range, "Offset Range", make_float3(0.0f, 1.0f, 0.0f));
++  SOCKET_IN_FLOAT(falloff, "Falloff", 0.5f);
++  SOCKET_IN_FLOAT(falloff_contrast, "Falloff Contrast", 0.5f);
++  SOCKET_IN_VECTOR(luma_coeffs, "Luma Coeffs", make_float3(0.2722287f, 0.6740818f, 0.0536895f));
++
++  SOCKET_OUT_COLOR(color, "Color");
++  SOCKET_OUT_FLOAT(alpha, "Alpha");
++
++  return type;
++}
++
++MxHextiledImageTextureNode::MxHextiledImageTextureNode() : ImageSlotTextureNode(get_node_type())
++{
++  colorspace = u_colorspace_scene_linear;
++  animated = false;
++}
++
++ShaderNode *MxHextiledImageTextureNode::clone(ShaderGraph *graph) const
++{
++  MxHextiledImageTextureNode *node = graph->create_node<MxHextiledImageTextureNode>(*this);
++  node->handle = handle;
++  return node;
++}
++
++ImageParams MxHextiledImageTextureNode::image_params() const
++{
++  ImageParams params;
++  params.animated = animated;
++  params.interpolation = interpolation;
++  params.extension = extension;
++  params.alpha_type = alpha_type;
++  params.colorspace = colorspace;
++  return params;
++}
++
++void MxHextiledImageTextureNode::cull_tiles(Scene * /*scene*/, ShaderGraph * /*graph*/) {}
++
++void MxHextiledImageTextureNode::update_images(const SVMCompiler &compiler)
++{
++  if (handle.empty()) {
++    ImageManager *image_manager = compiler.scene->image_manager.get();
++    handle = image_manager->add_image(filename.string(), image_params(), tiles);
++  }
++  set_need_derivatives();
++}
++
++void MxHextiledImageTextureNode::compile(SVMCompiler &compiler)
++{
++  ShaderInput *vector_in = input("Vector");
++  ShaderOutput *alpha_out = output("Alpha");
++
++  update_images(compiler);
++
++  const ImageMetaData metadata = handle.metadata(compiler.progress);
++  const bool compress_as_srgb = metadata.is_compressible_as_srgb;
++
++  const SVMStackOffset vector_offset = tex_mapping.compile_begin(compiler, vector_in, this);
++  uint flags = 0;
++
++  if (compress_as_srgb) {
++    flags |= NODE_IMAGE_COMPRESS_AS_SRGB;
++  }
++  if (!alpha_out->links.empty()) {
++    const bool unassociate_alpha = !(ColorSpaceManager::colorspace_is_data(colorspace) ||
++                                     alpha_type == IMAGE_ALPHA_CHANNEL_PACKED ||
++                                     alpha_type == IMAGE_ALPHA_IGNORE);
++
++    if (unassociate_alpha) {
++      flags |= NODE_IMAGE_ALPHA_UNASSOCIATE;
++    }
++  }
++
++  compiler.add_node(this,
++                    NODE_TEX_MX_HEXTILED_IMAGE,
++                    SVMNodeTexMxHextiledImage{
++                        .id = handle.kernel_id(),
++                        .flags = uint8_t(flags),
++                        .tiling = compiler.input_float3("Tiling"),
++                        .rotation = compiler.input_float("Rotation"),
++                        .rotation_range = compiler.input_float3("Rotation Range"),
++                        .scale = compiler.input_float("Scale"),
++                        .scale_range = compiler.input_float3("Scale Range"),
++                        .offset = compiler.input_float("Offset"),
++                        .offset_range = compiler.input_float3("Offset Range"),
++                        .falloff = compiler.input_float("Falloff"),
++                        .falloff_contrast = compiler.input_float("Falloff Contrast"),
++                        .luma_coeffs = compiler.input_float3("Luma Coeffs"),
++                        .vector_offset = vector_offset,
++                        .out_offset = compiler.output("Color"),
++                        .alpha_offset = compiler.output("Alpha"),
++                    });
++
++  tex_mapping.compile_end(compiler, vector_in, vector_offset);
++}
++
++void MxHextiledImageTextureNode::compile(OSLCompiler &compiler)
++{
++  compiler.add(this, "node_mx_hextiled_image_texture");
++}
++
+ /* Wave Texture */
+ 
+ NODE_DEFINE(WaveTextureNode)
+diff --git a/src/scene/shader_nodes.h b/src/scene/shader_nodes.h
+index ec0f48e3..4e4e4c41 100644
+--- a/src/scene/shader_nodes.h
++++ b/src/scene/shader_nodes.h
+@@ -410,6 +410,63 @@ class WhiteNoiseTextureNode : public ShaderNode {
+   NODE_SOCKET_API(float, w)
+ };
+ 
++class MxNoiseTextureNode : public ShaderNode {
++ public:
++  SHADER_NODE_CLASS(MxNoiseTextureNode)
++
++  NODE_SOCKET_API(int, dimensions)
++  NODE_SOCKET_API(int, noise_type)
++  NODE_SOCKET_API(float3, vector)
++  NODE_SOCKET_API(float, amplitude)
++  NODE_SOCKET_API(float, pivot)
++  NODE_SOCKET_API(float, octaves)
++  NODE_SOCKET_API(float, lacunarity)
++  NODE_SOCKET_API(float, diminish)
++  NODE_SOCKET_API(float, jitter)
++  NODE_SOCKET_API(float, style)
++  NODE_SOCKET_API(float, unified_type)
++  NODE_SOCKET_API(float3, freq)
++  NODE_SOCKET_API(float3, offset)
++  NODE_SOCKET_API(float, out_min)
++  NODE_SOCKET_API(float, out_max)
++  NODE_SOCKET_API(float, clamp_output)
++};
++
++class MxHextiledImageTextureNode : public ImageSlotTextureNode {
++ public:
++  SHADER_NODE_NO_CLONE_CLASS(MxHextiledImageTextureNode)
++  ShaderNode *clone(ShaderGraph *graph) const override;
++
++  ImageParams image_params() const;
++  void update_images(const SVMCompiler &compiler) override;
++  ShaderNodeType shader_node_type() const override
++  {
++    return NODE_TEX_MX_HEXTILED_IMAGE;
++  }
++
++  NODE_SOCKET_API(ustring, filename)
++  NODE_SOCKET_API(ustring, colorspace)
++  NODE_SOCKET_API(ImageAlphaType, alpha_type)
++  NODE_SOCKET_API(InterpolationType, interpolation)
++  NODE_SOCKET_API(ExtensionType, extension)
++  NODE_SOCKET_API(bool, animated)
++  NODE_SOCKET_API(float3, vector)
++  NODE_SOCKET_API(float3, tiling)
++  NODE_SOCKET_API(float, rotation)
++  NODE_SOCKET_API(float3, rotation_range)
++  NODE_SOCKET_API(float, scale)
++  NODE_SOCKET_API(float3, scale_range)
++  NODE_SOCKET_API(float, offset)
++  NODE_SOCKET_API(float3, offset_range)
++  NODE_SOCKET_API(float, falloff)
++  NODE_SOCKET_API(float, falloff_contrast)
++  NODE_SOCKET_API(float3, luma_coeffs)
++  NODE_SOCKET_API_ARRAY(array<int>, tiles)
++
++ protected:
++  void cull_tiles(Scene *scene, ShaderGraph *graph);
++};
++
+ class MappingNode : public ShaderNode {
+  public:
+   SHADER_NODE_CLASS(MappingNode)

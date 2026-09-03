@@ -1,0 +1,59 @@
+From ed2c21476b29381a2d59dd3626473c3cb223192d Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Mon, 31 Aug 2026 03:26:39 +0200
+Subject: [PATCH 09/38] hydra: do not build an unusable GL context for the
+ display driver
+
+gl_context_create() reads the calling thread's current GL context twice: once
+through wglGetCurrentDC() for the pixel format, and once for wglShareLists().
+With no context current it produced a context that is neither correctly
+formatted nor shared with the host's, which then failed on first use.
+
+Bail out when there is no current context, and destroy the context if sharing
+fails, so gl_context_enable() reports the failure cleanly instead.
+
+Also add a CYCLES_DISPLAY_DRIVER environment setting to turn the display
+driver off entirely. Hosts differ in when and on which thread a GL context is
+current, and rendering through the output driver instead is slower to refresh
+but has no GL requirements at all.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/display_driver.cpp | 17 ++++++++++++++++-
+ 1 file changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/src/hydra/display_driver.cpp b/src/hydra/display_driver.cpp
+index cca8c8b0..26095cf8 100644
+--- a/src/hydra/display_driver.cpp
++++ b/src/hydra/display_driver.cpp
+@@ -42,6 +42,14 @@ void HdCyclesDisplayDriver::gl_context_create()
+ {
+ #ifdef _WIN32
+   if (!gl_context_) {
++    /* Both the pixel format query and wglShareLists below read the calling
++     * thread's current GL context. Without one they quietly produce a context
++     * that is not shared with the host's, which then fails on first use - so
++     * bail out and let gl_context_enable() report the failure cleanly. */
++    if (wglGetCurrentContext() == nullptr || wglGetCurrentDC() == nullptr) {
++      return;
++    }
++
+     hdc_ = GetDC(CreateWindowA("STATIC",
+                                "HdCycles",
+                                WS_OVERLAPPEDWINDOW | WS_CLIPSIBLINGS | WS_CLIPCHILDREN,
+@@ -60,7 +68,14 @@ void HdCyclesDisplayDriver::gl_context_create()
+     SetPixelFormat((HDC)hdc_, pixelFormat, &pfd);
+ 
+     TF_VERIFY(gl_context_ = wglCreateContext((HDC)hdc_));
+-    TF_VERIFY(wglShareLists(wglGetCurrentContext(), (HGLRC)gl_context_));
++    if (gl_context_ && !wglShareLists(wglGetCurrentContext(), (HGLRC)gl_context_)) {
++      /* An unshared context cannot see the host's textures, so it is worse
++       * than no display driver at all. */
++      TF_WARN("Could not share the host GL context, disabling the Cycles display driver");
++      wglDeleteContext((HGLRC)gl_context_);
++      gl_context_ = nullptr;
++      return;
++    }
+   }
+   if (!gl_context_) {
+     return;

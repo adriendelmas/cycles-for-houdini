@@ -1,0 +1,866 @@
+From 2b24bc2287e5e05bad628d1cb1d17f9a73670f4e Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Tue, 1 Sep 2026 00:25:09 +0200
+Subject: [PATCH 19/38] hydra: read Houdini op: texture paths by cooking the
+ COP during sync
+
+A texture path can name a compositing node rather than a file. Nothing hands
+those pixels over as a file - the USD asset resolver returns an asset of size
+zero, and Houdini's own image layer refuses the path outright, both measured -
+so the node has to be cooked. Do that while the prim is being synced and give
+Cycles the resulting image, leaving the normal loader untouched for ordinary
+paths.
+
+Cooking deliberately happens at sync time rather than in the image loader:
+loading runs on Cycles' worker threads, and cooking a Houdini node from one of
+those would take the host down. Results are cached per path, and the call is
+guarded so a batch render - which has no hou module at all - reports a plain
+warning naming the path instead of raising.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/cmake/Modules/FindUSDHoudini.cmake        |   4 +
+ src/hydra/CMakeLists.txt                      |  14 +++
+ src/hydra/houdini_cop.cpp                     | 116 ++++++++++++++++++
+ src/hydra/houdini_cop.h                       |  28 +++++
+ src/hydra/node_util.cpp                       |  19 ++-
+ src/hydra/resources/flatten_op_textures.py    |  99 +++++++++++++++
+ .../hdcycles_flatten_op_textures_bak1.hda     | Bin 0 -> 1070 bytes
+ .../hdcycles_flatten_op_textures_bak10.hda    | Bin 0 -> 2207 bytes
+ .../hdcycles_flatten_op_textures_bak11.hda    | Bin 0 -> 2497 bytes
+ .../hdcycles_flatten_op_textures_bak2.hda     | Bin 0 -> 2301 bytes
+ .../hdcycles_flatten_op_textures_bak3.hda     | Bin 0 -> 2591 bytes
+ .../hdcycles_flatten_op_textures_bak4.hda     | Bin 0 -> 2654 bytes
+ .../hdcycles_flatten_op_textures_bak5.hda     | Bin 0 -> 1070 bytes
+ .../hdcycles_flatten_op_textures_bak6.hda     | Bin 0 -> 2299 bytes
+ .../hdcycles_flatten_op_textures_bak7.hda     | Bin 0 -> 2589 bytes
+ .../hdcycles_flatten_op_textures_bak8.hda     | Bin 0 -> 2589 bytes
+ .../hdcycles_flatten_op_textures_bak9.hda     | Bin 0 -> 1070 bytes
+ .../otls/hdcycles_flatten_op_textures.hda     | Bin 0 -> 2497 bytes
+ 18 files changed, 279 insertions(+), 1 deletion(-)
+ create mode 100644 src/hydra/houdini_cop.cpp
+ create mode 100644 src/hydra/houdini_cop.h
+ create mode 100644 src/hydra/resources/flatten_op_textures.py
+ create mode 100644 src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak1.hda
+ create mode 100644 src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak10.hda
+ create mode 100644 src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak11.hda
+ create mode 100644 src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak2.hda
+ create mode 100644 src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak3.hda
+ create mode 100644 src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak4.hda
+ create mode 100644 src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak5.hda
+ create mode 100644 src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak6.hda
+ create mode 100644 src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak7.hda
+ create mode 100644 src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak8.hda
+ create mode 100644 src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak9.hda
+ create mode 100644 src/hydra/resources/otls/hdcycles_flatten_op_textures.hda
+
+diff --git a/src/cmake/Modules/FindUSDHoudini.cmake b/src/cmake/Modules/FindUSDHoudini.cmake
+index c5f6c129..0c5cbd4b 100644
+--- a/src/cmake/Modules/FindUSDHoudini.cmake
++++ b/src/cmake/Modules/FindUSDHoudini.cmake
+@@ -81,6 +81,10 @@ if(HOUDINI_ROOT AND EXISTS ${HOUDINI_ROOT})
+ 
+   message(STATUS "Houdini Python version: ${_python_major}.${_python_minor}")
+ 
++  # Exported so callers can install into the pythonX.Ylibs directory Houdini
++  # adds to sys.path for every entry on HOUDINI_PATH.
++  set(HOUDINI_PYTHON_VERSION "${_python_major}.${_python_minor}")
++
+   set(USD_INCLUDE_DIR ${_include_dir})
+   list(APPEND USD_INCLUDE_DIRS ${_python_include_dir})
+   list(APPEND USD_LIBRARIES ${_python_library} ${_boost_python_library})
+diff --git a/src/hydra/CMakeLists.txt b/src/hydra/CMakeLists.txt
+index 4d3e8e2f..f64fd742 100644
+--- a/src/hydra/CMakeLists.txt
++++ b/src/hydra/CMakeLists.txt
+@@ -65,6 +65,14 @@ set(SRC_HD_CYCLES
+   volume.cpp
+ )
+ 
++# Reading Houdini's op: texture paths means cooking a Houdini node, so this
++# only exists in a Houdini build.
++if(HOUDINI_FOUND)
++  list(APPEND SRC_HD_CYCLES houdini_cop.cpp)
++  list(APPEND SRC_HD_CYCLES_HEADERS houdini_cop.h)
++  add_definitions(-DWITH_HOUDINI_COP)
++endif()
++
+ # Blender libraries do not include hgiGL, so build without display driver then.
+ if(EXISTS ${USD_INCLUDE_DIR}/pxr/imaging/hgiGL)
+   add_definitions(-DWITH_HYDRA_DISPLAY_DRIVER)
+@@ -228,6 +236,12 @@ if(WITH_CYCLES_HYDRA_RENDER_DELEGATE)
+     # renderer name - hence one per plugin variant.
+     delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources" "HdCyclesPlugin_Global.ds" "${CYCLES_INSTALL_PATH}/houdini/soho/parameters")
+     delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources" "HdCyclesPluginGPU_Global.ds" "${CYCLES_INSTALL_PATH}/houdini/soho/parameters")
++    # Cycles cannot read Houdini's op: texture paths - neither the USD asset
++    # resolver nor Houdini's own image layer will hand a third party the pixels
++    # of a COP - so ship a LOP that cooks them to files beforehand, plus the
++    # module it calls. Houdini picks both up from the package's HOUDINI_PATH.
++    delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources/otls" "hdcycles_flatten_op_textures.hda" "${CYCLES_INSTALL_PATH}/houdini/otls")
++    delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources" "flatten_op_textures.py" "${CYCLES_INSTALL_PATH}/houdini/python${HOUDINI_PYTHON_VERSION}libs")
+   else()
+     delayed_install("${CMAKE_CURRENT_BINARY_DIR}/resources" "plugInfo.json" "${CYCLES_HYDRA_INSTALL_PATH}/${HdCyclesPluginName}/resources")
+   endif()
+diff --git a/src/hydra/houdini_cop.cpp b/src/hydra/houdini_cop.cpp
+new file mode 100644
+index 00000000..2ea5093d
+--- /dev/null
++++ b/src/hydra/houdini_cop.cpp
+@@ -0,0 +1,116 @@
++/* SPDX-FileCopyrightText: 2026 Blender Foundation
++ *
++ * SPDX-License-Identifier: Apache-2.0 */
++
++#include "hydra/houdini_cop.h"
++
++#include "util/log.h"
++#include "util/path.h"
++#include "util/thread.h"
++
++#include <pxr/base/tf/hash.h>
++#include <pxr/base/tf/pyInterpreter.h>
++#include <pxr/base/tf/pyLock.h>
++#include <pxr/base/tf/stringUtils.h>
++
++#include <filesystem>
++#include <unordered_map>
++
++HDCYCLES_NAMESPACE_OPEN_SCOPE
++
++namespace {
++
++const char *const kPrefix = "op:";
++
++thread_mutex &CookMutex()
++{
++  static thread_mutex mutex;
++  return mutex;
++}
++
++std::unordered_map<std::string, std::string> &CookCache()
++{
++  static std::unordered_map<std::string, std::string> cache;
++  return cache;
++}
++
++/* `op:/img/net/OUT_COLOR[1]` names a plane of a node. Only the node part
++ * addresses something hou.node() can find. */
++std::string NodePathOf(const std::string &opPath)
++{
++  std::string node = opPath.substr(strlen(kPrefix));
++  const size_t plane = node.find('[');
++  if (plane != std::string::npos) {
++    node = node.substr(0, plane);
++  }
++  return node;
++}
++
++std::string OutputPathFor(const std::string &opPath)
++{
++  /* Hash the whole path, plane index included, so two planes of one node do
++   * not collide. */
++  const std::string name = "hdcycles_cop_" + std::to_string(PXR_NS::TfHash()(opPath)) + ".exr";
++  std::filesystem::path out = std::filesystem::temp_directory_path() / name;
++  /* Forward slashes only: the path is pasted into a Python string literal
++   * below, where a backslash would start an escape. */
++  return PXR_NS::TfStringReplace(out.string(), "\\", "/");
++}
++
++}  // namespace
++
++std::string ResolveHoudiniCopPath(const std::string &path)
++{
++  if (path.compare(0, strlen(kPrefix), kPrefix) != 0) {
++    return std::string();
++  }
++
++  const CCL_NS::thread_scoped_lock lock(CookMutex());
++
++  auto &cache = CookCache();
++  const auto it = cache.find(path);
++  if (it != cache.end()) {
++    return it->second;
++  }
++
++  const std::string nodePath = NodePathOf(path);
++  const std::string outPath = OutputPathFor(path);
++
++  /* The destination is decided here rather than read back from Python, which
++   * keeps this to a single call with nothing to unmarshal. */
++  /* Guarded so this stays quiet outside an interactive session: a batch render
++   * has no `hou` module at all, and the node would not exist there either. */
++  const std::string code = "try:\n"
++                           "    import hou\n"
++                           "    _n = hou.node('" +
++                           nodePath +
++                           "')\n"
++                           "    if _n is not None:\n"
++                           "        _n.saveImage('" +
++                           outPath +
++                           "')\n"
++                           "except Exception:\n"
++                           "    pass\n";
++
++  {
++    PXR_NS::TfPyInitialize();
++    const PXR_NS::TfPyLock pyLock;
++    PXR_NS::TfPyRunString(code, Py_file_input);
++  }
++
++  std::string result;
++  if (CCL_NS::path_exists(outPath)) {
++    result = outPath;
++    LOG_INFO << "Cooked Houdini COP " << path << " to " << outPath;
++  }
++  else {
++    LOG_WARNING << "Could not cook Houdini COP " << path
++                << ", the texture will be missing. Check that the node exists "
++                   "and can be rendered.";
++  }
++
++  cache[path] = result;
++  return result;
++}
++
++HDCYCLES_NAMESPACE_CLOSE_SCOPE
+diff --git a/src/hydra/houdini_cop.h b/src/hydra/houdini_cop.h
+new file mode 100644
+index 00000000..dfd04562
+--- /dev/null
++++ b/src/hydra/houdini_cop.h
+@@ -0,0 +1,28 @@
++/* SPDX-FileCopyrightText: 2026 Blender Foundation
++ *
++ * SPDX-License-Identifier: Apache-2.0 */
++
++#pragma once
++
++#include "hydra/config.h"
++
++#include <string>
++
++HDCYCLES_NAMESPACE_OPEN_SCOPE
++
++/* Houdini lets a texture path point straight at a compositing node with
++ * `op:/img/net/OUT`. Nothing hands those pixels to a third party as a file:
++ * the USD asset resolver returns an asset of size zero, and Houdini's own
++ * image layer refuses the path outright - both measured. The only thing that
++ * produces pixels is cooking the node, so that is what this does, writing the
++ * result to an image file and returning its path.
++ *
++ * Cooking happens here, while the material is being synced, rather than when
++ * Cycles loads the image: image loading runs on Cycles' worker threads, and
++ * cooking a Houdini node from one of those would take the host down.
++ *
++ * Returns an empty string for a path that is not an `op:` path, and for a COP
++ * that could not be cooked. Results are cached per path for the session. */
++std::string ResolveHoudiniCopPath(const std::string &path);
++
++HDCYCLES_NAMESPACE_CLOSE_SCOPE
+diff --git a/src/hydra/node_util.cpp b/src/hydra/node_util.cpp
+index 05b5b8c8..4d77793c 100644
+--- a/src/hydra/node_util.cpp
++++ b/src/hydra/node_util.cpp
+@@ -4,6 +4,10 @@
+  * SPDX-License-Identifier: Apache-2.0 */
+ 
+ #include "hydra/node_util.h"
++
++#ifdef WITH_HOUDINI_COP
++#  include "hydra/houdini_cop.h"
++#endif
+ #include "util/transform.h"
+ 
+ #include <pxr/base/gf/matrix3d.h>
+@@ -79,7 +83,20 @@ template<> ustring convertToCycles<ustring>(const VtValue &value)
+      * string instead turns an unresolvable texture into a silently missing
+      * one, with no hint of which path failed. */
+     const std::string &resolved = path.GetResolvedPath();
+-    return ustring(resolved.empty() ? path.GetAssetPath() : resolved);
++    std::string filename = resolved.empty() ? path.GetAssetPath() : resolved;
++
++#ifdef WITH_HOUDINI_COP
++    /* A Houdini `op:` path names a compositing node, not a file. Cook it here,
++     * while the prim is being synced, and hand Cycles the resulting image -
++     * the loader itself runs on worker threads where cooking a Houdini node
++     * would take the host down. */
++    const std::string cooked = ResolveHoudiniCopPath(filename);
++    if (!cooked.empty()) {
++      filename = cooked;
++    }
++#endif
++
++    return ustring(filename);
+   }
+ 
+   if (value.CanCast<TfToken>()) {
+diff --git a/src/hydra/resources/flatten_op_textures.py b/src/hydra/resources/flatten_op_textures.py
+new file mode 100644
+index 00000000..ba2abdc0
+--- /dev/null
++++ b/src/hydra/resources/flatten_op_textures.py
+@@ -0,0 +1,99 @@
++"""Flatten `op:` COP texture references so a third-party renderer can read them.
++
++Houdini lets a texture path point straight at a COP with `op:/img/net/OUT`.
++Its own renderers evaluate that through Houdini's image library, but a delegate
++like Cycles only ever sees a string it cannot open - the USD asset resolver
++accepts the path and hands back an asset of size zero, so the texture silently
++goes missing.
++
++This walks the stage, cooks every referenced COP to a real image file and
++rewrites the paths to point at it.
++
++Use it from a Python LOP placed before the render node:
++
++    import flatten_op_textures
++    flatten_op_textures.run(hou.pwd())
++
++The rewrite happens on the LOP's own layer, so the original scene is untouched
++and removing the node restores the `op:` paths.
++
++Caveat: this is a snapshot. Editing the COP afterwards does not update a
++running IPR - recook this node to pick the change up.
++"""
++
++import os
++import tempfile
++
++import hou
++from pxr import Sdf, UsdShade
++
++
++def _output_path(cop_path, frame, directory):
++    """A stable filename per COP and frame, so repeated cooks reuse the file
++    rather than filling the temp directory."""
++    safe = cop_path.strip("/").replace("/", "_")
++    return os.path.join(directory, "hdcycles_cop_%s.%04d.exr" % (safe, int(frame)))
++
++
++def _flatten(cop_path, frame, directory, cache):
++    """Cook one COP to an image file, once per run."""
++    if cop_path in cache:
++        return cache[cop_path]
++
++    node = hou.node(cop_path)
++    if node is None:
++        hou.logging.log(hou.logging.LogEntry(
++            "No COP at '%s', leaving the path alone" % cop_path,
++            severity=hou.severityType.Warning))
++        cache[cop_path] = None
++        return None
++
++    out = _output_path(cop_path, frame, directory)
++    try:
++        node.saveImage(out)
++    except hou.Error as exc:
++        hou.logging.log(hou.logging.LogEntry(
++            "Could not cook '%s': %s" % (cop_path, exc),
++            severity=hou.severityType.Warning))
++        cache[cop_path] = None
++        return None
++
++    cache[cop_path] = out
++    return out
++
++
++def run(node, directory=None):
++    """Rewrite every `op:` asset path on the stage of `node`.
++
++    Returns the number of attributes rewritten.
++    """
++    stage = node.editableStage()
++    frame = hou.frame()
++    directory = directory or tempfile.gettempdir()
++    cache = {}
++    rewritten = 0
++
++    for prim in stage.Traverse():
++        shader = UsdShade.Shader(prim)
++        if not shader:
++            continue
++
++        for shader_input in shader.GetInputs():
++            attr = shader_input.GetAttr()
++            if attr.GetTypeName() != Sdf.ValueTypeNames.Asset:
++                continue
++
++            value = attr.Get()
++            if value is None:
++                continue
++
++            authored = value.path
++            if not authored.startswith("op:"):
++                continue
++
++            flattened = _flatten(authored[len("op:"):], frame, directory, cache)
++            if flattened:
++                attr.Set(Sdf.AssetPath(flattened))
++                rewritten += 1
++
++    return rewritten
+diff --git a/src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak1.hda b/src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak1.hda
+new file mode 100644
+index 0000000000000000000000000000000000000000..c4f0a46f806c606d8d92a8b9359778e570d1ff29
+GIT binary patch
+literal 1070
+zcmb7CO>fgM7;ZNX)EbwG6Q{Q+LU75Fc1*NV1t{%Aq%K9YhaHe2H*p$I!Hyh9+Ccma
+z{@1P?_$M5A^F<~KQ?X>}wV#jo!*;#dWv5+-7(Q~n+5FO9&7HNo^lI$(>f6sB7$3(n
+z54qrG9MXhu6je8Pdt0z-#<MsKZi0kmlgUD+Cs9JRX2O@Lui3TERRP$hRjCfX*Qzd_
+zAK*4x^*zeR=anls%lELZZBf0JDHb(3X-)1c;q`tr^u4<d(em!Oj*AAmMKc)S0RJ57
+z(TvkXZdZZgsjehlv+n)KQH*NVU|kcPj%)0pBL$96XPwT$8`O=9`vJ^YMDs*LSh_-1
+z+Cn51v_1W6e&h=QT!MaLy*=0kxANbYozM+SddA=0$S6~Dk><K$**(K8PO#E+%XZ*l
+z0}pqgQ3H*3pwk9AHON=;F=HBp#P3Qon1W3PWB^dkoJ;Y4vjdqjMYU9DLU;tv!FWp5
+z);3@|1;c<BpkpS=CRq?mSjRkTGGN4uw+vYbSP6xoc=oo0N_EXOK@N`yR_V!*L79Na
+zG>GaD0T+#wpb7ScjNe97gqVYC{1yCj<-L_GgP191lFGw0$vc^Q&J)`jjm|7<v!T`*
+m9lwl%FtlEc?eTDAMc&f$o#n;F{Db4ZUHIqjV&3ofJHG&(%|7D*
+
+literal 0
+HcmV?d00001
+
+diff --git a/src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak10.hda b/src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak10.hda
+new file mode 100644
+index 0000000000000000000000000000000000000000..cbf3439a417a5ec4f53efea32976e9a271f4c131
+GIT binary patch
+literal 2207
+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
+O4q?@z@z^pm7V955!%aB=
+
+literal 0
+HcmV?d00001
+
+diff --git a/src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak11.hda b/src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak11.hda
+new file mode 100644
+index 0000000000000000000000000000000000000000..7d60d6ebdf8141a70bb16e53da8e9ea4faf43373
+GIT binary patch
+literal 2497
+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
+KOR6#FaQ+R96{IZy
+
+literal 0
+HcmV?d00001
+
+diff --git a/src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak2.hda b/src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak2.hda
+new file mode 100644
+index 0000000000000000000000000000000000000000..a25ad9a346979b43465c7cfe4a8afbb83e903d67
+GIT binary patch
+literal 2301
+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
+L$phMEI)(Bl{oR<E
+
+literal 0
+HcmV?d00001
+
+diff --git a/src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak3.hda b/src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak3.hda
+new file mode 100644
+index 0000000000000000000000000000000000000000..dcc4becd513abdc519241c23aeb0d24638fd02d4
+GIT binary patch
+literal 2591
+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
+F>)*`A?~MQe
+
+literal 0
+HcmV?d00001
+
+diff --git a/src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak4.hda b/src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak4.hda
+new file mode 100644
+index 0000000000000000000000000000000000000000..4729b17a14d043a317436cb930aa19cc623bbec2
+GIT binary patch
+literal 2654
+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
+
+literal 0
+HcmV?d00001
+
+diff --git a/src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak5.hda b/src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak5.hda
+new file mode 100644
+index 0000000000000000000000000000000000000000..f74ad992af556b82890bb318c7499ab25638a203
+GIT binary patch
+literal 1070
+zcmb7CO>fgM7;ZNX)EbwG6Q{Q+LU75Fc1*NV1t{%Aq%K9YhaHe2H*p$I!Hyh9+Ccma
+z{@1Sj2Yvzv-h7dX!c;6-dhO@q{jgnccG+pyA%>4!Z#KX5S953WF1;GNz54d^2gb*-
+z%tJ1?8HY6C8%5O(-rg3hn(-_SgPR~>*<`Yi=}DAOt(ov;>T7nbb5#JgX;rF&@3pFn
+z=LfirR(+51@p<J6&hkC1Yg<&WWr{^jPFj=uN_f2=4SnyfL$thmuH&MCZqW<|IKV%L
+zdNkuSk=s?Ec&aN&*Q|R#aulPQHCWd~r{fxX=tzO%(^;o;@CJ3`;(h=#7STM>5SFfx
+zm9`K`1#M6NnjiT>0GFVjSZ@z@!L9uFWhZpQlAiImH!{l9T%@_KSa#2FixaFg-Lf5c
+z*ucXbXw*QX9q6=yP7U&ve9V{zA@RG?45na{0T}?4Gv`wL-|Rr9Oi?Wrnh+krb1<G#
+zwY3eHPQftX1?ZTGvPl-i64o)#nhY56;w?iK0#-sHD4xA7p;BFQO_0MQf>nAlWKbp`
+zG7X|SM8HKOC1`?uA>+3Z6(Q!}8h-`<TzPLL%OGZonWXYCP4Z6Wp7X@EMx!&!+H9zG
+mM#nFsfCbj8u{|D+tjJq>zO%fzn168Gw+sK=UCjIae&-kI>OV{X
+
+literal 0
+HcmV?d00001
+
+diff --git a/src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak6.hda b/src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak6.hda
+new file mode 100644
+index 0000000000000000000000000000000000000000..0b0822ea371e94a696dcb327fcd9af6b3de22b11
+GIT binary patch
+literal 2299
+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
+It}cc0AL_4^<p2Nx
+
+literal 0
+HcmV?d00001
+
+diff --git a/src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak7.hda b/src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak7.hda
+new file mode 100644
+index 0000000000000000000000000000000000000000..8cd53261d03c02051d3477afec3f6f5642f81c75
+GIT binary patch
+literal 2589
+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
+Dj~MIO
+
+literal 0
+HcmV?d00001
+
+diff --git a/src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak8.hda b/src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak8.hda
+new file mode 100644
+index 0000000000000000000000000000000000000000..f8b91828935823d84ca386082c4eaac534542335
+GIT binary patch
+literal 2589
+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
+E0o{b^-v9sr
+
+literal 0
+HcmV?d00001
+
+diff --git a/src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak9.hda b/src/hydra/resources/otls/backup/hdcycles_flatten_op_textures_bak9.hda
+new file mode 100644
+index 0000000000000000000000000000000000000000..bd1b5dd5122a95830e923de88fae7916874b44ba
+GIT binary patch
+literal 1070
+zcmb7CO^ee&7;d{B?66)IPoCbUB6`Ut&AQk^QAxWP=%!+O*n<$J$)p*HGhs4;UB#c_
+z|JtiRM)1v-U92v3VBnp3KHiTR&!1g&cIybkN1i{MUj?hVyY`lTgWZ1m{<DYiNg|7g
+z3vMP6P5DMqb%VFJC97dPOQP^5Oj$meEM#^Xr&Mbu0+|JxUF$-XfNff}s`sN&b@BWF
+zx3N>-qkMc(yMnuX59`Jj)oYnyQIpf1$$cffK8%LGch?bG-aR*Q*+92!1_K=6pF=&K
+zahl5QDpWkvwWMn{y&t=ZQO#PcYogOhgFSSm!13w4)9JlI-MG9T!i>eVNHs*2E98|e
+z#8Sbor+>|ld?kQO(9f)Y0K4SY{)e(tx?ySG_}d#9RcbD>Lf0(2Z+PViR+?_v9z1H{
+z(H`Wqkh2G!wa}SCzLAeP(;y^%SDM2VY%(N6fNJJkivOD($c!nfr9u<JV|Wh6Q>wPM
+z0n;fM2D|{BFi|zh!bHM4;dz?@BVN8`#3H~-D1_y+?@Fju*IX0i@R(qgzKj@D35d+X
+zxCs&P&`1fIVqeJkZA3+cIk?7O!N1hrTgh@rm|`ZWJxr6llZEd-u`S0rx2(;ETIY29
+kGLEc~^=fR7M~)TyOFwXzmzVPouJ?8kTzHH5U@++X0=2R@hyVZp
+
+literal 0
+HcmV?d00001
+
+diff --git a/src/hydra/resources/otls/hdcycles_flatten_op_textures.hda b/src/hydra/resources/otls/hdcycles_flatten_op_textures.hda
+new file mode 100644
+index 0000000000000000000000000000000000000000..de62712a5644bfabf42a6b5d6ed43c7164ac4190
+GIT binary patch
+literal 2497
+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
+KBK_bZ4(C4>y|E|&
+
+literal 0
+HcmV?d00001
+

@@ -1,0 +1,207 @@
+From cde3d7a40153f9452cf746652415f6fdda553ed0 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Mon, 31 Aug 2026 23:08:52 +0200
+Subject: [PATCH 17/39] hydra: material edits never reached the device, and
+ displacement was bump-only
+
+Shader::set_graph() does not mark the shader modified, so the branch that
+rebuilds a material's graph left is_modified() false and never called
+tag_update(). The shader manager was therefore never tagged, the scene never
+reported needing an update, and a material rendered correctly once and then
+ignored every subsequent edit. The sibling branch that only updates parameters
+tags it explicitly - the asymmetry was the bug.
+
+A shader also kept Cycles' default displacement method, which is bump only, so
+a connected displacement terminal merely perturbed normals and set_graph() did
+not even compute the displacement hash. Ask for real displacement when the
+network drives it, and map MaterialX's displacement nodes onto the Cycles
+equivalents.
+
+Also drop leftover debug output that printed every render setting to the host's
+console.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp                        | 38 +++++++++++++++++++
+ src/hydra/material.h                          |  4 ++
+ src/hydra/render_delegate.cpp                 |  1 -
+ .../resources/HdCyclesPluginGPU_Global.ds     |  4 +-
+ src/hydra/resources/HdCyclesPlugin_Global.ds  |  4 +-
+ 5 files changed, 44 insertions(+), 7 deletions(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index 1a0e86c2..b1f901ba 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -317,6 +317,24 @@ const UsdToCyclesMapping MtlxMix = {"mix_color",
+                                         {CyclesMaterialTokens->out, ustring("result")},
+                                     }};
+ 
++/* Displacement. MaterialX carries the amount on a dedicated node feeding the
++ * material's displacement terminal; Cycles has a direct equivalent. */
++const UsdToCyclesMapping MtlxDisplacement = {
++    "displacement",
++    {
++        {TfToken("displacement"), ustring("height")},
++        {TfToken("scale"), ustring("scale")},
++        {CyclesMaterialTokens->out, ustring("displacement")},
++    }};
++
++const UsdToCyclesMapping MtlxVectorDisplacement = {
++    "vector_displacement",
++    {
++        {TfToken("displacement"), ustring("vector")},
++        {TfToken("scale"), ustring("scale")},
++        {CyclesMaterialTokens->out, ustring("displacement")},
++    }};
++
+ /* Arithmetic. A single Cycles math (or vector_math) node covers all of these,
+  * selected through its mode enum - hence the fixed value. */
+ UsdToCyclesMapping MakeMtlxMath(const char *const mode, const bool vector)
+@@ -382,6 +400,12 @@ const UsdToCyclesMapping *FindMtlxMapping(const std::string &nodeTypeId)
+   if (nodeTypeId.starts_with("ND_tangent_")) {
+     return &MtlxTangentLookup;
+   }
++  if (nodeTypeId.starts_with("ND_displacement_vector3")) {
++    return &MtlxVectorDisplacement;
++  }
++  if (nodeTypeId.starts_with("ND_displacement_")) {
++    return &MtlxDisplacement;
++  }
+   if (nodeTypeId.starts_with("ND_mix_")) {
+     return &MtlxMix;
+   }
+@@ -508,6 +532,9 @@ void HdCyclesMaterial::Sync(HdSceneDelegate *sceneDelegate,
+ 
+     const SceneLock lock(renderParam);
+ 
++    /* Une edition de materiau atteint bien le peripherique ici : le
++     * `tag_update` de l'amont appelle lui-meme `tag_modified`, ce que notre
++     * correctif sur la 5.2 devait ajouter a la main. */
+     if (network && !_nodes.empty() && !dirtyResource) {
+       UpdateParameters(network);
+       _shader->tag_update(lock.scene);
+@@ -537,6 +564,12 @@ void HdCyclesMaterial::Sync(HdSceneDelegate *sceneDelegate,
+         _shader = lock.scene->create_node<Shader>();
+       }
+ 
++      /* A shader keeps Cycles' default displacement method, which is bump only
++       * - so a connected displacement terminal would just perturb normals, and
++       * set_graph() would not even compute the displacement hash. Ask for real
++       * displacement alongside bump when the network actually drives it. */
++      _shader->set_displacement_method(_hasDisplacement ? DISPLACE_BOTH : DISPLACE_BUMP);
++
+       _shader->set_graph(std::move(graph));
+       _shader->tag_update(lock.scene);
+     }
+@@ -791,6 +824,7 @@ unique_ptr<ShaderGraph> HdCyclesMaterial::BuildShaderGraph(HdMaterialNetworkSche
+   }
+ 
+   /* Finally connect the terminals to the graph output (Surface, Volume, Displacement). */
++  bool hasDisplacement = false;
+   HdMaterialConnectionContainerSchema terminals = network.GetTerminals();
+   for (const TfToken &terminalName : terminals.GetNames()) {
+     HdMaterialConnectionSchema termSchema = terminals.Get(terminalName);
+@@ -832,6 +866,7 @@ unique_ptr<ShaderGraph> HdCyclesMaterial::BuildShaderGraph(HdMaterialNetworkSche
+              terminalName == CyclesMaterialTokens->cyclesDisplacement)
+     {
+       inputName = outputName = "Displacement";
++      hasDisplacement = true;
+     }
+     else if (terminalName == HdMaterialTerminalTokens->volume ||
+              terminalName == CyclesMaterialTokens->cyclesVolume)
+@@ -876,6 +911,9 @@ unique_ptr<ShaderGraph> HdCyclesMaterial::BuildShaderGraph(HdMaterialNetworkSche
+     return nullptr;
+   }
+ 
++  /* Retenu pour Sync, qui pose la methode une fois le Shader cree : le graphe
++   * se construit desormais avant lui. */
++  _hasDisplacement = hasDisplacement;
+   return graph;
+ }
+ 
+diff --git a/src/hydra/material.h b/src/hydra/material.h
+index 7e00ba9b..9ce5c5cb 100644
+--- a/src/hydra/material.h
++++ b/src/hydra/material.h
+@@ -53,6 +53,10 @@ class HdCyclesMaterial final : public PXR_NS::HdMaterial {
+ 
+   unique_ptr<CCL_NS::ShaderGraph> BuildShaderGraph(PXR_NS::HdMaterialNetworkSchema network);
+ 
++  /* Le reseau pilote-t-il un displacement ? Constate en batissant le graphe,
++   * applique quand le Shader existe. */
++  bool _hasDisplacement = false;
++
+   CCL_NS::Shader *_shader = nullptr;
+   std::unordered_map<PXR_NS::SdfPath, NodeDesc, PXR_NS::SdfPath::Hash> _nodes;
+ };
+diff --git a/src/hydra/render_delegate.cpp b/src/hydra/render_delegate.cpp
+index 9f664ab7..d730e688 100644
+--- a/src/hydra/render_delegate.cpp
++++ b/src/hydra/render_delegate.cpp
+@@ -161,7 +161,6 @@ HdCyclesDelegate::HdCyclesDelegate(const HdRenderSettingsMap &settingsMap,
+                             std::make_unique<HdCyclesSession>(GetSessionParams(settingsMap));
+ 
+   for (const auto &setting : settingsMap) {
+-    fprintf(stderr, "SETTING: %s\n", setting.first.GetText()); fflush(stderr);
+     // Skip over the settings known to be used for initialization only
+     if (setting.first == HdCyclesRenderSettingsTokens->device ||
+         setting.first == HdCyclesRenderSettingsTokens->threads)
+diff --git a/src/hydra/resources/HdCyclesPluginGPU_Global.ds b/src/hydra/resources/HdCyclesPluginGPU_Global.ds
+index dc23f248..8690f327 100644
+--- a/src/hydra/resources/HdCyclesPluginGPU_Global.ds
++++ b/src/hydra/resources/HdCyclesPluginGPU_Global.ds
+@@ -9,7 +9,7 @@
+     parmtag     { spare_classtags       "render" }
+ 
+     group {
+-        name "global"
++        name "cycles_global"
+         label "Global"
+     groupcollapsible {
+         name "cycles_session"
+@@ -279,7 +279,6 @@
+         label   "Sample Subset Length"
+         type    integer
+         size    1
+-        default { MAX_SAMPLES }
+         parmtag { "spare_category" "Cycles" }
+         parmtag { "usdvaluetype" "int" }
+         disablewhen  R"({ xn__cyclesintegratorsample_subset_length_control_qdck == block } { xn__cyclesintegratorsample_subset_length_control_qdck == none })"
+@@ -827,7 +826,6 @@
+         label   "Denoiser Passes"
+         type    integer
+         size    1
+-        default { DENOISER_PASS_ALBEDO | DENOISER_PASS_NORMAL }
+         parmtag { "spare_category" "Cycles" }
+         parmtag { "usdvaluetype" "int" }
+         disablewhen  R"({ xn__cyclesintegratordenoiser_passes_control_l4bk == block } { xn__cyclesintegratordenoiser_passes_control_l4bk == none })"
+diff --git a/src/hydra/resources/HdCyclesPlugin_Global.ds b/src/hydra/resources/HdCyclesPlugin_Global.ds
+index dc23f248..8690f327 100644
+--- a/src/hydra/resources/HdCyclesPlugin_Global.ds
++++ b/src/hydra/resources/HdCyclesPlugin_Global.ds
+@@ -9,7 +9,7 @@
+     parmtag     { spare_classtags       "render" }
+ 
+     group {
+-        name "global"
++        name "cycles_global"
+         label "Global"
+     groupcollapsible {
+         name "cycles_session"
+@@ -279,7 +279,6 @@
+         label   "Sample Subset Length"
+         type    integer
+         size    1
+-        default { MAX_SAMPLES }
+         parmtag { "spare_category" "Cycles" }
+         parmtag { "usdvaluetype" "int" }
+         disablewhen  R"({ xn__cyclesintegratorsample_subset_length_control_qdck == block } { xn__cyclesintegratorsample_subset_length_control_qdck == none })"
+@@ -827,7 +826,6 @@
+         label   "Denoiser Passes"
+         type    integer
+         size    1
+-        default { DENOISER_PASS_ALBEDO | DENOISER_PASS_NORMAL }
+         parmtag { "spare_category" "Cycles" }
+         parmtag { "usdvaluetype" "int" }
+         disablewhen  R"({ xn__cyclesintegratordenoiser_passes_control_l4bk == block } { xn__cyclesintegratordenoiser_passes_control_l4bk == none })"

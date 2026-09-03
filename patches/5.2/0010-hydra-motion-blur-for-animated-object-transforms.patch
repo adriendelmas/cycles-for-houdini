@@ -1,0 +1,261 @@
+From ce57b0a37c9be2658a343897ad03fb35a950b500 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Mon, 31 Aug 2026 03:26:40 +0200
+Subject: [PATCH 10/38] hydra: motion blur for animated object transforms
+
+Only the camera was sampled across the shutter; geometry read a single
+transform at time zero, so anything moving rendered sharp.
+
+Take the shutter interval from the render settings rather than from the
+camera prim, which avoids depending on the order sprims and rprims are
+synced in. Sample each rprim's transform at evenly spaced times across it -
+Object::motion_time() spreads motion steps linearly over [-1, 1], so the
+irregular sample times a data source reports would blur along a distorted
+path - and drive the static transform from the middle sample so the blur is
+centred.
+
+Cycles also only interpolates motion when the integrator asks for it, see
+Scene::need_motion(), so set Integrator::motion_blur alongside the shutter.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/geometry.h          |  6 +++++
+ src/hydra/geometry.inl        | 48 +++++++++++++++++++++++++++++++----
+ src/hydra/render_delegate.cpp | 42 ++++++++++++++++++++++++++++++
+ src/hydra/render_delegate.h   |  2 +-
+ src/hydra/session.h           | 34 +++++++++++++++++++++++++
+ 5 files changed, 126 insertions(+), 6 deletions(-)
+
+diff --git a/src/hydra/geometry.h b/src/hydra/geometry.h
+index 5ac38e6d..458adf2f 100644
+--- a/src/hydra/geometry.h
++++ b/src/hydra/geometry.h
+@@ -33,6 +33,10 @@ template<typename Base, typename CyclesBase> class HdCyclesGeometry : public Bas
+                         PXR_NS::HdDirtyBits dirtyBits,
+                         bool &rebuild) = 0;
+ 
++  /* Transform samples across the shutter, evenly spaced. Cycles maps a motion
++   * step index linearly onto [-1, 1], so the spacing has to be regular. */
++  static constexpr int kMotionSteps = 3;
++
+   CyclesBase *_geom = nullptr;
+   std::vector<CCL_NS::Object *> _instances;
+ 
+@@ -42,6 +46,8 @@ template<typename Base, typename CyclesBase> class HdCyclesGeometry : public Bas
+   void InitializeInstance(const int index);
+ 
+   PXR_NS::GfMatrix4d _geomTransform;
++  PXR_NS::GfMatrix4d _geomTransformSamples[kMotionSteps];
++  bool _geomTransformAnimated = false;
+ };
+ 
+ HDCYCLES_NAMESPACE_CLOSE_SCOPE
+diff --git a/src/hydra/geometry.inl b/src/hydra/geometry.inl
+index beb436e3..c4eb2fc9 100644
+--- a/src/hydra/geometry.inl
++++ b/src/hydra/geometry.inl
+@@ -120,8 +120,36 @@ void HdCyclesGeometry<Base, CyclesBase>::Sync(HdSceneDelegate *sceneDelegate,
+ 
+   if (HdChangeTracker::IsTransformDirty(*dirtyBits, id)) {
+     _geomTransform = GfMatrix4d(1.0);
++    _geomTransformAnimated = false;
++    for (int step = 0; step < kMotionSteps; ++step) {
++      _geomTransformSamples[step] = GfMatrix4d(1.0);
++    }
++
+     if (auto matrixDs = HdXformSchema::GetFromParent(primDs).GetMatrix()) {
+       _geomTransform = matrixDs->GetTypedValue(0.0f);
++
++      const auto *const session = static_cast<const HdCyclesSession *>(renderParam);
++      if (session->IsMotionBlurEnabled()) {
++        /* Sample at evenly spaced times rather than at the data source's own
++         * contributing sample times: Object::motion_time() spreads motion
++         * steps linearly over the shutter, so irregular spacing would blur
++         * along a distorted path. */
++        const float open = session->GetShutterOpen();
++        const float close = session->GetShutterClose();
++
++        for (int step = 0; step < kMotionSteps; ++step) {
++          const float t = open + (close - open) * step / float(kMotionSteps - 1);
++          _geomTransformSamples[step] = matrixDs->GetTypedValue(t);
++          if (_geomTransformSamples[step] != _geomTransformSamples[0]) {
++            _geomTransformAnimated = true;
++          }
++        }
++        /* Blur is centred on the shutter, so drive the static transform from
++         * the middle sample rather than from time zero. */
++        if (_geomTransformAnimated) {
++          _geomTransform = _geomTransformSamples[kMotionSteps / 2];
++        }
++      }
+     }
+   }
+ 
+@@ -160,13 +188,23 @@ void HdCyclesGeometry<Base, CyclesBase>::Sync(HdSceneDelegate *sceneDelegate,
+     }
+ 
+     // Update transforms of all instances
+-    for (size_t i = 0; i < transforms.size(); ++i) {
+-      const float metersPerUnit =
+-          static_cast<HdCyclesSession *>(renderParam)->GetStageMetersPerUnit();
++    const float metersPerUnit = static_cast<HdCyclesSession *>(renderParam)
++                                    ->GetStageMetersPerUnit();
++    const Transform unitScale = transform_scale(make_float3(metersPerUnit));
+ 
+-      const Transform tfm = transform_scale(make_float3(metersPerUnit)) *
+-                            convert_transform(_geomTransform * transforms[i]);
++    for (size_t i = 0; i < transforms.size(); ++i) {
++      const Transform tfm = unitScale * convert_transform(_geomTransform * transforms[i]);
+       _instances[i]->set_tfm(tfm);
++
++      array<Transform> motion;
++      if (_geomTransformAnimated) {
++        motion.resize(kMotionSteps);
++        for (int step = 0; step < kMotionSteps; ++step) {
++          motion[step] = unitScale *
++                         convert_transform(_geomTransformSamples[step] * transforms[i]);
++        }
++      }
++      _instances[i]->set_motion(motion);
+     }
+   }
+ 
+diff --git a/src/hydra/render_delegate.cpp b/src/hydra/render_delegate.cpp
+index e67b503e..a0fb08a6 100644
+--- a/src/hydra/render_delegate.cpp
++++ b/src/hydra/render_delegate.cpp
+@@ -4,6 +4,8 @@
+  * SPDX-License-Identifier: Apache-2.0 */
+ 
+ #include "hydra/render_delegate.h"
++
++#include <pxr/base/tf/envSetting.h>
+ #include "hydra/camera.h"
+ #include "hydra/curves.h"
+ #include "hydra/field.h"
+@@ -28,6 +30,11 @@ HDCYCLES_NAMESPACE_OPEN_SCOPE
+ 
+ TF_DEFINE_PUBLIC_TOKENS(HdCyclesRenderSettingsTokens, HD_CYCLES_RENDER_SETTINGS_TOKENS);
+ 
++// clang-format off
++TF_DEFINE_ENV_SETTING(CYCLES_DISPLAY_DRIVER,
++                      true,
++                      "Use the OpenGL display driver for interactive rendering");
++
+ // clang-format off
+ TF_DEFINE_PRIVATE_TOKENS(_tokens,
+     (cycles)
+@@ -151,6 +158,14 @@ void HdCyclesDelegate::SetDrivers(const HdDriverVector &drivers)
+ bool HdCyclesDelegate::IsDisplaySupported() const
+ {
+ #if defined(_WIN32) && defined(WITH_HYDRA_DISPLAY_DRIVER)
++  /* The display driver shares the host's GL context to blit rendered tiles
++   * straight into a texture. Hosts differ in when and on which thread that
++   * context is current, so allow turning it off: rendering then goes through
++   * the output driver instead, which is slower to refresh but has no GL
++   * requirements at all. */
++  if (!TfGetEnvSetting(CYCLES_DISPLAY_DRIVER)) {
++    return false;
++  }
+   return _hgi && _hgi->GetAPIName() == HgiTokens->OpenGL;
+ #else
+   return false;
+@@ -426,6 +441,33 @@ void HdCyclesDelegate::SetRenderSetting(const PXR_NS::TfToken &key, const PXR_NS
+     session->params.use_sample_subset = session->params.sample_subset_offset > 0;
+     ++_settingsVersion;
+   }
++  else if (key == HdCyclesRenderSettingsTokens->shutterOpen) {
++    _renderParam->SetShutter(VtValue::Cast<float>(value).GetWithDefault(
++                                 _renderParam->GetShutterOpen()),
++                             _renderParam->GetShutterClose());
++    /* Cycles only interpolates object and camera motion when the integrator
++     * asks for it, see Scene::need_motion(). */
++    scene->integrator->set_motion_blur(_renderParam->IsMotionBlurEnabled());
++    ++_settingsVersion;
++  }
++  else if (key == HdCyclesRenderSettingsTokens->shutterClose) {
++    _renderParam->SetShutter(_renderParam->GetShutterOpen(),
++                             VtValue::Cast<float>(value).GetWithDefault(
++                                 _renderParam->GetShutterClose()));
++    scene->integrator->set_motion_blur(_renderParam->IsMotionBlurEnabled());
++    ++_settingsVersion;
++  }
++  else if (key == HdCyclesRenderSettingsTokens->disableMotionBlur ||
++           key == HdCyclesRenderSettingsTokens->instantaneousShutter)
++  {
++    /* Both spellings mean the same thing to the hosts that set them: collapse
++     * the shutter so nothing is blurred. */
++    if (VtValue::Cast<bool>(value).GetWithDefault(false)) {
++      _renderParam->SetMotionBlurEnabled(false);
++      scene->integrator->set_motion_blur(false);
++      ++_settingsVersion;
++    }
++  }
+   else {
+     const std::string &keyString = key.GetString();
+     if (keyString.rfind("cycles:integrator:", 0) == 0) {
+diff --git a/src/hydra/render_delegate.h b/src/hydra/render_delegate.h
+index f6148481..1e0d3dab 100644
+--- a/src/hydra/render_delegate.h
++++ b/src/hydra/render_delegate.h
+@@ -19,7 +19,7 @@ HDCYCLES_NAMESPACE_OPEN_SCOPE
+     ((threads, "cycles:threads")) \
+     ((timeLimit, "cycles:time_limit")) \
+     ((samples, "cycles:samples")) \
+-    ((sampleOffset, "cycles:sample_offset"))
++    ((sampleOffset, "cycles:sample_offset"))     ((shutterOpen, "shutter:open"))     ((shutterClose, "shutter:close"))     (disableMotionBlur)     (instantaneousShutter)
+ // clang-format on
+ 
+ TF_DECLARE_PUBLIC_TOKENS(HdCyclesRenderSettingsTokens, HD_CYCLES_RENDER_SETTINGS_TOKENS);
+diff --git a/src/hydra/session.h b/src/hydra/session.h
+index 4c4e8ff6..4370020b 100644
+--- a/src/hydra/session.h
++++ b/src/hydra/session.h
+@@ -55,6 +55,37 @@ class HdCyclesSession final : public PXR_NS::HdRenderParam {
+     return _aovBindings;
+   }
+ 
++  /* Shutter interval in frames, relative to the frame being rendered, as
++   * reported by the host through the render settings. Taking it from the
++   * settings rather than from the camera prim avoids depending on the order
++   * sprims and rprims are synced in. */
++  void SetShutter(const float open, const float close)
++  {
++    _shutterOpen = open;
++    _shutterClose = close;
++  }
++
++  float GetShutterOpen() const
++  {
++    return _shutterOpen;
++  }
++
++  float GetShutterClose() const
++  {
++    return _shutterClose;
++  }
++
++  void SetMotionBlurEnabled(const bool enabled)
++  {
++    _motionBlurEnabled = enabled;
++  }
++
++  /* Motion blur only makes sense over a shutter that is actually open. */
++  bool IsMotionBlurEnabled() const
++  {
++    return _motionBlurEnabled && _shutterClose > _shutterOpen;
++  }
++
+   void SyncAovBindings(const PXR_NS::HdRenderPassAovBindingVector &aovBindings);
+ 
+   void RemoveAovBinding(PXR_NS::HdRenderBuffer *renderBuffer);
+@@ -65,6 +96,9 @@ class HdCyclesSession final : public PXR_NS::HdRenderParam {
+  private:
+   const bool _ownCyclesSession;
+   double _stageMetersPerUnit = 0.01;
++  float _shutterOpen = 0.0f;
++  float _shutterClose = 0.0f;
++  bool _motionBlurEnabled = true;
+   PXR_NS::HdRenderPassAovBindingVector _aovBindings;
+   PXR_NS::HdRenderPassAovBinding _displayAovBinding;
+ };

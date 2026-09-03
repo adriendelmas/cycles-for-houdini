@@ -1,0 +1,205 @@
+From 1577a24fa4337b0a1e2610322049114422040061 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Tue, 1 Sep 2026 16:49:43 +0200
+Subject: [PATCH 28/38] hydra: translate MaterialX noise onto the MaterialX
+ noise node
+
+The ten noise families now reach mx_noise_texture instead of being approximated
+by Cycles' own noise and voronoi textures. One node covers them all, told apart
+by a dimension count and a noise type, so the fixed values a mapping carries had
+to learn to set an integer socket and not only a named enum.
+
+Which output to read comes from the nodedef variant, not from what the output
+feeds: ND_fractal3d_float is one scalar broadcast across the channels while
+ND_fractal3d_color3 is three separate noises, so reading the destination's type
+would turn every greyscale noise driving a colour into a coloured one. Hence the
+paired table entries, the _float one winning on prefix length.
+
+Also adds HD_CYCLES_DUMP_GRAPH: point it at a directory and each translated
+material is written out as a .dot. Reading the graph is what settled where the
+coordinates were being lost.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp | 126 ++++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 117 insertions(+), 9 deletions(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index 6d685103..9a40ef07 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -3,6 +3,7 @@
+  *
+  * SPDX-License-Identifier: Apache-2.0 */
+ 
++#include <algorithm>
+ #include "hydra/material.h"
+ 
+ #include "util/log.h"
+@@ -213,6 +214,17 @@ namespace {
+  * Keep it self-contained.
+  * ------------------------------------------------------------------------ */
+ 
++/* A mapping states its fixed values as text, which suits the enum sockets that
++ * pick a node's mode. A few sockets are plain integers - a noise variant, a
++ * dimension count - and want a number rather than a name. */
++VtValue FixedValue(const SocketType &socket, const char *const text)
++{
++  if (socket.type == SocketType::INT || socket.type == SocketType::UINT) {
++    return VtValue(int(strtol(text, nullptr, 10)));
++  }
++  return VtValue(std::string(text));
++}
++
+ /* A Cycles node whose useful output depends on what it feeds: texture nodes
+  * carry both a scalar `fac` and a `color`, while MaterialX exposes a single
+  * `out`. */
+@@ -745,6 +757,79 @@ const std::vector<MtlxEntry> &MtlxTable()
+    * the diagonal type as the nearest available - documented as approximate. */
+   static const UsdToCyclesMapping kRampTB = makeRamp("diagonal");
+ 
++  /* MaterialX procedural noise, on the Cycles node that implements the
++   * MaterialX algorithms exactly - same hashes, same normalisation, same
++   * parameter semantics. One node covers every variant, told apart by its
++   * dimension count and noise type; the full parameter map is shared because a
++   * nodedef only ever supplies the inputs it declares. */
++  /* MaterialX procedural noise, on the Cycles node that implements the
++   * MaterialX algorithms exactly - same hashes, same normalisation, same
++   * parameter semantics. One node covers every variant, told apart by its
++   * dimension count and noise type.
++   *
++   * The node evaluates once and offers the result as a float and as a colour,
++   * and which one a MaterialX graph means is decided by the nodedef variant it
++   * used: `ND_fractal3d_float` is a scalar that broadcasts across the
++   * channels, `ND_fractal3d_color3` is three different noises. Reading that
++   * from what the output feeds instead would turn every greyscale noise driving
++   * a colour into a coloured one. Hence the paired table entries below, the
++   * `_float` one winning on length. (The node's vector output carries the same
++   * value as its colour output, so it needs no separate case.)
++   *
++   * The parameter map is shared across the families because a nodedef only ever
++   * supplies the inputs it declares. */
++  auto makeMxNoise = [](const char *const dimensions,
++                        const char *const noiseType,
++                        const char *const out) {
++    UsdToCyclesMapping m{"mx_noise_texture",
++                         {
++                             {TfToken("position"), ustring("vector")},
++                             {TfToken("texcoord"), ustring("vector")},
++                             {TfToken("amplitude"), ustring("amplitude")},
++                             {TfToken("pivot"), ustring("pivot")},
++                             {TfToken("octaves"), ustring("octaves")},
++                             {TfToken("lacunarity"), ustring("lacunarity")},
++                             {TfToken("diminish"), ustring("diminish")},
++                             {TfToken("jitter"), ustring("jitter")},
++                             {TfToken("freq"), ustring("freq")},
++                             {TfToken("offset"), ustring("offset")},
++                             {TfToken("outmin"), ustring("out_min")},
++                             {TfToken("outmax"), ustring("out_max")},
++                             {TfToken("clampoutput"), ustring("clamp_output")},
++                             {TfToken("type"), ustring("unified_type")},
++                             {CyclesMaterialTokens->out, ustring(out)},
++                         }};
++    m.setFixedValues({{ustring("dimensions"), dimensions},
++                      {ustring("noise_type"), noiseType}});
++    return m;
++  };
++  /* Values of the node's noise_type socket, see NodeMxNoiseType. */
++  static const char *const kPerlin = "0";
++  static const char *const kFractal = "1";
++  static const char *const kCell = "2";
++  static const char *const kWorley = "3";
++  static const char *const kUnified = "4";
++  static const UsdToCyclesMapping kMxNoise2dF = makeMxNoise("2", kPerlin, "value");
++  static const UsdToCyclesMapping kMxNoise2dC = makeMxNoise("2", kPerlin, "color");
++  static const UsdToCyclesMapping kMxNoise3dF = makeMxNoise("3", kPerlin, "value");
++  static const UsdToCyclesMapping kMxNoise3dC = makeMxNoise("3", kPerlin, "color");
++  static const UsdToCyclesMapping kMxFractal2dF = makeMxNoise("2", kFractal, "value");
++  static const UsdToCyclesMapping kMxFractal2dC = makeMxNoise("2", kFractal, "color");
++  static const UsdToCyclesMapping kMxFractal3dF = makeMxNoise("3", kFractal, "value");
++  static const UsdToCyclesMapping kMxFractal3dC = makeMxNoise("3", kFractal, "color");
++  static const UsdToCyclesMapping kMxCell2dF = makeMxNoise("2", kCell, "value");
++  static const UsdToCyclesMapping kMxCell2dC = makeMxNoise("2", kCell, "color");
++  static const UsdToCyclesMapping kMxCell3dF = makeMxNoise("3", kCell, "value");
++  static const UsdToCyclesMapping kMxCell3dC = makeMxNoise("3", kCell, "color");
++  static const UsdToCyclesMapping kMxWorley2dF = makeMxNoise("2", kWorley, "value");
++  static const UsdToCyclesMapping kMxWorley2dC = makeMxNoise("2", kWorley, "color");
++  static const UsdToCyclesMapping kMxWorley3dF = makeMxNoise("3", kWorley, "value");
++  static const UsdToCyclesMapping kMxWorley3dC = makeMxNoise("3", kWorley, "color");
++  static const UsdToCyclesMapping kMxUnified2dF = makeMxNoise("2", kUnified, "value");
++  static const UsdToCyclesMapping kMxUnified2dC = makeMxNoise("2", kUnified, "color");
++  static const UsdToCyclesMapping kMxUnified3dF = makeMxNoise("3", kUnified, "value");
++  static const UsdToCyclesMapping kMxUnified3dC = makeMxNoise("3", kUnified, "color");
++
+   /* Longest prefix wins, so the specific entries come before their family. */
+   static const std::vector<MtlxEntry> table = {
+       /* Surfaces and terminals. */
+@@ -765,13 +850,26 @@ const std::vector<MtlxEntry> &MtlxTable()
+       {"ND_texcoord_", &MtlxTexCoord},
+ 
+       /* Procedurals. */
+-      {"ND_noise3d_", &MtlxNoise},
+-      {"ND_noise2d_", &MtlxNoise},
+-      {"ND_fractal3d_", &MtlxNoise},
+-      {"ND_fractal2d_", &MtlxNoise},
+-      {"ND_unifiednoise", &MtlxNoise},
+-      {"ND_worleynoise", &kVoronoi},
+-      {"ND_cellnoise", &kVoronoi},
++      {"ND_noise2d_float", &kMxNoise2dF},
++      {"ND_noise2d_", &kMxNoise2dC},
++      {"ND_noise3d_float", &kMxNoise3dF},
++      {"ND_noise3d_", &kMxNoise3dC},
++      {"ND_fractal2d_float", &kMxFractal2dF},
++      {"ND_fractal2d_", &kMxFractal2dC},
++      {"ND_fractal3d_float", &kMxFractal3dF},
++      {"ND_fractal3d_", &kMxFractal3dC},
++      {"ND_cellnoise2d_float", &kMxCell2dF},
++      {"ND_cellnoise2d", &kMxCell2dC},
++      {"ND_cellnoise3d_float", &kMxCell3dF},
++      {"ND_cellnoise3d", &kMxCell3dC},
++      {"ND_worleynoise2d_float", &kMxWorley2dF},
++      {"ND_worleynoise2d", &kMxWorley2dC},
++      {"ND_worleynoise3d_float", &kMxWorley3dF},
++      {"ND_worleynoise3d", &kMxWorley3dC},
++      {"ND_unifiednoise2d_float", &kMxUnified2dF},
++      {"ND_unifiednoise2d", &kMxUnified2dC},
++      {"ND_unifiednoise3d_float", &kMxUnified3dF},
++      {"ND_unifiednoise3d", &kMxUnified3dC},
+       {"ND_flake", &kVoronoi},
+       {"ND_randomcolor", &kWhiteNoise},
+       {"ND_randomfloat", &kWhiteNoise},
+@@ -1251,7 +1349,7 @@ void HdCyclesMaterial::PopulateShaderGraph(HdMaterialNetworkSchema network)
+         if (nodeDesc.mapping) {
+           for (const auto &fixed : nodeDesc.mapping->fixedValues()) {
+             if (const SocketType *socket = nodeType->find_input(fixed.first)) {
+-              SetNodeValue(nodeDesc.node, *socket, VtValue(std::string(fixed.second)));
++              SetNodeValue(nodeDesc.node, *socket, FixedValue(*socket, fixed.second));
+             }
+           }
+ 
+@@ -1262,7 +1360,7 @@ void HdCyclesMaterial::PopulateShaderGraph(HdMaterialNetworkSchema network)
+               ShaderNode *const helperNode = graph->create_node(helperType);
+               for (const auto &fixed : helper.fixedValues) {
+                 if (const SocketType *socket = helperType->find_input(fixed.first)) {
+-                  SetNodeValue(helperNode, *socket, VtValue(std::string(fixed.second)));
++                  SetNodeValue(helperNode, *socket, FixedValue(*socket, fixed.second));
+                 }
+               }
+ 
+@@ -1405,6 +1503,16 @@ void HdCyclesMaterial::PopulateShaderGraph(HdMaterialNetworkSchema network)
+    * displacement alongside bump when the network actually drives it. */
+   _shader->set_displacement_method(hasDisplacement ? DISPLACE_BOTH : DISPLACE_BUMP);
+ 
++  /* Cycles can draw the graph it ended up with, which is the only way to see
++   * what a translated network really became - which node types were created
++   * and what stayed connected. Off unless asked for: one file per material,
++   * named after its path, in the directory the variable names. */
++  if (const char *const dumpDir = getenv("HD_CYCLES_DUMP_GRAPH")) {
++    std::string name = GetId().GetString();
++    std::replace(name.begin(), name.end(), '/', '_');
++    graph->dump_graph((std::string(dumpDir) + name + ".dot").c_str());
++  }
++
+   _shader->set_graph(std::move(graph));
+ }
+ 

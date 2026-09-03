@@ -1,0 +1,62 @@
+From c026db37ce5472e55cf7113b7b7a2d3751d286a4 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Tue, 1 Sep 2026 01:15:54 +0200
+Subject: [PATCH 21/39] hydra: read MaterialX data image variants without an
+ sRGB decode
+
+Cycles' image_texture defaults its colorspace to auto, which applies an sRGB
+decode to an eight bit file. That silently corrupts anything that is not a
+colour - a normal map above all, which is what showed up as a visible
+difference against Karma on the same texture.
+
+MaterialX draws the distinction in the nodedef name: ND_image_color3 carries
+colour, ND_image_vector3 carries data. Honour it and read the float and vector
+variants as data.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp | 24 +++++++++++++++++++++++-
+ 1 file changed, 23 insertions(+), 1 deletion(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index b1f901ba..0692eec2 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -270,6 +270,24 @@ const MtlxFacOrColor MtlxImage = {
+         {TfToken("default"), ustring("color")},
+     }};
+ 
++/* The float and vector variants of the image nodes carry data, not colour -
++ * a normal map being the obvious case. Cycles' colorspace defaults to `auto`,
++ * which applies an sRGB decode to an 8 bit file and quietly corrupts anything
++ * that is not a colour, so those variants are read raw. MaterialX makes the
++ * distinction in the nodedef name, which is why it can be honoured here. */
++UsdToCyclesMapping MakeMtlxImageData()
++{
++  UsdToCyclesMapping mapping{"image_texture",
++                             {
++                                 {TfToken("file"), ustring("filename")},
++                                 {TfToken("texcoord"), ustring("vector")},
++                                 {TfToken("default"), ustring("color")},
++                                 {CyclesMaterialTokens->out, ustring("color")},
++                             }};
++  mapping.setFixedValues({{ustring("colorspace"), "data"}});
++  return mapping;
++}
++
+ const UsdToCyclesMapping MtlxNormalMap = {
+     "normal_map",
+     {
+@@ -377,7 +395,11 @@ const UsdToCyclesMapping *FindMtlxMapping(const std::string &nodeTypeId)
+     return &MtlxStandardSurface;
+   }
+   if (nodeTypeId.starts_with("ND_image_") || nodeTypeId.starts_with("ND_tiledimage_")) {
+-    return &MtlxImage;
++    static const UsdToCyclesMapping MtlxImageData = MakeMtlxImageData();
++    /* Colour variants keep Cycles' automatic colorspace; the float and vector
++     * ones are data and must not be decoded. */
++    const bool isColor = nodeTypeId.find("_color") != std::string::npos;
++    return isColor ? &MtlxImage : &MtlxImageData;
+   }
+   if (nodeTypeId.starts_with("ND_normalmap")) {
+     return &MtlxNormalMap;

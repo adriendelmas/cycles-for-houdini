@@ -1,0 +1,54 @@
+From f1ac109082266af212e73c9caefe59fb20928239 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 3 Sep 2026 00:46:00 +0200
+Subject: [PATCH 36/39] interface des noeuds: connecteurs, selecteurs de
+ fichier, cases a cocher
+
+Un connecteur n'est emis que pour un socket que Cycles accepte de brancher. Le
+registre le dit, et cela recoupe exactement ce que Blender montre: sur le
+principled, distribution et subsurface_method sont des menus, pas des sockets.
+Les exposer en entree laissait construire des graphes qui ne se rejoueraient
+nulle part ailleurs.
+
+surface_mix_weight est masque: c'est le poids de melange interne que Cycles
+porte sur chaque fermeture, que Blender n'expose jamais puisque c'est le noeud
+Mix Shader qui le pose.
+
+Le delegate marque desormais les noms de fichier comme des chemins d'actif et
+les booleens d'un widget checkBox. Sans ces deux metadonnees, un chemin de
+texture se collait a la main et un booleen s'affichait en champ entier libre,
+la ou seuls zero et un ont un sens pour Cycles.
+
+Les sections de parametres passent en groupcollapsible: un simple group
+fabrique des onglets et rejette tout ce qui reste hors dossier dans un onglet
+Other, ce qui n'est pas la disposition de Blender.
+
+Banc rejoue: 97 noeuds, 0 probleme, 96 modifient l'image.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/sdr_cycles.cpp | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/src/hydra/sdr_cycles.cpp b/src/hydra/sdr_cycles.cpp
+index 102a6f73..9337f7c3 100644
+--- a/src/hydra/sdr_cycles.cpp
++++ b/src/hydra/sdr_cycles.cpp
+@@ -167,6 +167,17 @@ SdrShaderPropertyUniquePtr MakeProperty(const ccl::SocketType &socket, const boo
+   if (!socket.ui_name.empty()) {
+     metadata[SdrPropertyMetadata->Label] = socket.ui_name.c_str();
+   }
++  /* A boolean reaches USD as an integer, and nothing downstream can tell it
++   * apart from a count - a host would offer a free number field where only
++   * zero and one mean anything. Say so here. */
++  if (socket.type == ccl::SocketType::BOOLEAN) {
++    metadata[SdrPropertyMetadata->Widget] = "checkBox";
++  }
++  /* A filename is a file, not free text: hosts that know it can offer a file
++   * browser rather than asking for a path to be typed or pasted. */
++  if (socket.type == ccl::SocketType::STRING && socket.name == ccl::ustring("filename")) {
++    metadata[SdrPropertyMetadata->IsAssetIdentifier] = "1";
++  }
+   /* Only sockets Cycles marks LINKABLE may take a connection. */
+   if (!isOutput && (socket.flags & ccl::SocketType::LINKABLE) == 0) {
+     metadata[SdrPropertyMetadata->Connectable] = "0";

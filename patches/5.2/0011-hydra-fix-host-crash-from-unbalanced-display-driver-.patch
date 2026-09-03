@@ -1,0 +1,99 @@
+From 8d9bf42703fe6698d4429badb8cbee8347dbd4f6 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Mon, 31 Aug 2026 03:31:45 +0200
+Subject: [PATCH 11/38] hydra: fix host crash from unbalanced display driver
+ locking
+
+gl_context_enable() takes mutex_ on success but returns false *without*
+taking it when there is no usable GL context. flush() and
+graphics_interop_activate() ignored that return value, and
+gl_context_disable() then unlocked mutex_ unconditionally - unlocking a mutex
+the thread does not own, which is undefined behaviour and crashed Houdini.
+
+This was reachable whenever the display driver reported 'could not begin
+update', which is exactly when the context is missing, so the error message
+and the segfault that followed it were the same fault.
+
+Track lock ownership so disable() only releases a lock actually held, make
+flush() bail out rather than issue GL calls with no context, and create the
+shared context in the constructor instead of waiting for the first draw() -
+draw() returns early in several cases, so the render thread could reach
+update_begin() before any context existed.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/display_driver.cpp | 21 ++++++++++++++++++++-
+ src/hydra/display_driver.h   |  3 +++
+ 2 files changed, 23 insertions(+), 1 deletion(-)
+
+diff --git a/src/hydra/display_driver.cpp b/src/hydra/display_driver.cpp
+index 26095cf8..381e65bc 100644
+--- a/src/hydra/display_driver.cpp
++++ b/src/hydra/display_driver.cpp
+@@ -23,6 +23,13 @@ HDCYCLES_NAMESPACE_OPEN_SCOPE
+ HdCyclesDisplayDriver::HdCyclesDisplayDriver(HdCyclesSession *renderParam, Hgi *hgi)
+     : _renderParam(renderParam), _hgi(hgi)
+ {
++  /* Create the shared context here rather than waiting for the first draw().
++   * draw() returns early in several cases, so the Cycles render thread could
++   * reach update_begin() before any context existed and report a failure for
++   * every frame until a draw finally got through. This runs on the thread
++   * Hydra executes on, which is where the host's GL context is current;
++   * gl_context_create() is a no-op when it is not. */
++  gl_context_create();
+ }
+ 
+ HdCyclesDisplayDriver::~HdCyclesDisplayDriver()
+@@ -105,6 +112,7 @@ bool HdCyclesDisplayDriver::gl_context_enable()
+     }
+   }
+ 
++  gl_context_locked_ = true;
+   return true;
+ #else
+   return false;
+@@ -114,10 +122,19 @@ bool HdCyclesDisplayDriver::gl_context_enable()
+ void HdCyclesDisplayDriver::gl_context_disable()
+ {
+ #ifdef _WIN32
++  /* gl_context_enable() returns false *without* taking the lock when there is
++   * no usable GL context. Callers that ignore that return value would then
++   * unlock a mutex this thread does not own, which is undefined behaviour and
++   * in practice crashes the host. Only release a lock actually held. */
++  if (!gl_context_locked_) {
++    return;
++  }
++
+   if (wglGetCurrentContext() == gl_context_) {
+     TF_VERIFY(wglMakeCurrent(nullptr, nullptr));
+   }
+ 
++  gl_context_locked_ = false;
+   mutex_.unlock();
+ #endif
+ }
+@@ -173,7 +190,9 @@ void HdCyclesDisplayDriver::update_end()
+ 
+ void HdCyclesDisplayDriver::flush()
+ {
+-  gl_context_enable();
++  if (!gl_context_enable()) {
++    return;
++  }
+ 
+   if (gl_upload_sync_) {
+     glWaitSync((GLsync)gl_upload_sync_, 0, GL_TIMEOUT_IGNORED);
+diff --git a/src/hydra/display_driver.h b/src/hydra/display_driver.h
+index 01a27cb5..04c2430e 100644
+--- a/src/hydra/display_driver.h
++++ b/src/hydra/display_driver.h
+@@ -56,6 +56,9 @@ class HdCyclesDisplayDriver final : public CCL_NS::DisplayDriver {
+ #endif
+   CCL_NS::thread_mutex mutex_;
+ 
++  /* Whether this thread holds mutex_ through gl_context_enable(). */
++  bool gl_context_locked_ = false;
++
+   PXR_NS::HgiTextureHandle texture_;
+   unsigned int gl_pbo_id_ = 0;
+   CCL_NS::int2 pbo_size_ = CCL_NS::make_int2(0, 0);

@@ -1,0 +1,336 @@
+From 467fd0f346639ea79a169f588fdab8106f213dc9 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Mon, 31 Aug 2026 16:37:32 +0200
+Subject: [PATCH 13/39] hydra: restart the render on scene edits, and translate
+ more MaterialX nodes
+
+Implement IsStopSupported/Stop/Restart. Hosts stop the render before applying
+scene edits and restart it after; without that the session kept rendering the
+old scene state, so moving an object or editing a material only appeared once
+the user restarted the render by hand.
+
+Extend the MaterialX translation past standard_surface: noise and fractal,
+checkerboard, position/normal/tangent lookups, mix, and the arithmetic nodes.
+A mapping can now carry fixed socket values, which is how one Cycles math node
+stands in for every MaterialX arithmetic node through its mode enum, and
+MtlxFacOrColor picks between a texture node's scalar and colour outputs based
+on what the connection feeds.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp        | 184 ++++++++++++++++++++++++++++++----
+ src/hydra/render_delegate.cpp |  24 +++++
+ src/hydra/render_delegate.h   |   6 ++
+ 3 files changed, 196 insertions(+), 18 deletions(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index 8a79ed23..1a0e86c2 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -40,6 +40,7 @@ static SdfPath MaterialNodeNameToSdfPath(const TfToken &nodeName)
+ TF_DEFINE_PRIVATE_TOKENS(CyclesMaterialTokens,
+     (cycles)
+     (mtlx)
++    (out)
+     ((cyclesSurface, "cycles:surface"))
+     ((cyclesDisplacement, "cycles:displacement"))
+     ((cyclesVolume, "cycles:volume"))
+@@ -85,6 +86,21 @@ class UsdToCyclesMapping {
+     return _paramMap.find(name) != _paramMap.end();
+   }
+ 
++  /* Sockets set to a constant when the node is created. Needed where one
++   * Cycles node covers several source nodes through a mode enum - a single
++   * `math` node stands in for every MaterialX arithmetic node, for one. */
++  using FixedMap = std::vector<std::pair<ustring, const char *>>;
++
++  const FixedMap &fixedValues() const
++  {
++    return _fixedValues;
++  }
++
++  void setFixedValues(FixedMap fixedValues)
++  {
++    _fixedValues = std::move(fixedValues);
++  }
++
+   virtual std::string parameterName(const TfToken &name,
+                                     const ShaderInput *inputConnection,
+                                     VtValue * /*value*/ = nullptr) const
+@@ -130,6 +146,7 @@ class UsdToCyclesMapping {
+  private:
+   const ustring _nodeType;
+   ParamMap _paramMap;
++  FixedMap _fixedValues;
+ };
+ 
+ class UsdToCyclesTexture : public UsdToCyclesMapping {
+@@ -175,12 +192,38 @@ namespace {
+  * Keep it self-contained.
+  * ------------------------------------------------------------------------ */
+ 
++/* A Cycles node whose useful output depends on what it feeds: texture nodes
++ * carry both a scalar `fac` and a `color`, while MaterialX exposes a single
++ * `out`. */
++class MtlxFacOrColor : public UsdToCyclesMapping {
++ public:
++  using UsdToCyclesMapping::UsdToCyclesMapping;
++
++  std::string parameterName(const TfToken &name,
++                            const ShaderInput *inputConnection,
++                            VtValue *value) const override
++  {
++    if (name == CyclesMaterialTokens->out && inputConnection) {
++      switch (inputConnection->socket_type.type) {
++        case SocketType::BOOLEAN:
++        case SocketType::FLOAT:
++        case SocketType::INT:
++        case SocketType::UINT:
++          return "fac";
++        default:
++          return "color";
++      }
++    }
++    return UsdToCyclesMapping::parameterName(name, inputConnection, value);
++  }
++};
++
+ /* MaterialX standard_surface -> Cycles principled_bsdf.
+  *
+  * Socket names verified against the Cycles node registry. Inputs with no
+  * Cycles counterpart are deliberately left unmapped and are ignored:
+- *  - base / specular / transmission_color / coat_affect_*: weights and tints
+- *    that Cycles folds into other inputs,
++ *  - base / specular / transmission_color: weights and tints Cycles folds into
++ *    other inputs,
+  *  - subsurface_color: Cycles derives it from base_color,
+  *  - transmission_extra_roughness, transmission_dispersion. */
+ const UsdToCyclesMapping MtlxStandardSurface = {
+@@ -218,9 +261,8 @@ const UsdToCyclesMapping MtlxStandardSurface = {
+         {TfToken("tangent"), ustring("tangent")},
+     }};
+ 
+-/* MaterialX image nodes -> Cycles image_texture. Covers every ND_image_*
+- * variant; the output type difference is handled by the connection code. */
+-const UsdToCyclesMapping MtlxImage = {
++/* Covers every ND_image_* and ND_tiledimage_* variant. */
++const MtlxFacOrColor MtlxImage = {
+     "image_texture",
+     {
+         {TfToken("file"), ustring("filename")},
+@@ -228,30 +270,95 @@ const UsdToCyclesMapping MtlxImage = {
+         {TfToken("default"), ustring("color")},
+     }};
+ 
+-/* MaterialX <-> Cycles for the handful of utility nodes that show up in almost
+- * every graph. */
+-const UsdToCyclesMapping MtlxNormalMap = {"normal_map",
+-                                          {
+-                                              {TfToken("in"), ustring("color")},
+-                                              {TfToken("scale"), ustring("strength")},
+-                                          }};
+-
+-const UsdToCyclesMapping MtlxTexCoord = {"texture_coordinate", {}};
++const UsdToCyclesMapping MtlxNormalMap = {
++    "normal_map",
++    {
++        {TfToken("in"), ustring("color")},
++        {TfToken("scale"), ustring("strength")},
++        {CyclesMaterialTokens->out, ustring("normal")},
++    }};
+ 
+-const UsdToCyclesMapping MtlxConstant = {"rgb_ramp", {}};
++const UsdToCyclesMapping MtlxTexCoord = {"texture_coordinate",
++                                         {{CyclesMaterialTokens->out, ustring("UV")}}};
++
++/* Noise. MaterialX amplitude and pivot have no Cycles counterpart; fractal3d
++ * maps far better than plain noise3d, which is why both land on the same
++ * node. */
++const MtlxFacOrColor MtlxNoise = {"noise_texture",
++                                  {
++                                      {TfToken("position"), ustring("vector")},
++                                      {TfToken("octaves"), ustring("detail")},
++                                      {TfToken("lacunarity"), ustring("lacunarity")},
++                                      {TfToken("diminish"), ustring("roughness")},
++                                  }};
++
++const MtlxFacOrColor MtlxCheckerboard = {"checker_texture",
++                                         {
++                                             {TfToken("color1"), ustring("color1")},
++                                             {TfToken("color2"), ustring("color2")},
++                                             {TfToken("texcoord"), ustring("vector")},
++                                             {TfToken("uvtiling"), ustring("scale")},
++                                         }};
++
++/* Geometric lookups all come off the one Cycles geometry node, each picking a
++ * different output. */
++const UsdToCyclesMapping MtlxPosition = {"geometry",
++                                         {{CyclesMaterialTokens->out, ustring("position")}}};
++const UsdToCyclesMapping MtlxNormalLookup = {"geometry",
++                                             {{CyclesMaterialTokens->out, ustring("normal")}}};
++const UsdToCyclesMapping MtlxTangentLookup = {"geometry",
++                                              {{CyclesMaterialTokens->out, ustring("tangent")}}};
++
++const UsdToCyclesMapping MtlxMix = {"mix_color",
++                                    {
++                                        {TfToken("fg"), ustring("a")},
++                                        {TfToken("bg"), ustring("b")},
++                                        {TfToken("mix"), ustring("fac")},
++                                        {CyclesMaterialTokens->out, ustring("result")},
++                                    }};
++
++/* Arithmetic. A single Cycles math (or vector_math) node covers all of these,
++ * selected through its mode enum - hence the fixed value. */
++UsdToCyclesMapping MakeMtlxMath(const char *const mode, const bool vector)
++{
++  UsdToCyclesMapping mapping{
++      vector ? "vector_math" : "math",
++      {
++          {TfToken("in1"), ustring(vector ? "vector1" : "value1")},
++          {TfToken("in2"), ustring(vector ? "vector2" : "value2")},
++          {CyclesMaterialTokens->out, ustring(vector ? "vector" : "value")},
++      }};
++  mapping.setFixedValues({{ustring("math_type"), mode}});
++  return mapping;
++}
+ 
+-/* Returns the mapping for a MaterialX nodedef identifier, or null if that node
+- * has no Cycles counterpart yet. */
++/* Returns the mapping for a MaterialX nodedef identifier, or null when that
++ * node has no Cycles counterpart yet. Matching is on the nodedef prefix, so
++ * every type variant of a node - _float, _color3, _vector3 - is covered at
++ * once. */
+ const UsdToCyclesMapping *FindMtlxMapping(const std::string &nodeTypeId)
+ {
+   if (!nodeTypeId.starts_with("ND_")) {
+     return nullptr;
+   }
+ 
++  static const UsdToCyclesMapping MtlxAdd = MakeMtlxMath("add", false);
++  static const UsdToCyclesMapping MtlxSubtract = MakeMtlxMath("subtract", false);
++  static const UsdToCyclesMapping MtlxMultiply = MakeMtlxMath("multiply", false);
++  static const UsdToCyclesMapping MtlxDivide = MakeMtlxMath("divide", false);
++  static const UsdToCyclesMapping MtlxAddVec = MakeMtlxMath("add", true);
++  static const UsdToCyclesMapping MtlxSubtractVec = MakeMtlxMath("subtract", true);
++  static const UsdToCyclesMapping MtlxMultiplyVec = MakeMtlxMath("multiply", true);
++  static const UsdToCyclesMapping MtlxDivideVec = MakeMtlxMath("divide", true);
++
++  const bool isVector = nodeTypeId.find("vector") != std::string::npos ||
++                        nodeTypeId.find("color3") != std::string::npos ||
++                        nodeTypeId.find("color4") != std::string::npos;
++
+   if (nodeTypeId.starts_with("ND_standard_surface_surfaceshader")) {
+     return &MtlxStandardSurface;
+   }
+-  if (nodeTypeId.starts_with("ND_image_")) {
++  if (nodeTypeId.starts_with("ND_image_") || nodeTypeId.starts_with("ND_tiledimage_")) {
+     return &MtlxImage;
+   }
+   if (nodeTypeId.starts_with("ND_normalmap")) {
+@@ -260,6 +367,36 @@ const UsdToCyclesMapping *FindMtlxMapping(const std::string &nodeTypeId)
+   if (nodeTypeId.starts_with("ND_texcoord_")) {
+     return &MtlxTexCoord;
+   }
++  if (nodeTypeId.starts_with("ND_noise3d_") || nodeTypeId.starts_with("ND_fractal3d_")) {
++    return &MtlxNoise;
++  }
++  if (nodeTypeId.starts_with("ND_checkerboard_")) {
++    return &MtlxCheckerboard;
++  }
++  if (nodeTypeId.starts_with("ND_position_")) {
++    return &MtlxPosition;
++  }
++  if (nodeTypeId.starts_with("ND_normal_")) {
++    return &MtlxNormalLookup;
++  }
++  if (nodeTypeId.starts_with("ND_tangent_")) {
++    return &MtlxTangentLookup;
++  }
++  if (nodeTypeId.starts_with("ND_mix_")) {
++    return &MtlxMix;
++  }
++  if (nodeTypeId.starts_with("ND_add_")) {
++    return isVector ? &MtlxAddVec : &MtlxAdd;
++  }
++  if (nodeTypeId.starts_with("ND_subtract_")) {
++    return isVector ? &MtlxSubtractVec : &MtlxSubtract;
++  }
++  if (nodeTypeId.starts_with("ND_multiply_")) {
++    return isVector ? &MtlxMultiplyVec : &MtlxMultiply;
++  }
++  if (nodeTypeId.starts_with("ND_divide_")) {
++    return isVector ? &MtlxDivideVec : &MtlxDivide;
++  }
+ 
+   return nullptr;
+ }
+@@ -617,6 +754,17 @@ unique_ptr<ShaderGraph> HdCyclesMaterial::BuildShaderGraph(HdMaterialNetworkSche
+       /* If it's a native Cycles' node-type, just do the lookup now. */
+       if (const NodeType *nodeType = NodeType::find(cyclesType)) {
+         nodeDesc.node = graph->create_node(nodeType);
++
++        /* Apply the constants that pick this node's mode, if the mapping
++         * carries any. */
++        if (nodeDesc.mapping) {
++          for (const auto &fixed : nodeDesc.mapping->fixedValues()) {
++            if (const SocketType *socket = nodeType->find_input(fixed.first)) {
++              SetNodeValue(nodeDesc.node, *socket, VtValue(std::string(fixed.second)));
++            }
++          }
++        }
++
+         _nodes.emplace(nodePath, nodeDesc);
+       }
+       else {
+diff --git a/src/hydra/render_delegate.cpp b/src/hydra/render_delegate.cpp
+index 1828050e..821ac668 100644
+--- a/src/hydra/render_delegate.cpp
++++ b/src/hydra/render_delegate.cpp
+@@ -208,6 +208,30 @@ HdResourceRegistrySharedPtr HdCyclesDelegate::GetResourceRegistry() const
+   return HdResourceRegistrySharedPtr();
+ }
+ 
++bool HdCyclesDelegate::IsStopSupported() const
++{
++  return true;
++}
++
++bool HdCyclesDelegate::Stop(const bool blocking)
++{
++  /* Hosts stop the render before applying scene edits and restart it after.
++   * Without this the session kept running against the old scene state, so
++   * moving an object or editing a material only showed up once the user
++   * restarted the render by hand. */
++  _renderParam->session->cancel(!blocking);
++  return true;
++}
++
++bool HdCyclesDelegate::Restart()
++{
++  /* HdCyclesRenderPass::_Execute() returns early while the session is
++   * cancelled, so clear that state before it runs again. It resets and starts
++   * the session itself once the scene reports it needs it. */
++  _renderParam->session->progress.reset();
++  return true;
++}
++
+ bool HdCyclesDelegate::IsPauseSupported() const
+ {
+   return true;
+diff --git a/src/hydra/render_delegate.h b/src/hydra/render_delegate.h
+index 1e0d3dab..1d61830e 100644
+--- a/src/hydra/render_delegate.h
++++ b/src/hydra/render_delegate.h
+@@ -50,6 +50,12 @@ class HdCyclesDelegate final : public PXR_NS::HdRenderDelegate {
+ 
+   PXR_NS::HdRenderSettingDescriptorList GetRenderSettingDescriptors() const override;
+ 
++  bool IsStopSupported() const override;
++
++  bool Stop(bool blocking = true) override;
++
++  bool Restart() override;
++
+   bool IsPauseSupported() const override;
+ 
+   bool Pause() override;

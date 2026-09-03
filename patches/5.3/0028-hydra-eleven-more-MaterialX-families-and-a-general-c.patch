@@ -1,0 +1,341 @@
+From ad2bcf8c169def7832511e6cf4eaf5673b232179 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Tue, 1 Sep 2026 17:06:18 +0200
+Subject: [PATCH 28/39] hydra: eleven more MaterialX families, and a general
+ composite mechanism
+
+The helper node a mapping can ask for now takes several wires into the main
+node, and a MaterialX input can be addressed to the helper by prefixing its
+target with helper:. That is what conditionals and colour space conversion
+need: the two compared values belong to the comparison node while the two
+branches belong to the mix, and a colour conversion is a separate_color in one
+space feeding a combine_color in the other across three wires.
+
+Adds clamp, remap, range and smoothstep on Cycles' own clamp and map_range;
+invert and luminance, each with the input it cannot honour left unmapped rather
+than approximated in silence; rgbtohsv and hsvtorgb, verified by round trip;
+and ifgreater, ifgreatereq and ifequal, whose truth tables are checked by
+render. Each conditional needs the mix node matching its data type - a colour
+branch read through mix_float comes out black.
+
+Also routes separate2 and separate4 on vectors to separate_xyz; they were
+falling through to separate_color, which has no x output, and the connection
+was being dropped.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp | 205 ++++++++++++++++++++++++++++++++++++-----
+ src/hydra/material.h   |   4 +
+ 2 files changed, 186 insertions(+), 23 deletions(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index 4141268d..011d0f70 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -112,11 +112,17 @@ class UsdToCyclesMapping {
+    * covers that without a general subgraph mechanism. */
+   struct Helper {
+     const char *nodeType = nullptr;
+-    const char *output = nullptr;
+-    const char *input = nullptr;
++    /* Wires from the helper's outputs to the main node's inputs, named the way
++     * Cycles names them when looking a socket up by hand: by interface name,
++     * so "Fac" and "Factor", not "fac" on both sides. */
++    std::vector<std::pair<const char *, const char *>> wires;
+     FixedMap fixedValues;
+   };
+ 
++  /* An input whose mapped name carries this prefix belongs to the helper node,
++   * not to the main one. */
++  static constexpr const char *kHelperPrefix = "helper:";
++
+   const Helper &helper() const
+   {
+     return _helper;
+@@ -227,6 +233,9 @@ VtValue FixedValue(const SocketType &socket, const char *const text)
+   if (socket.type == SocketType::INT || socket.type == SocketType::UINT) {
+     return VtValue(int(strtol(text, nullptr, 10)));
+   }
++  if (socket.type == SocketType::FLOAT) {
++    return VtValue(float(strtod(text, nullptr)));
++  }
+   return VtValue(std::string(text));
+ }
+ 
+@@ -754,7 +763,7 @@ const std::vector<MtlxEntry> &MtlxTable()
+     m.setFixedValues({{ustring("blend_type"), "mix"}});
+     /* Cycles looks a socket up by its interface name, not its identifier: the
+      * gradient's output is "Fac" and the mix's input is "Factor". */
+-    m.setHelper({"gradient_texture", "Fac", "Factor", {{ustring("gradient_type"), gradientType}}});
++    m.setHelper({"gradient_texture", {{"Fac", "Factor"}}, {{ustring("gradient_type"), gradientType}}});
+     return m;
+   };
+   static const UsdToCyclesMapping kRampLR = makeRamp("linear");
+@@ -835,6 +844,115 @@ const std::vector<MtlxEntry> &MtlxTable()
+   static const UsdToCyclesMapping kMxUnified3dF = makeMxNoise("3", kUnified, "value");
+   static const UsdToCyclesMapping kMxUnified3dC = makeMxNoise("3", kUnified, "color");
+ 
++  /* Ranges and clamping, all on nodes Cycles already has. */
++  static const UsdToCyclesMapping kClamp = [] {
++    UsdToCyclesMapping m{"clamp",
++                         {
++                             {TfToken("in"), ustring("value")},
++                             {TfToken("low"), ustring("min")},
++                             {TfToken("high"), ustring("max")},
++                             {CyclesMaterialTokens->out, ustring("result")},
++                         }};
++    m.setFixedValues({{ustring("clamp_type"), "minmax"}});
++    return m;
++  }();
++  auto makeRange = [](const char *const rangeType) {
++    UsdToCyclesMapping m{"map_range",
++                         {
++                             {TfToken("in"), ustring("value")},
++                             {TfToken("inlow"), ustring("from_min")},
++                             {TfToken("inhigh"), ustring("from_max")},
++                             {TfToken("outlow"), ustring("to_min")},
++                             {TfToken("outhigh"), ustring("to_max")},
++                             {TfToken("doclamp"), ustring("clamp")},
++                             /* smoothstep names its bounds differently. */
++                             {TfToken("low"), ustring("from_min")},
++                             {TfToken("high"), ustring("from_max")},
++                             {CyclesMaterialTokens->out, ustring("result")},
++                         }};
++    m.setFixedValues({{ustring("range_type"), rangeType}});
++    return m;
++  };
++  /* `range` also carries a gamma, which the Cycles node has no equivalent for;
++   * it is left unmapped rather than silently approximated. */
++  static const UsdToCyclesMapping kRemap = makeRange("linear");
++  static const UsdToCyclesMapping kSmoothStep = makeRange("smoothstep");
++
++  /* `invert` leaves `amount` unmapped: Cycles inverts about one and mixes by
++   * `fac`, which matches MaterialX only at the default amount of 1. */
++  static const UsdToCyclesMapping kInvert = {"invert",
++                                             {
++                                                 {TfToken("in"), ustring("color")},
++                                                 {CyclesMaterialTokens->out, ustring("color")},
++                                             }};
++  /* `luminance` leaves `lumacoeffs` unmapped - the Cycles node has Rec.709
++   * baked in - so a graph asking for different weights gets these. */
++  static const UsdToCyclesMapping kLuminance = {"rgb_to_bw",
++                                                {
++                                                    {TfToken("in"), ustring("color")},
++                                                    {CyclesMaterialTokens->out, ustring("val")},
++                                                }};
++
++  /* Colour space conversion. Cycles splits and joins a colour in a chosen
++   * space, so the pair does the conversion: separate in one space, combine in
++   * the other, three wires between them. */
++  auto makeColorConvert = [](const char *const from, const char *const to) {
++    UsdToCyclesMapping m{"combine_color",
++                         {
++                             {TfToken("in"), ustring("helper:color")},
++                             {CyclesMaterialTokens->out, ustring("color")},
++                         }};
++    m.setFixedValues({{ustring("color_type"), to}});
++    m.setHelper({"separate_color",
++                 {{"Red", "Red"}, {"Green", "Green"}, {"Blue", "Blue"}},
++                 {{ustring("color_type"), from}}});
++    return m;
++  };
++  static const UsdToCyclesMapping kRgbToHsv = makeColorConvert("hsv", "rgb");
++  static const UsdToCyclesMapping kHsvToRgb = makeColorConvert("rgb", "hsv");
++
++  /* The conditionals: a comparison feeding the factor of a mix. MaterialX
++   * returns in1 when the test passes, and a mix returns B at a factor of one,
++   * so the true branch is B. */
++  auto makeIf = [](const char *const mathType, bool invertTest, const char *const mixType) {
++    UsdToCyclesMapping m{
++        mixType,
++        {
++            /* Swapping the operands turns "greater" into "greater or equal":
++             * value1 >= value2 is exactly not(value2 > value1), and the branches
++             * swap with it. */
++            {TfToken("value1"), ustring(invertTest ? "helper:value2" : "helper:value1")},
++            {TfToken("value2"), ustring(invertTest ? "helper:value1" : "helper:value2")},
++            {TfToken("in1"), ustring(invertTest ? "a" : "b")},
++            {TfToken("in2"), ustring(invertTest ? "b" : "a")},
++            {CyclesMaterialTokens->out, ustring("result")},
++        }};
++    /* Cycles' compare tests within an epsilon it reads from a third input, and
++     * an epsilon of zero would never match. */
++    UsdToCyclesMapping::FixedMap helperValues{{ustring("math_type"), mathType}};
++    if (strcmp(mathType, "compare") == 0) {
++      helperValues.emplace_back(ustring("value3"), "1e-6");
++    }
++    m.setHelper({"math", {{"Value", "Factor"}}, std::move(helperValues)});
++    /* The colour mix carries a blend mode the others do not have. */
++    if (strcmp(mixType, "mix_color") == 0) {
++      m.setFixedValues({{ustring("blend_type"), "mix"}});
++    }
++    return m;
++  };
++  /* Cycles has one mix node per data type, so which one a conditional becomes
++   * follows the nodedef variant - a colour mix would read a float branch as
++   * black. */
++  static const UsdToCyclesMapping kIfGreaterF = makeIf("greater_than", false, "mix_float");
++  static const UsdToCyclesMapping kIfGreaterC = makeIf("greater_than", false, "mix_color");
++  static const UsdToCyclesMapping kIfGreaterV = makeIf("greater_than", false, "mix_vector");
++  static const UsdToCyclesMapping kIfGreaterEqF = makeIf("greater_than", true, "mix_float");
++  static const UsdToCyclesMapping kIfGreaterEqC = makeIf("greater_than", true, "mix_color");
++  static const UsdToCyclesMapping kIfGreaterEqV = makeIf("greater_than", true, "mix_vector");
++  static const UsdToCyclesMapping kIfEqualF = makeIf("compare", false, "mix_float");
++  static const UsdToCyclesMapping kIfEqualC = makeIf("compare", false, "mix_color");
++  static const UsdToCyclesMapping kIfEqualV = makeIf("compare", false, "mix_vector");
++
+   /* Longest prefix wins, so the specific entries come before their family. */
+   static const std::vector<MtlxEntry> table = {
+       /* Surfaces and terminals. */
+@@ -879,6 +997,24 @@ const std::vector<MtlxEntry> &MtlxTable()
+       {"ND_randomcolor", &kWhiteNoise},
+       {"ND_randomfloat", &kWhiteNoise},
+       {"ND_checkerboard", &MtlxCheckerboard},
++      {"ND_clamp_", &kClamp},
++      {"ND_remap_", &kRemap},
++      {"ND_range_", &kRemap},
++      {"ND_smoothstep_", &kSmoothStep},
++      {"ND_invert_", &kInvert},
++      {"ND_luminance_", &kLuminance},
++      {"ND_rgbtohsv_", &kRgbToHsv},
++      {"ND_hsvtorgb_", &kHsvToRgb},
++      {"ND_ifgreatereq_float", &kIfGreaterEqF},
++      {"ND_ifgreatereq_vector", &kIfGreaterEqV},
++      {"ND_ifgreatereq_", &kIfGreaterEqC},
++      {"ND_ifgreater_float", &kIfGreaterF},
++      {"ND_ifgreater_vector", &kIfGreaterV},
++      {"ND_ifgreater_", &kIfGreaterC},
++      {"ND_ifequal_float", &kIfEqualF},
++      {"ND_ifequal_vector", &kIfEqualV},
++      {"ND_ifequal_", &kIfEqualC},
++
+       {"ND_ramplr", &kRampLR},
+       {"ND_ramptb", &kRampTB},
+       {"ND_ramp_gradient", &kGradient},
+@@ -913,7 +1049,9 @@ const std::vector<MtlxEntry> &MtlxTable()
+       {"ND_combine3_color", &kCombineColor},
+       {"ND_combine2_color", &kCombineColor},
+       {"ND_combine", &kCombineColor},
++      {"ND_separate2_vector", &kSeparateXYZ},
+       {"ND_separate3_vector", &kSeparateXYZ},
++      {"ND_separate4_vector", &kSeparateXYZ},
+       {"ND_separate3v", &kSeparateXYZ},
+       {"ND_separate3c", &kSeparateColor},
+       {"ND_separate", &kSeparateColor},
+@@ -1206,13 +1344,23 @@ void HdCyclesMaterial::UpdateParameters(NodeDesc &nodeDesc,
+ 
+     /* See if the parameter name is in USDPreviewSurface terms, and needs to be converted .*/
+     const UsdToCyclesMapping *inputMapping = nodeDesc.mapping;
+-    const std::string inputName = inputMapping ?
+-                                      inputMapping->parameterName(paramName, nullptr, &value) :
+-                                      paramName.GetString();
++    std::string inputName = inputMapping ?
++                                inputMapping->parameterName(paramName, nullptr, &value) :
++                                paramName.GetString();
++
++    /* A composite mapping can send an input to its helper node instead. */
++    ShaderNode *target = nodeDesc.node;
++    if (inputName.starts_with(UsdToCyclesMapping::kHelperPrefix)) {
++      inputName.erase(0, strlen(UsdToCyclesMapping::kHelperPrefix));
++      if (nodeDesc.helperNode == nullptr) {
++        continue;
++      }
++      target = nodeDesc.helperNode;
++    }
+ 
+     /* Find the input to write the parameter value to. */
+     const SocketType *input = nullptr;
+-    for (const SocketType &socket : nodeDesc.node->type->inputs) {
++    for (const SocketType &socket : target->type->inputs) {
+       if (string_iequals(socket.name.string(), inputName) || socket.ui_name == inputName) {
+         input = &socket;
+         break;
+@@ -1226,17 +1374,16 @@ void HdCyclesMaterial::UpdateParameters(NodeDesc &nodeDesc,
+       if (inputMapping && inputMapping->hasParameterMapping(paramName)) {
+         LOG_WARNING << "MaterialX: input '" << paramName.GetText() << "' on node '"
+                     << nodePath.GetText() << "' maps to Cycles input '" << inputName
+-                    << "', which '" << nodeDesc.node->name.c_str()
+-                    << "' does not have; value ignored.";
++                    << "', which '" << target->name.c_str() << "' does not have; value ignored.";
+       }
+       else {
+         LOG_WARNING << "MaterialX: no input '" << paramName.GetText() << "' on Cycles node '"
+-                    << nodeDesc.node->name.c_str() << "', value ignored.";
++                    << target->name.c_str() << "', value ignored.";
+       }
+       continue;
+     }
+ 
+-    SetNodeValue(nodeDesc.node, *input, value);
++    SetNodeValue(target, *input, value);
+   }
+ }
+ 
+@@ -1270,13 +1417,22 @@ void HdCyclesMaterial::UpdateConnections(NodeDesc &nodeDesc,
+     }
+ 
+     const UsdToCyclesMapping *inputMapping = nodeDesc.mapping;
+-    const std::string inputName = inputMapping ?
+-                                      inputMapping->parameterName(dstSocketName, nullptr) :
+-                                      dstSocketName.GetString();
++    std::string inputName = inputMapping ? inputMapping->parameterName(dstSocketName, nullptr) :
++                                           dstSocketName.GetString();
++
++    /* A composite mapping can send an input to its helper node instead. */
++    ShaderNode *target = nodeDesc.node;
++    if (inputName.starts_with(UsdToCyclesMapping::kHelperPrefix)) {
++      inputName.erase(0, strlen(UsdToCyclesMapping::kHelperPrefix));
++      if (nodeDesc.helperNode == nullptr) {
++        continue;
++      }
++      target = nodeDesc.helperNode;
++    }
+ 
+     /* Find the input to connect to on the passed in node. */
+     ShaderInput *input = nullptr;
+-    for (ShaderInput *in : nodeDesc.node->inputs) {
++    for (ShaderInput *in : target->inputs) {
+       if (string_iequals(in->socket_type.name.string(), inputName)) {
+         input = in;
+         break;
+@@ -1412,14 +1568,17 @@ unique_ptr<ShaderGraph> HdCyclesMaterial::BuildShaderGraph(HdMaterialNetworkSche
+                 }
+               }
+ 
+-              ShaderOutput *const from = helperNode->output(helper.output);
+-              ShaderInput *const to = nodeDesc.node->input(helper.input);
+-              if (from != nullptr && to != nullptr) {
+-                graph->connect(from, to);
+-              }
+-              else {
+-                LOG_WARNING << "MaterialX: could not wire helper '" << helper.nodeType << "."
+-                            << helper.output << "' into '" << helper.input << "'.";
++              nodeDesc.helperNode = helperNode;
++              for (const auto &wire : helper.wires) {
++                ShaderOutput *const from = helperNode->output(wire.first);
++                ShaderInput *const to = nodeDesc.node->input(wire.second);
++                if (from != nullptr && to != nullptr) {
++                  graph->connect(from, to);
++                }
++                else {
++                  LOG_WARNING << "MaterialX: could not wire helper '" << helper.nodeType << "."
++                              << wire.first << "' into '" << wire.second << "'.";
++                }
+               }
+             }
+           }
+diff --git a/src/hydra/material.h b/src/hydra/material.h
+index 9ce5c5cb..7e67ad8b 100644
+--- a/src/hydra/material.h
++++ b/src/hydra/material.h
+@@ -37,6 +37,10 @@ class HdCyclesMaterial final : public PXR_NS::HdMaterial {
+  private:
+   struct NodeDesc {
+     CCL_NS::ShaderNode *node;
++    /* The auxiliary node a composite mapping asked for, if any: some MaterialX
++     * nodes need two Cycles nodes, and some of their inputs belong to this one
++     * rather than to `node`. */
++    CCL_NS::ShaderNode *helperNode;
+     const class UsdToCyclesMapping *mapping;
+   };
+ 

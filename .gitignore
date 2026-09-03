@@ -8,3 +8,5 @@ install-53/
 tests/usd/*.exr
 tests/usd/*.png
 tests/usd/t?.exr
+__pycache__/
+*.pyc

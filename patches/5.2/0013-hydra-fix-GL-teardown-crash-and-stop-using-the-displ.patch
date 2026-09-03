@@ -1,0 +1,94 @@
+From 3d984101c94fcee8032853c42bbe4bbdc21bed32 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Mon, 31 Aug 2026 13:52:54 +0200
+Subject: [PATCH 13/38] hydra: fix GL teardown crash, and stop using the
+ display driver by default
+
+The destructor issued glDeleteBuffers() with no current GL context. It runs on
+whichever thread the host tears the delegate down on - switching renderer in
+the viewport, for one - which has no context of its own, so the call went into
+nothing and took the host with it. gl_context_dispose() likewise tried to
+delete a context that could still be current. Make ours current for the
+deletes, and unbind before disposing.
+
+Also default the display driver off. Sharing the host's GL context to blit
+tiles into a texture has now produced four distinct failures in Houdini's
+viewport - unbalanced locking, a context created too late, wrong pixels, and
+this teardown crash - while the output driver path is what every batch render
+already uses and is correct. CYCLES_DISPLAY_DRIVER=1 opts back in for anyone
+working on it.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/display_driver.cpp  | 28 +++++++++++++++++++++++-----
+ src/hydra/render_delegate.cpp |  7 ++++++-
+ 2 files changed, 29 insertions(+), 6 deletions(-)
+
+diff --git a/src/hydra/display_driver.cpp b/src/hydra/display_driver.cpp
+index 02f042c6..dd416bdd 100644
+--- a/src/hydra/display_driver.cpp
++++ b/src/hydra/display_driver.cpp
+@@ -34,12 +34,20 @@ HdCyclesDisplayDriver::HdCyclesDisplayDriver(HdCyclesSession *renderParam, Hgi *
+ 
+ HdCyclesDisplayDriver::~HdCyclesDisplayDriver()
+ {
+-  if (texture_) {
+-    _hgi->DestroyTexture(&texture_);
++  /* Deleting a GL object needs a current context. This destructor runs on
++   * whichever thread the host tears the delegate down on - switching renderer
++   * in the viewport, for one - and that thread has no context of its own, so
++   * make ours current first rather than issuing GL calls into nothing. */
++  if (gl_context_enable()) {
++    if (gl_pbo_id_) {
++      glDeleteBuffers(1, &gl_pbo_id_);
++      gl_pbo_id_ = 0;
++    }
++    gl_context_disable();
+   }
+ 
+-  if (gl_pbo_id_) {
+-    glDeleteBuffers(1, &gl_pbo_id_);
++  if (texture_) {
++    _hgi->DestroyTexture(&texture_);
+   }
+ 
+   gl_context_dispose();
+@@ -143,8 +151,18 @@ void HdCyclesDisplayDriver::gl_context_dispose()
+ {
+ #ifdef _WIN32
+   if (gl_context_) {
++    /* wglDeleteContext fails on a context that is still current. */
++    if (wglGetCurrentContext() == gl_context_) {
++      wglMakeCurrent(nullptr, nullptr);
++    }
++
+     TF_VERIFY(wglDeleteContext((HGLRC)gl_context_));
+-    DestroyWindow(WindowFromDC((HDC)hdc_));
++    if (hdc_) {
++      DestroyWindow(WindowFromDC((HDC)hdc_));
++    }
++
++    gl_context_ = nullptr;
++    hdc_ = nullptr;
+   }
+ #endif
+ }
+diff --git a/src/hydra/render_delegate.cpp b/src/hydra/render_delegate.cpp
+index a0fb08a6..3203bcfe 100644
+--- a/src/hydra/render_delegate.cpp
++++ b/src/hydra/render_delegate.cpp
+@@ -31,8 +31,13 @@ HDCYCLES_NAMESPACE_OPEN_SCOPE
+ TF_DEFINE_PUBLIC_TOKENS(HdCyclesRenderSettingsTokens, HD_CYCLES_RENDER_SETTINGS_TOKENS);
+ 
+ // clang-format off
++/* Off by default: the display driver shares the host's GL context to blit
++ * tiles straight into a texture, and that has proven unreliable in Houdini's
++ * viewport - wrong pixels, and crashes on teardown. Rendering through the
++ * output driver instead is a slower refresh but is the path every batch render
++ * already uses. Set CYCLES_DISPLAY_DRIVER=1 to opt back in. */
+ TF_DEFINE_ENV_SETTING(CYCLES_DISPLAY_DRIVER,
+-                      true,
++                      false,
+                       "Use the OpenGL display driver for interactive rendering");
+ 
+ // clang-format off
