@@ -1,7 +1,7 @@
 From 5ff91afdea44a1d2433410fab9567c15f0add398 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 22:46:16 +0200
-Subject: [PATCH 31/49] hydra: a colour landing on a scalar socket, and several
+Subject: [PATCH 31/50] hydra: a colour landing on a scalar socket, and several
  helpers per mapping
 
 MaterialX's opacity is a colour where the Cycles alpha it maps to is a single

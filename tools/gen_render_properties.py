@@ -17,10 +17,17 @@ import sys
 
 import hou
 
-CYCLES = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                      "external", "cycles")
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Quelle arborescence viser, suivant la meme convention que les autres outils :
+# `install` pour la 5.2, `install-53` pour la 5.3.
+INSTALL = os.environ.get("CYCLES_INSTALL_DIR", "install")
+CYCLES = os.path.join(ROOT, "external", "cycles-53" if INSTALL.endswith("-53") else "cycles")
 INTEGRATOR = os.path.join(CYCLES, "src", "scene", "integrator.cpp")
-OUT = os.path.join(CYCLES, "src", "hydra", "resources", "HdCyclesPlugin_Global.ds")
+RESOURCES = os.path.join(CYCLES, "src", "hydra", "resources")
+# Houdini cherche le fichier par nom de moteur : les deux entrees du menu, CPU
+# et GPU, ont donc chacune le leur, au contenu identique.
+OUTPUTS = [os.path.join(RESOURCES, "HdCyclesPlugin_Global.ds"),
+           os.path.join(RESOURCES, "HdCyclesPluginGPU_Global.ds")]
 
 # Cycles socket macro -> (Houdini parm type, USD value type)
 NUMERIC = re.compile(r"^-?(\d+\.?\d*([eE][-+]?\d+)?|\.\d+)$")
@@ -156,10 +163,12 @@ def main():
 }}
 '''
 
-    os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    open(OUT, "w", encoding="utf-8").write(text)
+    os.makedirs(RESOURCES, exist_ok=True)
+    for out in OUTPUTS:
+        open(out, "w", encoding="utf-8").write(text)
+        print(out)
     total = sum(len(v) for v in grouped.values())
-    print(f"{OUT}: {total} proprietes dans {len(grouped)} onglets")
+    print(f"{total} proprietes dans {len(grouped)} onglets")
 
 
 main()

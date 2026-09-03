@@ -1137,3 +1137,47 @@ distincts dans le viewport d'Houdini, dont deux crashs. Blender, lui, s'en
 sert toujours. `CYCLES_DISPLAY_DRIVER=1` le réactive pour qui veut tenter le
 rafraîchissement plus direct, en connaissance de cause. **Le rendre sûr par
 défaut reste ouvert** — c'est le vrai reliquat de réactivité côté viewport.
+
+## Phase 18 — Choisir son périphérique, et le display driver de retour ✅
+
+Deux demandes : réactiver le display driver, et pouvoir choisir entre OptiX et
+CUDA — « sur Blender y'a les paramètres mais sur Houdini j'ai rien pour
+choisir ». C'était exact : il n'y avait effectivement rien.
+
+**`CYCLES_DEVICE` était du code mort.** `GetSessionParams` ne consultait
+l'environnement que si le réglage `cycles:device` était absent — or le plugin
+le semait systématiquement, depuis sa variante CPU ou GPU. La branche n'était
+donc jamais atteinte. L'environnement passe désormais devant le défaut de la
+variante, ce qui est le seul levier arrivant à temps : le périphérique est figé
+à la construction de la session.
+
+Mesuré en lisant la ligne `Path tracing on` que Cycles écrit lui-même :
+
+| | rendu réel |
+|---|---|
+| entrée GPU, sans rien | RTX 3090 (OptiX) |
+| entrée GPU + `CYCLES_DEVICE=CUDA` | RTX 3090 (CUDA) — avant : OptiX |
+| entrée CPU + `CYCLES_DEVICE=OPTIX` | RTX 3090 (OptiX) — avant : CPU |
+
+**La route USD est un cul-de-sac sous husk.** Un `string cycles:device` authoré
+sur un prim `RenderSettings` n'atteint jamais le delegate — vérifié par une
+trace inconditionnelle posée à l'entrée de `SetRenderSetting`, avant comme
+après avoir déclaré `device` parmi les descripteurs. Le constructeur écarte de
+toute façon `device` et `threads`, réglages d'initialisation. Un menu de
+périphérique avait été ajouté aux propriétés de rendu puis **retiré** : un
+contrôle d'interface qui ne fait rien en silence est pire que pas de contrôle.
+Restent l'entrée de menu et `CYCLES_DEVICE`, qui eux fonctionnent.
+
+Un avertissement signale désormais `device` et `threads` arrivant trop tard,
+pour les hôtes qui les transmettent — husk ne le fera jamais, mais le silence
+était le vrai défaut.
+
+**Le display driver revient par défaut.** Les trois crashs qui l'avaient fait
+désactiver sont corrigés depuis (0010, 0011, 0012). ⚠️ **Les pixels faux, eux,
+n'ont jamais été confirmés corrigés** — et rien de tout ça ne se vérifie en
+batch : husk n'a pas de contexte GL et retombe sur le driver de sortie. Cela ne
+se juge que dans le viewport de Solaris. `CYCLES_DISPLAY_DRIVER=0` revient en
+arrière.
+
+Banc : 97 exportés, 97 rendus, 0 problème ; 96 images sur 97 identiques au
+pixel près, la seule différente étant `cycles_set_normal`, déjà ouvert (A19).

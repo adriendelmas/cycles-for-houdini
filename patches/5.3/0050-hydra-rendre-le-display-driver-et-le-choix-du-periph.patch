@@ -1,0 +1,179 @@
+From 7296f68b88c471023f0b24f32b71f9f2fbd2c5a2 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 3 Sep 2026 23:19:44 +0200
+Subject: [PATCH 50/50] hydra: rendre le display driver et le choix du
+ peripherique utilisables
+
+Trois choses, toutes autour de la reactivite du viewport et du choix
+du peripherique.
+
+**Le display driver revient par defaut.** Il partage le contexte GL de
+l'hote pour blitter les tuiles dans une texture, ce qui est ce qui rend
+le viewport aussi prompt que celui de Blender. Il etait desactive
+depuis 0012 : il avait produit des pixels faux et des crashs a la
+destruction. Les trois crashs - le verrou desequilibre, le contexte
+construit trop tard, les appels GL sans contexte - sont corriges depuis
+(0010, 0011, 0012). **Les pixels faux, eux, n'ont jamais ete confirmes
+corriges** : husk n'a pas de contexte GL et retombe de toute facon sur
+le driver de sortie, donc rien de tout ca ne se verifie en batch. A
+regarder dans le viewport ; CYCLES_DISPLAY_DRIVER=0 revient en arriere.
+
+**CYCLES_DEVICE etait du code mort.** GetSessionParams ne lisait
+l'environnement que si le reglage cycles:device etait absent - or le
+plugin le semait systematiquement depuis sa variante CPU ou GPU, donc
+la branche n'etait jamais atteinte. L'environnement passe desormais
+devant le defaut de la variante, ce qui est le seul levier qui arrive
+a temps : le peripherique est fige a la construction de la session.
+
+Mesure, en lisant la ligne "Path tracing on" de Cycles :
+
+    entree GPU, sans rien                RTX 3090 (OptiX)
+    entree GPU + CYCLES_DEVICE=CUDA      RTX 3090 (CUDA)     <- avant : OptiX
+    entree CPU + CYCLES_DEVICE=OPTIX     RTX 3090 (OptiX)    <- avant : CPU
+
+**device et threads sont declares parmi les descripteurs**, et un
+avertissement signale desormais qu'ils arrivent trop tard pour etre
+appliques. Mesure faite : husk ne transmet de toute facon jamais le
+cycles:device d'un prim RenderSettings au delegate, declare ou non -
+la route USD est un cul-de-sac chez lui, et l'entree de menu plus
+CYCLES_DEVICE sont ce qui choisit reellement. L'avertissement reste
+pour les hotes qui, eux, le transmettent.
+
+Banc : 97 exportes, 97 rendus, 0 probleme ; 96 images sur 97
+identiques au pixel pres, la seule differente etant cycles_set_normal,
+deja ouvert (A19) et sans rapport.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/plugin.cpp          | 12 +++++--
+ src/hydra/render_delegate.cpp | 59 +++++++++++++++++++++++++++++++----
+ 2 files changed, 63 insertions(+), 8 deletions(-)
+
+diff --git a/src/hydra/plugin.cpp b/src/hydra/plugin.cpp
+index 9e3f8c59..b6ea7571 100644
+--- a/src/hydra/plugin.cpp
++++ b/src/hydra/plugin.cpp
+@@ -12,6 +12,7 @@
+ #include <pxr/base/plug/plugin.h>
+ #include <pxr/base/plug/thisPlugin.h>
+ #include <pxr/base/tf/envSetting.h>
++#include <pxr/base/tf/getenv.h>
+ #include <pxr/imaging/hd/rendererPluginRegistry.h>
+ 
+ PXR_NAMESPACE_OPEN_SCOPE
+@@ -61,11 +62,18 @@ HdRenderDelegate *HdCyclesPlugin::CreateRenderDelegate(const HdRenderSettingsMap
+ {
+   /* Seed the device from the plugin variant, but let an explicit
+    * cycles:device setting win - a host that asks for a specific device means
+-   * it. */
++   * it.
++   *
++   * CYCLES_DEVICE comes next, ahead of the variant's own default. The device
++   * is fixed when the session is built, so a host that only hands its render
++   * settings over afterwards - husk does - can no longer change it; naming
++   * the menu entry is then the only choice left, and it cannot tell OptiX
++   * from CUDA. The environment is the one lever left that lands in time. */
+   HdRenderSettingsMap settings = settingsMap;
+   const TfToken &deviceKey = HD_CYCLES_NS::HdCyclesRenderSettingsTokens->device;
+   if (settings.find(deviceKey) == settings.end()) {
+-    settings[deviceKey] = VtValue(std::string(DefaultDevice()));
++    const std::string fromEnv = TfGetenv("CYCLES_DEVICE");
++    settings[deviceKey] = VtValue(fromEnv.empty() ? std::string(DefaultDevice()) : fromEnv);
+   }
+ 
+   return new HD_CYCLES_NS::HdCyclesDelegate(settings);
+diff --git a/src/hydra/render_delegate.cpp b/src/hydra/render_delegate.cpp
+index a383c6d4..afe0efd3 100644
+--- a/src/hydra/render_delegate.cpp
++++ b/src/hydra/render_delegate.cpp
+@@ -22,6 +22,7 @@
+ #include "scene/integrator.h"
+ #include "scene/scene.h"
+ #include "session/session.h"
++#include "util/log.h"
+ 
+ #include <pxr/base/tf/getenv.h>
+ #include <pxr/imaging/hgi/tokens.h>
+@@ -31,13 +32,16 @@ HDCYCLES_NAMESPACE_OPEN_SCOPE
+ TF_DEFINE_PUBLIC_TOKENS(HdCyclesRenderSettingsTokens, HD_CYCLES_RENDER_SETTINGS_TOKENS);
+ 
+ // clang-format off
+-/* Off by default: the display driver shares the host's GL context to blit
+- * tiles straight into a texture, and that has proven unreliable in Houdini's
+- * viewport - wrong pixels, and crashes on teardown. Rendering through the
+- * output driver instead is a slower refresh but is the path every batch render
+- * already uses. Set CYCLES_DISPLAY_DRIVER=1 to opt back in. */
++/* On by default: the display driver shares the host's GL context to blit tiles
++ * straight into a texture, which is what makes the viewport refresh as
++ * promptly as Blender's. It was off for a while - it had produced wrong pixels
++ * and crashes on teardown - but the crashes were the unbalanced lock, the
++ * context built too late and the GL calls made without a context, all three
++ * since fixed. Rendering through the output driver remains the fallback
++ * whenever there is no usable GL context, and CYCLES_DISPLAY_DRIVER=0 forces
++ * it for anyone who still sees the viewport misbehave. */
+ TF_DEFINE_ENV_SETTING(CYCLES_DISPLAY_DRIVER,
+-                      false,
++                      true,
+                       "Use the OpenGL display driver for interactive rendering");
+ 
+ // clang-format off
+@@ -449,6 +453,21 @@ HdRenderSettingDescriptorList HdCyclesDelegate::GetRenderSettingDescriptors() co
+ 
+   HdRenderSettingDescriptorList descriptors;
+ 
++  /* Undeclared settings never reach the delegate at all: a host builds what it
++   * forwards from this list, so `cycles:device` authored on a RenderSettings
++   * prim was dropped before SetRenderSetting could even see it. Declared, it
++   * arrives - too late to rebuild the session around a different device, but
++   * late is what the warning there is for, and silence was the real fault. */
++  descriptors.push_back({
++      "Device",
++      HdCyclesRenderSettingsTokens->device,
++      VtValue(std::string(Device::string_from_type(_renderParam->session->params.device.type))),
++  });
++  descriptors.push_back({
++      "Threads",
++      HdCyclesRenderSettingsTokens->threads,
++      VtValue(_renderParam->session->params.threads),
++  });
+   descriptors.push_back({
+       "Time Limit",
+       HdCyclesRenderSettingsTokens->timeLimit,
+@@ -527,6 +546,34 @@ void HdCyclesDelegate::SetRenderSetting(const PXR_NS::TfToken &key, const PXR_NS
+       ++_settingsVersion;
+     }
+   }
++  else if (key == HdCyclesRenderSettingsTokens->device ||
++           key == HdCyclesRenderSettingsTokens->threads)
++  {
++    /* Both are baked into the session when it is built, and the session owns
++     * the scene - swapping either now would mean tearing that down and
++     * resyncing everything, so the constructor skips them and this is the
++     * late path.
++     *
++     * husk never gets here: measured with a log on entry, it does not hand a
++     * RenderSettings prim's `cycles:device` to the delegate at all, declared
++     * among the descriptors or not. The renderer menu entry and CYCLES_DEVICE
++     * are what actually choose the device. This stays for the hosts that do
++     * forward it, where dropping the value without a word would look exactly
++     * like a setting that had no effect. */
++    const bool isDevice = key == HdCyclesRenderSettingsTokens->device;
++    const std::string requested = VtValue::Cast<std::string>(value).GetWithDefault(std::string());
++    const std::string current = isDevice ?
++                                    Device::string_from_type(session->params.device.type) :
++                                    std::to_string(session->params.threads);
++    if (!requested.empty() && requested != current) {
++      /* Cycles' own logger rather than TF_WARN, which husk swallows - the
++       * whole point is that this must not go unseen in a batch render. */
++      LOG_WARNING << "'" << key.GetText() << "' is fixed when the render session is built and "
++                  << "cannot be changed to '" << requested << "' now; still using '" << current
++                  << "'. Pick the Cycles CPU or Cycles GPU renderer, or set CYCLES_DEVICE "
++                  << "before the session starts.";
++    }
++  }
+   else {
+     const std::string &keyString = key.GetString();
+     if (keyString.rfind("cycles:integrator:", 0) == 0) {
+-- 
+2.53.0.windows.2
+
