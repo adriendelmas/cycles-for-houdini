@@ -1,7 +1,7 @@
 From 0b4feff926ccff8f674dcd9497a7e1635a36f2b1 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 00:25:09 +0200
-Subject: [PATCH 18/47] hydra: read Houdini op: texture paths by cooking the
+Subject: [PATCH 18/48] hydra: read Houdini op: texture paths by cooking the
  COP during sync
 
 A texture path can name a compositing node rather than a file. Nothing hands

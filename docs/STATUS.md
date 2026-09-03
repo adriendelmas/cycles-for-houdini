@@ -1040,3 +1040,57 @@ pixel près à la référence précédente — la seule différence est
 
 Ne concerne que le côté Houdini du plugin (génération du VOP, Material
 Builder) — rien n'a changé côté Cycles.
+
+## Phase 16 — La dispersion du MaterialX standard_surface ✅
+
+Demande directe : Cycles vient de gagner la dispersion sur son principled
+bsdf (patch 0038, reprise de la PR Blender 162041), mais la traduction
+MaterialX ne la transmettait pas encore. MaterialX n'a qu'un seul curseur
+pour ça, qui se lit directement comme le nombre d'Abbe de Cycles — pas
+besoin de mapper le facteur d'échelle, que MaterialX n'a pas.
+
+**Mappé tel quel** : `transmission_dispersion` → `transmission_dispersion_abbe_number`.
+Les deux moteurs divisent ce nombre de la même façon
+(`kernel/svm/closure.h`) et traitent 0 comme « pas de dispersion », la
+division par zéro annulant l'effet — exactement le comportement demandé.
+
+**Détour de diagnostic** : un premier test A/B (transmission=1,
+`transmission_dispersion` à deux valeurs différentes) rendait au pixel près
+identique des deux côtés. Tracé jusqu'au bout via des impressions de
+diagnostic temporaires dans `material.cpp`, `svm.cpp` et
+`shader_nodes.cpp` : le nœud recevait bien les bonnes valeurs, mais
+`has_dispersion()` n'était jamais évalué — le matériau de la scène de test
+n'était jamais compilé du tout. Cause : la scène de test posait une USD
+`Sphere` à la main plutôt qu'un `Mesh`, et sa liaison de matériau ne
+parvenait pas jusqu'au delegate, qui retombait sur `default_surface` sans
+avertissement. Remplacé par un `Mesh` calqué sur le banc de test existant
+(déjà éprouvé) et le vrai signal est apparu aussitôt. **Sans rapport avec
+ce correctif, non creusé plus loin** : la liaison de matériau d'une
+`Sphere` USD posée à la main mériterait un jour d'être vérifiée pour de
+bon — possible artefact de contourner le pipeline d'autorat habituel
+d'Houdini plutôt qu'un vrai bug du delegate.
+
+**Une régression attrapée avant tout commit.** Le facteur d'échelle de
+Cycles n'a pas d'équivalent dans MaterialX ; comme c'est lui qui active ou
+désactive réellement la dispersion (pas le nombre d'Abbe), il est fixé à 1
+pour que `transmission_dispersion` reste le seul interrupteur. Une première
+version ne fixait que ce facteur, en supposant qu'un réseau qui ne touche
+jamais `transmission_dispersion` recevrait 0 par défaut — le propre défaut
+de MaterialX pour cette entrée. Faux : Hydra ne transmet que les
+paramètres réalisés, et le défaut de Cycles pour le nombre d'Abbe est 20,
+pas 0. Tout matériau `transmission` non nul qui n'avait jamais touché la
+dispersion en héritait donc une, sans l'avoir demandée. Le banc des 97
+nœuds l'a montré immédiatement : `cycles_math` et 96 autres nœuds sans
+rapport avec MaterialX changeaient de plusieurs pourcents de pixels,
+remontée jusqu'à `mxGlass` dans la scène de banc partagée
+(`transmission=1`, dispersion jamais touchée). Corrigé en fixant aussi le
+nombre d'Abbe à 0 — le vrai défaut d'entrée de MaterialX — recouvert par
+le mapping normal dès que le réseau l'écrit vraiment.
+
+Vérifié après correction : un test explicite (`transmission_dispersion = 3`,
+matériau exporté via une vraie Material Library Solaris) rend visiblement
+différent d'une variante sans dispersion (erreur moyenne 1e-7, 4,48 % des
+pixels au-dessus de 1e-6 — FAILURE côté `hoiiotool --diff`, comme attendu).
+Banc des 97 nœuds : 0 problème, 96 images sur 97 identiques au pixel près à
+la référence précédente — la seule différence est `cycles_set_normal`,
+déjà ouvert (A19), sans rapport.
