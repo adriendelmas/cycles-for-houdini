@@ -1,7 +1,7 @@
 From b02c5de8ebe52bee77df5122eeea9148e4c0b362 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 00:59:49 +0200
-Subject: [PATCH 20/42] hydra: build proper RGBA when writing a Copernicus COP
+Subject: [PATCH 20/44] hydra: build proper RGBA when writing a Copernicus COP
  layer
 
 hou.saveImageDataToFile takes a sequence of floats and only accepts RGBA -

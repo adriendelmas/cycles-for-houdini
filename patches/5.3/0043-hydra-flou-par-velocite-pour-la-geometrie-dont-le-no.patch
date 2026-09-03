@@ -1,0 +1,275 @@
+From 5207cd12f15cc2d75241cb74b2e2a3cce2d83fc5 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 3 Sep 2026 14:38:28 +0200
+Subject: [PATCH 43/44] hydra: flou par velocite, pour la geometrie dont le
+ nombre de points varie
+
+L'echantillonnage des positions ne couvre pas tout. Des que le nombre de points
+change d'une image a l'autre, il n'y a plus aucune correspondance a interpoler
+-- et c'est exactement ce que produit une simulation. Houdini ecrit alors un
+seul echantillon de points et un champ de `velocities`. Sans lecture de ce
+champ, ces geometries sont irrendables en flou.
+
+Verifie avant d'ecrire quoi que ce soit: ni USD ni Hydra ne synthetisent les
+positions a notre place. Un maillage a `velocities` rendait net, a sa position
+de repos.
+
+Les velocites l'emportent desormais sur l'interpolation entre echantillons,
+comme le prescrit USD. Deux points de vigilance:
+
+* les velocites d'USD sont en unites par seconde et l'obturateur en images:
+  sans timeCodesPerSecond, lu dans les globals de scene, aucune des deux ne dit
+  combien de temps dure l'autre;
+* les `accelerations`, si elles sont ecrites, courbent la trajectoire au second
+  ordre -- un projectile floute le long de son arc et non de sa corde.
+
+A amplitude egale, le cube a velocite et le cube a points echantillonnes
+floutent de la meme longueur.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/curves.cpp     |  8 +++-
+ src/hydra/geometry.h     |  3 ++
+ src/hydra/geometry.inl   | 11 ++++++
+ src/hydra/mesh.cpp       |  9 ++++-
+ src/hydra/pointcloud.cpp |  9 ++++-
+ src/hydra/util.cpp       | 81 +++++++++++++++++++++++++++++++++++++++-
+ src/hydra/util.h         | 17 +++++++--
+ 7 files changed, 127 insertions(+), 11 deletions(-)
+
+diff --git a/src/hydra/curves.cpp b/src/hydra/curves.cpp
+index 8134cc54..7f40d2b5 100644
+--- a/src/hydra/curves.cpp
++++ b/src/hydra/curves.cpp
+@@ -90,7 +90,13 @@ void HdCyclesCurves::PopulatePoints(HdSceneDelegate *sceneDelegate)
+    * rendaient nettes faute d'echantillons le long de l'obturateur. */
+   const std::vector<VtVec3fArray> samples =
+       _motionBlur ?
+-          SampleDeformingPoints(pointsDs, _shutterOpen, _shutterClose, kMotionSteps, numKeys) :
++          SampleDeformingPoints(primvars,
++                                pointsDs,
++                                _shutterOpen,
++                                _shutterClose,
++                                kMotionSteps,
++                                numKeys,
++                                _timeCodesPerSecond) :
+           std::vector<VtVec3fArray>();
+ 
+   Attribute *attr_P = _geom->attributes.find(ATTR_STD_POSITION);
+diff --git a/src/hydra/geometry.h b/src/hydra/geometry.h
+index 1a5f35b0..0784a16b 100644
+--- a/src/hydra/geometry.h
++++ b/src/hydra/geometry.h
+@@ -46,6 +46,9 @@ template<typename Base, typename CyclesBase> class HdCyclesGeometry : public Bas
+   bool _motionBlur = false;
+   float _shutterOpen = 0.0f;
+   float _shutterClose = 0.0f;
++  /* L'obturateur est en images, les velocites d'USD en unites par seconde :
++   * sans la cadence, aucune des deux ne dit combien de temps dure l'autre. */
++  double _timeCodesPerSecond = 24.0;
+ 
+  private:
+   void Initialize(PXR_NS::HdRenderParam *renderParam);
+diff --git a/src/hydra/geometry.inl b/src/hydra/geometry.inl
+index b8bceb8c..b24b3684 100644
+--- a/src/hydra/geometry.inl
++++ b/src/hydra/geometry.inl
+@@ -19,6 +19,7 @@
+ #include <pxr/imaging/hd/materialBindingSchema.h>
+ #include <pxr/imaging/hd/materialBindingsSchema.h>
+ #include <pxr/imaging/hd/sceneDelegate.h>
++#include <pxr/imaging/hd/sceneGlobalsSchema.h>
+ #include <pxr/imaging/hd/tokens.h>
+ #include <pxr/imaging/hd/xformSchema.h>
+ 
+@@ -79,6 +80,16 @@ void HdCyclesGeometry<Base, CyclesBase>::Sync(HdSceneDelegate *sceneDelegate,
+     _motionBlur = session->IsMotionBlurEnabled();
+     _shutterOpen = session->GetShutterOpen();
+     _shutterClose = session->GetShutterClose();
++
++    if (HdSceneIndexBaseRefPtr si = sceneDelegate->GetRenderIndex().GetTerminalSceneIndex()) {
++      const HdSceneGlobalsSchema globals = HdSceneGlobalsSchema::GetFromSceneIndex(si);
++      if (auto fpsDs = globals.GetTimeCodesPerSecond()) {
++        const double fps = fpsDs->GetTypedValue(0.0f);
++        if (fps > 0.0) {
++          _timeCodesPerSecond = fps;
++        }
++      }
++    }
+   }
+ 
+   const SdfPath &id = Base::GetId();
+diff --git a/src/hydra/mesh.cpp b/src/hydra/mesh.cpp
+index 4884b93e..983c795f 100644
+--- a/src/hydra/mesh.cpp
++++ b/src/hydra/mesh.cpp
+@@ -190,8 +190,13 @@ void HdCyclesMesh::PopulatePoints(HdSceneDelegate *sceneDelegate)
+    * nets. Cycles range les pas de mouvement dans l'attribut de position
+    * lui-meme, le pas central a l'indice 0. */
+   const std::vector<VtVec3fArray> samples =
+-      _motionBlur ? SampleDeformingPoints(
+-                        pointsDs, _shutterOpen, _shutterClose, kMotionSteps, numPoints) :
++      _motionBlur ? SampleDeformingPoints(primvars,
++                                          pointsDs,
++                                          _shutterOpen,
++                                          _shutterClose,
++                                          kMotionSteps,
++                                          numPoints,
++                                          _timeCodesPerSecond) :
+                     std::vector<VtVec3fArray>();
+ 
+   if (!samples.empty()) {
+diff --git a/src/hydra/pointcloud.cpp b/src/hydra/pointcloud.cpp
+index 497280d3..4517c2dd 100644
+--- a/src/hydra/pointcloud.cpp
++++ b/src/hydra/pointcloud.cpp
+@@ -86,8 +86,13 @@ void HdCyclesPoints::PopulatePoints(HdSceneDelegate *sceneDelegate)
+    * flouter comme le fait une transform animee. */
+   const std::vector<VtVec3fArray> samples =
+       _motionBlur ?
+-          SampleDeformingPoints(
+-              pointsDs, _shutterOpen, _shutterClose, kMotionSteps, points.size()) :
++          SampleDeformingPoints(primvars,
++                                pointsDs,
++                                _shutterOpen,
++                                _shutterClose,
++                                kMotionSteps,
++                                points.size(),
++                                _timeCodesPerSecond) :
+           std::vector<VtVec3fArray>();
+ 
+   Attribute *attr_P = _geom->attributes.find(ATTR_STD_POSITION);
+diff --git a/src/hydra/util.cpp b/src/hydra/util.cpp
+index b31fc576..51e2a28a 100644
+--- a/src/hydra/util.cpp
++++ b/src/hydra/util.cpp
+@@ -31,17 +31,94 @@ HdSceneIndexPrim GetPrim(HdSceneDelegate *delegate, const SdfPath &id)
+   return si->GetPrim(id);
+ }
+ 
+-std::vector<VtVec3fArray> SampleDeformingPoints(const HdSampledDataSourceHandle &pointsDs,
++/* Les positions au temps demande, extrapolees d'un champ de vitesses.
++ *
++ * Les velocites d'USD sont en unites par seconde, l'obturateur en images :
++ * c'est la cadence qui fait le pont. Les accelerations, si elles sont ecrites,
++ * courbent la trajectoire au second ordre - un projectile floute alors le long
++ * de son arc et non de sa corde. */
++static std::vector<VtVec3fArray> SampleFromVelocities(const HdPrimvarsSchema &primvars,
++                                                      const HdSampledDataSourceHandle &pointsDs,
++                                                      const float shutterOpen,
++                                                      const float shutterClose,
++                                                      const int steps,
++                                                      const size_t minPoints,
++                                                      const double timeCodesPerSecond)
++{
++  const VtValue velValue = ReadPrimvar(primvars, HdTokens->velocities);
++  if (!velValue.IsHolding<VtVec3fArray>()) {
++    return {};
++  }
++  const VtVec3fArray velocities = velValue.UncheckedGet<VtVec3fArray>();
++  if (velocities.size() < minPoints || minPoints == 0) {
++    return {};
++  }
++
++  const VtValue baseValue = pointsDs ? pointsDs->GetValue(0.0f) : VtValue();
++  if (!baseValue.IsHolding<VtVec3fArray>()) {
++    return {};
++  }
++  const VtVec3fArray base = baseValue.UncheckedGet<VtVec3fArray>();
++  if (base.size() < minPoints) {
++    return {};
++  }
++
++  bool moves = false;
++  for (size_t i = 0; i < minPoints && !moves; ++i) {
++    moves = velocities[i] != GfVec3f(0.0f);
++  }
++  if (!moves) {
++    return {};
++  }
++
++  VtVec3fArray accelerations;
++  const VtValue accValue = ReadPrimvar(primvars, HdTokens->accelerations);
++  if (accValue.IsHolding<VtVec3fArray>()) {
++    const VtVec3fArray candidate = accValue.UncheckedGet<VtVec3fArray>();
++    if (candidate.size() >= minPoints) {
++      accelerations = candidate;
++    }
++  }
++
++  const double fps = timeCodesPerSecond > 0.0 ? timeCodesPerSecond : 24.0;
++  std::vector<VtVec3fArray> samples(steps);
++  for (int step = 0; step < steps; ++step) {
++    const float frames = shutterOpen + (shutterClose - shutterOpen) * step / float(steps - 1);
++    const float dt = float(frames / fps);
++    VtVec3fArray at = base;
++    for (size_t i = 0; i < minPoints; ++i) {
++      at[i] += velocities[i] * dt;
++      if (!accelerations.empty()) {
++        at[i] += accelerations[i] * (0.5f * dt * dt);
++      }
++    }
++    samples[step] = std::move(at);
++  }
++  return samples;
++}
++
++std::vector<VtVec3fArray> SampleDeformingPoints(const HdPrimvarsSchema &primvars,
++                                                const HdSampledDataSourceHandle &pointsDs,
+                                                 const float shutterOpen,
+                                                 const float shutterClose,
+                                                 const int steps,
+-                                                const size_t minPoints)
++                                                const size_t minPoints,
++                                                const double timeCodesPerSecond)
+ {
+   std::vector<VtVec3fArray> samples;
+   if (!pointsDs || steps < 2) {
+     return samples;
+   }
+ 
++  /* USD donne la priorite aux velocites sur l'interpolation entre echantillons,
++   * et pour une bonne raison : quand le nombre de points varie, il n'y a rien a
++   * interpoler, et c'est alors la seule source de flou. */
++  samples = SampleFromVelocities(
++      primvars, pointsDs, shutterOpen, shutterClose, steps, minPoints, timeCodesPerSecond);
++  if (!samples.empty()) {
++    return samples;
++  }
++
+   samples.resize(steps);
+   for (int step = 0; step < steps; ++step) {
+     /* Les memes instants regulierement espaces que pour les transforms :
+diff --git a/src/hydra/util.h b/src/hydra/util.h
+index fb79460e..b5400cae 100644
+--- a/src/hydra/util.h
++++ b/src/hydra/util.h
+@@ -106,15 +106,24 @@ PXR_NS::TfTokenVector PrimvarNamesAtInterpolation(const PXR_NS::HdPrimvarsSchema
+                                                   PXR_NS::HdInterpolation interpolation);
+ 
+ /* Positions echantillonnees regulierement le long de l'obturateur, pour le flou
+- * de deformation. Rend un vecteur vide si rien ne bouge, ou si le nombre de
+- * points change d'un instant a l'autre : de la geometrie creee ou detruite en
+- * cours de plan n'a aucune correspondance a interpoler. */
++ * de deformation.
++ *
++ * Deux sources, dans l'ordre qu'impose USD. Un champ de `velocities` l'emporte
++ * quand il existe : c'est le seul flou possible quand le nombre de points
++ * change d'une image a l'autre, cas ou il n'y a plus aucune correspondance a
++ * interpoler - et c'est precisement ce qu'ecrit Houdini pour une simulation.
++ * Faute de velocites, les positions sont relues a chaque instant.
++ *
++ * Rend un vecteur vide si rien ne bouge, ou si les echantillons ne se
++ * correspondent pas. */
+ std::vector<PXR_NS::VtVec3fArray> SampleDeformingPoints(
++    const PXR_NS::HdPrimvarsSchema &primvars,
+     const PXR_NS::HdSampledDataSourceHandle &pointsDs,
+     float shutterOpen,
+     float shutterClose,
+     int steps,
+-    size_t minPoints);
++    size_t minPoints,
++    double timeCodesPerSecond);
+ 
+ /* Pose ces echantillons dans l'attribut de position. Cycles y range le pas
+  * central a l'indice 0 et les autres a la suite, dans l'ordre de l'obturateur. */

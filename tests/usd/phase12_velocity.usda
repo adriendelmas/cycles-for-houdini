@@ -1,0 +1,124 @@
+#usda 1.0
+(
+    defaultPrim = "world"
+    metersPerUnit = 1
+    upAxis = "Y"
+    startTimeCode = 1
+    endTimeCode = 2
+    timeCodesPerSecond = 24
+)
+
+def Xform "world"
+{
+    def Camera "camera"
+    {
+        float focalLength = 35
+        float horizontalAperture = 36
+        float verticalAperture = 24
+        float2 clippingRange = (0.1, 1000)
+        double shutter:open = 0
+        double shutter:close = 0.75
+        matrix4d xformOp:transform = ( (1,0,0,0), (0,1,0,0), (0,0,1,0), (0, 1.5, 9, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+
+    def Mesh "ground"
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(-20, 0, -20), (20, 0, -20), (20, 0, 20), (-20, 0, 20)]
+        color3f[] primvars:displayColor = [(0.35, 0.35, 0.38)]
+        uniform token subdivisionScheme = "none"
+    }
+
+    # cube EN MOUVEMENT : deux echantillons temporels
+    def Mesh "moving"
+    {
+        int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+        int[] faceVertexIndices = [0, 3, 2, 1,  4, 5, 6, 7,  3, 7, 6, 2,  0, 1, 5, 4,  0, 4, 7, 3,  1, 2, 6, 5]
+        point3f[] points = [(-0.5,-0.5,-0.5), (0.5,-0.5,-0.5), (0.5,-0.5,0.5), (-0.5,-0.5,0.5), (-0.5,0.5,-0.5), (0.5,0.5,-0.5), (0.5,0.5,0.5), (-0.5,0.5,0.5)]
+        color3f[] primvars:displayColor = [(0.9, 0.25, 0.15)]
+        uniform token subdivisionScheme = "none"
+        matrix4d xformOp:transform.timeSamples = {
+            1: ( (1,0,0,0), (0,1,0,0), (0,0,1,0), (-2.5, 1.0, 0, 1) ),
+            2: ( (1,0,0,0), (0,1,0,0), (0,0,1,0), (2.5, 1.0, 0, 1) ),
+        }
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+
+
+    # cube A VELOCITE : un seul echantillon de points, et un champ de vitesses.
+    # C'est ce qu'ecrit Houdini quand le nombre de points varie, seul cas ou
+    # l'interpolation entre echantillons n'a aucun sens.
+    def Mesh "velocity"
+    {
+        int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+        int[] faceVertexIndices = [0, 3, 2, 1,  4, 5, 6, 7,  3, 7, 6, 2,  0, 1, 5, 4,  0, 4, 7, 3,  1, 2, 6, 5]
+        point3f[] points = [(-0.5,-0.5,-0.5), (0.5,-0.5,-0.5), (0.5,-0.5,0.5), (-0.5,-0.5,0.5), (-0.5,0.5,-0.5), (0.5,0.5,-0.5), (0.5,0.5,0.5), (-0.5,0.5,0.5)]
+        vector3f[] velocities = [(120, 0, 0), (120, 0, 0), (120, 0, 0), (120, 0, 0), (120, 0, 0), (120, 0, 0), (120, 0, 0), (120, 0, 0)]
+        color3f[] primvars:displayColor = [(0.15, 0.85, 0.25)]
+        uniform token subdivisionScheme = "none"
+        matrix4d xformOp:transform = ( (1,0,0,0), (0,1,0,0), (0,0,1,0), (0, 2.7, 0, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+
+    # cube STATIQUE : reference de nettete
+    def Mesh "static"
+    {
+        int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+        int[] faceVertexIndices = [0, 3, 2, 1,  4, 5, 6, 7,  3, 7, 6, 2,  0, 1, 5, 4,  0, 4, 7, 3,  1, 2, 6, 5]
+        point3f[] points = [(-0.5,-0.5,-0.5), (0.5,-0.5,-0.5), (0.5,-0.5,0.5), (-0.5,-0.5,0.5), (-0.5,0.5,-0.5), (0.5,0.5,-0.5), (0.5,0.5,0.5), (-0.5,0.5,0.5)]
+        color3f[] primvars:displayColor = [(0.2, 0.5, 0.9)]
+        uniform token subdivisionScheme = "none"
+        matrix4d xformOp:transform = ( (1,0,0,0), (0,1,0,0), (0,0,1,0), (0, 1.0, -3, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+
+    def RectLight "key"
+    {
+        float inputs:width = 8
+        float inputs:height = 8
+        float inputs:intensity = 14
+        matrix4d xformOp:transform = ( (1,0,0,0), (0,0.5,-0.866,0), (0,0.866,0.5,0), (-3, 7, 6, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+
+    def DomeLight "sky"
+    {
+        float inputs:intensity = 0.4
+        color3f inputs:color = (0.4, 0.5, 0.65)
+    }
+}
+
+def RenderSettings "rendersettings"
+{
+    rel camera = </world/camera>
+    uniform int2 resolution = (640, 360)
+    uniform bool disableMotionBlur = 0
+    rel products = </Render/product>
+}
+
+def Scope "Render"
+{
+    def RenderProduct "product"
+    {
+        rel camera = </world/camera>
+        uniform token productType = "raster"
+        token productName = "velocity.exr"
+        rel orderedVars = [</Render/Vars/color>]
+    }
+
+    def Scope "Vars"
+    {
+        def RenderVar "color" (
+            apiSchemas = ["HuskRenderVarAPI"]
+        )
+        {
+            uniform token dataType = "color4f"
+            token driver:parameters:aov:husk:format = "color4f"
+            string driver:parameters:aov:husk:name = "C"
+            uniform string sourceName = "color"
+            uniform token sourceType = "raw"
+        }
+    }
+}

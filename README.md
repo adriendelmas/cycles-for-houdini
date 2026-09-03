@@ -24,8 +24,8 @@ where the work went.
   procedural noise implemented exactly, as native SVM and OSL kernel nodes.
 - **Copernicus COP textures read live**, without a round trip through disk.
 - Motion blur on animated transforms **and on deforming geometry** — meshes,
-  curves and point clouds alike, so simulations and particles blur rather than
-  render sharp.
+  curves and point clouds alike, from time-sampled points or from a
+  `velocities` field, so a simulation whose point count changes still blurs.
 - Displacement, render settings surfaced in Solaris, and a long list of crash
   and correctness fixes to the delegate.
 
@@ -121,8 +121,6 @@ bit-identical between 5.2 and 5.3.
 
 - Karma's own material context (`kma:`) falls back to UsdPreviewSurface.
 - An intermittent CUDA "illegal address" on some scene edits, under investigation.
-- Velocity-driven blur (`velocities`, `accelerations`) is not read; deformation
-  blur comes from time-sampled points.
 
 ## Licence
 

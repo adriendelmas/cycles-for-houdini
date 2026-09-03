@@ -1,7 +1,7 @@
 From 53a08f756991ef40b25fe9c08b972c241f78b3a1 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 00:45:16 +0200
-Subject: [PATCH 19/42] hydra: read Copernicus COP pixels live rather than
+Subject: [PATCH 19/44] hydra: read Copernicus COP pixels live rather than
  through an output node
 
 Copernicus nodes - the compositing system Houdini has used since 20.5 - carry

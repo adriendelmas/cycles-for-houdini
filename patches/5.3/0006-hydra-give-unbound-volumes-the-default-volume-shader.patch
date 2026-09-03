@@ -1,7 +1,7 @@
 From 7deebe0aad30f0043c0c8727d5ccd80f4f605b6f Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 02:14:06 +0200
-Subject: [PATCH 06/42] hydra: give unbound volumes the default volume shader
+Subject: [PATCH 06/44] hydra: give unbound volumes the default volume shader
 
 Geometry with no material binding fell back to scene->default_surface
 regardless of its type. A Volume needs a shader carrying a volume closure,

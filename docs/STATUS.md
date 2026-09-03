@@ -877,12 +877,34 @@ seuls points, l'un immobile :
 | Animé par transform | 179 px | 179 px |
 | Points animés | **74 px** (net) | **179 px** |
 
-Écarté volontairement : un nombre de points qui change d'un instant à l'autre.
-De la géométrie créée ou détruite en cours de plan n'a aucune correspondance à
-interpoler ; on s'en tient alors à l'instant central.
+## Phase 12 — Flou par vélocité ✅
 
-Reste à faire : le flou tiré des `velocities` / `accelerations`, à la manière de
-Karma, pour les cas où le nombre de points varie.
+L'échantillonnage des positions ne couvre pas tout : dès que le **nombre de
+points change** d'une image à l'autre, il n'y a plus aucune correspondance à
+interpoler, et c'est précisément ce que produit une simulation. Houdini écrit
+alors un seul échantillon de points et un champ de `velocities` — sans lecture
+de ce champ, ces géométries sont irrendables en flou.
+
+Vérifié avant d'écrire quoi que ce soit : ni USD ni Hydra ne synthétisent les
+positions à notre place. Un maillage à `velocities` rendait net, à sa position
+de repos.
+
+Les vélocités **l'emportent** désormais sur l'interpolation entre échantillons,
+comme le prescrit USD. Deux points de vigilance :
+
+* **La cadence.** Les vélocités d'USD sont en unités par *seconde*, l'obturateur
+  en *images*. Sans `timeCodesPerSecond`, lu dans les globals de scène, aucune
+  des deux ne dit combien de temps dure l'autre. Repli à 24.
+* **Les accélérations.** Si `accelerations` est écrit, la trajectoire est
+  courbée au second ordre : un projectile floute le long de son arc et non de
+  sa corde.
+
+| Cube à vélocité | Avant | Après |
+|---|---|---|
+| Largeur à l'écran | **62 px** (net) | **242 px** |
+
+À amplitude égale, le cube à vélocité et le cube à points échantillonnés
+floutent de la même longueur — les deux chemins concordent.
 
 ### A19 — Le banc de `set_normal` produit des infinis ⚠️ OUVERT
 
@@ -890,3 +912,40 @@ Karma, pour les cas où le nombre de points varie.
 sans donner de direction. Le résultat contient des **infinis** sur le vert, et
 leur emplacement change d'une compilation à l'autre : son image de référence
 n'en est pas une. Le test mérite une direction explicite.
+
+## Phase 13 — Les normales sont celles du maillage ✅
+
+Le correctif de la phase 8 lisait bien les normales plutôt que l'indice
+d'affichage, mais n'honorait que trois interpolations — `vertex`, `varying`,
+`constant` — et prenait `faceVarying` pour la marque d'une arête dure.
+
+Or c'est exactement ce qu'écrit Houdini dès que la normale vit sur les
+**vertices**, son cas courant : un vertex Houdini est le coin d'une face, pas un
+point. Un maillage aux normales lisses rendait donc facetté — l'inverse du
+défaut d'origine.
+
+![normales par coin](milestone-normals.png)
+
+À gauche ce que donnait un maillage à normales par coin, à droite ce qu'il
+donne. Même géométrie, mêmes normales : seule leur lecture a changé.
+
+Le code portait la raison, devenue fausse — *« Cycles has no per-corner
+normals »* — avec le vrai traitement derrière un `#if 0`. `ATTR_STD_CORNER_NORMAL`
+existe désormais, support noyau compris.
+
+Les normales par coin sont écrites telles quelles, triangulées comme la
+topologie. **Cycles cesse alors de consulter l'indicateur lisse/plat** : la
+dureté d'une arête est déjà inscrite dans l'écart entre les normales de ses
+coins. Le maillage décide, arête par arête.
+
+| Comparaison | Résultat |
+|---|---|
+| normales par coin **vs** par point | **identique au bit près** |
+| sans normale **vs** par point | diffère sur 5 % des pixels — facettes conservées |
+
+La seconde ligne compte autant que la première : rien n'a été forcé au lissage,
+un maillage sans normale reste facetté puisqu'il n'y a rien à interpoler.
+
+Reste à faire : faire suivre les normales au fil de l'obturateur. Cycles écarte
+les normales par coin quand la géométrie floute sans qu'elles bougent avec elle,
+et l'indicateur reprend alors la main — réglé sur *lisse*, faute de mieux.

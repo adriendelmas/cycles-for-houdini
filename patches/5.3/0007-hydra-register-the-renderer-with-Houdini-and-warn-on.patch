@@ -1,7 +1,7 @@
 From 7726749b048270021310ac8712e79b37cd09b4db Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 02:25:21 +0200
-Subject: [PATCH 07/42] hydra: register the renderer with Houdini and warn on
+Subject: [PATCH 07/44] hydra: register the renderer with Houdini and warn on
  unknown integrator settings
 
 Adds UsdRenderers.json so Houdini gets a menu label, a default purpose and

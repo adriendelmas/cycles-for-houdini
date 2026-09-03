@@ -1,0 +1,127 @@
+From 0d51aeebf8118fe33ecb1769007806ae65cd3da4 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 3 Sep 2026 14:51:26 +0200
+Subject: [PATCH 44/44] hydra: les normales par coin, au lieu de facetter ce
+ qui ne l'est pas
+
+Le correctif precedent lisait les normales du maillage plutot que l'indice
+d'affichage, mais n'honorait que trois interpolations -- vertex, varying,
+constant -- et prenait `faceVarying` pour la marque d'une arete dure. Or c'est
+precisement ce qu'ecrit Houdini des que la normale vit sur les vertices, son
+cas courant: un maillage aux normales lisses rendait facette.
+
+Le code portait la raison, devenue fausse: "Cycles has no per-corner normals",
+avec le vrai traitement derriere un #if 0. ATTR_STD_CORNER_NORMAL existe
+desormais, support noyau compris.
+
+Les normales par coin sont donc ecrites telles quelles, triangulees comme la
+topologie. Cycles cesse alors de consulter l'indicateur lisse/plat -- la durete
+d'une arete est deja inscrite dans l'ecart entre les normales de ses coins. Le
+maillage decide, arete par arete, au lieu de subir un choix pose sur la piece
+entiere.
+
+Verifie: les memes normales, rangees par coin ou par point, rendent au bit
+pres la meme image; et un maillage sans normale reste facette, ce qui est la
+bonne reponse puisqu'il n'y a rien a interpoler.
+
+L'indicateur garde un role de repli. Cycles ecarte les normales par coin quand
+la geometrie floute sans qu'elles bougent avec elle; il vaut mieux lisser
+approximativement que facetter franchement ce que le maillage n'a jamais
+demande.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/mesh.cpp | 58 +++++++++++++++++++++++++++++++++-------------
+ 1 file changed, 42 insertions(+), 16 deletions(-)
+
+diff --git a/src/hydra/mesh.cpp b/src/hydra/mesh.cpp
+index 983c795f..fa35d6e3 100644
+--- a/src/hydra/mesh.cpp
++++ b/src/hydra/mesh.cpp
+@@ -218,6 +218,7 @@ void HdCyclesMesh::PopulatePoints(HdSceneDelegate *sceneDelegate)
+ void HdCyclesMesh::PopulateNormals(HdSceneDelegate *sceneDelegate)
+ {
+   _geom->attributes.remove(ATTR_STD_VERTEX_NORMAL);
++  _geom->attributes.remove(ATTR_STD_CORNER_NORMAL);
+ 
+   // Authored normals should only exist on triangle meshes
+   if (_geom->get_subdivision_type() != Mesh::SUBDIVISION_NONE) {
+@@ -267,16 +268,35 @@ void HdCyclesMesh::PopulateNormals(HdSceneDelegate *sceneDelegate)
+   else if (interpolation == HdInterpolationFaceVarying) {
+     TF_VERIFY(normals.size() == static_cast<size_t>(_topology.GetNumFaceVaryings()));
+ 
+-    // TODO: Cycles has no per-corner normals, so ignore until supported.
+-#if 0
+-    if (!_util.ComputeTriangulatedFaceVaryingPrimvar(
+-            normals.data(), normals.size(), HdTypeFloatVec3, &value))
+-    {
++    /* Une normale par coin, ce qu'ecrit Houdini des que la normale vit sur les
++     * vertices plutot que sur les points -- son cas courant. Cycles sait les
++     * porter depuis qu'existe ATTR_STD_CORNER_NORMAL, et il les interpole
++     * toujours: l'indicateur `smooth` est alors ignore, puisque la durete d'une
++     * arete est deja inscrite dans la difference entre les normales de ses
++     * coins. C'est donc le maillage qui decide, arete par arete, et non un
++     * choix impose a la piece entiere. */
++    const VtValue triangulated = ComputeTriangulatedFaceVaryingPrimvar(
++        value, HdTypeFloatVec3, _util);
++    if (!triangulated.IsHolding<VtVec3fArray>()) {
++      TF_WARN("Could not triangulate face-varying normals for %s", GetId().GetText());
+       return;
+     }
+ 
+-    const auto &normalsTriangulated = value.UncheckedGet<VtVec3fArray>();
+-#endif
++    const auto &corners = triangulated.UncheckedGet<VtVec3fArray>();
++    const size_t numCorners = _geom->num_triangles() * 3;
++    if (corners.size() != numCorners) {
++      TF_WARN("Face-varying normals for %s have %zu corners, expected %zu",
++              GetId().GetText(),
++              corners.size(),
++              numCorners);
++      return;
++    }
++
++    packed_normal *const N =
++        _geom->attributes.add(ATTR_STD_CORNER_NORMAL)->data_for_write<packed_normal>();
++    for (size_t i = 0; i < numCorners; ++i) {
++      N[i] = packed_normal(make_float3(corners[i][0], corners[i][1], corners[i][2]));
++    }
+   }
+ }
+ 
+@@ -463,20 +483,26 @@ void HdCyclesMesh::PopulateTopology(HdSceneDelegate *sceneDelegate)
+    * on its own smoothed every mesh and rounded off every hard edge.
+    *
+    * A polygonal mesh with no authored normals is faceted - there is nothing to
+-   * interpolate - and a subdivided one is smooth by construction. In between,
+-   * Cycles carries a single normal per vertex, so only vertex, varying and
+-   * constant normals can be honoured; per-face and per-corner normals are how a
+-   * hard edge is written, and flat shading reads them far closer than
+-   * interpolating the averaged vertex normals Cycles would otherwise invent. */
++   * interpolate - and a subdivided one is smooth by construction.
++   *
++   * Les normales par coin ne passent pas par ici: elles sont posees en
++   * ATTR_STD_CORNER_NORMAL, et Cycles ignore alors cet indicateur puisque la
++   * durete de chaque arete est deja inscrite dans les normales elles-memes.
++   * Restent les normales par face, qui decrivent bien une facette. */
+   const HdSceneIndexPrim normalsPrim = GetPrim(sceneDelegate, GetId());
+   const HdPrimvarsSchema normalsPrimvars = HdPrimvarsSchema::GetFromParent(
+       normalsPrim.dataSource);
+   const HdInterpolation normalsInterpolation = ReadPrimvarInterpolation(normalsPrimvars,
+                                                                        HdTokens->normals);
+-  const bool haveVertexNormals = normalsInterpolation == HdInterpolationVertex ||
+-                                 normalsInterpolation == HdInterpolationVarying ||
+-                                 normalsInterpolation == HdInterpolationConstant;
+-  const bool smooth = !flatShadingEnabled && (subdivision || haveVertexNormals);
++  const bool haveInterpolatableNormals = normalsInterpolation == HdInterpolationVertex ||
++                                         normalsInterpolation == HdInterpolationVarying ||
++                                         normalsInterpolation == HdInterpolationConstant ||
++                                         normalsInterpolation == HdInterpolationFaceVarying;
++  /* Les normales par coin comptent ici comme un repli. Cycles les ecarte quand
++   * la geometrie floute sans qu'elles bougent avec elle (Mesh::add_vertex_normals) ;
++   * l'indicateur reprend alors la main, et un lissage approche vaut mieux qu'une
++   * facettisation franche que le maillage n'a jamais demandee. */
++  const bool smooth = !flatShadingEnabled && (subdivision || haveInterpolatableNormals);
+ 
+   // Initialize lookup table from polygon face to material shader index
+   VtIntArray faceShaders(_topology.GetNumFaces(), 0);
