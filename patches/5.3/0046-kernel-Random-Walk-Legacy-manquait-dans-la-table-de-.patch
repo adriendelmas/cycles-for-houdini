@@ -1,0 +1,46 @@
+From 41a12fc75d6b1a7f2cf422611b25ebc458074b01 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 3 Sep 2026 18:20:24 +0200
+Subject: [PATCH 46/46] kernel: Random Walk (Legacy) manquait dans la table de
+ saut des fermetures
+
+Trouve en cherchant la cause du rendu noir en sous-surface: svm_node_closure_bsdf_skip()
+liste les trois autres methodes BSSRDF -- burley, random_walk, random_walk_skin
+-- mais pas random_walk_legacy, qui retombait sur le cas par defaut et
+avancait le flux SVM de sizeof(SVMNodeSimpleBsdfData) au lieu de
+sizeof(SVMNodeBssrdfData), plusieurs uint trop court.
+
+Cette fonction n'est pas un cas rare: elle est appelee des qu'une fermeture
+doit etre sautee plutot qu'evaluee -- poids de melange nul, passe de shading
+volumique, masque de fonctionnalites qui n'est ni BSDF ni emission. Choisir
+Random Walk (Legacy) et atteindre l'un de ces chemins faisait lire n'importe
+quoi au reste du flux SVM.
+
+Bug independant de Houdini, dans le noyau lui-meme -- present tel quel sur la
+branche main de Blender au moment du rebase. Correctif d'une ligne: ajouter
+le cas manquant au groupe des trois autres.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+---
+ src/kernel/svm/closure.h | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/src/kernel/svm/closure.h b/src/kernel/svm/closure.h
+index 311bcf02..dd31a2bf 100644
+--- a/src/kernel/svm/closure.h
++++ b/src/kernel/svm/closure.h
+@@ -79,7 +79,14 @@ ccl_device_inline int svm_node_closure_bsdf_skip(int offset, const uint type)
+       break;
+     case CLOSURE_BSSRDF_BURLEY_ID:
+     case CLOSURE_BSSRDF_RANDOM_WALK_ID:
++    case CLOSURE_BSSRDF_RANDOM_WALK_LEGACY_ID:
+     case CLOSURE_BSSRDF_RANDOM_WALK_SKIN_ID:
++      /* Random Walk (Legacy) was missing here: it fell to the `default` case
++       * below and advanced `offset` by sizeof(SVMNodeSimpleBsdfData), several
++       * uints short of the actual SVMNodeBssrdfData it was written with. Every
++       * skip of that closure - a zero mix weight, a volume shading pass, any
++       * feature mask that is neither BSDF nor emission - misread everything
++       * the SVM stream held after it. */
+       offset += sizeof(SVMNodeBssrdfData) / sizeof(uint);
+       break;
+     default:

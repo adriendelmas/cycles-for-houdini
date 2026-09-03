@@ -1,7 +1,7 @@
 From b4eff508ef0c25f60396f36a4948b1ff49699a1f Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 01:21:05 +0200
-Subject: [PATCH 37/44] cases a cocher, section Base, et un fil ignore ne l'est
+Subject: [PATCH 37/46] cases a cocher, section Base, et un fil ignore ne l'est
  plus en silence
 
 thin_wall est une case a cocher: Cycles le declare SOCKET_IN_INT avec un defaut

@@ -949,3 +949,47 @@ un maillage sans normale reste facetté puisqu'il n'y a rien à interpoler.
 Reste à faire : faire suivre les normales au fil de l'obturateur. Cycles écarte
 les normales par coin quand la géométrie floute sans qu'elles bougent avec elle,
 et l'indicateur reprend alors la main — réglé sur *lisse*, faute de mieux.
+
+## Phase 14 — Diffusion sous-surfacique : noir sans raison ✅
+
+Un principled bsdf de l'utilisateur portait `subsurface_method = 0`. Aucune des
+quatre méthodes BSSRDF de Cycles ne vaut 0 — ce sont des identifiants de
+fermeture pris dans une énumération commune, 31 à 34. 0 est `CLOSURE_NONE_ID` :
+aucune fermeture du tout, silencieusement. D'où le noir, sans le moindre
+avertissement pour dire pourquoi.
+
+Vérifié avant toute correction : le même matériau avec `subsurface_method = 32`
+(random_walk, valide) rend normalement. Seule la validité de l'énumération
+change.
+
+**Pourquoi MaterialX n'était jamais touché.** Sa traduction de
+`standard_surface` écrit le poids, le rayon, l'échelle et l'anisotropie de la
+diffusion — jamais la méthode. Le défaut valide de Cycles reste donc
+toujours en place sur ce chemin, et seuls les nœuds Cycles posés directement
+pouvaient hériter d'une valeur incorrecte.
+
+**Le delegate transmettait l'entier sans jamais le vérifier.** `SetNodeValue()`
+appelait `node->set()` directement, alors que `NodeEnum::exists()` existe
+précisément pour ça. Une valeur hors registre est désormais rejetée, avec un
+avertissement, en laissant le défaut de Cycles en place — plutôt que de
+laisser le moteur shader silencieusement n'importe quoi.
+
+**Un vrai bug de noyau, trouvé en cherchant.** `svm_node_closure_bsdf_skip()`
+liste trois des quatre méthodes BSSRDF dans son groupe de saut, mais pas
+`random_walk_legacy` : ce cas retombait sur le défaut et avançait le flux SVM
+de plusieurs `uint` trop court. Cette fonction n'est pas un chemin rare — elle
+s'exécute dès qu'une fermeture doit être sautée plutôt qu'évaluée : poids de
+mélange nul, passe volumique, masque de fonctionnalités qui n'est ni BSDF ni
+émission. Choisir Random Walk (Legacy) et atteindre l'un de ces chemins faisait
+lire n'importe quoi au reste du flux. Bug indépendant de Houdini, présent tel
+quel sur `main` au moment du rebase — correctif d'une ligne.
+
+Vérifié après correction : `subsurface_method = 0` et `distribution = 1`
+(également hors registre) rendent désormais au bit près comme leurs
+équivalents valides. Banc : 97 rendus, 0 problème, aucune image de référence
+déplacée.
+
+**Comment la valeur invalide a pu être écrite reste ouvert** — l'HDA installée
+publie le bon menu (31-34), et un VOP fraîchement posé porte le bon défaut
+(32). La cause la plus probable est une promotion de paramètre côté Houdini
+qui n'a pas préservé les valeurs du menu et est repartie d'un index à zéro.

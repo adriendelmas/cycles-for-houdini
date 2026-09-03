@@ -1,0 +1,76 @@
+From 9895647024012c8b52ca42b7d0f962963ff79056 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 3 Sep 2026 18:20:13 +0200
+Subject: [PATCH 45/46] hydra: rejeter une valeur d'enum hors registre plutot
+ que de la transmettre telle quelle
+
+Un materiau utilisateur portait subsurface_method=0 sur un principled bsdf --
+une valeur qui n'existe dans aucune des quatre methodes de Cycles (31 a 34).
+0 est CLOSURE_NONE_ID: aucune fermeture du tout. Le rendu etait noir, sans
+avertissement, et rien ne disait pourquoi.
+
+Verifie avant correction: le meme materiau avec method=32 (random_walk, valide)
+rend normalement. La seule variable qui change est la validite de l'enum.
+
+SetNodeValue() transmettait l'entier a Cycles sans jamais consulter
+socket.enum_values, alors que NodeEnum::exists() existe precisement pour ca.
+Une valeur hors registre est desormais rejetee avec un avertissement, en
+laissant en place le defaut que Cycles porte deja sur ce socket -- au lieu de
+laisser le moteur shader silencieusement n'importe quoi.
+
+Le chemin MaterialX n'a jamais expose ce risque: sa traduction de
+standard_surface ecrit le poids, le rayon et l'echelle de la diffusion, jamais
+la methode -- le defaut valide de Cycles reste donc toujours en place. C'est
+pourquoi seuls les noeuds Cycles directs etaient touches.
+
+Verifie apres correction: subsurface_method=0 et distribution=1 (egalement
+hors registre) rendent desormais au bit pres comme leurs equivalents valides.
+Banc: 97 rendus, 0 probleme, aucune image de reference deplacee.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+---
+ src/hydra/node_util.cpp | 29 +++++++++++++++++++++++++++--
+ 1 file changed, 27 insertions(+), 2 deletions(-)
+
+diff --git a/src/hydra/node_util.cpp b/src/hydra/node_util.cpp
+index 7fb85f67..4af79e86 100644
+--- a/src/hydra/node_util.cpp
++++ b/src/hydra/node_util.cpp
+@@ -545,10 +545,35 @@ void SetNodeValue(Node *node, const SocketType &socket, const VtValue &value)
+     case SocketType::ENUM:
+       // Enum's can accept a string or an int
+       if (value.IsHolding<TfToken>() || value.IsHolding<std::string>()) {
+-        node->set(socket, convertToCycles<ustring>(value));
++        const ustring token = convertToCycles<ustring>(value);
++        if (socket.enum_values && !socket.enum_values->exists(token)) {
++          TF_WARN("'%s' is not a valid value for '%s' on Cycles node '%s'; keeping %s's default.",
++                  token.c_str(),
++                  socket.name.c_str(),
++                  node->name.c_str(),
++                  node->type->name.c_str());
++          break;
++        }
++        node->set(socket, token);
+       }
+       else {
+-        node->set(socket, convertToCycles<int>(value));
++        /* An enum's numeric values are Cycles closure IDs, not the 0-based
++         * index a promoted or overridden parameter can end up carrying
++         * instead - see A20. Cycles does not validate this itself: an
++         * unrecognised id is silently accepted and shades as whatever that
++         * number happens to collide with, which for a BSSRDF method is
++         * CLOSURE_NONE_ID - no closure at all, a black surface with no
++         * warning to say why. */
++        const int enumValue = convertToCycles<int>(value);
++        if (socket.enum_values && !socket.enum_values->exists(enumValue)) {
++          TF_WARN("%d is not a valid value for '%s' on Cycles node '%s'; keeping %s's default.",
++                  enumValue,
++                  socket.name.c_str(),
++                  node->name.c_str(),
++                  node->type->name.c_str());
++          break;
++        }
++        node->set(socket, enumValue);
+       }
+       break;
+     case SocketType::TRANSFORM:

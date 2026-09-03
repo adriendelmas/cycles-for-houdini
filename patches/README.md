@@ -5,7 +5,7 @@ vivent sur une branche a nous, en commits separes par sujet. Cette serie en est
 l'export par `git format-patch`.
 
     patches/5.2/   38 correctifs, base 3b97e190 (branche release/5.2)
-    patches/5.3/   44 correctifs, base 8424ed53 (branche main)
+    patches/5.3/   46 correctifs, base 8424ed53 (branche main)
 
 `tools/bootstrap.py` fait le chemin complet -- clone, `git am`, compilation.
 A la main, sur un clone deja pose :
@@ -74,6 +74,8 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0042` | le Cycles Material Builder n'etait dans aucun depot |
 | `0043` | hydra: flou par velocite, pour la geometrie dont le nombre de points varie |
 | `0044` | hydra: les normales par coin, au lieu de facetter ce qui ne l'est pas |
+| `0045` | hydra: rejeter une valeur d'enum hors registre plutot que de la transmettre telle quelle |
+| `0046` | kernel: Random Walk (Legacy) manquait dans la table de saut des fermetures |
 
 ---
 
