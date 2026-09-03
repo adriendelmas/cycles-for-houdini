@@ -29,9 +29,16 @@ where the work went.
 - Displacement, render settings surfaced in Solaris, and a long list of crash
   and correctness fixes to the delegate.
 
-Rendering is CPU and CUDA/OptiX. The GL display driver is off by default — it
-misbehaved in Houdini's viewport in four distinct ways, all documented in the
-patch series; rendering goes through the output driver instead.
+Rendering is CPU and CUDA/OptiX, chosen from **Render › Cycles Render Device**.
+The device is fixed when the render session is built, so it cannot come from a
+Render Settings node — and it describes the machine rather than the scene, so it
+is a per-installation preference the `.hip` does not carry.
+
+The GL display driver is on, which is what makes the viewport refresh as
+promptly as Blender's. It misbehaved in Houdini's viewport in four distinct
+ways; three were crashes, all fixed and documented in the patch series. The
+fourth, wrong pixels, has never been confirmed fixed and only shows in the
+viewport — `CYCLES_DISPLAY_DRIVER=0` falls back to the output driver.
 
 ## Cycles versions
 

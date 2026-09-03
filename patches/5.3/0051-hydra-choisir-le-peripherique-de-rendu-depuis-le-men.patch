@@ -1,0 +1,344 @@
+From 44d7d3fe38a85310c370cc27e1c4845c0892c78a Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Fri, 4 Sep 2026 00:03:56 +0200
+Subject: [PATCH 51/51] hydra: choisir le peripherique de rendu depuis le menu
+ d'Houdini
+
+Le peripherique se choisissait jusqu'ici en nommant l'entree du menu des
+moteurs - Cycles CPU ou Cycles GPU, qui ne sait pas distinguer OptiX de
+CUDA - ou en posant CYCLES_DEVICE avant de lancer Houdini. Un reglage
+qu'il faut relancer l'application pour changer n'est pas un reglage.
+
+Le voici dans Render > Cycles Render Device : Default, GPU, CPU, OptiX,
+CUDA, HIP, oneAPI, et le choix courant porte une coche.
+
+Il est **global a l'installation, pas au fichier**. Le peripherique decrit
+la machine - la carte qu'elle porte, ou son absence - et non la scene :
+range dans le .hip, il imposerait une RTX a qui n'en a pas. Il vit donc
+dans $HOUDINI_USER_PREF_DIR/cycles_device.pref, que scripts/pythonrc.py
+relit au demarrage, avant qu'aucun delegate n'existe. Un CYCLES_DEVICE
+deja pose par l'environnement gagne sur la preference : il vient de plus
+loin.
+
+Trois points de mecanique :
+
+* la variable est ecrite deux fois, os.environ et hou.putenv. Mesure sous
+  hython : toutes deux atteignent le getenv d'ucrtbase, celui que lit
+  TfGetenv dans le plugin, et le bloc d'environnement Win32, dont herite
+  le husk qu'Houdini lance ;
+* changer de peripherique demande une session neuve, donc un delegate
+  neuf : le menu bascule le viewport sur un autre moteur et revient.
+  restartRenderer() ne suffirait pas, il rebatit la scene, pas la session ;
+* un scriptMenuStripDynamic n'a pas de coche - la seule variante qui en
+  porte, scriptMenuStripDynamicRadio, demande une variable interne
+  d'Houdini que rien dans les menus livres n'emploie - donc le libelle
+  la porte.
+
+Mesure, en lisant la ligne "Path tracing on" avec l'entree GPU :
+
+    sans rien                RTX 3090 (OptiX)
+    CYCLES_DEVICE=CPU        Threadripper PRO 3995WX (128 threads)
+    CYCLES_DEVICE=OPTIX      RTX 3090 (OptiX)
+    CYCLES_DEVICE=CUDA       RTX 3090 (CUDA)
+
+Rien ne filtre la liste sur ce que la machine porte : enumerer les
+peripheriques hors du process de rendu n'est pas offert depuis Python, et
+Cycles retombe de lui-meme sur le CPU en le disant dans son log.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/CMakeLists.txt               |   8 ++
+ src/hydra/resources/MainMenuCommon.xml |  41 ++++++
+ src/hydra/resources/cycles_device.py   | 187 +++++++++++++++++++++++++
+ src/hydra/resources/pythonrc.py        |  18 +++
+ 4 files changed, 254 insertions(+)
+ create mode 100644 src/hydra/resources/MainMenuCommon.xml
+ create mode 100644 src/hydra/resources/cycles_device.py
+ create mode 100644 src/hydra/resources/pythonrc.py
+
+diff --git a/src/hydra/CMakeLists.txt b/src/hydra/CMakeLists.txt
+index dd6503ef..d8aaa70f 100644
+--- a/src/hydra/CMakeLists.txt
++++ b/src/hydra/CMakeLists.txt
+@@ -249,6 +249,14 @@ if(WITH_CYCLES_HYDRA_RENDER_DELEGATE)
+     # inutilisable.
+     delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources" "cycles_builder.py" "${CYCLES_INSTALL_PATH}/houdini/scripts/python")
+     delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources" "CyclesTools.shelf" "${CYCLES_INSTALL_PATH}/houdini/toolbar")
++    # Le choix du peripherique de rendu, dans le menu Render d'Houdini. Il ne
++    # peut pas vivre sur un noeud - il est fige a la construction de la session,
++    # et decrit la machine plutot que la scene - donc un menu global, une
++    # preference utilisateur, et le pythonrc qui la relit au demarrage, avant
++    # qu'aucun delegate ne soit cree.
++    delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources" "MainMenuCommon.xml" "${CYCLES_INSTALL_PATH}/houdini")
++    delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources" "cycles_device.py" "${CYCLES_INSTALL_PATH}/houdini/scripts/python")
++    delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources" "pythonrc.py" "${CYCLES_INSTALL_PATH}/houdini/scripts")
+   else()
+     delayed_install("${CMAKE_CURRENT_BINARY_DIR}/resources" "plugInfo.json" "${CYCLES_HYDRA_INSTALL_PATH}/${HdCyclesPluginName}/resources")
+   endif()
+diff --git a/src/hydra/resources/MainMenuCommon.xml b/src/hydra/resources/MainMenuCommon.xml
+new file mode 100644
+index 00000000..71ddfd16
+--- /dev/null
++++ b/src/hydra/resources/MainMenuCommon.xml
+@@ -0,0 +1,41 @@
++<?xml version="1.0" encoding="UTF-8"?>
++
++<!-- Le peripherique de rendu Cycles, dans le menu Render.
++
++     Il n'a pas sa place sur un noeud : le peripherique decrit la machine, pas
++     la scene, et un .hip qui l'emporterait imposerait une RTX a qui n'en a
++     pas. Le choix est donc global a l'installation, garde dans les preferences
++     utilisateur, et relu au demarrage par scripts/pythonrc.py.
++
++     Houdini fusionne les MainMenuCommon.xml trouves le long du HOUDINI_PATH :
++     nommer un id existant, ici render_menu, y ajoute nos entrees. -->
++
++<mainMenu>
++  <menuBar>
++    <subMenu id="render_menu">
++
++      <separatorItem id="cycles_device_sep"/>
++
++      <subMenu id="cycles_device_menu">
++      <label>Cycles Render Device</label>
++
++        <titleItem id="cycles_device_title">
++          <label>Applies to every Cycles render</label>
++        </titleItem>
++
++        <scriptMenuStripDynamic id="cycles_device_strip">
++          <contentsScriptCode><![CDATA[
++import cycles_device
++return cycles_device.menu_contents()
++]]></contentsScriptCode>
++          <scriptCode><![CDATA[
++import cycles_device
++cycles_device.menu_select(kwargs['selectedtoken'])
++]]></scriptCode>
++        </scriptMenuStripDynamic>
++
++      </subMenu>
++
++    </subMenu>
++  </menuBar>
++</mainMenu>
+diff --git a/src/hydra/resources/cycles_device.py b/src/hydra/resources/cycles_device.py
+new file mode 100644
+index 00000000..75cf6b49
+--- /dev/null
++++ b/src/hydra/resources/cycles_device.py
+@@ -0,0 +1,187 @@
++"""Le peripherique de rendu Cycles, choisi depuis Houdini.
++
++Le peripherique est fige a la construction de la session : ni un reglage
++`cycles:device` authore sur un prim RenderSettings -- husk ne le transmet
++jamais -- ni un parametre de noeud n'arrivent a temps. Les deux seuls leviers
++qui marchent sont l'entree du menu des moteurs (Cycles CPU / Cycles GPU) et la
++variable d'environnement `CYCLES_DEVICE`, lue par le plugin au moment ou il
++cree le delegate.
++
++Ce module manoeuvre la seconde depuis Houdini. Le choix est **global a
++l'installation, pas au fichier** : il ne se range pas dans le .hip mais dans
++`$HOUDINI_USER_PREF_DIR/cycles_device.pref`, ou `pythonrc.py` le relit au
++demarrage suivant. C'est bien ce qu'on veut d'un reglage qui decrit la machine
++-- la carte qu'elle porte, ou son absence -- et non la scene : un .hip passe
++d'une machine a l'autre, le peripherique non.
++
++Deux ecritures pour une seule variable : `os.environ`, que suit tout processus
++lance par Python, et `hou.putenv`, qui remplit la table d'environnement
++d'Houdini -- celle dont herite le husk qu'il lance lui-meme, et celle que lisent
++les expressions. Mesure faite sous hython : les deux atteignent le `getenv` de
++ucrtbase, celui-la meme que lit `TfGetenv` dans le plugin.
++
++Changer de peripherique demande de reconstruire la session : le menu bascule
++donc le viewport sur un autre moteur et revient, ce qui detruit le delegate et
++en cree un neuf. Un rendu batch, lui, part d'un husk neuf a chaque fois.
++"""
++
++import os
++import sys
++
++import hou
++
++ENV_VAR = "CYCLES_DEVICE"
++PREF_FILE = "cycles_device.pref"
++
++# Les chaines que `Device::type_from_string` accepte, plus "GPU", que le plugin
++# resout vers le premier backend que la machine offre (OptiX, CUDA, HIP,
++# oneAPI, Metal). La valeur vide laisse decider l'entree du menu des moteurs.
++DEVICES = [
++    ("", "Default (renderer entry)"),
++    ("GPU", "GPU (best available)"),
++    ("CPU", "CPU"),
++    ("OPTIX", "OptiX"),
++    ("CUDA", "CUDA"),
++    ("HIP", "HIP"),
++    ("ONEAPI", "oneAPI"),
++]
++if sys.platform == "darwin":
++    DEVICES.append(("METAL", "Metal"))
++
++# Rien ici ne verifie qu'un peripherique existe : c'est Cycles qui le fait, et
++# il retombe sur le CPU en le disant dans son log. Presenter une liste filtree
++# demanderait d'enumerer les peripheriques hors du process de rendu, ce que la
++# bibliotheque ne propose pas depuis Python.
++
++
++def preference_file():
++    """Le fichier ou le choix survit a la fermeture d'Houdini."""
++    home = hou.text.expandString("$HOUDINI_USER_PREF_DIR")
++    return os.path.join(home, PREF_FILE)
++
++
++def current():
++    """Le peripherique demande, ou "" si l'entree du menu decide."""
++    return os.environ.get(ENV_VAR, "").strip().upper()
++
++
++def label_for(device):
++    for token, label in DEVICES:
++        if token == device:
++            return label
++    # Un CYCLES_DEVICE pose a la main, hors de notre liste : le montrer tel quel
++    # plutot que de faire comme s'il n'existait pas.
++    return device
++
++
++def apply_device(device):
++    """Poser la variable dans les deux environnements, sans rien enregistrer."""
++    device = (device or "").strip().upper()
++    if device:
++        os.environ[ENV_VAR] = device
++    else:
++        os.environ.pop(ENV_VAR, None)
++    # Une chaine vide vaut absence pour le plugin, qui teste `empty()`.
++    hou.putenv(ENV_VAR, device)
++    return device
++
++
++def save(device):
++    path = preference_file()
++    try:
++        if device:
++            with open(path, "w") as handle:
++                handle.write(device + "\n")
++        elif os.path.exists(path):
++            os.remove(path)
++    except OSError as error:
++        hou.ui.setStatusMessage(
++            "Cycles: could not write {}: {}".format(path, error),
++            severity=hou.severityType.Warning,
++        )
++
++
++def restore():
++    """Relire le choix enregistre. Appele par pythonrc.py au demarrage.
++
++    Un `CYCLES_DEVICE` deja pose dans l'environnement -- par un package, un
++    script de ferme, un shell -- gagne : il vient de plus loin que nous et
++    l'ecraser en silence serait le pire des deux mondes.
++    """
++    if os.environ.get(ENV_VAR, "").strip():
++        return current()
++    try:
++        with open(preference_file()) as handle:
++            device = handle.read().strip()
++    except OSError:
++        return ""
++    return apply_device(device)
++
++
++def restart_viewports():
++    """Reconstruire les delegates Cycles vivants, et dire lesquels.
++
++    Basculer sur un autre moteur puis revenir detruit le delegate et en fait
++    creer un neuf, ce qui est le seul moment ou `CYCLES_DEVICE` est relu.
++    `restartRenderer()` ne suffit pas : il rebatit la scene, pas la session.
++    """
++    if not hou.isUIAvailable():
++        return []
++
++    restarted = []
++    for tab in hou.ui.paneTabs():
++        if tab.type() != hou.paneTabType.SceneViewer:
++            continue
++        try:
++            renderer = tab.currentHydraRenderer()
++            available = tab.hydraRenderers()
++        except hou.Error:
++            continue
++        if "cycles" not in renderer.lower():
++            continue
++        others = [name for name in available if name != renderer]
++        if not others:
++            continue
++        # Houdini GL de preference : il ne construit pas de session de rendu,
++        # donc l'aller-retour ne coute rien.
++        detour = next((name for name in others if "houdini" in name.lower()), others[0])
++        tab.setHydraRenderer(detour)
++        tab.setHydraRenderer(renderer)
++        restarted.append(renderer)
++    return restarted
++
++
++def set_device(device):
++    """Choisir un peripherique : le poser, l'enregistrer, relancer les rendus."""
++    device = apply_device(device)
++    save(device)
++    restarted = restart_viewports()
++
++    message = "Cycles render device: {}".format(label_for(device))
++    if restarted:
++        message += " (restarted {})".format(", ".join(sorted(set(restarted))))
++    else:
++        message += " -- takes effect on the next render"
++    if hou.isUIAvailable():
++        hou.ui.setStatusMessage(message)
++    return message
++
++
++def menu_contents():
++    """Jetons et libelles, a plat, pour le scriptMenuStripDynamic du menu."""
++    device = current()
++    known = [token for token, _ in DEVICES]
++    entries = list(DEVICES)
++    if device and device not in known:
++        entries.append((device, device))
++
++    contents = []
++    for token, label in entries:
++        # Un scriptMenuStripDynamic n'a pas de coche : le libelle la porte.
++        contents.append(token)
++        contents.append(("✓ " if token == device else "    ") + label)
++    return contents
++
++
++def menu_select(token):
++    set_device(token)
+diff --git a/src/hydra/resources/pythonrc.py b/src/hydra/resources/pythonrc.py
+new file mode 100644
+index 00000000..0b72fe9d
+--- /dev/null
++++ b/src/hydra/resources/pythonrc.py
+@@ -0,0 +1,18 @@
++"""Relire le peripherique de rendu Cycles au demarrage d'Houdini.
++
++Houdini execute le pythonrc.py de chaque entree du HOUDINI_PATH au demarrage de
++son interpreteur, avant qu'aucun delegate ne soit cree -- c'est le seul moment
++qui vaille, puisque le plugin lit CYCLES_DEVICE quand il construit la session.
++
++Rien ici ne doit pouvoir empecher Houdini de demarrer : ce fichier est charge
++pour tout le monde, y compris hython et les fermes de rendu.
++"""
++
++try:
++    import cycles_device
++
++    cycles_device.restore()
++except Exception:  # noqa: BLE001 - un demarrage d'Houdini vaut mieux qu'un log
++    import traceback
++
++    traceback.print_exc()
+-- 
+2.53.0.windows.2
+

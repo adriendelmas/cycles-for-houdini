@@ -1,7 +1,7 @@
 From 1f651c0bca27774b15d3c6038e747b48dd6a9750 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 01:38:53 +0200
-Subject: [PATCH 01/50] cmake: add missing USD libraries for the Houdini build
+Subject: [PATCH 01/51] cmake: add missing USD libraries for the Houdini build
 
 FindUSDHoudini.cmake did not list hdsi, which src/hydra/file_reader.cpp
 needs for HdSiExtComputationPrimvarPruningSceneIndex, breaking the link of

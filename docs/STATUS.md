@@ -1181,3 +1181,52 @@ arrière.
 
 Banc : 97 exportés, 97 rendus, 0 problème ; 96 images sur 97 identiques au
 pixel près, la seule différente étant `cycles_set_normal`, déjà ouvert (A19).
+
+## Phase 19 — Le périphérique se choisit dans un menu d'Houdini ✅
+
+Suite de la phase 18 : `CYCLES_DEVICE` fonctionne, mais il fallait le poser
+avant de lancer Houdini. Un réglage qu'on ne peut pas changer sans redémarrer
+l'application n'en est pas vraiment un.
+
+**Render > Cycles Render Device** — Default, GPU, CPU, OptiX, CUDA, HIP,
+oneAPI, le choix courant portant une coche.
+
+**Global à l'installation, pas au fichier.** Le périphérique décrit la machine
+— la carte qu'elle porte, ou son absence — et non la scène. Rangé dans le
+`.hip`, il imposerait une RTX à qui n'en a pas ; c'est aussi pourquoi il n'a
+rien à faire sur un nœud Render Settings, en plus de n'y avoir aucun effet
+(phase 18). Il vit donc dans `$HOUDINI_USER_PREF_DIR/cycles_device.pref`, que
+`scripts/pythonrc.py` relit au démarrage, avant qu'aucun delegate n'existe. Un
+`CYCLES_DEVICE` déjà posé par l'environnement — package, ferme, shell — gagne
+sur la préférence : il vient de plus loin.
+
+Trois points de mécanique :
+
+* la variable est écrite deux fois, `os.environ` et `hou.putenv`. Mesuré sous
+  hython : toutes deux atteignent le `getenv` d'ucrtbase, celui-là même que lit
+  `TfGetenv` dans le plugin, et le bloc d'environnement Win32, dont hérite le
+  husk qu'Houdini lance ;
+* changer de périphérique demande une session neuve, donc un delegate neuf : le
+  menu bascule le viewport sur un autre moteur et revient. `restartRenderer()`
+  ne suffirait pas — il rebâtit la scène, pas la session ;
+* un `scriptMenuStripDynamic` n'a pas de coche. La seule variante qui en porte,
+  `scriptMenuStripDynamicRadio`, réclame une variable interne d'Houdini que
+  **aucun** des menus livrés n'emploie — donc le libellé porte la coche.
+
+Mesuré par la ligne `Path tracing on`, entrée GPU, en lançant husk depuis un
+Python qui vient de poser la variable — le chemin exact d'un rendu batch
+déclenché depuis Houdini :
+
+| | rendu réel |
+|---|---|
+| sans rien | RTX 3090 (OptiX) |
+| `CPU` | Threadripper PRO 3995WX (128 threads) |
+| `OPTIX` | RTX 3090 (OptiX) |
+| `CUDA` | RTX 3090 (CUDA) |
+
+**Reste à vérifier dans l'interface** : la fusion du `MainMenuCommon.xml` et
+l'aller-retour de moteur dans le viewport ne se constatent qu'Houdini ouvert.
+
+Rien ne filtre la liste sur ce que la machine porte réellement : énumérer les
+périphériques hors du process de rendu n'est pas offert depuis Python, et
+Cycles retombe de lui-même sur le CPU en le disant dans son log.

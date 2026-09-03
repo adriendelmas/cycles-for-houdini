@@ -1,7 +1,7 @@
 From f1ac109082266af212e73c9caefe59fb20928239 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 00:46:00 +0200
-Subject: [PATCH 36/50] interface des noeuds: connecteurs, selecteurs de
+Subject: [PATCH 36/51] interface des noeuds: connecteurs, selecteurs de
  fichier, cases a cocher
 
 Un connecteur n'est emis que pour un socket que Cycles accepte de brancher. Le

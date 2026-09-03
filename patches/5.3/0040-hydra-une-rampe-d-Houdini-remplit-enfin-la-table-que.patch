@@ -1,7 +1,7 @@
 From 25de0d48fe0a6c9e01a38e02a487ccead07206b3 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 14:24:24 +0200
-Subject: [PATCH 40/50] hydra: une rampe d'Houdini remplit enfin la table que
+Subject: [PATCH 40/51] hydra: une rampe d'Houdini remplit enfin la table que
  Cycles attend
 
 Color Ramp, RGB Curves, Vector Curves et Float Curve ne calculaient rien du
