@@ -1064,11 +1064,13 @@ n'était jamais compilé du tout. Cause : la scène de test posait une USD
 `Sphere` à la main plutôt qu'un `Mesh`, et sa liaison de matériau ne
 parvenait pas jusqu'au delegate, qui retombait sur `default_surface` sans
 avertissement. Remplacé par un `Mesh` calqué sur le banc de test existant
-(déjà éprouvé) et le vrai signal est apparu aussitôt. **Sans rapport avec
-ce correctif, non creusé plus loin** : la liaison de matériau d'une
-`Sphere` USD posée à la main mériterait un jour d'être vérifiée pour de
-bon — possible artefact de contourner le pipeline d'autorat habituel
-d'Houdini plutôt qu'un vrai bug du delegate.
+(déjà éprouvé) et le vrai signal est apparu aussitôt.
+
+Ce n'était pas une découverte : **c'est l'anomalie A1**, déjà consignée plus
+haut. `kSupportedRPrimTypes` ne déclare que `basisCurves`, `mesh`, `points`
+et `volume` — une `Sphere` USD n'est donc jamais rendue, et perdre son
+matériau en est la conséquence directe. J'avais d'abord signalé ça comme une
+piste inédite à vérifier ; c'était déjà écrit noir sur blanc.
 
 **Une régression attrapée avant tout commit.** Le facteur d'échelle de
 Cycles n'a pas d'équivalent dans MaterialX ; comme c'est lui qui active ou
@@ -1094,3 +1096,44 @@ pixels au-dessus de 1e-6 — FAILURE côté `hoiiotool --diff`, comme attendu).
 Banc des 97 nœuds : 0 problème, 96 images sur 97 identiques au pixel près à
 la référence précédente — la seule différence est `cycles_set_normal`,
 déjà ouvert (A19), sans rapport.
+
+## Phase 17 — Réactivité : le menu proposait le CPU en premier ✅
+
+Signalé : « c'est assez long à charger et surtout à rendre, beaucoup plus que
+dans Blender alors que c'est le même moteur ».
+
+**Mesuré avant de toucher quoi que ce soit**, même scène, husk, RTX 3090 :
+
+| | CPU | GPU |
+|---|---|---|
+| Coût fixe seul (1 échantillon) | 5,4 s | 3,6 s |
+| 1024 échantillons en 960×720 | 9,1 s | 4,7 s |
+
+Soit environ **quatre fois le débit de trace**, et un démarrage plus court
+par-dessus. Le build porte bien CUDA et OptiX (`WITH_CYCLES_DEVICE_OPTIX=ON`,
+SDK 9.1) et les kernels OptiX sont installés — le GPU était donc disponible,
+simplement pas choisi.
+
+**Cause** : le delegate part sur le CPU sauf mention contraire, et les deux
+entrées du menu suivaient l'ordre d'Houdini pour Karma — CPU au-dessus.
+SideFX a ses raisons (son XPU reste jeune), pas nous : OptiX est le chemin
+que Cycles emploie depuis des années, et celui que tout utilisateur venant de
+Blender croit prendre. Les priorités sont échangées : **Cycles GPU (45)
+au-dessus de Cycles CPU (44)**.
+
+**Ce qui n'est pas en cause**, vérifié au passage :
+
+* le coût fixe de husk n'est pas le nôtre — Karma démarre en **6,9 s** sur la
+  même scène, contre 3,6 s pour nous ;
+* la logique interactive est celle de Blender — `session->reset()` seulement
+  quand `scene->need_reset()` le dit, pas à chaque rafraîchissement ;
+* le driver de sortie a déjà son chemin sans copie quand la tuile couvre tout
+  le tampon.
+
+**Ce qui reste en écart avec Blender** : le display driver est désactivé par
+défaut depuis le correctif 0012 — il partage le contexte GL de l'hôte pour
+blitter les tuiles dans une texture, ce qui avait produit quatre défauts
+distincts dans le viewport d'Houdini, dont deux crashs. Blender, lui, s'en
+sert toujours. `CYCLES_DISPLAY_DRIVER=1` le réactive pour qui veut tenter le
+rafraîchissement plus direct, en connaissance de cause. **Le rendre sûr par
+défaut reste ouvert** — c'est le vrai reliquat de réactivité côté viewport.

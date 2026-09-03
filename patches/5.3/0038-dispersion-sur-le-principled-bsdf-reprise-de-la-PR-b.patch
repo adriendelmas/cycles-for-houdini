@@ -1,7 +1,7 @@
 From 51494370d3ae89ab9d8450877ef0b00013f95ef2 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 13:14:49 +0200
-Subject: [PATCH 38/48] dispersion sur le principled bsdf, reprise de la PR
+Subject: [PATCH 38/49] dispersion sur le principled bsdf, reprise de la PR
  blender 162041
 
 Deux sockets nouvelles dans Transmission -- l'echelle de dispersion et le

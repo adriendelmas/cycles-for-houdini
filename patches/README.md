@@ -5,7 +5,7 @@ vivent sur une branche a nous, en commits separes par sujet. Cette serie en est
 l'export par `git format-patch`.
 
     patches/5.2/   38 correctifs, base 3b97e190 (branche release/5.2)
-    patches/5.3/   48 correctifs, base 8424ed53 (branche main)
+    patches/5.3/   49 correctifs, base 8424ed53 (branche main)
 
 `tools/bootstrap.py` fait le chemin complet -- clone, `git am`, compilation.
 A la main, sur un clone deja pose :
@@ -78,6 +78,7 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0046` | kernel: Random Walk (Legacy) manquait dans la table de saut des fermetures |
 | `0047` | hydra: un seul terminal a trois entrees, plutot que trois connecteurs qui se contredisent |
 | `0048` | hydra: la dispersion du MaterialX standard_surface, vers le principled bsdf qui la porte enfin |
+| `0049` | hydra: presenter Cycles GPU avant Cycles CPU dans le menu des moteurs |
 
 ---
 

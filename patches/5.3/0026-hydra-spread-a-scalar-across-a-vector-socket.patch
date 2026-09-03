@@ -1,7 +1,7 @@
 From b32619b1136f1be6a56db4a85c769d6b7260e711 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 16:49:43 +0200
-Subject: [PATCH 26/48] hydra: spread a scalar across a vector socket
+Subject: [PATCH 26/49] hydra: spread a scalar across a vector socket
 
 USD defines no cast from a float to a GfVec3f, so convertToCycles<float3> fell
 through to its warning and returned zero. Every MaterialX node that combines a

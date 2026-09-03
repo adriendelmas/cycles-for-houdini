@@ -1,7 +1,7 @@
 From 7d00a626e196afd66f52b494f144b1a55c15774a Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 2 Sep 2026 16:09:32 +0200
-Subject: [PATCH 35/48] hydra: an empty string default crashed the Sdr parser
+Subject: [PATCH 35/49] hydra: an empty string default crashed the Sdr parser
 
 Cycles' ustring hands back a null pointer when it holds nothing, and building a
 std::string from that walked off the end. An empty default is exactly what an
