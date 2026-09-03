@@ -136,8 +136,8 @@ Le delegate accepte, depuis un prim `RenderSettings` USD :
 | Clé | Effet |
 |---|---|
 | `cycles:samples` | nombre d'échantillons |
-| `cycles:device` | CPU / CUDA / OPTIX… |
-| `cycles:threads` | threads CPU |
+| ~~`cycles:device`~~ | **n'arrive jamais sous husk** — voir phase 18 |
+| ~~`cycles:threads`~~ | idem |
 | `cycles:time_limit` | limite de temps |
 | `cycles:sample_offset` | décalage d'échantillons |
 | `cycles:integrator:<socket>` | **tout** socket de l'intégrateur |
