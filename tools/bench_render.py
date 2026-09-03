@@ -14,7 +14,9 @@ import sys
 
 ROOT = r"E:\WORK\PERSONNAL STUFF\HOUDINI\hdCycles"
 HFS = r"E:\Side Effects Software\Houdini22.0.368\bin"
-BENCH = os.path.join(ROOT, "tests", "usd", "bench")
+# Quelle installation viser : `install` pour la 5.2, `install-53` pour la 5.3.
+INSTALL = os.environ.get("CYCLES_INSTALL_DIR", "install")
+BENCH = os.path.join(ROOT, "tests", "usd", "bench" if INSTALL == "install" else "bench-53")
 SCENES = os.path.join(BENCH, "scenes")
 IMAGES = os.path.join(BENCH, "images")
 for d in (SCENES, IMAGES):
@@ -24,7 +26,7 @@ for d in (SCENES, IMAGES):
 BASE = open(os.path.join(ROOT, "tests", "usd", "phase4b_mtlx.usda"), encoding="utf-8").read()
 
 env = dict(os.environ)
-env["PXR_PLUGINPATH_NAME"] = "E:/WORK/PERSONNAL STUFF/HOUDINI/hdCycles/install/houdini/dso/usd_plugins"
+env["PXR_PLUGINPATH_NAME"] = os.path.join(ROOT, INSTALL, "houdini", "dso", "usd_plugins")
 env["PATH"] = HFS + ";" + env["PATH"]
 
 

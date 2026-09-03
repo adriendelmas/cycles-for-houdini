@@ -1,6 +1,8 @@
 external/cycles/
+external/cycles-53/
 build/
 install/
+install-53/
 *.user
 *.log
 tests/usd/*.exr

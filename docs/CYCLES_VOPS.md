@@ -80,6 +80,7 @@ rendu. Passer par la chaîne complète est le seul moyen de tester les nœuds
 générés plutôt que le seul delegate.
 
 ```
+CYCLES_INSTALL_DIR=install-53 hython tools/build_cycles_vops.py   # bibliotheque 5.3
 hython tools/bench_export.py     # un USD par nœud
 python tools/bench_render.py     # un rendu par nœud
 python tools/bench_diff.py       # ce qui ne change rien à l'image
@@ -136,6 +137,11 @@ un champ à parcourir plutôt qu'une chaîne à coller.
 forme d'entier, et rien ne le distingue alors d'un compteur : le delegate le
 signale maintenant dans les métadonnées, et l'interface n'offre plus un champ
 libre là où seuls zéro et un ont un sens.
+
+**Le Color Ramp n'a pas de rampe.** Ses sockets `ramp` et `ramp_alpha` sont
+des tableaux, ecartes par le meme filtre que les sockets pointes. Le noeud est
+donc pose mais inerte : il emet la valeur par defaut de Cycles. Voir A18 dans
+`docs/STATUS.md`.
 
 **Les sections sont repliables, pas des onglets.** Le mot-clé de Houdini est
 `groupcollapsible` ; un simple `group` fabrique des onglets et rejette tout ce

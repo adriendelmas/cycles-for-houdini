@@ -26,7 +26,12 @@ from pxr import Sdr
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-OTLS = os.path.join(ROOT, "install", "houdini", "otls")
+# Quelle installation viser. Les deux moteurs cohabitent — `install` pour la
+# 5.2, `install-53` pour la 5.3 — et la bibliotheque doit etre regeneree pour
+# chacune : le registre Sdr dont elle derive est publie par le delegate
+# construit, dont les noeuds changent d'une version a l'autre.
+INSTALL = os.environ.get("CYCLES_INSTALL_DIR", "install")
+OTLS = os.path.join(ROOT, INSTALL, "houdini", "otls")
 LIBRARY = os.path.join(OTLS, "cycles_vops.hda")
 
 RENDER_CONTEXT = "cycles"

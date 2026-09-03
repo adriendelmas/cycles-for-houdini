@@ -778,3 +778,59 @@ crée, et les avertissements portent sur des noms UsdPreviewSurface
 Non résolu. La résolution du contexte semble se faire côté Houdini plutôt que
 par la liste que le delegate déclare. Sans effet sur un USD MaterialX Builder,
 qui est le cas le mieux couvert.
+
+## Phase 10 — Cycles 5.3 en installation parallèle ✅
+
+Voir `docs/CYCLES_53.md` pour le détail — bascule, fabrication, pièges.
+
+La 5.2 et la 5.3 cohabitent. Un seul mot change dans le package Houdini :
+`"CYCLES_BUILD": "install"` ou `"install-53"`.
+
+**37 des 38 correctifs rejoués** sur `origin/main`. Le 0004 abandonné comme
+obsolète, la moitié du 0018 aussi : l'amont fait désormais ces deux choses
+lui-même.
+
+### Non-régression 5.2 → 5.3
+
+| vérification | résultat |
+|---|---|
+| Banc des 97 nœuds — export | 97 exportés, 0 problème |
+| Banc des 97 nœuds — rendu | 97 rendus, 0 problème |
+| Banc — effet sur l'image | 97/97 modifient l'image |
+| Scène MaterialX complète | **identique au bit près** |
+| Dispersion | fonctionne, mesurée |
+
+La scène MaterialX rendant exactement la même image sur les deux moteurs, la
+fusion de `material.cpp` — là où étaient les conflits — est propre.
+
+Comparé nœud par nœud entre les deux moteurs, l'écart est nul partout sauf
+trois endroits :
+
+* **`rgb_ramp` — 77 % sur le vert.** Voir A18 : le nœud n'a pas de rampe.
+* **`rgb_curves` 3,8 %, `set_normal` 3,2 %** — un seul canal chacun.
+* **Neuf nœuds de fermeture à exactement 3,02 %**, avec des valeurs identiques
+  au chiffre près : ils rendent tous la même image, c'est un décalage global du
+  chemin des fermetures venu de l'amont, pas une régression par nœud.
+
+### A18 — Le nœud Color Ramp n'a aucune rampe ⚠️ OUVERT
+
+`cycles_rgb_ramp` s'affiche « Color Ramp » et n'expose que `interpolate` et
+`fac`. Ses deux sockets utiles, `ramp` et `ramp_alpha`, sont des **tableaux**,
+que le générateur de VOP écarte au même titre que les sockets pointés.
+
+Le nœud émet donc la valeur par défaut de Cycles, quelle qu'elle soit — d'où
+une moyenne de vert à **2,81** en 5.2 contre **0,65** en 5.3 sur le banc. Ni
+l'une ni l'autre n'est une couleur choisie par l'utilisateur.
+
+Ce n'est **pas une régression de la 5.3** : le défaut existe identiquement en
+5.2, et la comparaison entre moteurs n'a fait que le révéler.
+
+Deux issues, au choix :
+
+1. **Le brancher** — un `hou.RampParmTemplate` sur le VOP, et côté delegate une
+   conversion vers le `array<float3>` que `RGBRampNode` attend. C'est du travail
+   neuf : rien dans le delegate ne lit aujourd'hui de tableau de couleurs, la
+   gestion de rampe existante (`ND_ramplr`, `ND_ramptb`) est un dégradé
+   MaterialX à deux couleurs, sans rapport.
+2. **Le retirer** — conforme à la règle posée pour les autres entrées : une
+   entrée qui ne calcule rien induit en erreur plus qu'elle ne sert.

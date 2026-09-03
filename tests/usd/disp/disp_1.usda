@@ -1,0 +1,65 @@
+#usda 1.0
+(
+    defaultPrim = "world"
+    metersPerUnit = 1
+    upAxis = "Y"
+    startTimeCode = 1
+    endTimeCode = 1
+)
+
+def Xform "world"
+{
+    def Camera "camera"
+    {
+        float focalLength = 50
+        float horizontalAperture = 36
+        float verticalAperture = 24
+        float2 clippingRange = (0.1, 1000)
+        matrix4d xformOp:transform = ( (1,0,0,0), (0,1,0,0), (0,0,1,0), (0, 0, 7, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+
+    def RectLight "key"
+    {
+        float inputs:width = 0.35
+        float inputs:height = 0.35
+        float inputs:intensity = 4000
+        color3f inputs:color = (1, 1, 1)
+        bool inputs:normalize = 1
+        matrix4d xformOp:transform = ( (-1,0,0,0), (0,1,0,0), (0,0,-1,0), (0, 0, -6, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+
+    def Mesh "ball" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </world/Materials/glass>
+        int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+        int[] faceVertexIndices = [0, 3, 2, 1,  4, 5, 6, 7,  3, 7, 6, 2,  0, 1, 5, 4,  0, 4, 7, 3,  1, 2, 6, 5]
+        point3f[] points = [(-1,-1,-1), (1,-1,-1), (1,-1,1), (-1,-1,1), (-1,1,-1), (1,1,-1), (1,1,1), (-1,1,1)]
+        uniform token subdivisionScheme = "catmullClark"
+        int[] primvars:osd_levels = [4]
+    }
+
+    def Scope "Materials"
+    {
+        def Material "glass"
+        {
+            token outputs:cycles:surface.connect = </world/Materials/glass/surface.outputs:BSDF>
+
+            def Shader "surface"
+            {
+                uniform token info:id = "cycles_principled_bsdf"
+                color3f inputs:base_color = (1, 1, 1)
+                float inputs:transmission_weight = 1
+                float inputs:roughness = 0
+                float inputs:metallic = 0
+                float inputs:ior = 1.55
+                float inputs:transmission_dispersion_scale = 1
+                float inputs:transmission_dispersion_abbe_number = 20
+                token outputs:BSDF
+            }
+        }
+    }
+}
