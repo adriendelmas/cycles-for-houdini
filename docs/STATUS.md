@@ -993,3 +993,50 @@ déplacée.
 publie le bon menu (31-34), et un VOP fraîchement posé porte le bon défaut
 (32). La cause la plus probable est une promotion de paramètre côté Houdini
 qui n'a pas préservé les valeurs du menu et est repartie d'un index à zéro.
+
+## Phase 15 — Le displacement et le volume ne branchaient pas sur leur terminal ✅
+
+Signalé par capture : le displacement du Material Builder se comportait en
+`vector` générique et le volume en `surface`, alors qu'Houdini attend
+`displacement` et `atmosphere` sur ces terminaux précis.
+
+**Vérifié en isolant la variable**, avant toute correction : brancher
+`cycles_displacement` sur le terminal Displacement, ou `cycles_principled_volume`
+sur le terminal Volume, du Material Builder tel qu'il existait, levait
+`"Input data type does not match output for input 'suboutput'"`. Le graphe
+compilait quand même — d'où un bug silencieux plutôt qu'un blocage net.
+
+**Cause** : Cycles n'a qu'un seul type de fermeture — un volume et un BSDF de
+surface partagent le même `SocketType::CLOSURE`, publiés tous deux comme
+`terminal` côté Sdr — donc le générateur de VOP (`build_cycles_vops.py`)
+étiquetait indistinctement tout nœud à sortie de fermeture `surface`, et les
+nœuds de displacement gardaient le connecteur générique `vector` de leur
+socket Sdr. Houdini, lui, exige que le connecteur du nœud branché corresponde
+exactement à ce qu'attend le terminal — vérifié en comparant à
+`mtlxdisplacement`, dont la sortie porte explicitement le connecteur
+`displacement`.
+
+**Correctif ciblé**, pas une bascule générale : les quelques nœuds qui ne
+terminent jamais qu'un seul type de réseau reçoivent maintenant le bon
+connecteur et le bon `shadertype` — `displacement`/`vector_displacement` →
+`displacement`, `principled_volume`/`absorption_volume`/`scatter_volume`/
+`volume_coefficients` → `atmosphere`. Les mélangeurs génériques (`add_closure`,
+`mix_closure`...) restent `surface` : un réseau de volume peut légitimement
+s'en servir aussi, et rien dans le registre Sdr ne dit lequel des deux usages
+est visé. Les combiner directement dans le terminal Volume redonnerait donc la
+même erreur — limite connue, pas encore résolue.
+
+**Le Material Builder passe en même temps d'un `subnetconnector` par terminal
+à un seul `suboutput` à trois entrées nommées** (surface/displacement/volume),
+sur le modèle du builder Karma. Le rôle exporté se déduit désormais du
+connecteur du nœud branché, plus d'un `parmtype` déclaré à côté qui pouvait le
+contredire.
+
+Vérifié après correction : export réel Material Library → USD, les trois
+sorties `outputs:cycles:surface/displacement/volume` pointent chacune vers le
+bon shader. Banc : 97 rendus, 0 problème ; 96 images sur 97 identiques au
+pixel près à la référence précédente — la seule différence est
+`cycles_set_normal`, déjà ouvert (A19), sans rapport avec ce correctif.
+
+Ne concerne que le côté Houdini du plugin (génération du VOP, Material
+Builder) — rien n'a changé côté Cycles.

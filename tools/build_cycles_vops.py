@@ -184,10 +184,37 @@ def default_literal(prop, components):
     return "%g" % float(value)
 
 
-def shader_type(sdr_node):
+# Cycles n'a qu'un seul type de fermeture : le même `SocketType::CLOSURE` sert
+# aussi bien à un BSDF de surface qu'à un volume, et Sdr les publie tous deux
+# comme `terminal`. Houdini, lui, distingue par contre les connecteurs de
+# nuanceur - `surface`, `displacement`, `atmosphere` - et un `subnetconnector`
+# refuse un fil dont le connecteur ne porte pas exactement le nom attendu
+# (vérifié : brancher une sortie `vector` ou `surface` sur un connecteur
+# `parmtype` Displacement ou Atmosphere lève "Input data type does not match
+# output"). Il faut donc mentir sciemment sur ces quelques nœuds qui ne
+# terminent jamais qu'un seul type de réseau - les mélangeurs génériques
+# (`add_closure`, `mix_closure`, `subsurface_scattering`...) restent eux
+# `surface`, car un réseau de volume peut légitimement s'en servir aussi et
+# rien ne dit dans le registre lequel des deux emplois est visé.
+VOLUME_TERMINAL_NODES = {"absorption_volume", "scatter_volume", "volume_coefficients",
+                         "principled_volume"}
+DISPLACEMENT_TERMINAL_NODES = {"displacement", "vector_displacement"}
+
+# Connecteur -> ce que le `subnetconnector` du builder attend en face (voir
+# resources/cycles_builder.py, PARMTYPE_DISPLACEMENT et PARMTYPE_ATMOSPHERE).
+OUTPUT_KIND_OVERRIDES = {name: "displacement" for name in DISPLACEMENT_TERMINAL_NODES}
+OUTPUT_KIND_OVERRIDES.update({name: "atmosphere" for name in VOLUME_TERMINAL_NODES})
+
+
+def shader_type(node_id, sdr_node):
     """Ce que le nœud produit, ce qui décide de sa place dans le menu."""
-    for name in sdr_node.GetShaderOutputNames():
-        if str(sdr_node.GetShaderOutput(name).GetType()) == "terminal":
+    name = node_id[len(PREFIX):]
+    if name in DISPLACEMENT_TERMINAL_NODES:
+        return "displacement"
+    if name in VOLUME_TERMINAL_NODES:
+        return "atmosphere"
+    for out_name in sdr_node.GetShaderOutputNames():
+        if str(sdr_node.GetShaderOutput(out_name).GetType()) == "terminal":
             return "surface"
     return "generic"
 
@@ -306,7 +333,7 @@ def dialog_script(node_id, sdr_node):
     out = ["{", "    name\t%s" % node_id, "    script\t%s" % node_id,
            '    label\t"%s"' % escape(label), "",
            "    rendermask\t%s" % RENDER_CONTEXT,
-           "    shadertype\t%s" % shader_type(sdr_node),
+           "    shadertype\t%s" % shader_type(node_id, sdr_node),
            "    externalshader\t1", ""]
 
     # Un connecteur seulement pour ce que Cycles accepte de lier. Le reste - un
@@ -322,9 +349,10 @@ def dialog_script(node_id, sdr_node):
         conn = TYPES.get(str(prop.GetType()), ("float", "float", 1))[0]
         out.append('    input\t%s\t%s\t"%s"' % (conn, parm_name(name),
                                                 escape(prop.GetLabel() or name)))
+    kind_override = OUTPUT_KIND_OVERRIDES.get(node_id[len(PREFIX):])
     for name in outputs:
         prop = sdr_node.GetShaderOutput(name)
-        conn = TYPES.get(str(prop.GetType()), ("float", "float", 1))[0]
+        conn = kind_override or TYPES.get(str(prop.GetType()), ("float", "float", 1))[0]
         # Une sortie garde son nom tel quel : c'est celui que le delegate
         # cherche côté Cycles, et l'étiquette qui rétablit le nom réel ne vaut
         # que pour les paramètres, qu'une sortie n'est pas.
@@ -460,7 +488,7 @@ MATERIAL_DIALOG = """{
 
     input	surface	surface	"Surface"
     input	displacement	displacement	"Displacement"
-    input	surface	volume	"Volume"
+    input	atmosphere	volume	"Volume"
     output	material	out	"out"
 
     parm {

@@ -1,7 +1,7 @@
 From 013c9b7b6bf3c85f1639061a34c639a986fa863c Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 13:33:36 +0200
-Subject: [PATCH 39/46] otls: ne plus suivre les sauvegardes automatiques
+Subject: [PATCH 39/47] otls: ne plus suivre les sauvegardes automatiques
  d'Houdini
 
 Houdini ecrit une copie horodatee de chaque HDA a chaque sauvegarde. Trente-neuf
@@ -5914,4 +5914,7 @@ z(H`Wqkh2G!wa}SCzLAeP(;y^%SDM2VY%(N6fNJJkivOD($c!nfr9u<JV|Wh6Q>wPM
 z0n;fM2D|{BFi|zh!bHM4;dz?@BVN8`#3H~-D1_y+?@Fju*IX0i@R(qgzKj@D35d+X
 zxCs&P&`1fIVqeJkZA3+cIk?7O!N1hrTgh@rm|`ZWJxr6llZEd-u`S0rx2(;ETIY29
 kGLEc~^=fR7M~)TyOFwXzmzVPouJ?8kTzHH5U@++X0=2R@hyVZp
+
+-- 
+2.53.0.windows.2
 

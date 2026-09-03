@@ -65,7 +65,7 @@ for typename in names:
                     break
         try:
             if closure:
-                terminal = sub.node("surface_output")
+                terminal = sub.node("outputs")
                 terminal.setInput(0, node, 0)
                 surface.destroy()
                 note = "ferme -> surface"
@@ -85,7 +85,12 @@ for typename in names:
 
     text = open(path, encoding="utf-8").read()
     has_id = 'info:id = "%s"' % typename in text
-    has_mat = "outputs:cycles:surface" in text
+    # Un noeud de fermeture peut desormais terminer en surface, en
+    # displacement ou en volume selon ce qu'il est reellement (voir
+    # OUTPUT_KIND_OVERRIDES dans build_cycles_vops.py) - peu importe lequel,
+    # tant que le materiau exporte un vrai terminal.
+    has_mat = any(("outputs:cycles:%s" % role) in text
+                 for role in ("surface", "displacement", "volume"))
     report.append((typename, "ok" if (has_id and has_mat) else "INCOMPLET",
                    "%s%s%s" % (note,
                                "" if has_id else " | pas d'info:id",

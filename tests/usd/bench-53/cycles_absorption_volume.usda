@@ -27,13 +27,10 @@ def Scope "world"
             }
         )
         {
-            token outputs:cycles:surface.connect = </world/Materials/cyclesmat/probe.outputs:volume>
+            token outputs:cycles:volume.connect = </world/Materials/cyclesmat/probe.outputs:volume>
 
             def Shader "probe" (
                 apiSchemas = ["NodeGraphNodeAPI"]
-                customData = {
-                    bool HoudiniHasAutoPreviewShader = 1
-                }
             )
             {
                 uniform token info:id = "cycles_absorption_volume"

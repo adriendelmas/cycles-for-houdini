@@ -1,7 +1,7 @@
 From 37fae6a53f6433ac9207b25b2ada2d13654309a4 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 14:24:47 +0200
-Subject: [PATCH 42/46] le Cycles Material Builder n'etait dans aucun depot
+Subject: [PATCH 42/47] le Cycles Material Builder n'etait dans aucun depot
 
 Son module et son etagere n'existaient que dans le dossier d'installation,
 ignore par git: ecrits a la main, jamais versionnes, jamais copies par le
@@ -176,3 +176,6 @@ index 00000000..79e07872
 +    import voptoolutils
 +    subnet = voptoolutils.genericTool(kwargs, "subnet", name)
 +    return setup(subnet)
+-- 
+2.53.0.windows.2
+

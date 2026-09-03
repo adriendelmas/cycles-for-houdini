@@ -1,7 +1,7 @@
 From 41a12fc75d6b1a7f2cf422611b25ebc458074b01 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 18:20:24 +0200
-Subject: [PATCH 46/46] kernel: Random Walk (Legacy) manquait dans la table de
+Subject: [PATCH 46/47] kernel: Random Walk (Legacy) manquait dans la table de
  saut des fermetures
 
 Trouve en cherchant la cause du rendu noir en sous-surface: svm_node_closure_bsdf_skip()
@@ -44,3 +44,6 @@ index 311bcf02..dd31a2bf 100644
        offset += sizeof(SVMNodeBssrdfData) / sizeof(uint);
        break;
      default:
+-- 
+2.53.0.windows.2
+

@@ -41,7 +41,15 @@ dans Blender : **surface, displacement, volume**.
 Ce n'est pas un type de nœud mais un `subnet` configuré, monté par
 `install/houdini/scripts/python/cycles_builder.py` et déclaré dans
 `install/houdini/toolbar/CyclesTools.shelf`. C'est ainsi que Houdini fabrique
-le Karma Material Builder.
+le Karma Material Builder — un seul `suboutput` à trois entrées nommées
+(surface/displacement/volume), plutôt qu'un connecteur par terminal. Cycles
+n'ayant qu'un seul type de fermeture (un volume et un BSDF de surface
+publient le même `terminal` côté Sdr), les quelques nœuds qui ne terminent
+jamais qu'un seul type de réseau — `displacement`, `vector_displacement`,
+`principled_volume` et les autres producteurs de volume purs — reçoivent un
+connecteur de sortie dédié (`displacement`, `atmosphere`) dans
+`tools/build_cycles_vops.py`, sans quoi Houdini refuse le fil sur le terminal
+correspondant.
 
 Son menu tab est restreint par `tabmenumask` à `cycles_*` et aux utilitaires de
 réseau. **Aucun nœud MaterialX ni Karma n'y entre** : un graphe qui les

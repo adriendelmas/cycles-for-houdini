@@ -1,7 +1,7 @@
 From 3d31a03ce9b70a14382b53bcadd86965e92e7087 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 18:16:47 +0200
-Subject: [PATCH 14/46] hydra: take the scene lock rather than trying it, and
+Subject: [PATCH 14/47] hydra: take the scene lock rather than trying it, and
  add a GPU renderer entry
 
 The render pass only reset the session when a try_lock on the scene mutex
@@ -254,3 +254,6 @@ index ac63c2cc..12d0d6d7 100644
      list(APPEND cuda_cubins ${cuda_file_compressed})
      set(cuda_cubins "${cuda_cubins}" PARENT_SCOPE)
    endfunction()
+-- 
+2.53.0.windows.2
+

@@ -9,8 +9,8 @@
 
 def HoudiniLayerInfo "HoudiniLayerInfo" (
     customData = {
-        int HoudiniCreatorNode = 406
-        int[] HoudiniEditorNodes = [406]
+        int HoudiniCreatorNode = 307
+        int[] HoudiniEditorNodes = [307]
         string HoudiniSaveControl = "Placeholder"
     }
 )
@@ -23,7 +23,7 @@ def Scope "world"
     {
         def Material "cyclesmat" (
             customData = {
-                int[] HoudiniPrimEditorNodes = [407]
+                int[] HoudiniPrimEditorNodes = [308]
             }
         )
         {

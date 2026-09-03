@@ -9,8 +9,8 @@
 
 def HoudiniLayerInfo "HoudiniLayerInfo" (
     customData = {
-        int HoudiniCreatorNode = 214
-        int[] HoudiniEditorNodes = [214]
+        int HoudiniCreatorNode = 163
+        int[] HoudiniEditorNodes = [163]
         string HoudiniSaveControl = "Placeholder"
     }
 )
@@ -23,7 +23,7 @@ def Scope "world"
     {
         def Material "cyclesmat" (
             customData = {
-                int[] HoudiniPrimEditorNodes = [215]
+                int[] HoudiniPrimEditorNodes = [164]
             }
         )
         {
@@ -47,7 +47,7 @@ def Scope "world"
             )
             {
                 uniform token info:id = "cycles_displacement"
-                vector3f outputs:displacement
+                token outputs:displacement
                 uniform float2 ui:nodegraph:node:pos = (0, 0)
             }
         }

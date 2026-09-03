@@ -1,0 +1,126 @@
+From 600d400edf882964450cfd6379ea285d4db003be Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 3 Sep 2026 19:01:34 +0200
+Subject: [PATCH 47/47] hydra: un seul terminal a trois entrees, plutot que
+ trois connecteurs qui se contredisent
+
+Le Material Builder branchait chaque terminal sur son propre
+subnetconnector, dont le parmtype (24/25/26) fixe le role attendu -
+Surface, Displacement, Atmosphere. Mais le connecteur du noeud branche
+en face ne suivait jamais ce role : tous les sockets de fermeture de
+Cycles publient le meme type Sdr "terminal" (un volume et un BSDF de
+surface partagent le meme SocketType::CLOSURE cote Cycles), donc
+build_cycles_vops.py les etiquetait tous "surface", et les noeuds de
+displacement gardaient le connecteur generique "vector" de leur socket
+Sdr. Brancher un noeud de volume ou de displacement sur son propre
+terminal levait alors "Input data type does not match output for input
+'suboutput'" dans Houdini - verifie directement, le graphe compilait
+mais le materiau resultant etait bancal.
+
+Cote build_cycles_vops.py (repo principal), les quelques noeuds qui ne
+terminent jamais qu'un seul type de reseau - displacement,
+vector_displacement, principled_volume, absorption_volume,
+scatter_volume, volume_coefficients - recoivent maintenant le
+connecteur et le shadertype qui correspondent vraiment a leur role.
+Les melangeurs generiques (add_closure, mix_closure...) restent
+"surface", puisqu'un reseau de volume peut legitimement s'en servir
+aussi et rien dans le registre ne dit lequel des deux usages est vise.
+
+Cote builder, un seul `suboutput` a trois entrees nommees remplace les
+trois subnetconnectors : son role exporte se deduit desormais du
+connecteur du noeud branche, plus d'un parmtype declare a cote qui
+pouvait le contredire. Verifie via un vrai export Material Library ->
+USD : outputs:cycles:surface/displacement/volume pointent chacun vers
+le bon shader.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+---
+ src/hydra/resources/cycles_builder.py | 51 ++++++++++++---------------
+ 1 file changed, 23 insertions(+), 28 deletions(-)
+
+diff --git a/src/hydra/resources/cycles_builder.py b/src/hydra/resources/cycles_builder.py
+index 79e07872..66ce6a28 100644
+--- a/src/hydra/resources/cycles_builder.py
++++ b/src/hydra/resources/cycles_builder.py
+@@ -10,9 +10,17 @@ dans mes tentatives précédentes :
+ 
+ * `setMaterialFlag(True)` — sans lui la Material Library ne voit pas un
+   matériau et n'exporte rien du tout ;
+-* des connecteurs de sortie dont le `parmtype` est un **index numérique**
+-  (24 pour une surface, 25 pour un displacement, 26 pour un volume) et non un
+-  nom ; passé en chaîne, le connecteur existe mais reste inerte ;
++* un unique `suboutput` à trois entrées nommées `surface`/`displacement`/
++  `volume`, dont le rôle exporté se déduit du connecteur du nœud branché sur
++  chacune — pas du nom qu'on lui donne. Cycles n'a qu'un seul type de
++  fermeture (un volume et un BSDF de surface sont tous deux `terminal` côté
++  Sdr), donc `tools/build_cycles_vops.py` ment sciemment sur les quelques
++  nœuds qui ne terminent jamais qu'un seul type de réseau — `displacement` et
++  `vector_displacement` prennent le connecteur `displacement`,
++  `principled_volume` et consorts prennent `atmosphere` — pour que Houdini
++  les distingue d'un BSDF de surface, ordinairement `surface`. Sans ce
++  mensonge ciblé, brancher l'un d'eux ici lève "Input data type does not
++  match output for input 'suboutput'" (vérifié) ;
+ * un `tabmenumask`, qui restreint le menu tab aux nœuds Cycles pour que le
+   réseau ne se mélange pas avec ceux d'un autre moteur.
+ """
+@@ -32,18 +40,9 @@ CYCLES_TAB_MASK = "cycles_* {} {}".format(UTILITY_NODES, SUBNET_NODES)
+ 
+ RENDER_CONTEXT = "cycles"
+ 
+-# Index du menu `parmtype` d'un subnetconnector, pas des noms.
+-PARMTYPE_SURFACE = 24
+-PARMTYPE_DISPLACEMENT = 25
+-PARMTYPE_ATMOSPHERE = 26
+-CONNECTOR_OUTPUT = 1
+-
+-# Les trois sorties d'un matériau Cycles, comme dans Blender.
+-TERMINALS = (
+-    ("surface", "Surface", PARMTYPE_SURFACE, (0.89, 0.69, 0.60), 0.0),
+-    ("displacement", "Displacement", PARMTYPE_DISPLACEMENT, (0.60, 0.69, 0.89), -2.4334),
+-    ("volume", "Volume", PARMTYPE_ATMOSPHERE, (0.69, 0.89, 0.60), -4.8668),
+-)
++# Les trois sorties d'un matériau Cycles, comme dans Blender - un seul
++# `suboutput`, une entrée par terminal.
++TERMINALS = ("surface", "displacement", "volume")
+ 
+ 
+ def _add_subnet_parms(subnet, folder_label):
+@@ -73,8 +72,6 @@ def setup(subnet, folder_label="Cycles Material Builder"):
+     """Configure un subnet déjà créé en builder Cycles."""
+     _add_subnet_parms(subnet, folder_label)
+ 
+-    if subnet.node("suboutput1"):
+-        subnet.node("suboutput1").destroy()
+     inputs = subnet.node("subinput1")
+     if inputs:
+         inputs.setName("inputs")
+@@ -83,17 +80,15 @@ def setup(subnet, folder_label="Cycles Material Builder"):
+     surface = subnet.createNode("cycles_principled_bsdf", "surface")
+     surface.setPosition(hou.Vector2(-0.2883, 0.0376))
+ 
+-    for name, label, parmtype, color, height in TERMINALS:
+-        connector = subnet.createNode("subnetconnector", name + "_output")
+-        connector.setParms({"parmname": name,
+-                            "parmlabel": label,
+-                            "parmtype": parmtype,
+-                            "connectorkind": CONNECTOR_OUTPUT,
+-                            "useasparmdefiner": 0})
+-        connector.setColor(hou.Color(color))
+-        connector.setPosition(hou.Vector2(2.5236, height))
+-        if name == "surface":
+-            connector.setInput(0, surface, 0)
++    outputs = subnet.node("suboutput1")
++    if outputs is None:
++        outputs = subnet.createNode("suboutput", "outputs")
++    else:
++        outputs.setName("outputs")
++    outputs.setPosition(hou.Vector2(2.5236, 0.0376))
++    outputs.setInput(0, surface, 0)
++    for index, name in enumerate(TERMINALS):
++        outputs.parm("name%d" % (index + 1)).set(name)
+ 
+     # Sans ce drapeau la Material Library ne reconnaît pas un matériau.
+     subnet.setMaterialFlag(True)
+-- 
+2.53.0.windows.2
+

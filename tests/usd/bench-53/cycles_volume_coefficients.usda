@@ -9,8 +9,8 @@
 
 def HoudiniLayerInfo "HoudiniLayerInfo" (
     customData = {
-        int HoudiniCreatorNode = 1090
-        int[] HoudiniEditorNodes = [1090]
+        int HoudiniCreatorNode = 820
+        int[] HoudiniEditorNodes = [820]
         string HoudiniSaveControl = "Placeholder"
     }
 )
@@ -23,17 +23,14 @@ def Scope "world"
     {
         def Material "cyclesmat" (
             customData = {
-                int[] HoudiniPrimEditorNodes = [1091]
+                int[] HoudiniPrimEditorNodes = [821]
             }
         )
         {
-            token outputs:cycles:surface.connect = </world/Materials/cyclesmat/probe.outputs:volume>
+            token outputs:cycles:volume.connect = </world/Materials/cyclesmat/probe.outputs:volume>
 
             def Shader "probe" (
                 apiSchemas = ["NodeGraphNodeAPI"]
-                customData = {
-                    bool HoudiniHasAutoPreviewShader = 1
-                }
             )
             {
                 uniform token info:id = "cycles_volume_coefficients"

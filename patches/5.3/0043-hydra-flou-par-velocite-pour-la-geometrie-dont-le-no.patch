@@ -1,7 +1,7 @@
 From 5207cd12f15cc2d75241cb74b2e2a3cce2d83fc5 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 14:38:28 +0200
-Subject: [PATCH 43/46] hydra: flou par velocite, pour la geometrie dont le
+Subject: [PATCH 43/47] hydra: flou par velocite, pour la geometrie dont le
  nombre de points varie
 
 L'echantillonnage des positions ne couvre pas tout. Des que le nombre de points
@@ -273,3 +273,6 @@ index fb79460e..b5400cae 100644
  
  /* Pose ces echantillons dans l'attribut de position. Cycles y range le pas
   * central a l'indice 0 et les autres a la suite, dans l'ordre de l'obturateur. */
+-- 
+2.53.0.windows.2
+

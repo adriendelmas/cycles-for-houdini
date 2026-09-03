@@ -1,7 +1,7 @@
 From ba2dbc7d23680845b45fdd0460711b7ddb46e3ce Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 23:33:48 +0200
-Subject: [PATCH 32/46] hydra: MaterialX displacement has no midlevel
+Subject: [PATCH 32/47] hydra: MaterialX displacement has no midlevel
 
 The Cycles displacement node computes (height - midlevel) * scale and defaults
 midlevel to 0.5, which is the convention for a heightfield read from an image
@@ -95,3 +95,6 @@ index d730e688..a383c6d4 100644
  }
  
  VtDictionary HdCyclesDelegate::GetRenderStats() const
+-- 
+2.53.0.windows.2
+
