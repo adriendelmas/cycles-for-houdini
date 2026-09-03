@@ -49,12 +49,16 @@ See [docs/CYCLES_53.md](docs/CYCLES_53.md) for the parallel install.
 
 ## Requirements
 
-This targets one specific Houdini build. It is not portable across Houdini
-versions — Houdini ships its own USD, and the delegate links against it.
+The delegate links against the USD, Python and image libraries Houdini ships,
+so it is bound to a Houdini series rather than to a single build. Symbols carry
+USD's versioned internal namespace (`pxrInternal_v0_26_5`), which means a
+Houdini on a different USD will refuse to load it outright rather than
+misbehave. Any Houdini 22.0 build should do; 22.5 and beyond will need a
+rebuild, and so will the Python 3.11 flavour.
 
 | | |
 |---|---|
-| Houdini | **22.0.368** (USD 26.05, MaterialX 1.39.5) |
+| Houdini | 22.0 series, built against **22.0.368** (USD 26.05, Python 3.13, MaterialX 1.39.5) |
 | OS | Windows 11, MSVC 14.44 (VS2022 Build Tools) |
 | GPU | CUDA 12.9 + OptiX SDK, or CPU only |
 | Also | CMake 3.28+, git, git-lfs |
