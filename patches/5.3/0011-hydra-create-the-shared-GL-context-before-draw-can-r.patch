@@ -1,7 +1,7 @@
 From a01c665ea9ffd20b9dc3d641e441431c8a5f440c Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 13:33:28 +0200
-Subject: [PATCH 11/39] hydra: create the shared GL context before draw() can
+Subject: [PATCH 11/42] hydra: create the shared GL context before draw() can
  return early
 
 draw() returns early when the display AOV binding is missing, when its

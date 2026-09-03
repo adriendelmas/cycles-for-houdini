@@ -47,6 +47,42 @@ def Scope "world"
             )
             {
                 uniform token info:id = "cycles_rgb_ramp"
+                int inputs:ramp = 2 (
+                    customData = {
+                        string rampbasisattr = "inputs:ramp_basis"
+                        bool rampbasisisarray = 0
+                        string rampcountattr = "inputs:ramp"
+                        string rampposattr = "inputs:ramp_keys"
+                        string rampvalueattr = "inputs:ramp_values"
+                    }
+                )
+                token inputs:ramp_basis = "linear" (
+                    customData = {
+                        string rampbasisattr = "inputs:ramp_basis"
+                        bool rampbasisisarray = 0
+                        string rampcountattr = "inputs:ramp"
+                        string rampposattr = "inputs:ramp_keys"
+                        string rampvalueattr = "inputs:ramp_values"
+                    }
+                )
+                float[] inputs:ramp_keys = [0, 1] (
+                    customData = {
+                        string rampbasisattr = "inputs:ramp_basis"
+                        bool rampbasisisarray = 0
+                        string rampcountattr = "inputs:ramp"
+                        string rampposattr = "inputs:ramp_keys"
+                        string rampvalueattr = "inputs:ramp_values"
+                    }
+                )
+                color3f[] inputs:ramp_values = [(0, 0, 0), (1, 1, 1)] (
+                    customData = {
+                        string rampbasisattr = "inputs:ramp_basis"
+                        bool rampbasisisarray = 0
+                        string rampcountattr = "inputs:ramp"
+                        string rampposattr = "inputs:ramp_keys"
+                        string rampvalueattr = "inputs:ramp_values"
+                    }
+                )
                 color3f outputs:color
                 uniform float2 ui:nodegraph:node:pos = (0, 0)
             }

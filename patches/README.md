@@ -5,7 +5,7 @@ vivent sur une branche a nous, en commits separes par sujet. Cette serie en est
 l'export par `git format-patch`.
 
     patches/5.2/   38 correctifs, base 3b97e190 (branche release/5.2)
-    patches/5.3/   39 correctifs, base 8424ed53 (branche main)
+    patches/5.3/   42 correctifs, base 8424ed53 (branche main)
 
 `tools/bootstrap.py` fait le chemin complet -- clone, `git am`, compilation.
 A la main, sur un clone deja pose :
@@ -69,6 +69,9 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0037` | cases a cocher, section Base, et un fil ignore ne l'est plus en silence |
 | `0038` | dispersion sur le principled bsdf, reprise de la PR blender 162041 |
 | `0039` | otls: ne plus suivre les sauvegardes automatiques d'Houdini |
+| `0040` | hydra: une rampe d'Houdini remplit enfin la table que Cycles attend |
+| `0041` | hydra: flou de deformation pour les points animes |
+| `0042` | le Cycles Material Builder n'etait dans aucun depot |
 
 ---
 

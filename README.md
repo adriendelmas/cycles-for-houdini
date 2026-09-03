@@ -23,8 +23,11 @@ where the work went.
   authored anywhere in a USD pipeline renders in Cycles. Includes MaterialX's
   procedural noise implemented exactly, as native SVM and OSL kernel nodes.
 - **Copernicus COP textures read live**, without a round trip through disk.
-- Motion blur on animated transforms, displacement, render settings surfaced in
-  Solaris, and a long list of crash and correctness fixes to the delegate.
+- Motion blur on animated transforms **and on deforming geometry** — meshes,
+  curves and point clouds alike, so simulations and particles blur rather than
+  render sharp.
+- Displacement, render settings surfaced in Solaris, and a long list of crash
+  and correctness fixes to the delegate.
 
 Rendering is CPU and CUDA/OptiX. The GL display driver is off by default — it
 misbehaved in Houdini's viewport in four distinct ways, all documented in the
@@ -72,6 +75,14 @@ applies the patch series, and installs into `install-53/`.
 python tools/bootstrap.py --version 5.3
 ```
 
+The VOP library is not shipped: it is generated from the Sdr registry the built
+delegate publishes, so it always matches the Cycles you compiled. Generate it
+once the install exists, with Houdini's Python:
+
+```
+hython tools/build_cycles_vops.py
+```
+
 Then point Houdini at the result by copying the generated package file:
 
 ```
@@ -108,11 +119,10 @@ bit-identical between 5.2 and 5.3.
 
 ## Known gaps
 
-- The **Color Ramp** node exposes no ramp — its ramp sockets are arrays, which the
-  node generator does not yet convert. It renders a default, not your choice.
 - Karma's own material context (`kma:`) falls back to UsdPreviewSurface.
 - An intermittent CUDA "illegal address" on some scene edits, under investigation.
-- Deformation motion blur (animated points, `velocities`) is not implemented.
+- Velocity-driven blur (`velocities`, `accelerations`) is not read; deformation
+  blur comes from time-sampled points.
 
 ## Licence
 

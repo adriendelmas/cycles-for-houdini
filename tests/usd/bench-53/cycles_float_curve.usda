@@ -47,6 +47,42 @@ def Scope "world"
             )
             {
                 uniform token info:id = "cycles_float_curve"
+                int inputs:curve = 2 (
+                    customData = {
+                        string rampbasisattr = "inputs:curve_basis"
+                        bool rampbasisisarray = 0
+                        string rampcountattr = "inputs:curve"
+                        string rampposattr = "inputs:curve_keys"
+                        string rampvalueattr = "inputs:curve_values"
+                    }
+                )
+                token inputs:curve_basis = "linear" (
+                    customData = {
+                        string rampbasisattr = "inputs:curve_basis"
+                        bool rampbasisisarray = 0
+                        string rampcountattr = "inputs:curve"
+                        string rampposattr = "inputs:curve_keys"
+                        string rampvalueattr = "inputs:curve_values"
+                    }
+                )
+                float[] inputs:curve_keys = [0, 1] (
+                    customData = {
+                        string rampbasisattr = "inputs:curve_basis"
+                        bool rampbasisisarray = 0
+                        string rampcountattr = "inputs:curve"
+                        string rampposattr = "inputs:curve_keys"
+                        string rampvalueattr = "inputs:curve_values"
+                    }
+                )
+                float[] inputs:curve_values = [0, 1] (
+                    customData = {
+                        string rampbasisattr = "inputs:curve_basis"
+                        bool rampbasisisarray = 0
+                        string rampcountattr = "inputs:curve"
+                        string rampposattr = "inputs:curve_keys"
+                        string rampvalueattr = "inputs:curve_values"
+                    }
+                )
                 float outputs:value
                 uniform float2 ui:nodegraph:node:pos = (0, 0)
             }

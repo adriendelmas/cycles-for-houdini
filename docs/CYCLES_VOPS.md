@@ -138,10 +138,14 @@ forme d'entier, et rien ne le distingue alors d'un compteur : le delegate le
 signale maintenant dans les métadonnées, et l'interface n'offre plus un champ
 libre là où seuls zéro et un ont un sens.
 
-**Le Color Ramp n'a pas de rampe.** Ses sockets `ramp` et `ramp_alpha` sont
-des tableaux, ecartes par le meme filtre que les sockets pointes. Le noeud est
-donc pose mais inerte : il emet la valeur par defaut de Cycles. Voir A18 dans
-`docs/STATUS.md`.
+**Un socket tableau devient une rampe.** `ramp`, `curve` et `curves` sont des
+tableaux, longtemps écartés par le même filtre que les sockets pointés — les
+nœuds étaient alors posés mais inertes. Le générateur en fait maintenant un
+`ramp_rgb` ou un `ramp_flt` selon le type d'élément, et le delegate rassemble
+les quatre morceaux qu'Houdini écrit — compte de clés, positions, valeurs,
+base — en la table plate qu'attend Cycles. Quatre nœuds en dépendent : Color
+Ramp, RGB Curves, Vector Curves et Float Curve. Le seul tableau qui n'est pas
+une courbe, la liste de dalles UDIM d'Image Texture, reste écarté.
 
 **Les sections sont repliables, pas des onglets.** Le mot-clé de Houdini est
 `groupcollapsible` ; un simple `group` fabrique des onglets et rejette tout ce

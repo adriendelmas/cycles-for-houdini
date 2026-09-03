@@ -197,13 +197,36 @@ def shader_type(sdr_node):
 # qu'égarer, et un graphe qui s'en servirait ne se rejouerait pas ailleurs.
 INTERNAL_SOCKETS = {"surface_mix_weight"}
 
+# Le canal alpha d'une rampe se déduit, il ne se règle pas : la rampe d'Houdini
+# n'en porte pas, et le delegate le remplit d'opaque pour que les deux tableaux
+# aient la même taille — sans quoi Cycles refuse de compiler le nœud.
+DERIVED_SOCKETS = {"ramp_alpha"}
+
+# Les types de tableau qu'une rampe d'Houdini sait remplir. `tiles`, un tableau
+# d'entiers, n'en est pas : c'est une liste de dalles UDIM, pas une courbe.
+RAMP_TYPES = {"color": "ramp_rgb", "vector": "ramp_rgb", "point": "ramp_rgb",
+              "normal": "ramp_rgb", "float": "ramp_flt"}
+
+
+def ramp_type_of(prop):
+    """Le widget de rampe qui convient à ce socket tableau, si tant est."""
+    if prop.GetArraySize() == 0:
+        return None
+    return RAMP_TYPES.get(str(prop.GetType()))
+
 
 def usable(prop):
     """Cycles publie son bloc de placement en sockets pointés
     (`tex_mapping.translation`) : un point est illégal dans un nom de
-    paramètre. Les sockets tableau et les sockets internes sont écartés."""
-    return ("." not in prop.GetName() and prop.GetArraySize() == 0
-            and prop.GetName() not in INTERNAL_SOCKETS)
+    paramètre. Les sockets internes et dérivés sont écartés, et un tableau ne
+    passe que si une rampe peut le remplir."""
+    if "." in prop.GetName():
+        return False
+    if prop.GetName() in INTERNAL_SOCKETS or prop.GetName() in DERIVED_SOCKETS:
+        return False
+    if prop.GetArraySize() != 0:
+        return ramp_type_of(prop) is not None
+    return True
 
 
 def parm_type_of(prop, fallback):
@@ -294,7 +317,7 @@ def dialog_script(node_id, sdr_node):
     # fil qui ne fait rien, ce qui trompe plus que ça ne sert.
     for name in inputs:
         prop = sdr_node.GetShaderInput(name)
-        if not prop.IsConnectable():
+        if not prop.IsConnectable() or ramp_type_of(prop):
             continue
         conn = TYPES.get(str(prop.GetType()), ("float", "float", 1))[0]
         out.append('    input\t%s\t%s\t"%s"' % (conn, parm_name(name),
@@ -311,6 +334,19 @@ def dialog_script(node_id, sdr_node):
 
     def emit_parm(name, indent):
         prop = sdr_node.GetShaderInput(name)
+        ramp = ramp_type_of(prop)
+        if ramp:
+            # Houdini découpe la rampe en un compte de clés, des positions, des
+            # valeurs et une base ; le delegate les rassemble en la table plate
+            # qu'attend Cycles.
+            return [indent + "parm {",
+                    '%s    name    "%s"' % (indent, name),
+                    '%s    label   "%s"' % (indent, escape(prop.GetLabel() or name)),
+                    "%s    type    %s" % (indent, ramp),
+                    '%s    default { "2" }' % indent,
+                    "%s    range   { 1! 10 }" % indent,
+                    '%s    parmtag { "rampbasisdefault" "linear" }' % indent,
+                    indent + "}"]
         conn, ptype, comps = TYPES.get(str(prop.GetType()), ("float", "float", 1))
         if ptype is None:
             return []

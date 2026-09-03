@@ -812,25 +812,81 @@ trois endroits :
   au chiffre près : ils rendent tous la même image, c'est un décalage global du
   chemin des fermetures venu de l'amont, pas une régression par nœud.
 
-### A18 — Le nœud Color Ramp n'a aucune rampe ⚠️ OUVERT
+### A18 — Le nœud Color Ramp n'a aucune rampe ✅ RÉSOLU
 
-`cycles_rgb_ramp` s'affiche « Color Ramp » et n'expose que `interpolate` et
+`cycles_rgb_ramp` s'affichait « Color Ramp » et n'exposait que `interpolate` et
 `fac`. Ses deux sockets utiles, `ramp` et `ramp_alpha`, sont des **tableaux**,
-que le générateur de VOP écarte au même titre que les sockets pointés.
+que le générateur de VOP écartait au même titre que les sockets pointés.
 
-Le nœud émet donc la valeur par défaut de Cycles, quelle qu'elle soit — d'où
-une moyenne de vert à **2,81** en 5.2 contre **0,65** en 5.3 sur le banc. Ni
-l'une ni l'autre n'est une couleur choisie par l'utilisateur.
+Le diagnostic était plus sévère que « il rend un défaut ». `RGBRampNode::compile()`
+commence par ceci :
 
-Ce n'est **pas une régression de la 5.3** : le défaut existe identiquement en
-5.2, et la comparaison entre moteurs n'a fait que le révéler.
+    if (ramp.size() == 0 || ramp.size() != ramp_alpha.size()) {
+      return;
+    }
 
-Deux issues, au choix :
+Le nœud **n'émettait aucune instruction**. Sa sortie n'était pas une couleur par
+défaut mais ce qui traînait sur la pile du compilateur — d'où le vert à 2,81 en
+5.2 contre 0,65 en 5.3, deux valeurs qui ne veulent rien dire.
 
-1. **Le brancher** — un `hou.RampParmTemplate` sur le VOP, et côté delegate une
-   conversion vers le `array<float3>` que `RGBRampNode` attend. C'est du travail
-   neuf : rien dans le delegate ne lit aujourd'hui de tableau de couleurs, la
-   gestion de rampe existante (`ND_ramplr`, `ND_ramptb`) est un dégradé
-   MaterialX à deux couleurs, sans rapport.
-2. **Le retirer** — conforme à la règle posée pour les autres entrées : une
-   entrée qui ne calcule rien induit en erreur plus qu'elle ne sert.
+Le delegate savait pourtant déjà convertir les tableaux, et le registre Sdr
+publiait déjà `ramp` en `color3f[]` : vérifié en écrivant l'USD à la main, la
+rampe rendait juste. Seul le maillon Houdini manquait.
+
+Une rampe posée sur un VOP **arrive bien en USD**, mais dans l'encodage de
+SideFX — un entier `<nom>` portant le nombre de clés, plus `<nom>_keys`,
+`<nom>_values` et `<nom>_basis`. Le delegate rassemble désormais ce quatuor et
+le rééchantillonne en table plate de `RAMP_TABLE_SIZE` entrées, en respectant la
+base d'interpolation ; le canal alpha, que la rampe d'Houdini ne porte pas, est
+rempli d'opaque, faute de quoi les deux tableaux n'ont pas la même taille et
+Cycles renonce à nouveau.
+
+**Quatre nœuds réparés par le même mécanisme** : Color Ramp, RGB Curves,
+Vector Curves et Float Curve avaient tous le même défaut. Le seul tableau qui
+n'est pas une courbe — la liste de dalles UDIM d'Image Texture — reste écarté.
+
+Vérifié de bout en bout : rampe rouge → vert → bleu réglée dans le Cycles
+Material Builder, `fac` à 0,5, rendu **R 0,029 / V 1,285 / B 0,036**. En base
+constante à `fac` 0,4, du rouge pur — la marche est respectée, pas lissée.
+
+## Phase 11 — Flou de déformation ✅
+
+Le flou de mouvement ne couvrait que ce qui bouge en bloc. Une géométrie dont
+les points sont animés — simulation, déformeur, particules, chevelure — rendait
+nette pendant que le reste de la scène floutait correctement.
+
+Les positions sont maintenant échantillonnées le long de l'obturateur, aux mêmes
+instants régulièrement espacés que les transforms, parce que Cycles étale ses pas
+de mouvement linéairement. Cycles range ces pas dans l'attribut de position
+lui-même, le pas central à l'indice 0.
+
+Les **trois** géométries en bénéficient — maillage, courbes, nuage de points —
+par un échantillonnage partagé.
+
+![flou de deformation](milestone-deform.png)
+
+Avant en haut, après en bas. Le cube vert n'a pas de transform animée : seuls
+ses points bougent. Le rouge, animé par sa transform, sert de témoin — les deux
+flous se superposent maintenant. Le cube blanc est immobile.
+
+Mesuré sur une scène à trois cubes, l'un animé par sa transform, l'un par ses
+seuls points, l'un immobile :
+
+| Cube | Avant | Après |
+|---|---|---|
+| Animé par transform | 179 px | 179 px |
+| Points animés | **74 px** (net) | **179 px** |
+
+Écarté volontairement : un nombre de points qui change d'un instant à l'autre.
+De la géométrie créée ou détruite en cours de plan n'a aucune correspondance à
+interpoler ; on s'en tient alors à l'instant central.
+
+Reste à faire : le flou tiré des `velocities` / `accelerations`, à la manière de
+Karma, pour les cas où le nombre de points varie.
+
+### A19 — Le banc de `set_normal` produit des infinis ⚠️ OUVERT
+
+`cycles_set_normal.usda` branche la sortie `normal` du nœud sur `base_color`
+sans donner de direction. Le résultat contient des **infinis** sur le vert, et
+leur emplacement change d'une compilation à l'autre : son image de référence
+n'en est pas une. Le test mérite une direction explicite.

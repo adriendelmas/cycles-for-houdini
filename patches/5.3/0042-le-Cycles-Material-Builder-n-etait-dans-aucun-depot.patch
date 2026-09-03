@@ -1,0 +1,178 @@
+From 37fae6a53f6433ac9207b25b2ada2d13654309a4 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 3 Sep 2026 14:24:47 +0200
+Subject: [PATCH 42/42] le Cycles Material Builder n'etait dans aucun depot
+
+Son module et son etagere n'existaient que dans le dossier d'installation,
+ignore par git: ecrits a la main, jamais versionnes, jamais copies par le
+build. Un clone du depot donnait donc le delegate et ses noeuds, mais aucun
+builder pour les cabler -- et effacer l'installation les perdait pour de bon.
+
+Ils rejoignent les autres ressources Houdini, avec leur regle d'installation.
+
+Au passage, un cycles_vops.hda perime trainait dans les sources. Rien ne
+l'installait et rien ne le lisait: la bibliotheque de VOP se genere depuis le
+registre Sdr, par tools/build_cycles_vops.py, elle ne se versionne pas.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/CMakeLists.txt              |   7 ++
+ src/hydra/resources/CyclesTools.shelf |  16 ++++
+ src/hydra/resources/cycles_builder.py | 107 ++++++++++++++++++++++++++
+ 3 files changed, 130 insertions(+)
+ create mode 100644 src/hydra/resources/CyclesTools.shelf
+ create mode 100644 src/hydra/resources/cycles_builder.py
+
+diff --git a/src/hydra/CMakeLists.txt b/src/hydra/CMakeLists.txt
+index f64fd742..dd6503ef 100644
+--- a/src/hydra/CMakeLists.txt
++++ b/src/hydra/CMakeLists.txt
+@@ -242,6 +242,13 @@ if(WITH_CYCLES_HYDRA_RENDER_DELEGATE)
+     # module it calls. Houdini picks both up from the package's HOUDINI_PATH.
+     delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources/otls" "hdcycles_flatten_op_textures.hda" "${CYCLES_INSTALL_PATH}/houdini/otls")
+     delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources" "flatten_op_textures.py" "${CYCLES_INSTALL_PATH}/houdini/python${HOUDINI_PYTHON_VERSION}libs")
++    # Le Cycles Material Builder. Un builder n'est pas un type de noeud mais un
++    # subnet configure, monte par un outil du menu tab: il faut donc le module
++    # qui le monte et l'etagere qui l'appelle. Sans eux, la categorie Cycles
++    # n'apparait pas dans le menu tab et la bibliotheque de VOP reste
++    # inutilisable.
++    delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources" "cycles_builder.py" "${CYCLES_INSTALL_PATH}/houdini/scripts/python")
++    delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources" "CyclesTools.shelf" "${CYCLES_INSTALL_PATH}/houdini/toolbar")
+   else()
+     delayed_install("${CMAKE_CURRENT_BINARY_DIR}/resources" "plugInfo.json" "${CYCLES_HYDRA_INSTALL_PATH}/${HdCyclesPluginName}/resources")
+   endif()
+diff --git a/src/hydra/resources/CyclesTools.shelf b/src/hydra/resources/CyclesTools.shelf
+new file mode 100644
+index 00000000..af291b14
+--- /dev/null
++++ b/src/hydra/resources/CyclesTools.shelf
+@@ -0,0 +1,16 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<shelfDocument>
++  <tool name="vop_cyclesmaterialbuilder" label="Cycles Material Builder" icon="SOP_material">
++    <toolMenuContext name="network">
++      <contextOpType>Vop/materialbuilder</contextOpType>
++    </toolMenuContext>
++    <toolSubmenu>Cycles</toolSubmenu>
++    <script scriptType="python"><![CDATA[
++import cycles_builder
++cycles_builder.create(kwargs)
++]]></script>
++    <keywordList>
++      <keyword>Cycles</keyword>
++    </keywordList>
++  </tool>
++</shelfDocument>
+diff --git a/src/hydra/resources/cycles_builder.py b/src/hydra/resources/cycles_builder.py
+new file mode 100644
+index 00000000..79e07872
+--- /dev/null
++++ b/src/hydra/resources/cycles_builder.py
+@@ -0,0 +1,107 @@
++"""Le Cycles Material Builder.
++
++Un builder n'est pas un type de nœud : c'est un `subnet` configuré, monté par
++un outil du menu tab. C'est ainsi que Houdini fabrique le Karma Material
++Builder et le USD MaterialX Builder — relevé dans
++`voptoolutils._setupMtlXBuilderSubnet`.
++
++Trois choses le rendent reconnaissable, et il en manquait à chaque fois une
++dans mes tentatives précédentes :
++
++* `setMaterialFlag(True)` — sans lui la Material Library ne voit pas un
++  matériau et n'exporte rien du tout ;
++* des connecteurs de sortie dont le `parmtype` est un **index numérique**
++  (24 pour une surface, 25 pour un displacement, 26 pour un volume) et non un
++  nom ; passé en chaîne, le connecteur existe mais reste inerte ;
++* un `tabmenumask`, qui restreint le menu tab aux nœuds Cycles pour que le
++  réseau ne se mélange pas avec ceux d'un autre moteur.
++"""
++
++import hou
++
++# Le masque suit la construction de Houdini : le mot-clé du moteur, puis les
++# utilitaires et les nœuds de subnet dont tout réseau a besoin.
++UTILITY_NODES = "parameter constant collect null genericshader"
++SUBNET_NODES = "subnet subnetconnector suboutput subinput"
++# Le masque filtre par **motif de nom de type**. Un jeton comme "Cycles" ne
++# correspond à aucun type et ne filtre rien ; `cycles_*` prend nos cent nœuds et
++# rejette mécaniquement ceux de MaterialX et de Karma, qu'un graphe Cycles ne
++# doit pas contenir — un shader mêlant les deux ne rendrait qu'ici, et pas à
++# l'export vers Blender.
++CYCLES_TAB_MASK = "cycles_* {} {}".format(UTILITY_NODES, SUBNET_NODES)
++
++RENDER_CONTEXT = "cycles"
++
++# Index du menu `parmtype` d'un subnetconnector, pas des noms.
++PARMTYPE_SURFACE = 24
++PARMTYPE_DISPLACEMENT = 25
++PARMTYPE_ATMOSPHERE = 26
++CONNECTOR_OUTPUT = 1
++
++# Les trois sorties d'un matériau Cycles, comme dans Blender.
++TERMINALS = (
++    ("surface", "Surface", PARMTYPE_SURFACE, (0.89, 0.69, 0.60), 0.0),
++    ("displacement", "Displacement", PARMTYPE_DISPLACEMENT, (0.60, 0.69, 0.89), -2.4334),
++    ("volume", "Volume", PARMTYPE_ATMOSPHERE, (0.69, 0.89, 0.60), -4.8668),
++)
++
++
++def _add_subnet_parms(subnet, folder_label):
++    """Le masque du menu tab et le contexte de rendu, dans un dossier repliable."""
++    parms = subnet.parmTemplateGroup()
++
++    mask = hou.properties.parmTemplate("op", "tabmenumask")
++    mask.setDefaultValue([CYCLES_TAB_MASK])
++
++    context = hou.properties.parmTemplate("vopui", "shader_rendercontextname")
++    context.setDefaultValue([RENDER_CONTEXT])
++
++    force_children = hou.properties.parmTemplate("vopui", "shader_forcechildren")
++    force_children.setDefaultValue(1)
++
++    folder = hou.FolderParmTemplate("folder1", folder_label,
++                                    folder_type=hou.folderType.Collapsible,
++                                    tags={"sidefx::shader_isparm": "0"})
++    folder.addParmTemplate(mask)
++    folder.addParmTemplate(context)
++    folder.addParmTemplate(force_children)
++    parms.append(folder)
++    subnet.setParmTemplateGroup(parms)
++
++
++def setup(subnet, folder_label="Cycles Material Builder"):
++    """Configure un subnet déjà créé en builder Cycles."""
++    _add_subnet_parms(subnet, folder_label)
++
++    if subnet.node("suboutput1"):
++        subnet.node("suboutput1").destroy()
++    inputs = subnet.node("subinput1")
++    if inputs:
++        inputs.setName("inputs")
++        inputs.setPosition(hou.Vector2(-4.53993, 0.0376))
++
++    surface = subnet.createNode("cycles_principled_bsdf", "surface")
++    surface.setPosition(hou.Vector2(-0.2883, 0.0376))
++
++    for name, label, parmtype, color, height in TERMINALS:
++        connector = subnet.createNode("subnetconnector", name + "_output")
++        connector.setParms({"parmname": name,
++                            "parmlabel": label,
++                            "parmtype": parmtype,
++                            "connectorkind": CONNECTOR_OUTPUT,
++                            "useasparmdefiner": 0})
++        connector.setColor(hou.Color(color))
++        connector.setPosition(hou.Vector2(2.5236, height))
++        if name == "surface":
++            connector.setInput(0, surface, 0)
++
++    # Sans ce drapeau la Material Library ne reconnaît pas un matériau.
++    subnet.setMaterialFlag(True)
++    return subnet
++
++
++def create(kwargs, name="cyclesmaterial"):
++    """Point d'entrée de l'outil du menu tab."""
++    import voptoolutils
++    subnet = voptoolutils.genericTool(kwargs, "subnet", name)
++    return setup(subnet)

@@ -47,6 +47,42 @@ def Scope "world"
             )
             {
                 uniform token info:id = "cycles_rgb_curves"
+                int inputs:curves = 2 (
+                    customData = {
+                        string rampbasisattr = "inputs:curves_basis"
+                        bool rampbasisisarray = 0
+                        string rampcountattr = "inputs:curves"
+                        string rampposattr = "inputs:curves_keys"
+                        string rampvalueattr = "inputs:curves_values"
+                    }
+                )
+                token inputs:curves_basis = "linear" (
+                    customData = {
+                        string rampbasisattr = "inputs:curves_basis"
+                        bool rampbasisisarray = 0
+                        string rampcountattr = "inputs:curves"
+                        string rampposattr = "inputs:curves_keys"
+                        string rampvalueattr = "inputs:curves_values"
+                    }
+                )
+                float[] inputs:curves_keys = [0, 1] (
+                    customData = {
+                        string rampbasisattr = "inputs:curves_basis"
+                        bool rampbasisisarray = 0
+                        string rampcountattr = "inputs:curves"
+                        string rampposattr = "inputs:curves_keys"
+                        string rampvalueattr = "inputs:curves_values"
+                    }
+                )
+                color3f[] inputs:curves_values = [(0, 0, 0), (1, 1, 1)] (
+                    customData = {
+                        string rampbasisattr = "inputs:curves_basis"
+                        bool rampbasisisarray = 0
+                        string rampcountattr = "inputs:curves"
+                        string rampposattr = "inputs:curves_keys"
+                        string rampvalueattr = "inputs:curves_values"
+                    }
+                )
                 color3f outputs:value
                 uniform float2 ui:nodegraph:node:pos = (0, 0)
             }

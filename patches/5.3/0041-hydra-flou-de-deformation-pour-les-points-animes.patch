@@ -1,0 +1,357 @@
+From a3d07f40a8fab1ede150539c732f550f2fb8064a Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 3 Sep 2026 14:24:37 +0200
+Subject: [PATCH 41/42] hydra: flou de deformation pour les points animes
+
+Le flou de mouvement ne couvrait que ce qui bouge en bloc. Une geometrie dont
+les points sont animes -- une simulation, un deformeur, des particules, une
+chevelure -- rendait nette, alors meme que le reste de la scene floutait
+correctement: le plus visible des deux defauts, puisque rien ne signale que le
+flou manque.
+
+Les positions sont echantillonnees le long de l'obturateur, aux memes instants
+regulierement espaces que les transforms, parce que Cycles etale ses pas de
+mouvement lineairement -- un echantillonnage irregulier flouterait le long
+d'une trajectoire faussee. Cycles range ces pas dans l'attribut de position
+lui-meme, le pas central a l'indice 0.
+
+Les trois geometries en beneficient, le maillage, les courbes et le nuage de
+points, par un echantillonnage partage. L'obturateur est retenu sur la
+geometrie parce que Populate() ne voit pas le render param.
+
+Un cas est ecarte volontairement: un nombre de points qui change d'un instant
+a l'autre. De la geometrie creee ou detruite en cours de plan n'a aucune
+correspondance a interpoler, et on s'en tient alors a l'instant central plutot
+que de melanger des points sans rapport.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/curves.cpp     | 30 +++++++++++++++++++--
+ src/hydra/geometry.h     |  7 +++++
+ src/hydra/geometry.inl   |  7 +++++
+ src/hydra/mesh.cpp       | 35 ++++++++++++++++++++++---
+ src/hydra/pointcloud.cpp | 28 +++++++++++++++++++-
+ src/hydra/util.cpp       | 56 ++++++++++++++++++++++++++++++++++++++++
+ src/hydra/util.h         | 21 +++++++++++++++
+ 7 files changed, 177 insertions(+), 7 deletions(-)
+
+diff --git a/src/hydra/curves.cpp b/src/hydra/curves.cpp
+index 72e9ef0d..8134cc54 100644
+--- a/src/hydra/curves.cpp
++++ b/src/hydra/curves.cpp
+@@ -3,6 +3,8 @@
+  *
+  * SPDX-License-Identifier: Apache-2.0 */
+ 
++#include <vector>
++
+ #include "hydra/curves.h"
+ #include "hydra/geometry.inl"
+ #include "hydra/util.h"
+@@ -62,7 +64,11 @@ void HdCyclesCurves::PopulatePoints(HdSceneDelegate *sceneDelegate)
+ {
+   const HdSceneIndexPrim prim = GetPrim(sceneDelegate, GetId());
+   const HdPrimvarsSchema primvars = HdPrimvarsSchema::GetFromParent(prim.dataSource);
+-  const VtValue value = ReadPrimvar(primvars, HdTokens->points);
++  HdSampledDataSourceHandle pointsDs;
++  if (primvars) {
++    pointsDs = primvars.GetPrimvar(HdTokens->points).GetPrimvarValue();
++  }
++  const VtValue value = pointsDs ? pointsDs->GetValue(0.0f) : VtValue();
+ 
+   if (!value.IsHolding<VtVec3fArray>()) {
+     TF_WARN("Invalid points data for %s", GetId().GetText());
+@@ -75,9 +81,29 @@ void HdCyclesCurves::PopulatePoints(HdSceneDelegate *sceneDelegate)
+ 
+   static_assert(sizeof(GfVec3f) == sizeof(packed_float3));
+ 
++  const size_t numKeys = std::min(points.size(), _geom->num_keys());
+   std::copy_n(reinterpret_cast<const packed_float3 *>(points.data()),
+-              std::min(points.size(), _geom->num_keys()),
++              numKeys,
+               _geom->get_position_for_write());
++
++  /* Des courbes qui se deforment - de la fourrure, une chevelure simulee -
++   * rendaient nettes faute d'echantillons le long de l'obturateur. */
++  const std::vector<VtVec3fArray> samples =
++      _motionBlur ?
++          SampleDeformingPoints(pointsDs, _shutterOpen, _shutterClose, kMotionSteps, numKeys) :
++          std::vector<VtVec3fArray>();
++
++  Attribute *attr_P = _geom->attributes.find(ATTR_STD_POSITION);
++  if (attr_P == nullptr) {
++    return;
++  }
++  if (!samples.empty()) {
++    WriteMotionPositions(_geom, attr_P, samples, numKeys);
++  }
++  else if (attr_P->has_motion()) {
++    attr_P->remove_motion();
++    _geom->set_use_motion_blur(false);
++  }
+ }
+ 
+ void HdCyclesCurves::PopulateWidths(HdSceneDelegate *sceneDelegate)
+diff --git a/src/hydra/geometry.h b/src/hydra/geometry.h
+index 458adf2f..1a5f35b0 100644
+--- a/src/hydra/geometry.h
++++ b/src/hydra/geometry.h
+@@ -40,6 +40,13 @@ template<typename Base, typename CyclesBase> class HdCyclesGeometry : public Bas
+   CyclesBase *_geom = nullptr;
+   std::vector<CCL_NS::Object *> _instances;
+ 
++  /* L'obturateur de ce rendu, retenu ici parce que Populate() ne voit pas le
++   * render param et qu'il lui faut ces bornes pour echantillonner une
++   * geometrie qui se deforme. */
++  bool _motionBlur = false;
++  float _shutterOpen = 0.0f;
++  float _shutterClose = 0.0f;
++
+  private:
+   void Initialize(PXR_NS::HdRenderParam *renderParam);
+ 
+diff --git a/src/hydra/geometry.inl b/src/hydra/geometry.inl
+index 6d230382..b8bceb8c 100644
+--- a/src/hydra/geometry.inl
++++ b/src/hydra/geometry.inl
+@@ -74,6 +74,13 @@ void HdCyclesGeometry<Base, CyclesBase>::Sync(HdSceneDelegate *sceneDelegate,
+ 
+   const SceneLock lock(renderParam);
+ 
++  {
++    const auto *const session = static_cast<const HdCyclesSession *>(renderParam);
++    _motionBlur = session->IsMotionBlurEnabled();
++    _shutterOpen = session->GetShutterOpen();
++    _shutterClose = session->GetShutterClose();
++  }
++
+   const SdfPath &id = Base::GetId();
+   const HdSceneIndexPrim prim = GetPrim(sceneDelegate, id);
+   const HdContainerDataSourceHandle &primDs = prim.dataSource;
+diff --git a/src/hydra/mesh.cpp b/src/hydra/mesh.cpp
+index cb1581a9..4884b93e 100644
+--- a/src/hydra/mesh.cpp
++++ b/src/hydra/mesh.cpp
+@@ -3,6 +3,9 @@
+  *
+  * SPDX-License-Identifier: Apache-2.0 */
+ 
++#include <algorithm>
++#include <vector>
++
+ #include "hydra/mesh.h"
+ #include "hydra/geometry.inl"
+ #include "hydra/util.h"
+@@ -162,7 +165,11 @@ void HdCyclesMesh::PopulatePoints(HdSceneDelegate *sceneDelegate)
+ {
+   const HdSceneIndexPrim prim = GetPrim(sceneDelegate, GetId());
+   const HdPrimvarsSchema primvars = HdPrimvarsSchema::GetFromParent(prim.dataSource);
+-  const VtValue value = ReadPrimvar(primvars, HdTokens->points);
++  HdSampledDataSourceHandle pointsDs;
++  if (primvars) {
++    pointsDs = primvars.GetPrimvar(HdTokens->points).GetPrimvarValue();
++  }
++  const VtValue value = pointsDs ? pointsDs->GetValue(0.0f) : VtValue();
+ 
+   if (!value.IsHolding<VtVec3fArray>()) {
+     TF_WARN("Invalid points data for %s", GetId().GetText());
+@@ -176,10 +183,30 @@ void HdCyclesMesh::PopulatePoints(HdSceneDelegate *sceneDelegate)
+   const bool subdivision = _geom->get_subdivision_type() != Mesh::SUBDIVISION_NONE;
+   AttributeSet &attributes = (subdivision) ? _geom->subd_attributes : _geom->attributes;
+   Attribute *attr_P = attributes.add(ATTR_STD_POSITION);
+-  packed_float3 *verts = attr_P->data_for_write<packed_float3>();
++  const size_t numPoints = static_cast<size_t>(_topology.GetNumPoints());
++
++  /* Flou de deformation. Le flou de transformation ne couvre que ce qui bouge
++   * en bloc : des points animes - une simulation, un deformeur - rendaient
++   * nets. Cycles range les pas de mouvement dans l'attribut de position
++   * lui-meme, le pas central a l'indice 0. */
++  const std::vector<VtVec3fArray> samples =
++      _motionBlur ? SampleDeformingPoints(
++                        pointsDs, _shutterOpen, _shutterClose, kMotionSteps, numPoints) :
++                    std::vector<VtVec3fArray>();
++
++  if (!samples.empty()) {
++    WriteMotionPositions(_geom, attr_P, samples, numPoints);
++  }
++  else {
++    if (attr_P->has_motion()) {
++      attr_P->remove_motion();
++    }
++    _geom->set_use_motion_blur(false);
++    std::copy_n(reinterpret_cast<const packed_float3 *>(points.data()),
++                numPoints,
++                attr_P->data_for_write<packed_float3>());
++  }
+ 
+-  std::copy_n(
+-      reinterpret_cast<const packed_float3 *>(points.data()), _topology.GetNumPoints(), verts);
+   _geom->tag_position_modified();
+ }
+ 
+diff --git a/src/hydra/pointcloud.cpp b/src/hydra/pointcloud.cpp
+index be640adc..497280d3 100644
+--- a/src/hydra/pointcloud.cpp
++++ b/src/hydra/pointcloud.cpp
+@@ -3,6 +3,8 @@
+  *
+  * SPDX-License-Identifier: Apache-2.0 */
+ 
++#include <vector>
++
+ #include "hydra/pointcloud.h"
+ #include "hydra/geometry.inl"
+ #include "hydra/util.h"
+@@ -60,7 +62,11 @@ void HdCyclesPoints::PopulatePoints(HdSceneDelegate *sceneDelegate)
+ {
+   const HdSceneIndexPrim prim = GetPrim(sceneDelegate, GetId());
+   const HdPrimvarsSchema primvars = HdPrimvarsSchema::GetFromParent(prim.dataSource);
+-  const VtValue value = ReadPrimvar(primvars, HdTokens->points);
++  HdSampledDataSourceHandle pointsDs;
++  if (primvars) {
++    pointsDs = primvars.GetPrimvar(HdTokens->points).GetPrimvarValue();
++  }
++  const VtValue value = pointsDs ? pointsDs->GetValue(0.0f) : VtValue();
+ 
+   if (!value.IsHolding<VtVec3fArray>()) {
+     TF_WARN("Invalid points data for %s", GetId().GetText());
+@@ -75,6 +81,26 @@ void HdCyclesPoints::PopulatePoints(HdSceneDelegate *sceneDelegate)
+   std::copy_n(reinterpret_cast<const packed_float3 *>(points.data()),
+               points.size(),
+               _geom->get_position_for_write());
++
++  /* Des points qui se deplacent - un nuage simule, des particules - doivent
++   * flouter comme le fait une transform animee. */
++  const std::vector<VtVec3fArray> samples =
++      _motionBlur ?
++          SampleDeformingPoints(
++              pointsDs, _shutterOpen, _shutterClose, kMotionSteps, points.size()) :
++          std::vector<VtVec3fArray>();
++
++  Attribute *attr_P = _geom->attributes.find(ATTR_STD_POSITION);
++  if (attr_P == nullptr) {
++    return;
++  }
++  if (!samples.empty()) {
++    WriteMotionPositions(_geom, attr_P, samples, points.size());
++  }
++  else if (attr_P->has_motion()) {
++    attr_P->remove_motion();
++    _geom->set_use_motion_blur(false);
++  }
+ }
+ 
+ void HdCyclesPoints::PopulateWidths(HdSceneDelegate *sceneDelegate)
+diff --git a/src/hydra/util.cpp b/src/hydra/util.cpp
+index 0c9f50fd..b31fc576 100644
+--- a/src/hydra/util.cpp
++++ b/src/hydra/util.cpp
+@@ -3,6 +3,8 @@
+  *
+  * SPDX-License-Identifier: Apache-2.0 */
+ 
++#include <algorithm>
++
+ #include "hydra/util.h"
+ #include "scene/attribute.h"
+ 
+@@ -29,6 +31,60 @@ HdSceneIndexPrim GetPrim(HdSceneDelegate *delegate, const SdfPath &id)
+   return si->GetPrim(id);
+ }
+ 
++std::vector<VtVec3fArray> SampleDeformingPoints(const HdSampledDataSourceHandle &pointsDs,
++                                                const float shutterOpen,
++                                                const float shutterClose,
++                                                const int steps,
++                                                const size_t minPoints)
++{
++  std::vector<VtVec3fArray> samples;
++  if (!pointsDs || steps < 2) {
++    return samples;
++  }
++
++  samples.resize(steps);
++  for (int step = 0; step < steps; ++step) {
++    /* Les memes instants regulierement espaces que pour les transforms :
++     * Cycles etale ses pas de mouvement lineairement sur l'obturateur, un
++     * echantillonnage irregulier flouterait le long d'une trajectoire faussee. */
++    const float t = shutterOpen + (shutterClose - shutterOpen) * step / float(steps - 1);
++    const VtValue sampled = pointsDs->GetValue(t);
++    if (!sampled.IsHolding<VtVec3fArray>()) {
++      return {};
++    }
++    samples[step] = sampled.UncheckedGet<VtVec3fArray>();
++    if (samples[step].size() < minPoints) {
++      return {};
++    }
++  }
++
++  for (int step = 1; step < steps; ++step) {
++    if (samples[step] != samples[0]) {
++      return samples;
++    }
++  }
++  return {};
++}
++
++void WriteMotionPositions(Geometry *geom,
++                          Attribute *attr_P,
++                          const std::vector<VtVec3fArray> &samples,
++                          const size_t count)
++{
++  const int steps = int(samples.size());
++  geom->set_motion_steps(steps);
++  geom->set_use_motion_blur(true);
++  attr_P->add_motion(geom);
++
++  int attrStep = 1;
++  for (int step = 0; step < steps; ++step) {
++    const int buffer = (step == steps / 2) ? 0 : attrStep++;
++    std::copy_n(reinterpret_cast<const packed_float3 *>(samples[step].data()),
++                count,
++                attr_P->data_for_write<packed_float3>(buffer));
++  }
++}
++
+ VtValue ReadPrimvar(const HdPrimvarsSchema &primvars, const TfToken &name)
+ {
+   if (!primvars) {
+diff --git a/src/hydra/util.h b/src/hydra/util.h
+index 69254c50..fb79460e 100644
+--- a/src/hydra/util.h
++++ b/src/hydra/util.h
+@@ -7,6 +7,9 @@
+ 
+ #include "hydra/config.h"
+ #include "scene/attribute.h"
++#include "scene/geometry.h"
++
++#include <vector>
+ 
+ #include <pxr/base/vt/value.h>
+ #include <pxr/imaging/hd/dataSource.h>
+@@ -102,6 +105,24 @@ PXR_NS::TfToken ReadPrimvarRole(const PXR_NS::HdPrimvarsSchema &primvars,
+ PXR_NS::TfTokenVector PrimvarNamesAtInterpolation(const PXR_NS::HdPrimvarsSchema &primvars,
+                                                   PXR_NS::HdInterpolation interpolation);
+ 
++/* Positions echantillonnees regulierement le long de l'obturateur, pour le flou
++ * de deformation. Rend un vecteur vide si rien ne bouge, ou si le nombre de
++ * points change d'un instant a l'autre : de la geometrie creee ou detruite en
++ * cours de plan n'a aucune correspondance a interpoler. */
++std::vector<PXR_NS::VtVec3fArray> SampleDeformingPoints(
++    const PXR_NS::HdSampledDataSourceHandle &pointsDs,
++    float shutterOpen,
++    float shutterClose,
++    int steps,
++    size_t minPoints);
++
++/* Pose ces echantillons dans l'attribut de position. Cycles y range le pas
++ * central a l'indice 0 et les autres a la suite, dans l'ordre de l'obturateur. */
++void WriteMotionPositions(CCL_NS::Geometry *geom,
++                          CCL_NS::Attribute *attr_P,
++                          const std::vector<PXR_NS::VtVec3fArray> &samples,
++                          size_t count);
++
+ /* Convert a Hydra primvar value to a Cycles attribute. */
+ void ApplyPrimvars(CCL_NS::AttributeSet &attributes,
+                    const CCL_NS::ustring &name,
