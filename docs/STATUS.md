@@ -913,6 +913,32 @@ sans donner de direction. Le résultat contient des **infinis** sur le vert, et
 leur emplacement change d'une compilation à l'autre : son image de référence
 n'en est pas une. Le test mérite une direction explicite.
 
+### A21 — Une texture 8 bits ne semble pas décodée en sRGB ⚠️ OUVERT
+
+Mesure : un PNG uni à 128/255, lu par `cycles_image_texture`, branché sur
+l'émission d'un principled à force 1, rendu par husk sans autre éclairage.
+
+| | valeur au centre |
+|---|---|
+| rendu | **0,502** |
+| attendu si sRGB → linéaire | 0,216 |
+| attendu sans décodage | 0,502 |
+
+Le fichier annonce pourtant `oiio:ColorSpace = sRGB` (vérifié), et le socket
+`colorspace` du nœud reste sur son défaut, la chaîne vide — qui est bien
+`u_colorspace_auto` chez Cycles. Ni avertissement ni ligne de journal :
+`detect_known_colorspace` a donc pris une branche silencieuse. Le résultat est
+le même avec et sans `OCIO` pointant la config ACES d'Houdini.
+
+⚠️ **Pas encore confirmé comme un défaut de notre côté** : il reste à rendre la
+même texture avec Karma sous la même config OCIO. Si Karma donne 0,216, nous
+avons un vrai écart avec Blender ; s'il donne 0,502, c'est la convention de la
+config et nous sommes cohérents avec l'hôte. À trancher avant de corriger quoi
+que ce soit — un décodage ajouté au mauvais endroit doublerait la correction.
+
+Ce que ce n'est pas : un PPM annonce `Rec709`, pas `sRGB`, et n'a donc pas à
+être décodé. La première mesure, faite sur un PPM, ne prouvait rien.
+
 ## Phase 13 — Les normales sont celles du maillage ✅
 
 Le correctif de la phase 8 lisait bien les normales plutôt que l'indice
@@ -1230,3 +1256,77 @@ l'aller-retour de moteur dans le viewport ne se constatent qu'Houdini ouvert.
 Rien ne filtre la liste sur ce que la machine porte réellement : énumérer les
 périphériques hors du process de rendu n'est pas offert depuis Python, et
 Cycles retombe de lui-même sur le CPU en le disant dans son log.
+
+## Phase 20 — Le displacement ne partait jamais, et les réglages du matériau ✅
+
+Signalé : « j'arrive pas à utiliser le displacement […] il apparaît même pas en
+normale ». Exact, et pour une raison plus large que le displacement.
+
+**Un terminal dont la sortie ne s'appelle pas `BSDF` n'était jamais branché.**
+`ShaderNode::output()` compare l'`ui_name` du socket — `Displacement`,
+`Volume`, `Closure`, `Emission` — quand le registre Sdr publie le nom interne,
+en minuscules, et que c'est celui-là que l'export USD écrit
+(`outputs:displacement`). Les deux ne coïncident que pour `BSDF`. Tombaient
+donc, en silence :
+
+| nœud | sortie authorée | ce que Cycles comparait |
+|---|---|---|
+| `displacement`, `vector_displacement` | `displacement` | `Displacement` |
+| `principled_volume` et les trois autres | `volume` | `Volume` |
+| `add_closure`, `mix_closure` | `closure` | `Closure` |
+| `emission`, `background_shader`, `holdout` | `emission` | `Emission` |
+
+Les connexions **entre nœuds** comparaient déjà le nom interne sans tenir
+compte de la casse : le réseau se câblait correctement partout sauf à sa
+dernière arête. Même recherche des deux côtés désormais.
+
+Mesuré par le graphe que Cycles dessine lui-même (`HD_CYCLES_DUMP_GRAPH`), sur
+`noise → displacement → terminal` :
+
+    avant   Fac:Height, BSDF:Surface
+    après   Fac:Height, BSDF:Surface, Displacement:Displacement
+
+⚠️ Les deux messages d'échec passaient par `TF_RUNTIME_ERROR`, que husk avale :
+c'est exactement ainsi qu'un displacement disparaissait sans un mot. Ils
+passent au journal de Cycles.
+
+**Les réglages du matériau, ensuite.** Cycles rend un displacement en bump par
+défaut ; le passer en vrai déplacement se fait dans les réglages du matériau,
+sous Blender. Un **Cycles Material Properties** les porte maintenant — les huit
+sockets du `Shader` — sur le modèle du nœud de Karma : une case d'activation
+par réglage, et seul ce qui est coché part dans l'USD.
+
+Il a fallu **notre propre traducteur de shaders USD**
+(`husdplugins/shadertranslators/cycles.py`). Le repli des propriétés sur le
+prim du shader terminal existe chez Houdini — « Hydra does not forward them to
+the render delegate », dit son propre commentaire — mais seulement dans le
+traducteur MaterialX, et il suppose Karma faute de contexte
+(`render_context = 'kma'`). Le nœud était posé, branché, activé, et
+n'atteignait jamais l'USD. Le point d'extension est celui que SideFX documente,
+`matchesRenderMask` et `shaderTranslatorHelper` ; tout le reste de la
+traduction reste la sienne.
+
+Mesuré, cube subdivisé, écart moyen à l'image sans réglage :
+
+| | écart |
+|---|---|
+| `displacement_method = "bump"` | 0,00853 |
+| `displacement_method = "true"` | 0,01376 |
+| socket inexistant | 0,00000, plus un avertissement nommant le réglage |
+
+**Vérifié au passage : tous les nœuds sont utilisables dans le builder.** Les
+100 types se posent, et chacun a au moins une sortie que le nœud `outputs`
+accepte ; les 63 absents du registre Sdr sont les `convert_*`, nœuds de
+conversion implicite que Blender n'expose pas non plus. Ce qui manquait n'était
+pas un nœud, c'était le terminal ci-dessus.
+
+**Non reproduit : l'inversion de l'UV.** Mesuré sur une texture haut rouge / bas
+bleu, plan dont `v = 0` est en bas : le rendu place bien le rouge en haut, par
+`primvars:st` écrit à la main comme par une grille SOP passée par Solaris
+(Houdini écrit `texCoord2f[] primvars:st`, interpolation `vertex`), et que
+l'image soit lue par le socket UV implicite ou par un `texture_coordinate`
+explicite. Il faut la scène qui l'exhibe pour aller plus loin.
+
+**Textures 4K : pas de surcoût côté batch.** Trois 4096² (base, rugosité,
+normale) sur husk : 2,7 s au total, 0,7 s avant la première trace. La lenteur
+signalée est donc à chercher dans le viewport, pas dans le chargement.

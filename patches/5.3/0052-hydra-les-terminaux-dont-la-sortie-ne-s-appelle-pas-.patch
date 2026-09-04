@@ -1,0 +1,129 @@
+From aa49feb429cc06d51218160fe93b247a020b803e Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Fri, 4 Sep 2026 04:07:57 +0200
+Subject: [PATCH 52/53] hydra: les terminaux dont la sortie ne s'appelle pas
+ BSDF n'etaient jamais branches
+
+Un displacement Cycles natif ne faisait rien. Ni relief, ni meme le bump
+qui lui sert de defaut : le terminal etait ecarte avant d'atteindre le
+graphe, en silence.
+
+Le nom d'une sortie tel que l'USD le porte n'est pas celui que Cycles
+compare. `ShaderNode::output()` teste l'`ui_name` du socket - "Displacement",
+"Volume", "Closure", "Emission" - alors que le registre Sdr publie le nom
+interne, en minuscules, et c'est lui que l'export ecrit :
+`outputs:displacement`. Les deux ne coincident que pour "BSDF". Toute
+sortie terminale qui ne s'appelait pas ainsi tombait donc :
+
+    displacement, vector_displacement          displacement / Displacement
+    principled_volume et les trois autres      volume       / Volume
+    add_closure, mix_closure                   closure      / Closure
+    emission, background_shader, holdout       emission     / Emission
+
+Les connexions entre noeuds, elles, comparaient deja le nom interne sans
+tenir compte de la casse - d'ou un reseau qui se cablait correctement
+partout sauf a sa derniere arete. La recherche est desormais la meme des
+deux cotes, nom interne d'abord, ui_name ensuite pour les noms que ce
+fichier se donne a lui-meme.
+
+Mesure, par le graphe que Cycles dessine lui-meme (HD_CYCLES_DUMP_GRAPH),
+sur un noise -> displacement -> terminal displacement :
+
+    avant   Fac:Height, BSDF:Surface
+    apres   Fac:Height, BSDF:Surface, Displacement:Displacement
+
+Et les deux messages passent au journal de Cycles : en TF_RUNTIME_ERROR,
+husk les avalait, ce qui est exactement comment un displacement pouvait
+disparaitre sans que rien ne le dise.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp | 54 +++++++++++++++++++++++++++++++-----------
+ 1 file changed, 40 insertions(+), 14 deletions(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index 6b9bf9da..985f1cca 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -1740,6 +1740,34 @@ void HdCyclesMaterial::UpdateParameters(HdMaterialNetworkSchema network)
+   }
+ }
+ 
++namespace {
++
++/* Le nom d'une sortie tel que l'USD le porte n'est pas celui que Cycles
++ * compare. `ShaderNode::output()` teste l'`ui_name` du socket - "Displacement",
++ * "Volume", "Closure" - alors que le registre Sdr publie le nom interne, en
++ * minuscules. Les deux ne coincident que pour "BSDF", d'ou une surface qui se
++ * branchait quand rien d'autre ne le faisait.
++ *
++ * Chercher donc le nom interne d'abord, comme le faisaient deja les connexions
++ * entre noeuds, puis l'ui_name pour les noms que ce fichier se donne a
++ * lui-meme. */
++ShaderOutput *FindOutput(ShaderNode *node, const std::string &name)
++{
++  for (ShaderOutput *out : node->outputs) {
++    if (string_iequals(out->socket_type.name.string(), name)) {
++      return out;
++    }
++  }
++  for (ShaderOutput *out : node->outputs) {
++    if (string_iequals(out->name().string(), name)) {
++      return out;
++    }
++  }
++  return nullptr;
++}
++
++}  // namespace
++
+ void HdCyclesMaterial::UpdateConnections(NodeDesc &nodeDesc,
+                                          HdMaterialNodeSchema nodeSchema,
+                                          const SdfPath &nodePath,
+@@ -1836,13 +1864,7 @@ void HdCyclesMaterial::UpdateConnections(NodeDesc &nodeDesc,
+                                        outputMapping->parameterName(upstreamOutputName, input) :
+                                        upstreamOutputName.GetString();
+ 
+-    ShaderOutput *output = nullptr;
+-    for (ShaderOutput *out : srcNodeIt->second.node->outputs) {
+-      if (string_iequals(out->socket_type.name.string(), outputName)) {
+-        output = out;
+-        break;
+-      }
+-    }
++    ShaderOutput *output = FindOutput(srcNodeIt->second.node, outputName);
+ 
+     if (!output) {
+       LOG_WARNING << "MaterialX: Cycles node '" << srcNodeIt->second.node->name.c_str()
+@@ -2025,17 +2047,21 @@ unique_ptr<ShaderGraph> HdCyclesMaterial::BuildShaderGraph(HdMaterialNetworkSche
+ 
+     ShaderInput *const input = inputName ? graph->output()->input(inputName) : nullptr;
+     if (!input) {
+-      TF_RUNTIME_ERROR("Could not find terminal input '%s.%s'",
+-                       upstreamNodePath.GetText(),
+-                       inputName ? inputName : "<null>");
++      /* Par le journal de Cycles, pas TF_RUNTIME_ERROR : husk avale les
++       * diagnostics de Tf, et un terminal qui tombe est precisement ce qu'il
++       * ne faut pas perdre - le materiau rend alors sans son displacement, ou
++       * sans son volume, sans un mot. */
++      LOG_WARNING << "No terminal input '" << (inputName ? inputName : "<null>") << "' for '"
++                  << terminalName.GetText() << "' from '" << upstreamNodePath.GetText()
++                  << "', terminal dropped.";
+       continue;
+     }
+ 
+-    ShaderOutput *const output = outputName ? node->output(outputName) : nullptr;
++    ShaderOutput *const output = outputName ? FindOutput(node, outputName) : nullptr;
+     if (!output) {
+-      TF_RUNTIME_ERROR("Could not find terminal output '%s.%s'",
+-                       upstreamNodePath.GetText(),
+-                       outputName ? outputName : "<null>");
++      LOG_WARNING << "Cycles node '" << node->name.c_str() << "' has no output '"
++                  << (outputName ? outputName : "<null>") << "' to drive the '"
++                  << terminalName.GetText() << "' terminal, terminal dropped.";
+       continue;
+     }
+ 
+-- 
+2.53.0.windows.2
+

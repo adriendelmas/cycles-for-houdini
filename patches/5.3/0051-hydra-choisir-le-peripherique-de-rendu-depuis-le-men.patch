@@ -1,7 +1,7 @@
 From 44d7d3fe38a85310c370cc27e1c4845c0892c78a Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 4 Sep 2026 00:03:56 +0200
-Subject: [PATCH 51/51] hydra: choisir le peripherique de rendu depuis le menu
+Subject: [PATCH 51/53] hydra: choisir le peripherique de rendu depuis le menu
  d'Houdini
 
 Le peripherique se choisissait jusqu'ici en nommant l'entree du menu des

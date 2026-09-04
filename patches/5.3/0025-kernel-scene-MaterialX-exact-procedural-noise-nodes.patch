@@ -1,7 +1,7 @@
 From 881a25477bb087a5dd81a8a5b478acff6f7dfdc5 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 16:49:43 +0200
-Subject: [PATCH 25/51] kernel/scene: MaterialX-exact procedural noise nodes
+Subject: [PATCH 25/53] kernel/scene: MaterialX-exact procedural noise nodes
 
 Imported from Blender PR #158054 (materialx-noise-nodes), Cycles side only -
 the Blender node, RNA and EEVEE parts are left out, as is blender/shader.cpp

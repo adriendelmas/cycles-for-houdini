@@ -1,0 +1,359 @@
+From f2b38d4af78d5cf1a01bf9aad2d5df961ecebf08 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Fri, 4 Sep 2026 04:08:28 +0200
+Subject: [PATCH 53/53] hydra: les reglages du materiau, dans un noeud plutot
+ que nulle part
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Cycles rend un displacement en bump par defaut ; passer en vrai
+deplacement se fait dans les reglages du materiau, sous Blender. Sous
+Houdini il n'y avait rien : ni ce reglage, ni les sept autres que porte
+le `Shader` de Cycles - echantillonnage de l'emission, ombres
+transparentes, correction du bump, sampling et interpolation des
+volumes, pas d'integration, pass id.
+
+Un `Cycles Material Properties` les porte desormais, sur le modele du
+`Karma Material Properties` : une case d'activation par reglage, et seul
+ce qui est coche part dans l'USD - sinon le defaut du delegate, bump ou
+both selon le reseau, ne pourrait plus s'exprimer. Le builder le pose
+d'emblee, branche sur une quatrieme entree du noeud outputs.
+
+Trois pieces :
+
+* **le noeud** (tools/build_cycles_vops.py, depot principal), dont les
+  parametres se nomment `cycles:<socket>` - le nom du socket de `Shader`,
+  pas une table de correspondance a tenir a jour ;
+
+* **un traducteur de shaders USD**, `husdplugins/shadertranslators/cycles.py`.
+  Le repli des proprietes sur le prim du shader terminal existe chez
+  Houdini - « Hydra does not forward them to the render delegate », dit
+  son propre commentaire - mais seulement dans le traducteur MaterialX,
+  ou il suppose Karma faute de contexte (`render_context = 'kma'`). Notre
+  noeud etait pose, branche, active, et n'atteignait jamais l'USD. Le
+  point d'extension est celui que SideFX documente : `matchesRenderMask`
+  et `shaderTranslatorHelper`. Tout le reste de la traduction reste la
+  sienne ;
+
+* **le delegate**, qui releve les parametres prefixes `cycles:` sur les
+  noeuds du reseau et les pose sur le `Shader`, un `Node` comme un autre :
+  le socket se cherche dans son NodeType, un nom inconnu est signale au
+  lieu d'etre ignore.
+
+Mesure, cube subdivise, noise -> displacement, ecart moyen a l'image
+sans reglage :
+
+    displacement_method = "bump"    0.00853
+    displacement_method = "true"    0.01376
+    socket inexistant               0.00000 + "No Cycles material setting
+                                    'cycles:pas_de_socket', value ignored."
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/CMakeLists.txt                      |   6 +
+ src/hydra/material.cpp                        |  54 +++++++-
+ src/hydra/material.h                          |   8 ++
+ src/hydra/resources/cycles_builder.py         |  14 ++-
+ .../husdplugins/shadertranslators/cycles.py   | 118 ++++++++++++++++++
+ 5 files changed, 194 insertions(+), 6 deletions(-)
+ create mode 100644 src/hydra/resources/husdplugins/shadertranslators/cycles.py
+
+diff --git a/src/hydra/CMakeLists.txt b/src/hydra/CMakeLists.txt
+index d8aaa70f..77f604b7 100644
+--- a/src/hydra/CMakeLists.txt
++++ b/src/hydra/CMakeLists.txt
+@@ -249,6 +249,12 @@ if(WITH_CYCLES_HYDRA_RENDER_DELEGATE)
+     # inutilisable.
+     delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources" "cycles_builder.py" "${CYCLES_INSTALL_PATH}/houdini/scripts/python")
+     delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources" "CyclesTools.shelf" "${CYCLES_INSTALL_PATH}/houdini/toolbar")
++    # Le traducteur de shaders USD pour le contexte cycles. Il n'existe que
++    # pour porter les reglages du materiau - le Cycles Material Properties -
++    # jusqu'a l'USD : Houdini ne fait ce repli que dans son traducteur
++    # MaterialX, ou il suppose Karma. Le reste de la traduction reste celle
++    # d'Houdini, heritee telle quelle.
++    delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources/husdplugins/shadertranslators" "cycles.py" "${CYCLES_INSTALL_PATH}/houdini/husdplugins/shadertranslators")
+     # Le choix du peripherique de rendu, dans le menu Render d'Houdini. Il ne
+     # peut pas vivre sur un noeud - il est fige a la construction de la session,
+     # et decrit la machine plutot que la scene - donc un menu global, une
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index 985f1cca..fe8ed783 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -1444,6 +1444,7 @@ void HdCyclesMaterial::Sync(HdSceneDelegate *sceneDelegate,
+      * correctif sur la 5.2 devait ajouter a la main. */
+     if (network && !_nodes.empty() && !dirtyResource) {
+       UpdateParameters(network);
++      ApplyShaderSettings();
+       _shader->tag_update(lock.scene);
+     }
+     else {
+@@ -1474,8 +1475,13 @@ void HdCyclesMaterial::Sync(HdSceneDelegate *sceneDelegate,
+       /* A shader keeps Cycles' default displacement method, which is bump only
+        * - so a connected displacement terminal would just perturb normals, and
+        * set_graph() would not even compute the displacement hash. Ask for real
+-       * displacement alongside bump when the network actually drives it. */
++       * displacement alongside bump when the network actually drives it.
++       *
++       * Ce n'est qu'un defaut : un `cycles:displacement_method` explicite, pose
++       * par un noeud de proprietes, passe apres et gagne. Blender laisse ce
++       * choix a l'utilisateur, nous aussi. */
+       _shader->set_displacement_method(_hasDisplacement ? DISPLACE_BOTH : DISPLACE_BUMP);
++      ApplyShaderSettings();
+ 
+       _shader->set_graph(std::move(graph));
+       _shader->tag_update(lock.scene);
+@@ -1675,6 +1681,18 @@ void HdCyclesMaterial::UpdateParameters(NodeDesc &nodeDesc,
+       continue;
+     }
+ 
++    /* Un reglage du materiau, pas du noeud. Houdini replie les parametres d'un
++     * noeud de proprietes dans le prim Shader du terminal, prefixes du moteur -
++     * `inputs:cycles:displacement_method` - exactement comme Karma le fait avec
++     * ses `inputs:karma:*`. Ils decrivent le Shader entier, qui n'existe pas
++     * encore ici : les mettre de cote, Sync les appliquera. */
++    static const std::string kSettingPrefix("cycles:");
++    const std::string &paramString = paramName.GetString();
++    if (paramString.rfind(kSettingPrefix, 0) == 0) {
++      _shaderSettings[paramString.substr(kSettingPrefix.size())] = value;
++      continue;
++    }
++
+     /* See if the parameter name is in USDPreviewSurface terms, and needs to be converted .*/
+     const UsdToCyclesMapping *inputMapping = nodeDesc.mapping;
+     std::string inputName = inputMapping ?
+@@ -1724,8 +1742,35 @@ void HdCyclesMaterial::UpdateParameters(NodeDesc &nodeDesc,
+   }
+ }
+ 
++/* Les reglages du materiau, poses sur le Shader lui-meme.
++ *
++ * Le Shader est un `Node` comme un autre : ses sockets - displacement_method,
++ * volume_step_rate, emission_sampling_method, pass_id... - se cherchent dans
++ * son NodeType et s'ecrivent avec la meme machinerie que ceux d'un noeud de
++ * shading. Nommer un socket qui n'existe pas est signale plutot qu'ignore :
++ * c'est la meme regle que pour `cycles:integrator:<socket>`, un nom mal
++ * orthographie etant indiscernable d'un reglage sans effet. */
++void HdCyclesMaterial::ApplyShaderSettings()
++{
++  if (!_shader) {
++    return;
++  }
++
++  for (const auto &setting : _shaderSettings) {
++    const SocketType *const socket = _shader->type->find_input(ustring(setting.first));
++    if (socket == nullptr) {
++      LOG_WARNING << "No Cycles material setting 'cycles:" << setting.first
++                  << "', value ignored.";
++      continue;
++    }
++    SetNodeValue(_shader, *socket, setting.second);
++  }
++}
++
+ void HdCyclesMaterial::UpdateParameters(HdMaterialNetworkSchema network)
+ {
++  _shaderSettings.clear();
++
+   HdMaterialNodeContainerSchema nodes = network.GetNodes();
+   for (const TfToken &nodeName : nodes.GetNames()) {
+     const SdfPath nodePath = MaterialNodeNameToSdfPath(nodeName);
+@@ -1880,6 +1925,7 @@ void HdCyclesMaterial::UpdateConnections(NodeDesc &nodeDesc,
+ unique_ptr<ShaderGraph> HdCyclesMaterial::BuildShaderGraph(HdMaterialNetworkSchema network)
+ {
+   _nodes.clear();
++  _shaderSettings.clear();
+ 
+   unique_ptr<ShaderGraph> graph = make_unique<ShaderGraph>();
+ 
+@@ -2051,9 +2097,9 @@ unique_ptr<ShaderGraph> HdCyclesMaterial::BuildShaderGraph(HdMaterialNetworkSche
+        * diagnostics de Tf, et un terminal qui tombe est precisement ce qu'il
+        * ne faut pas perdre - le materiau rend alors sans son displacement, ou
+        * sans son volume, sans un mot. */
+-      LOG_WARNING << "No terminal input '" << (inputName ? inputName : "<null>") << "' for '"
+-                  << terminalName.GetText() << "' from '" << upstreamNodePath.GetText()
+-                  << "', terminal dropped.";
++      LOG_WARNING << "No terminal input '" << (inputName ? inputName : "<null>")
++                  << "' for '" << terminalName.GetText() << "' from '"
++                  << upstreamNodePath.GetText() << "', terminal dropped.";
+       continue;
+     }
+ 
+diff --git a/src/hydra/material.h b/src/hydra/material.h
+index 2418041d..f8cdf0be 100644
+--- a/src/hydra/material.h
++++ b/src/hydra/material.h
+@@ -63,6 +63,14 @@ class HdCyclesMaterial final : public PXR_NS::HdMaterial {
+    * applique quand le Shader existe. */
+   bool _hasDisplacement = false;
+ 
++  /* Les reglages du materiau lui-meme - `cycles:<socket>` porte par un noeud
++   * du reseau - releves en lisant les parametres, appliques sur le Shader une
++   * fois qu'il existe. Ils ne sont pas des sockets de noeud : ils decrivent le
++   * materiau entier, comme le panneau Settings de Blender. */
++  std::map<std::string, PXR_NS::VtValue> _shaderSettings;
++
++  void ApplyShaderSettings();
++
+   CCL_NS::Shader *_shader = nullptr;
+   std::unordered_map<PXR_NS::SdfPath, NodeDesc, PXR_NS::SdfPath::Hash> _nodes;
+ };
+diff --git a/src/hydra/resources/cycles_builder.py b/src/hydra/resources/cycles_builder.py
+index 66ce6a28..490e53f3 100644
+--- a/src/hydra/resources/cycles_builder.py
++++ b/src/hydra/resources/cycles_builder.py
+@@ -41,8 +41,11 @@ CYCLES_TAB_MASK = "cycles_* {} {}".format(UTILITY_NODES, SUBNET_NODES)
+ RENDER_CONTEXT = "cycles"
+ 
+ # Les trois sorties d'un matériau Cycles, comme dans Blender - un seul
+-# `suboutput`, une entrée par terminal.
+-TERMINALS = ("surface", "displacement", "volume")
++# `suboutput`, une entrée par terminal - plus les réglages du matériau, qui
++# n'en sont pas une : `properties` ne termine aucun réseau, Houdini replie les
++# paramètres du nœud branché là dans le prim Shader du terminal, préfixés
++# `cycles:`. C'est l'entrée qu'a aussi le builder de Karma.
++TERMINALS = ("surface", "displacement", "volume", "properties")
+ 
+ 
+ def _add_subnet_parms(subnet, folder_label):
+@@ -90,6 +93,13 @@ def setup(subnet, folder_label="Cycles Material Builder"):
+     for index, name in enumerate(TERMINALS):
+         outputs.parm("name%d" % (index + 1)).set(name)
+ 
++    # Les réglages du matériau, posés d'emblée comme chez Karma : le nœud est
++    # inerte tant qu'aucune case n'est cochée, et le trouver déjà là vaut mieux
++    # que d'avoir à deviner qu'il existe.
++    properties = subnet.createNode("cycles_material_properties", "material_properties")
++    properties.setPosition(hou.Vector2(-0.2883, -3.8721))
++    outputs.setInput(TERMINALS.index("properties"), properties, 0)
++
+     # Sans ce drapeau la Material Library ne reconnaît pas un matériau.
+     subnet.setMaterialFlag(True)
+     return subnet
+diff --git a/src/hydra/resources/husdplugins/shadertranslators/cycles.py b/src/hydra/resources/husdplugins/shadertranslators/cycles.py
+new file mode 100644
+index 00000000..f8a2d6e9
+--- /dev/null
++++ b/src/hydra/resources/husdplugins/shadertranslators/cycles.py
+@@ -0,0 +1,118 @@
++"""Traducteur de shaders USD pour Cycles.
++
++Il n'existe que pour une chose : porter les reglages du materiau - le
++`Cycles Material Properties` - jusqu'a l'USD. Tout le reste est celui
++d'Houdini, hérité tel quel.
++
++Le probleme, dit par SideFX dans son propre code (`husd/mtlxshadertranslator.py`) :
++« Logically, render properties should be authored on the material primitive,
++but Hydra does not forward them to the render delegate. The workaround is to
++author them on the terminal shader prim. » Ce repli existe donc, mais seulement
++dans le traducteur MaterialX, et il suppose Karma faute de mieux
++(`render_context = 'kma'`). Un noeud de proprietes pose dans un reseau Cycles
++etait ainsi branche, active, et n'atteignait jamais l'USD : personne ne le
++lisait.
++
++Le point d'extension est documente dans `husd/shadertranslator.py` : redefinir
++`matchesRenderMask()` et `shaderTranslatorHelper()`, et mettre la logique dans
++un helper derive. C'est exactement ce qui suit.
++"""
++
++from pxr import Usd
++
++from husd import shaderutils
++from husd.shadertranslator import ShaderTranslator, ShaderTranslatorHelper
++
++RENDER_MASK = "cycles"
++# Le prefixe des reglages, tel que le delegate le cherche : `cycles:<socket>`
++# sur un noeud du reseau, releve en lisant ses parametres.
++PROPERTIES_CONNECTOR = "properties"
++# Seuls ces terminaux portent les reglages ; un displacement partage ceux de la
++# surface, comme chez Karma.
++PROPERTY_BEARING_TERMINALS = ("surface", "volume")
++
++
++def _properties_node(terminal_output_name, shader_node, shader_node_output_name):
++    """Le noeud de proprietes branche a cote du terminal, s'il y en a un.
++
++    Repris de `_propertiesShaderNodeSibling`, au contexte de rendu pres : le
++    notre se lit sur le noeud, et vaut `cycles`.
++    """
++    tokens = terminal_output_name.split(":")
++    if len(tokens) < 3 or tokens[-1] not in PROPERTY_BEARING_TERMINALS:
++        return None
++    target_context = tokens[-2]
++
++    output_node = None
++    for wire in shader_node.outputConnections():
++        if wire.inputName() == shader_node_output_name:
++            output_node = wire.outputNode()
++            break
++    if output_node is None:
++        return None
++
++    for wire in output_node.inputConnections():
++        if shaderutils.nodeInputTypeName(output_node, wire.outputName()) != PROPERTIES_CONNECTOR:
++            continue
++        node = wire.inputNode()
++        context = shaderutils.explicitPropertiesContextName(node)
++        if context and target_context in context.split():
++            return node
++    return None
++
++
++class CyclesShaderTranslatorHelper(ShaderTranslatorHelper):
++    def createAndConnectUsdTerminalShader(self,
++                                          shader_node,
++                                          requested_shader_type,
++                                          shader_node_output_name):
++        usd_output_path = ShaderTranslatorHelper.createAndConnectUsdTerminalShader(
++            self, shader_node, requested_shader_type, shader_node_output_name)
++        self._authorCyclesProperties(usd_output_path, shader_node, shader_node_output_name)
++        return usd_output_path
++
++    def _authorCyclesProperties(self, usd_output_path, shader_node, shader_node_output_name):
++        if not usd_output_path:
++            return
++
++        from pxr import UsdShade
++
++        output = UsdShade.Output(self.usdStage().GetAttributeAtPath(usd_output_path))
++        if not output:
++            return
++
++        # Les reglages vont sur le prim du shader terminal, faute que Hydra
++        # transmette ceux du prim Material.
++        terminal = UsdShade.ConnectableAPI(
++            shaderutils.usdFirstConnectedOriginatorSourcePrim(output))
++        if not terminal:
++            return
++
++        node = _properties_node(output.GetFullName(), shader_node, shader_node_output_name)
++        if node is None:
++            return
++
++        for parm_name in node.usdShaderParms():
++            parm_tuple = node.parmTuple(parm_name)
++            if parm_tuple is None:
++                continue
++            translator = self.parameterTranslator(parm_tuple)
++            if translator is None:
++                continue
++            translator.createAndSetAttrib(terminal, Usd.TimeCode.Default())
++
++
++class CyclesShaderTranslator(ShaderTranslator):
++    def matchesRenderMask(self, render_mask):
++        return render_mask == RENDER_MASK
++
++    def shaderTranslatorHelper(self, translator_id, usd_stage, usd_material_path, usd_time_code):
++        return CyclesShaderTranslatorHelper(translator_id, usd_stage,
++                                            usd_material_path, usd_time_code)
++
++
++_translator = CyclesShaderTranslator()
++
++
++def usdShaderTranslator():
++    return _translator
+-- 
+2.53.0.windows.2
+

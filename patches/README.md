@@ -5,7 +5,7 @@ vivent sur une branche a nous, en commits separes par sujet. Cette serie en est
 l'export par `git format-patch`.
 
     patches/5.2/   38 correctifs, base 3b97e190 (branche release/5.2)
-    patches/5.3/   51 correctifs, base 8424ed53 (branche main)
+    patches/5.3/   53 correctifs, base 8424ed53 (branche main)
 
 `tools/bootstrap.py` fait le chemin complet -- clone, `git am`, compilation.
 A la main, sur un clone deja pose :
@@ -81,6 +81,8 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0049` | hydra: presenter Cycles GPU avant Cycles CPU dans le menu des moteurs |
 | `0050` | hydra: rendre le display driver et le choix du peripherique utilisables |
 | `0051` | hydra: choisir le peripherique de rendu depuis le menu d'Houdini |
+| `0052` | hydra: les terminaux dont la sortie ne s'appelle pas BSDF n'etaient jamais branches |
+| `0053` | hydra: les reglages du materiau, dans un noeud plutot que nulle part |
 
 ---
 

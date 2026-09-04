@@ -1,7 +1,7 @@
 From be8c24ed7af6405457545190cda09957fb0c759a Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 19:54:38 +0200
-Subject: [PATCH 48/51] hydra: la dispersion du MaterialX standard_surface,
+Subject: [PATCH 48/53] hydra: la dispersion du MaterialX standard_surface,
  vers le principled bsdf qui la porte enfin
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
