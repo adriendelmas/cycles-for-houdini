@@ -1,7 +1,7 @@
 From 600d400edf882964450cfd6379ea285d4db003be Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 19:01:34 +0200
-Subject: [PATCH 47/57] hydra: un seul terminal a trois entrees, plutot que
+Subject: [PATCH 47/58] hydra: un seul terminal a trois entrees, plutot que
  trois connecteurs qui se contredisent
 
 Le Material Builder branchait chaque terminal sur son propre

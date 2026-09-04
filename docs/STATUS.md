@@ -1455,3 +1455,35 @@ par Solaris avec UV sur les points **et** sur les vertices, image lue par le
 socket UV implicite comme par un `texture_coordinate` explicite, et le même
 essai en MaterialX — que Karma et nous rendons identiquement. Il faut la scène
 qui l'exhibe.
+
+## Phase 23 — Le V inversé : c'était le chemin `op:`, pas les UV ✅
+
+Le `.hip` et l'USD de la scène ont tranché en une lecture : les textures y
+viennent de COPs — `op:/stage/copnet1/test` sur un `mtlximage` — et c'est le
+**seul chemin d'image que nous écrivons nous-mêmes**.
+
+`hou.saveImageDataToFile` écrit la première ligne des données comme scanline du
+**haut** — sa documentation le dit, et une mesure le confirme : un tableau dont
+la première ligne est blanche ressort avec cette ligne en haut du fichier. Or
+le buffer d'un COP commence **en bas**, à la manière d'Houdini. Nous lui
+passions le buffer tel quel. La fonction offre un `flip_vertical` fait
+exactement pour ça ; il est désormais posé.
+
+Ce que ce n'était pas, mesuré avant d'en arriver là — six chemins d'UV, tous à
+l'endroit :
+
+| chemin | verdict |
+|---|---|
+| `primvars:st` écrit à la main | à l'endroit |
+| grille SOP → Solaris, UV sur les points | à l'endroit |
+| grille SOP → Solaris, UV sur les vertices | à l'endroit |
+| socket UV implicite d'un `image_texture` Cycles | à l'endroit |
+| `texture_coordinate` explicite | à l'endroit |
+| MaterialX, contre Karma | identiques |
+| **le maillage exact de la scène signalée** — quad `leftHanded`, `st` en faceVarying | Karma et nous : identiques |
+
+⚠️ **À confirmer dans le viewport.** La chaîne complète n'est pas mesurable
+depuis hython : Copernicus n'y compile pas ses noyaux OpenCL — vérifié avec et
+**sans** notre package, donc ce n'est pas nous — et husk n'a pas de module `hou`,
+donc le chemin `op:` n'y existe pas du tout. Le contrat de la fonction d'écriture
+est mesuré ; le reste est du raisonnement, à valider d'un rendu.

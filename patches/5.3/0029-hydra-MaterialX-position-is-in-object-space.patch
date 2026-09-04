@@ -1,7 +1,7 @@
 From d8eefd2bda114dd739ce03a9de8199395e91418c Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 17:29:00 +0200
-Subject: [PATCH 29/57] hydra: MaterialX position is in object space
+Subject: [PATCH 29/58] hydra: MaterialX position is in object space
 
 Every geometric nodedef declares space as object by default, and the Cycles
 geometry node's Position is in world space. For a normal or a tangent the two

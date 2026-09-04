@@ -1,0 +1,57 @@
+From d84197c6c5293cc2edc07fb18343064441578d11 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Fri, 4 Sep 2026 17:00:45 +0200
+Subject: [PATCH 58/58] hydra: une texture venue d'un COP sortait retournee
+
+L'inversion du V signalee depuis plusieurs jours ne venait ni des UV ni de
+la traduction MaterialX : elle ne touche que les textures lues par un
+chemin `op:`, c'est-a-dire le seul chemin d'image que nous ecrivons
+nous-memes.
+
+`hou.saveImageDataToFile` ecrit la premiere ligne des donnees comme
+scanline du haut - sa documentation le dit - la ou le buffer d'un COP
+commence en bas, a la maniere d'Houdini. Nous lui passions le buffer tel
+quel : l'image sortait retournee, et cela se voyait comme un V inverse
+qu'il fallait corriger a la main par un facteur -1. La fonction offre un
+`flip_vertical` fait pour ca ; il est desormais pose.
+
+Mesure du contrat de la fonction, sans COP : un tableau dont la premiere
+ligne est blanche ressort avec cette ligne en **haut** du fichier. Le
+reste de la chaine est hors de portee d'hython - Copernicus n'y compile
+pas ses noyaux OpenCL, avec ou sans notre package - donc la confirmation
+finale se fait dans le viewport.
+
+Ce que ce n'etait pas, verifie au passage : cinq chemins d'UV mesures,
+tous a l'endroit, dont le maillage exact de la scene signalee - un quad en
+`leftHanded` avec un `st` en faceVarying - que Karma et nous rendons
+identiquement.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/houdini_cop.cpp | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/src/hydra/houdini_cop.cpp b/src/hydra/houdini_cop.cpp
+index e745f01d..a959651e 100644
+--- a/src/hydra/houdini_cop.cpp
++++ b/src/hydra/houdini_cop.cpp
+@@ -123,9 +123,15 @@ std::string ResolveHoudiniCopPath(const std::string &path)
+                            "                    _dst[1::4] = _src[1::_c]\n"
+                            "                    _dst[2::4] = _src[2::_c] if _c > 2 else _src[1::_c]\n"
+                            "                _dst[3::4] = array.array('f', [1.0]) * _px\n"
++                           /* `flip_vertical`, et il le faut : hou.saveImageDataToFile
++                            * ecrit la premiere ligne de donnees comme scanline du haut
++                            * - c'est sa documentation - alors que le buffer d'un COP
++                            * commence en bas, a la maniere d'Houdini. Sans ce drapeau
++                            * la texture sort retournee, ce qui se voit comme un V
++                            * inverse et se corrige a la main par un facteur -1. */
+                            "            hou.saveImageDataToFile(_dst, _w, _h, '" +
+                            outPath +
+-                           "')\n"
++                           "', True)\n"
+                            "except Exception:\n"
+                            "    pass\n";
+ 
+-- 
+2.53.0.windows.2
+

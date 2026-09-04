@@ -1,7 +1,7 @@
 From b691eab11ffac897efcdcfe55129ef10dc1f2876 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 22:47:08 +0200
-Subject: [PATCH 49/57] hydra: presenter Cycles GPU avant Cycles CPU dans le
+Subject: [PATCH 49/58] hydra: presenter Cycles GPU avant Cycles CPU dans le
  menu des moteurs
 
 Les deux entrees existaient deja, mais dans l'ordre d'Houdini pour

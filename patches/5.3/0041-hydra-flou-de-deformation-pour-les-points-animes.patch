@@ -1,7 +1,7 @@
 From a3d07f40a8fab1ede150539c732f550f2fb8064a Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 14:24:37 +0200
-Subject: [PATCH 41/57] hydra: flou de deformation pour les points animes
+Subject: [PATCH 41/58] hydra: flou de deformation pour les points animes
 
 Le flou de mouvement ne couvrait que ce qui bouge en bloc. Une geometrie dont
 les points sont animes -- une simulation, un deformeur, des particules, une
