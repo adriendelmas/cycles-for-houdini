@@ -1,7 +1,7 @@
 From 232ec7e13f348fbb7cd165d6792a92fb511d6641 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 2 Sep 2026 15:09:03 +0200
-Subject: [PATCH 34/60] hydra: shade a mesh flat unless its normals say
+Subject: [PATCH 34/61] hydra: shade a mesh flat unless its normals say
  otherwise, and refresh the UsdPreviewSurface names
 
 Smoothing was decided by displayStyle's flat shading hint alone. That hint is a

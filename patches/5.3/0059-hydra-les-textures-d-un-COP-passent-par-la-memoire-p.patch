@@ -1,7 +1,7 @@
 From 0d9b26cee0316dea4261756c73bc432ddc5c8eb9 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 4 Sep 2026 18:54:49 +0200
-Subject: [PATCH 59/60] hydra: les textures d'un COP passent par la memoire,
+Subject: [PATCH 59/61] hydra: les textures d'un COP passent par la memoire,
  plus par un fichier
 
 Un `op:` etait cuit vers un EXR temporaire que Cycles relisait ensuite.

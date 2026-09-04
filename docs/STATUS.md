@@ -1556,3 +1556,26 @@ Trois gardes, chacune contre un piège réel :
 * un matériau qui s'en va cesse d'être surveillé ;
 * un COP dont la lecture échoue n'est pas inscrit, donc un rendu batch — où
   `hou` n'existe pas — n'a rien à sonder.
+
+### Phase 24 ter — le frein
+
+Le signal est le bon, mesuré dans la scène signalée : après avoir touché au COP,
+`cookCount 4, needsToCook True` ; après rafraîchissement, `5, False`.
+
+Restait le risque inverse — relire à chaque micro-changement. Tirer un curseur
+aurait déclenché une relecture toutes les 250 ms, trois dixièmes de seconde
+chacune pour une 4K, alors que seule la dernière valeur compte. Trois freins :
+
+| | |
+|---|---|
+| temps de calme | on ne relit qu'une fois le COP immobile depuis 500 ms |
+| intervalle minimum | une seconde entre deux relectures du même COP, quoi qu'il arrive |
+| interrupteur | `CYCLES_COP_WATCH=0` éteint la veille sans recompiler |
+
+Le premier sondage d'un COP ne conclut rien, il note l'état : sinon la première
+comparaison se faisait contre un état vide et relisait pour rien. Et une ligne
+de journal dit quel COP a changé et combien de matériaux en dépendent —
+`CYCLES_LOGGING=1` suffit à la voir.
+
+Ordre de grandeur, pour situer le frein : une relecture coûte ~0,3 s en 4K,
+~20 ms en 1K. En dessous de 2K, la veille est transparente.

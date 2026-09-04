@@ -1,7 +1,7 @@
 From 0d51aeebf8118fe33ecb1769007806ae65cd3da4 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 14:51:26 +0200
-Subject: [PATCH 44/60] hydra: les normales par coin, au lieu de facetter ce
+Subject: [PATCH 44/61] hydra: les normales par coin, au lieu de facetter ce
  qui ne l'est pas
 
 Le correctif precedent lisait les normales du maillage plutot que l'indice

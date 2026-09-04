@@ -1,0 +1,202 @@
+From 472138d6786835cc7693e07d2a949d07e56b6e11 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Fri, 4 Sep 2026 21:09:33 +0200
+Subject: [PATCH 61/61] hydra: un frein sur la veille des COP, et de quoi la
+ couper
+
+La veille relisait des qu'un COP se declarait a recuire. Tirer un curseur
+aurait donc pu declencher une relecture toutes les 250 ms - trois
+dixiemes de seconde chacune pour une 4K - et hacher le viewport pour rien,
+puisque seule la derniere valeur compte.
+
+Trois freins :
+
+* **un temps de calme.** On ne relit qu'une fois le COP immobile depuis
+  500 ms. Pendant qu'on tire, rien ne se relit ; on lache, ca se met a
+  jour ;
+* **un intervalle minimum** d'une seconde entre deux relectures du meme
+  COP, quoi qu'il arrive, pour qu'une texture lourde ne puisse pas
+  monopoliser le fil de l'hote ;
+* **un interrupteur**, `CYCLES_COP_WATCH=0`, pour eteindre la veille sans
+  recompiler.
+
+Le premier sondage d'un COP ne conclut rien : il note l'etat. Sans cela,
+la premiere comparaison se faisait contre un etat vide et declenchait une
+relecture inutile.
+
+Une ligne de journal dit desormais quel COP a change et combien de
+materiaux en dependent - `CYCLES_LOGGING=1` suffit a la voir.
+
+Mesure du signal, dans la scene signalee : apres avoir touche au COP,
+cookCount 4 et needsToCook vrai ; apres rafraichissement, cookCount 5 et
+needsToCook faux. C'est bien ce que la veille attend.
+
+Banc : 97 rendus, 0 probleme.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/houdini_cop.cpp | 101 +++++++++++++++++++++++++++++---------
+ 1 file changed, 79 insertions(+), 22 deletions(-)
+
+diff --git a/src/hydra/houdini_cop.cpp b/src/hydra/houdini_cop.cpp
+index a6ff6f22..965f39b0 100644
+--- a/src/hydra/houdini_cop.cpp
++++ b/src/hydra/houdini_cop.cpp
+@@ -12,6 +12,7 @@
+ 
+ #include <pxr/base/tf/pySafePython.h>
+ 
++#include <pxr/base/tf/envSetting.h>
+ #include <pxr/base/tf/pyInterpreter.h>
+ #include <pxr/base/tf/pyLock.h>
+ 
+@@ -31,6 +32,15 @@ HDCYCLES_NAMESPACE_OPEN_SCOPE
+ 
+ using namespace CCL_NS;
+ 
++// clang-format off
++/* La veille des COP, coupable sans recompiler. Elle interroge Houdini quatre
++ * fois par seconde au plus, et ne relit une texture que lorsque son COP a
++ * cesse de bouger - mais qui prefere garder la main peut l'eteindre. */
++TF_DEFINE_ENV_SETTING(CYCLES_COP_WATCH,
++                      true,
++                      "Watch Houdini COP nodes and refresh their textures when they change");
++// clang-format on
++
+ namespace {
+ 
+ const char *const kPrefix = "op:";
+@@ -389,14 +399,29 @@ void BindHoudiniCopImage(Scene *scene,
+  * relus. */
+ void PollHoudiniCops()
+ {
+-  using clock = std::chrono::steady_clock;
+-  static clock::time_point last;
++  if (!PXR_NS::TfGetEnvSetting(CYCLES_COP_WATCH)) {
++    return;
++  }
+ 
++  using clock = std::chrono::steady_clock;
++  /* Le pas du sondage. Interroger Houdini ne cuit rien et coute une poignee de
++   * microsecondes, mais rien ne sert de le faire a chaque image. */
++  static const auto kPollInterval = std::chrono::milliseconds(250);
++  /* Le temps de calme : on ne relit qu'une fois le COP immobile depuis ce
++   * delai. Tirer un curseur ne declenche donc rien tant qu'on tire ; lacher
++   * met a jour. */
++  static const auto kQuietDelay = std::chrono::milliseconds(500);
++  /* Le filet : deux relectures du meme COP ne peuvent pas se suivre de plus
++   * pres, quoi qu'il arrive. Une 4K coute 0,3 s a relire, une seconde entre
++   * deux laisse le viewport respirer. */
++  static const auto kMinBetweenRefreshes = std::chrono::milliseconds(1000);
++
++  static clock::time_point lastPoll;
+   const clock::time_point now = clock::now();
+-  if (now - last < std::chrono::milliseconds(250)) {
++  if (now - lastPoll < kPollInterval) {
+     return;
+   }
+-  last = now;
++  lastPoll = now;
+ 
+   std::vector<std::pair<std::string, std::set<CopUser>>> watched;
+   {
+@@ -407,38 +432,66 @@ void PollHoudiniCops()
+     watched.assign(Users().begin(), Users().end());
+   }
+ 
+-  /* Ce qu'on a vu au sondage precedent. On se declenche sur le **changement**
+-   * d'etat, pas sur l'etat : un COP qu'aucun panneau n'affiche peut rester
+-   * indefiniment a "doit recuire", et se declencher la-dessus relirait ses
+-   * pixels quatre fois par seconde. */
+-  static std::map<std::string, CopState> lastSeen;
++  /* Ce qu'on a vu au sondage precedent, et quand. On se declenche sur le
++   * **changement** d'etat, pas sur l'etat : un COP qu'aucun panneau n'affiche
++   * peut rester indefiniment a "doit recuire". */
++  struct Watch {
++    CopState seen;
++    clock::time_point movedAt{};
++    clock::time_point refreshedAt{};
++    bool pending = false;
++  };
++  static std::map<std::string, Watch> watches;
+ 
+   for (const auto &entry : watched) {
+     const CopState state = StateOf(entry.first);
++    const auto inserted = watches.try_emplace(entry.first);
++    Watch &watch = inserted.first->second;
++    if (inserted.second) {
++      /* Premier sondage de ce COP : on note son etat, sans rien conclure. */
++      watch.seen = state;
++      continue;
++    }
++
++    const bool moved = state.cookCount != watch.seen.cookCount ||
++                       (state.needsToCook && !watch.seen.needsToCook);
++    watch.seen = state;
+ 
+-    bool stale = false;
++    if (moved) {
++      /* Il vient de bouger : le temps de calme repart de zero. */
++      watch.movedAt = now;
++      watch.pending = true;
++    }
++
++    if (!watch.pending) {
++      continue;
++    }
++
++    /* Ce qu'on garde est peut-etre deja a jour : une lecture faite entre-temps
++     * a pu remettre les deux d'accord. */
+     {
+       const thread_scoped_lock lock(CacheMutex());
+-      const auto seen = lastSeen.find(entry.first);
+-      if (seen != lastSeen.end()) {
+-        stale = state.cookCount != seen->second.cookCount ||
+-                (state.needsToCook && !seen->second.needsToCook);
+-      }
+-      lastSeen[entry.first] = state;
+-
+-      /* Ce qu'on garde correspond-il encore ? Une lecture faite entre-temps a
+-       * pu remettre les deux d'accord. */
+       const auto it = Cache().find(entry.first);
+-      if (stale && it != Cache().end() && it->second && !state.needsToCook &&
++      if (!state.needsToCook && it != Cache().end() && it->second &&
+           it->second->cookCount == state.cookCount)
+       {
+-        stale = false;
++        watch.pending = false;
++        continue;
+       }
+     }
+-    if (!stale) {
++
++    if (now - watch.movedAt < kQuietDelay) {
++      /* Il bouge encore. */
++      continue;
++    }
++    if (now - watch.refreshedAt < kMinBetweenRefreshes) {
+       continue;
+     }
+ 
++    watch.pending = false;
++    watch.refreshedAt = now;
++
++    int marked = 0;
+     for (const CopUser &user : entry.second) {
+       if (user.renderIndex == nullptr ||
+           user.renderIndex->GetSprim(PXR_NS::HdPrimTypeTokens->material, user.materialId) ==
+@@ -450,7 +503,11 @@ void PollHoudiniCops()
+        * qui relie les images sans rebatir le graphe. */
+       user.renderIndex->GetChangeTracker().MarkSprimDirty(user.materialId,
+                                                           PXR_NS::HdMaterial::DirtyParams);
++      ++marked;
+     }
++
++    LOG_INFO << "Houdini COP " << entry.first << " changed, refreshing " << marked
++             << " material(s).";
+   }
+ }
+ 
+-- 
+2.53.0.windows.2
+

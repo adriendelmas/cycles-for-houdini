@@ -1,7 +1,7 @@
 From 2a8c4771f0499604d8fdb15e97ec6c0e54dbf79a Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 01:38:54 +0200
-Subject: [PATCH 04/60] hydra: publish Cycles shader nodes to the USD shader
+Subject: [PATCH 04/61] hydra: publish Cycles shader nodes to the USD shader
  registry
 
 Adds an Sdr discovery and parser plugin pair that enumerates
