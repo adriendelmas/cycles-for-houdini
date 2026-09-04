@@ -1,7 +1,7 @@
 From d84197c6c5293cc2edc07fb18343064441578d11 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 4 Sep 2026 17:00:45 +0200
-Subject: [PATCH 58/59] hydra: une texture venue d'un COP sortait retournee
+Subject: [PATCH 58/60] hydra: une texture venue d'un COP sortait retournee
 
 L'inversion du V signalee depuis plusieurs jours ne venait ni des UV ni de
 la traduction MaterialX : elle ne touche que les textures lues par un

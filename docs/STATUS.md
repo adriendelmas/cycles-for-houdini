@@ -1533,3 +1533,26 @@ faut-il qu'on nous redemande une synchronisation ; si Solaris ne le fait pas,
 il faudra toucher le matériau. Mesuré ce qui pouvait l'être : un `op:` qui ne
 désigne rien ne produit plus qu'un avertissement le nommant, et le rendu va au
 bout.
+
+### Phase 24 bis — encore fallait-il qu'on nous rappelle
+
+Signalé après coup : « ça n'update pas du tout, ça garde celui du premier
+chargement ». Exact, et la relecture n'était pas en cause : **personne ne nous
+redemandait de synchroniser**. Solaris ne connaît pas la dépendance entre un
+matériau et un nœud de composition — changer le COP ne salit rien.
+
+La passe de rendu demande donc à Houdini, quatre fois par seconde au plus, si
+l'un des COP dont on s'est servi a besoin de recuire. `needsToCook` répond sans
+rien cuire, et il est vrai dès qu'on a touché au COP — là où le seul numéro de
+cuisson ne bougerait jamais pour un COP qu'aucun panneau n'affiche. Le matériau
+est alors sali en `DirtyParams`, Hydra redemande la synchronisation, et c'est
+là — sur le fil de l'hôte — que les pixels sont relus.
+
+Trois gardes, chacune contre un piège réel :
+
+* la veille se déclenche sur le **changement** d'état, pas sur l'état : un nœud
+  qui resterait indéfiniment à « doit recuire » relirait ses pixels quatre fois
+  par seconde ;
+* un matériau qui s'en va cesse d'être surveillé ;
+* un COP dont la lecture échoue n'est pas inscrit, donc un rendu batch — où
+  `hou` n'existe pas — n'a rien à sonder.

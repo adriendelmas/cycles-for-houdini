@@ -1,7 +1,7 @@
 From 1ba447fd359cd00ab7f107948cab8d73d18e4477 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 4 Sep 2026 13:10:02 +0200
-Subject: [PATCH 54/59] scene: le displacement s'ajoutait a lui-meme a chaque
+Subject: [PATCH 54/60] scene: le displacement s'ajoutait a lui-meme a chaque
  edition du materiau
 
 Changer une valeur de displacement dans le viewport empilait les
