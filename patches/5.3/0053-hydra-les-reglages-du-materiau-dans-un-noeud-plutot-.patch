@@ -1,7 +1,7 @@
 From f2b38d4af78d5cf1a01bf9aad2d5df961ecebf08 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 4 Sep 2026 04:08:28 +0200
-Subject: [PATCH 53/55] hydra: les reglages du materiau, dans un noeud plutot
+Subject: [PATCH 53/57] hydra: les reglages du materiau, dans un noeud plutot
  que nulle part
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8

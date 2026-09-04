@@ -1387,3 +1387,71 @@ lui-même, puis les espaces de la configuration OCIO active, alias compris, et
 reste modifiable à la main (`menureplace`) comme le File Color Space de
 MaterialX. La liste se construit à l'ouverture, puisqu'elle dépend de la
 configuration.
+
+## Phase 22 — Les lumières au niveau de Karma, et deux entrées MaterialX de plus ✅
+
+Signalé : « pour la même light Houdini sur Cycles elle est beauuucoup plus
+forte ». Mesuré, plan diffus, même USD, intensité 1, moyenne du centre :
+
+| type | normalize | avant | après |
+|---|---|---|---|
+| sphère / rectangle / disque | non et oui | 1,014 | 1,014 |
+| distante | non et oui | **4,06** | 1,017 |
+| dôme | non et oui | **3,20** | 1,018 |
+| cylindre | non | **18,85** | 0,951 |
+| cylindre | oui | **47,32** | 0,950 |
+
+Trois causes distinctes :
+
+* la lumière **distante** portait un facteur 4 dont le commentaire d'origine
+  disait lui-même ne pas savoir d'où il venait — « Unclear why, but
+  approximately matches Karma » ;
+* le facteur π qui convertit une intensité en flux radiant s'appliquait aussi
+  à la **dôme**, qui n'est pas une lumière de surface ;
+* la lumière **cylindrique** n'était déclarée nulle part : absente des types de
+  sprim supportés comme de la fabrique, elle n'atteignait pas le delegate. La
+  scène rendait sans elle, et le rapport mesuré n'était que celui du fond gris
+  par défaut.
+
+Cycles n'ayant pas de tube, le cylindre devient un rectangle de sa longueur sur
+son diamètre — ce que fait aussi l'import USD de Blender. ⚠️ Un tube émet tout
+autour de son axe, un rectangle d'un seul côté : l'éclairement de face est le
+bon, celui de dos manque.
+
+**Rien de tout ceci ne touche l'USD** : un stage exporté vers Blender porte les
+mêmes intensités qu'avant, seule leur lecture par le delegate a changé.
+
+### `transmission_color` et `subsurface_color`
+
+Les deux dernières entrées de `standard_surface` écartées « sciemment » par
+l'audit, parce que Cycles teinte transmission et sous-surfacique par le même
+`base_color`. L'objection vaut pour une multiplication sèche, pas pour ces
+montages :
+
+* la couleur de **transmission** passe par un `mix_color` commandé par
+  `light_path.is_transmission_ray`. Témoin : un matériau opaque à qui l'on
+  écrit un `transmission_color` vert rend **au pixel près** la même image ;
+* la couleur de **sous-surface** teinte la couleur de base **à hauteur du poids
+  de sous-surface** — nulle à 0, entière à 1, ce qui est exact aux deux bouts.
+
+L'autre route pour la sous-surface, multiplier le *rayon* par la couleur,
+**inverse la teinte** : un `subsurface_color` rouge donne un objet cyan, le
+rouge diffusant plus loin au lieu de ressortir. Mesuré (2,01 / 3,01 / 3,17)
+contre (2,01 / 0,74 / 0,44) pour le montage retenu.
+
+⚠️ Le défaut MaterialX du rayon de diffusion, (1, 1, 1), est désormais posé
+explicitement : celui de Cycles est (1, 0,2, 0,1), une peau, et Hydra ne
+transmettant que les entrées écrites, un réseau qui n'y touchait pas en
+héritait sans l'avoir demandé.
+
+**Audit rejoué sans images de référence** — chaque entrée contre la même scène
+privée de cette ligne : **29 honorées sur 39**, contre 27. Les références
+`tests/usd/au_*.exr` sont réécrites, le changement de dôme les ayant périmées.
+
+### UV inversés : toujours pas reproduits
+
+Cinq chemins mesurés, tous à l'endroit : `st` écrit à la main, grille SOP passée
+par Solaris avec UV sur les points **et** sur les vertices, image lue par le
+socket UV implicite comme par un `texture_coordinate` explicite, et le même
+essai en MaterialX — que Karma et nous rendons identiquement. Il faut la scène
+qui l'exhibe.

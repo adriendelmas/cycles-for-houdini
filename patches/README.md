@@ -5,7 +5,7 @@ vivent sur une branche a nous, en commits separes par sujet. Cette serie en est
 l'export par `git format-patch`.
 
     patches/5.2/   38 correctifs, base 3b97e190 (branche release/5.2)
-    patches/5.3/   55 correctifs, base 8424ed53 (branche main)
+    patches/5.3/   57 correctifs, base 8424ed53 (branche main)
 
 `tools/bootstrap.py` fait le chemin complet -- clone, `git am`, compilation.
 A la main, sur un clone deja pose :
@@ -85,6 +85,8 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0053` | hydra: les reglages du materiau, dans un noeud plutot que nulle part |
 | `0054` | scene: le displacement s'ajoutait a lui-meme a chaque edition du materiau |
 | `0055` | hydra: choisir l'espace colorimetrique d'une texture dans un menu |
+| `0056` | hydra: aligner les lumieres sur Karma, et rendre les lumieres cylindriques |
+| `0057` | hydra: la couleur de transmission et celle de sous-surface, enfin traduites |
 
 ---
 

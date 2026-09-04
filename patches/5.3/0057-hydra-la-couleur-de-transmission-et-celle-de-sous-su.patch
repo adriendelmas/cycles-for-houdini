@@ -1,0 +1,306 @@
+From e537177740fc47e17528eb28b99f76b6221f8290 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Fri, 4 Sep 2026 16:02:52 +0200
+Subject: [PATCH 57/57] hydra: la couleur de transmission et celle de
+ sous-surface, enfin traduites
+
+Deux entrees de standard_surface n'allaient nulle part, et l'audit disait
+pourquoi : Cycles teinte transmission et sous-surfacique par le meme
+`base_color`, donc les y multiplier tachait aussi le diffus. L'objection
+tient pour une multiplication seche ; elle tombe avec le bon montage.
+
+**transmission_color** passe par un `mix_color` commande par
+`light_path.is_transmission_ray` : le rayon qui traverse voit la couleur de
+transmission, tous les autres la couleur de base. Temoin mesure : un
+materiau opaque a qui l'on ecrit un transmission_color vert rend au pixel
+pres la meme image (ecart 0,00000), la ou un verre passe de 0,516 neutre
+a (0,519 / 0,265 / 0,265) avec un transmission_color rouge.
+
+**subsurface_color** teinte la couleur de base **a hauteur du poids de
+sous-surface** : nulle a 0, entiere a 1. C'est exact aux deux bouts, le
+principled melangeant diffus et sous-surfacique selon ce meme poids et les
+colorant tous deux par base_color. Mesure : reference neutre (2,01) ->
+(2,01 / 0,74 / 0,44) avec un subsurface_color rouge.
+
+L'autre route, celle qui multiplie le *rayon* par la couleur, a ete
+essayee et **inverse la teinte** - un subsurface_color rouge donne un objet
+cyan, le rouge diffusant plus loin au lieu de ressortir : (2,01 / 3,01 /
+3,17) mesure. Elle est ecartee pour cette raison.
+
+Au passage, le defaut MaterialX du rayon de diffusion, (1, 1, 1), est pose
+explicitement : celui de Cycles est (1, 0,2, 0,1) - une peau - et Hydra ne
+transmettant que les entrees ecrites, un reseau qui n'y touchait pas
+heritait d'une teinte de chair qu'il n'avait pas demandee.
+
+Deux mecaniques ajoutees a la table de correspondance pour cela : un
+auxiliaire peut se brancher sur un autre auxiliaire ("nom:socket" en
+cible), et une entree peut piloter plusieurs sockets ("a;b"), ce dont le
+poids de sous-surface a besoin - il commande a la fois le principled et le
+melange qui teinte sa couleur.
+
+Audit standard_surface rejoue sans images de reference, chaque entree
+contre la meme scene privee de cette ligne : 29 honorees sur 39, contre 27
+avant. Banc : 97 rendus, 0 probleme.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp | 180 +++++++++++++++++++++++++++++++----------
+ 1 file changed, 136 insertions(+), 44 deletions(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index fe8ed783..86e26285 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -184,6 +184,25 @@ class UsdToCyclesMapping {
+ 
+ /* An input mapped to "<helper>:<socket>" is written to that helper node. No
+  * Cycles socket name contains a colon, so the split is unambiguous. */
++/* Les cibles d'une entree qui en pilote plusieurs, separees par ';'. */
++std::vector<std::string> SplitTargets(const std::string &mapped)
++{
++  std::vector<std::string> targets;
++  size_t start = 0;
++  while (start <= mapped.size()) {
++    const size_t sep = mapped.find(';', start);
++    const size_t end = (sep == std::string::npos) ? mapped.size() : sep;
++    if (end > start) {
++      targets.push_back(mapped.substr(start, end - start));
++    }
++    if (sep == std::string::npos) {
++      break;
++    }
++    start = sep + 1;
++  }
++  return targets;
++}
++
+ std::pair<std::string, std::string> SplitHelperTarget(const std::string &mapped)
+ {
+   const size_t colon = mapped.find(':');
+@@ -292,9 +311,7 @@ class MtlxFacOrColor : public UsdToCyclesMapping {
+  *
+  * Socket names verified against the Cycles node registry. Inputs with no
+  * Cycles counterpart are deliberately left unmapped and are ignored:
+- *  - base / specular / transmission_color: weights and tints Cycles folds into
+- *    other inputs,
+- *  - subsurface_color: Cycles derives it from base_color,
++ *  - base / specular: weights Cycles folds into other inputs,
+  *  - transmission_extra_roughness. */
+ UsdToCyclesMapping MakeMtlxStandardSurface();
+ 
+@@ -322,6 +339,11 @@ UsdToCyclesMapping MakeMtlxStandardSurface()
+         {TfToken("specular_anisotropy"), ustring("anisotropic")},
+         {TfToken("specular_rotation"), ustring("anisotropic_rotation")},
+         {TfToken("transmission"), ustring("transmission_weight")},
++        /* La couleur de transmission passe par le meme socket que la diffuse
++         * chez Cycles - `base_color` teinte les deux. Un mix commande par
++         * `is_transmission_ray` les separe : le rayon qui traverse voit la
++         * couleur de transmission, tous les autres la couleur de base. */
++        {TfToken("transmission_color"), ustring("tcol:b")},
+         /* MaterialX's single dispersion slider reads as Cycles' Abbe number
+          * directly - both use it the same way (kernel/svm/closure.h divides
+          * the dispersion scale by it), and both treat 0 as "no dispersion",
+@@ -330,8 +352,11 @@ UsdToCyclesMapping MakeMtlxStandardSurface()
+          * is pinned to 1 below so the Abbe number is the only thing left to
+          * drive it, matching a slider MaterialX doesn't have. */
+         {TfToken("transmission_dispersion"), ustring("transmission_dispersion_abbe_number")},
+-        {TfToken("subsurface"), ustring("subsurface_weight")},
++        /* Le poids commande deux choses : celui du principled, et la part de
++         * teinte de sous-surface melee a la couleur de base - voir `sscol`. */
++        {TfToken("subsurface"), ustring("subsurface_weight;sscol:Factor")},
+         {TfToken("subsurface_radius"), ustring("subsurface_radius")},
++        {TfToken("subsurface_color"), ustring("sscol:b")},
+         {TfToken("subsurface_scale"), ustring("subsurface_scale")},
+         {TfToken("subsurface_anisotropy"), ustring("subsurface_anisotropy")},
+         {TfToken("sheen"), ustring("sheen_weight")},
+@@ -361,7 +386,15 @@ UsdToCyclesMapping MakeMtlxStandardSurface()
+    * reproduces MaterialX's own default for the input, and is overridden by
+    * the mapping above wherever the network does author it. */
+   mapping.setFixedValues({{ustring("transmission_dispersion_scale"), "1"},
+-                          {ustring("transmission_dispersion_abbe_number"), "0"}});
++                          {ustring("transmission_dispersion_abbe_number"), "0"},
++                          /* Le rayon de diffusion de Cycles vaut (1, 0,2, 0,1),
++                           * une peau ; celui de MaterialX vaut (1, 1, 1), neutre.
++                           * Hydra ne transmet que les entrees ecrites, donc un
++                           * reseau qui n'y touche pas heritait d'une teinte de
++                           * chair qu'il n'avait pas demandee. Le defaut de
++                           * MaterialX est pose ici, et la correspondance
++                           * ci-dessus le remplace des que le reseau l'ecrit. */
++                          {ustring("subsurface_radius"), "1,1,1"}});
+   /* The helper drives the level unconditionally, so it has to carry MaterialX's
+    * own default of 1 for the case where the network never writes `specular` at
+    * all - otherwise an unauthored input would be actively set to something
+@@ -372,13 +405,56 @@ UsdToCyclesMapping MakeMtlxStandardSurface()
+                      {{ustring("math_type"), "multiply"},
+                       {ustring("value1"), "1.0"},
+                       {ustring("value2"), "0.5"}}});
++  /* Le mix qui separe la couleur de transmission de la couleur de base. Il est
++   * declare en premier parce que les deux auxiliaires suivants se branchent
++   * dessus, et que les auxiliaires sont montes dans l'ordre.
++   *
++   * Approximation assumee : Cycles teinte diffuse et transmission par le meme
++   * `base_color`, la separation se fait donc par type de rayon plutot que par
++   * fermeture. Un rayon qui traverse voit `transmission_color`, les autres la
++   * couleur de base. Le defaut porte ici est celui de MaterialX, blanc, ce qui
++   * n'est pas neutre : sans cette entree, Cycles teintait la transmission de la
++   * couleur de base, ce que ne dit pas standard_surface. */
++  mapping.addHelper({"tcol",
++                     "mix_color",
++                     {{"Result", "Base Color"}},
++                     {{ustring("blend_type"), "mix"},
++                      {ustring("fac"), "0"},
++                      {ustring("a"), "0.8,0.8,0.8"},
++                      {ustring("b"), "1,1,1"}}});
++  mapping.addHelper({"tray", "light_path", {{"Is Transmission Ray", "tcol:Factor"}}, {}});
++  /* La couleur de sous-surface. Cycles n'a pas d'albedo propre au
++   * sous-surfacique : son `principled_bsdf` melange diffus et sous-surface
++   * selon `subsurface_weight`, les deux tirant leur couleur de `base_color`.
++   * On teinte donc la couleur de base par `subsurface_color`, mais **a la
++   * hauteur du poids** : a 0 la couleur de base est intacte, a 1 elle vaut
++   * l'albedo que MaterialX demande. C'est exact aux deux bouts, approche entre
++   * les deux, et surtout ca ne tache pas le diffus d'un materiau qui ne fait
++   * pas de sous-surface - l'objection qui avait fait ecarter cette entree.
++   *
++   * Mesure : multiplier plutot le *rayon* par la couleur, l'autre route
++   * possible, inverse la teinte - un subsurface_color rouge rend l'objet
++   * cyan, le rouge diffusant plus loin au lieu de ressortir. */
++  mapping.addHelper({"sstint",
++                     "vector_math",
++                     {{"Vector", "tcol:A"}},
++                     {{ustring("math_type"), "multiply"},
++                      {ustring("vector1"), "0.8,0.8,0.8"},
++                      {ustring("vector2"), "1,1,1"}}});
++  mapping.addHelper({"sscol",
++                     "mix_color",
++                     {{"Result", "sstint:Vector2"}},
++                     {{ustring("blend_type"), "mix"},
++                      {ustring("fac"), "0"},
++                      {ustring("a"), "1,1,1"},
++                      {ustring("b"), "1,1,1"}}});
+   /* `base` is a weight on the diffuse colour and Cycles has no socket for it,
+    * so the colour is multiplied on the way in. Both MaterialX defaults are
+    * carried here - a base of 1 and a base_color of 0.8 grey - so a network that
+    * writes neither still gets what it would have got. */
+   mapping.addHelper({"basew",
+                      "vector_math",
+-                     {{"Vector", "Base Color"}},
++                     {{"Vector", "sstint:Vector1"}},
+                      {{ustring("math_type"), "multiply"},
+                       {ustring("vector1"), "0.8,0.8,0.8"},
+                       {ustring("vector2"), "1,1,1"}}});
+@@ -1695,50 +1771,57 @@ void HdCyclesMaterial::UpdateParameters(NodeDesc &nodeDesc,
+ 
+     /* See if the parameter name is in USDPreviewSurface terms, and needs to be converted .*/
+     const UsdToCyclesMapping *inputMapping = nodeDesc.mapping;
+-    std::string inputName = inputMapping ?
+-                                inputMapping->parameterName(paramName, nullptr, &value) :
+-                                paramName.GetString();
+-
+-    /* A composite mapping can send an input to one of its helper nodes. */
+-    ShaderNode *target = nodeDesc.node;
+-    {
+-      const std::pair<std::string, std::string> split = SplitHelperTarget(inputName);
+-      if (!split.first.empty()) {
+-        const auto it = nodeDesc.helperNodes.find(split.first);
+-        if (it == nodeDesc.helperNodes.end()) {
+-          continue;
++    const std::string mappedName = inputMapping ?
++                                       inputMapping->parameterName(paramName, nullptr, &value) :
++                                       paramName.GetString();
++
++    /* Une entree MaterialX peut piloter plusieurs sockets Cycles - "a;b" -
++     * quand une seule valeur en commande deux : le poids de sous-surface est a
++     * la fois celui du principled et celui du melange qui teinte sa couleur. */
++    for (const std::string &mapped : SplitTargets(mappedName)) {
++      std::string inputName = mapped;
++
++      /* A composite mapping can send an input to one of its helper nodes. */
++      ShaderNode *target = nodeDesc.node;
++      {
++        const std::pair<std::string, std::string> split = SplitHelperTarget(inputName);
++        if (!split.first.empty()) {
++          const auto it = nodeDesc.helperNodes.find(split.first);
++          if (it == nodeDesc.helperNodes.end()) {
++            continue;
++          }
++          target = it->second;
++          inputName = split.second;
+         }
+-        target = it->second;
+-        inputName = split.second;
+       }
+-    }
+ 
+-    /* Find the input to write the parameter value to. */
+-    const SocketType *input = nullptr;
+-    for (const SocketType &socket : target->type->inputs) {
+-      if (string_iequals(socket.name.string(), inputName) || socket.ui_name == inputName) {
+-        input = &socket;
+-        break;
++      /* Find the input to write the parameter value to. */
++      const SocketType *input = nullptr;
++      for (const SocketType &socket : target->type->inputs) {
++        if (string_iequals(socket.name.string(), inputName) || socket.ui_name == inputName) {
++          input = &socket;
++          break;
++        }
+       }
+-    }
+ 
+-    if (!input) {
+-      /* La distinction vient de l'amont, le journal de nous : ces messages
+-       * passaient par TF_WARN, que husk avale, et l'utilisateur ne voyait
+-       * jamais qu'une valeur avait ete ignoree. */
+-      if (inputMapping && inputMapping->hasParameterMapping(paramName)) {
+-        LOG_WARNING << "MaterialX: input '" << paramName.GetText() << "' on node '"
+-                    << nodePath.GetText() << "' maps to Cycles input '" << inputName
+-                    << "', which '" << target->name.c_str() << "' does not have; value ignored.";
+-      }
+-      else {
+-        LOG_WARNING << "MaterialX: no input '" << paramName.GetText() << "' on Cycles node '"
+-                    << target->name.c_str() << "', value ignored.";
++      if (!input) {
++        /* La distinction vient de l'amont, le journal de nous : ces messages
++         * passaient par TF_WARN, que husk avale, et l'utilisateur ne voyait
++         * jamais qu'une valeur avait ete ignoree. */
++        if (inputMapping && inputMapping->hasParameterMapping(paramName)) {
++          LOG_WARNING << "MaterialX: input '" << paramName.GetText() << "' on node '"
++                      << nodePath.GetText() << "' maps to Cycles input '" << inputName
++                      << "', which '" << target->name.c_str() << "' does not have; value ignored.";
++        }
++        else {
++          LOG_WARNING << "MaterialX: no input '" << paramName.GetText() << "' on Cycles node '"
++                      << target->name.c_str() << "', value ignored.";
++        }
++        continue;
+       }
+-      continue;
+-    }
+ 
+-    SetNodeValue(target, *input, value);
++      SetNodeValue(target, *input, value);
++    }
+   }
+ }
+ 
+@@ -1995,7 +2078,16 @@ unique_ptr<ShaderGraph> HdCyclesMaterial::BuildShaderGraph(HdMaterialNetworkSche
+             nodeDesc.helperNodes[helper.name] = helperNode;
+             for (const auto &wire : helper.wires) {
+               ShaderOutput *const from = helperNode->output(wire.first);
+-              ShaderInput *const to = nodeDesc.node->input(wire.second);
++              /* La cible est le noeud principal, ou un autre auxiliaire quand
++               * elle s'ecrit "nom:socket" - celui-ci doit alors avoir ete
++               * declare avant, les auxiliaires etant montes dans l'ordre. */
++              const std::pair<std::string, std::string> target = SplitHelperTarget(wire.second);
++              ShaderNode *toNode = nodeDesc.node;
++              if (!target.first.empty()) {
++                const auto targetIt = nodeDesc.helperNodes.find(target.first);
++                toNode = (targetIt != nodeDesc.helperNodes.end()) ? targetIt->second : nullptr;
++              }
++              ShaderInput *const to = toNode ? toNode->input(target.second.c_str()) : nullptr;
+               if (from != nullptr && to != nullptr) {
+                 graph->connect(from, to);
+               }
+-- 
+2.53.0.windows.2
+

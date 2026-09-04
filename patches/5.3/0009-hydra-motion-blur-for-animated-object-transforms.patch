@@ -1,7 +1,7 @@
 From 98431903134ff47487de267d5f3286746d7f89d7 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 03:26:40 +0200
-Subject: [PATCH 09/55] hydra: motion blur for animated object transforms
+Subject: [PATCH 09/57] hydra: motion blur for animated object transforms
 
 Only the camera was sampled across the shutter; geometry read a single
 transform at time zero, so anything moving rendered sharp.

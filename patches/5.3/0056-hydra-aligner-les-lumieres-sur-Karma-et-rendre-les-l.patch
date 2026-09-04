@@ -1,0 +1,150 @@
+From 1e95b597dee4c58d5926d4c90360239ffd1680ac Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Fri, 4 Sep 2026 16:02:22 +0200
+Subject: [PATCH 56/57] hydra: aligner les lumieres sur Karma, et rendre les
+ lumieres cylindriques
+
+Une meme lumiere Houdini rendait beaucoup plus fort sous Cycles. Mesure,
+plan diffus, meme USD, intensite 1, moyenne du centre de l'image :
+
+    type        normalize   rapport a Karma
+    sphere      non/oui     1,014
+    rectangle   non/oui     1,014
+    disque      non/oui     1,014
+    distante    non/oui     4,06
+    dome        non/oui     3,20
+    cylindre    non         18,85
+    cylindre    oui         47,32
+
+Trois causes, une par ligne fautive :
+
+* la lumiere distante portait un facteur 4 dont le commentaire disait
+  lui-meme ne pas savoir d'ou il venait ("Unclear why, but approximately
+  matches Karma") ;
+* le facteur pi qui convertit une intensite en flux radiant s'appliquait
+  aussi a la dome light, qui n'est pas une lumiere de surface ;
+* la lumiere cylindrique n'etait declaree nulle part : ni dans les types
+  de sprim supportes, ni dans la fabrique. Elle n'arrivait pas au
+  delegate, la scene rendait sans elle, et le rapport mesure n'etait que
+  celui du fond gris par defaut.
+
+Cycles n'ayant pas de tube, le cylindre devient un rectangle de sa
+longueur sur son diametre - ce que fait aussi l'import USD de Blender. Un
+tube emet tout autour de son axe, un rectangle d'un seul cote : l'eclairement
+de face est le bon, celui de dos manque. Normalise, Cycles divise alors par
+l'aire du rectangle quand Karma divise par celle du tube, pi fois plus
+grande, d'ou la division correspondante.
+
+Apres, les douze cas tombent entre 0,95 et 1,02 de Karma. L'ecart qui reste
+est celui des deux moteurs sur la meme scene, pas une unite.
+
+Rien de tout ceci ne touche l'USD : un stage exporte vers Blender porte les
+memes intensites qu'avant.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/light.cpp           | 45 +++++++++++++++++++++++++++++++----
+ src/hydra/render_delegate.cpp |  4 +++-
+ 2 files changed, 43 insertions(+), 6 deletions(-)
+
+diff --git a/src/hydra/light.cpp b/src/hydra/light.cpp
+index ef0cce2e..72f450ab 100644
+--- a/src/hydra/light.cpp
++++ b/src/hydra/light.cpp
+@@ -88,16 +88,35 @@ void HdCyclesLight::Sync(HdSceneDelegate *sceneDelegate,
+     strength *= exp2(GetTypedValue<float>(lightDs, HdLightTokens->exposure, 0.0f));
+     strength *= GetTypedValue<float>(lightDs, HdLightTokens->intensity, 1.0f);
+ 
+-    if (_lightType == HdPrimTypeTokens->distantLight) {
+-      /* Unclear why, but approximately matches Karma. */
+-      strength *= 4.0f;
++    /* De l'intensite USD au flux radiant de Cycles. Le facteur pi vaut pour les
++     * lumieres de surface - sphere, rectangle, disque - et pour elles seules.
++     *
++     * Mesure contre Karma, plan diffus, meme USD, intensite 1 : le facteur 4
++     * qui trainait sur la lumiere distante la rendait quatre fois trop forte
++     * (rapport 4,06 mesure), et le pi applique a la dome light trois fois trop
++     * (3,20). Sans eux, les six types tombent a 1,01 de Karma - l'ecart qui
++     * reste est celui des deux moteurs sur la meme scene, pas une unite. */
++    if (_lightType == HdPrimTypeTokens->distantLight ||
++        _lightType == HdPrimTypeTokens->domeLight)
++    {
++      /* L'intensite est prise telle quelle. */
+     }
+     else {
+       /* Convert from intensity to radiant flux. */
+       strength *= M_PI_F;
+     }
+ 
+-    _light->set_normalize(GetTypedValue<bool>(lightDs, HdLightTokens->normalize, false));
++    const bool normalize = GetTypedValue<bool>(lightDs, HdLightTokens->normalize, false);
++    _light->set_normalize(normalize);
++
++    /* Un cylindre approxime par un rectangle : normalise, Cycles divise par
++     * l'aire du rectangle - longueur par diametre - quand Karma divise par
++     * celle du tube, 2 pi r l, soit pi fois plus grande. Mesure : rapport 2,98
++     * a Karma sans cette division, 0,95 avec, c'est-a-dire le meme ecart que
++     * le cylindre non normalise. */
++    if (normalize && _lightType == HdPrimTypeTokens->cylinderLight) {
++      strength /= M_PI_F;
++    }
+ 
+     if (auto ds = GetTypedDataSource<bool>(lightDs, _tokens->visibleInPrimaryRay)) {
+       if (ds->GetTypedValue(0.0f)) {
+@@ -134,6 +153,20 @@ void HdCyclesLight::Sync(HdSceneDelegate *sceneDelegate,
+         area_light->set_sizev(ds->GetTypedValue(0.0f));
+       }
+     }
++    else if (_lightType == HdPrimTypeTokens->cylinderLight) {
++      /* Cycles n'a pas de tube : un rectangle de la longueur du cylindre sur
++       * son diametre, ce que fait aussi l'import USD de Blender. Un tube emet
++       * tout autour de son axe, un rectangle d'un seul cote - l'eclairement de
++       * face est le bon, celui de dos manque. L'axe d'un CylinderLight USD est
++       * le X local, d'ou la longueur sur u. */
++      AreaLight *area_light = static_cast<AreaLight *>(_light);
++      if (auto ds = GetTypedDataSource<float>(lightDs, HdLightTokens->length)) {
++        area_light->set_sizeu(ds->GetTypedValue(0.0f));
++      }
++      if (auto ds = GetTypedDataSource<float>(lightDs, HdLightTokens->radius)) {
++        area_light->set_sizev(ds->GetTypedValue(0.0f) * 2.0f);
++      }
++    }
+     else if (_lightType == HdPrimTypeTokens->sphereLight) {
+       SpotLight *spot_light = static_cast<SpotLight *>(_light);
+       const bool treatAsPoint = GetTypedValue<bool>(lightDs, _tokens->treatAsPoint, false);
+@@ -389,7 +422,9 @@ void HdCyclesLight::Initialize(HdRenderParam *renderParam)
+     _light = lock.scene->create_node<AreaLight>();
+     static_cast<AreaLight *>(_light)->set_ellipse(true);
+   }
+-  else if (_lightType == HdPrimTypeTokens->rectLight) {
++  else if (_lightType == HdPrimTypeTokens->rectLight ||
++           _lightType == HdPrimTypeTokens->cylinderLight)
++  {
+     _light = lock.scene->create_node<AreaLight>();
+     static_cast<AreaLight *>(_light)->set_ellipse(false);
+   }
+diff --git a/src/hydra/render_delegate.cpp b/src/hydra/render_delegate.cpp
+index afe0efd3..42eab5f8 100644
+--- a/src/hydra/render_delegate.cpp
++++ b/src/hydra/render_delegate.cpp
+@@ -68,6 +68,7 @@ const TfTokenVector kSupportedSPrimTypes = {
+     HdPrimTypeTokens->camera,
+     HdPrimTypeTokens->material,
+     HdPrimTypeTokens->diskLight,
++    HdPrimTypeTokens->cylinderLight,
+     HdPrimTypeTokens->distantLight,
+     HdPrimTypeTokens->domeLight,
+     HdPrimTypeTokens->rectLight,
+@@ -323,7 +324,8 @@ HdSprim *HdCyclesDelegate::CreateSprim(const TfToken &typeId, const SdfPath &spr
+   if (typeId == HdPrimTypeTokens->material) {
+     return new HdCyclesMaterial(sprimId);
+   }
+-  if (typeId == HdPrimTypeTokens->diskLight || typeId == HdPrimTypeTokens->distantLight ||
++  if (typeId == HdPrimTypeTokens->cylinderLight || typeId == HdPrimTypeTokens->diskLight ||
++      typeId == HdPrimTypeTokens->distantLight ||
+       typeId == HdPrimTypeTokens->domeLight || typeId == HdPrimTypeTokens->rectLight ||
+       typeId == HdPrimTypeTokens->sphereLight)
+   {
+-- 
+2.53.0.windows.2
+
