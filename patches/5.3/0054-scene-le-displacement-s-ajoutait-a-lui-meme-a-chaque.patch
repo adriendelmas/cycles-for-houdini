@@ -1,0 +1,111 @@
+From 1ba447fd359cd00ab7f107948cab8d73d18e4477 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Fri, 4 Sep 2026 13:10:02 +0200
+Subject: [PATCH 54/55] scene: le displacement s'ajoutait a lui-meme a chaque
+ edition du materiau
+
+Changer une valeur de displacement dans le viewport empilait les
+deplacements : chaque edition ajoutait le sien au relief deja calcule, et
+il fallait un Restart Render pour retrouver la bonne forme.
+
+`read_shader_output` ecrit `verts[v] = verts[v] + off`. Cycles compte donc
+sur l'hote pour reposer les positions d'origine avant chaque nouveau
+calcul - Blender le fait en re-exportant le maillage - alors que la
+modification du displacement relance ce calcul d'elle-meme :
+`GeometryManager::device_update` marque la position du maillage comme
+modifiee des que `shader->need_update_displacement` (geometry.cpp). Un
+hote qui ne touche qu'au shader n'a aucune raison de renvoyer des points,
+et se retrouve a deplacer un maillage deja deplace.
+
+Un maillage subdivise y echappait : la meme fonction marque aussi le
+dicing comme modifie, donc la tesselation refait les sommets. Un maillage
+polygonal, non.
+
+L'attribut ATTR_STD_POSITION_UNDISPLACED existait deja, mais seulement
+quand un shader demandait la position non deplacee. Il est desormais pris
+des qu'un maillage porte un vrai deplacement, et `read_shader_output` en
+repart : le calcul devient idempotent. Cote delegate, poser de nouveaux
+points jette cette sauvegarde, sans quoi une geometrie animee repartirait
+de la pose precedente.
+
+Mesure, grille 40x40 non subdivisee, scale 0,4 en frame 1 puis 0,8 en
+frame 2, husk rendant les deux dans la meme session ; ecart de la frame 2
+a la meme frame rendue seule :
+
+    avant   moyen 0,03047   max 1,06470
+    apres   moyen 0,00000   max 0,00049
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/mesh.cpp          |  7 +++++++
+ src/scene/mesh.cpp          |  6 +++++-
+ src/scene/mesh_displace.cpp | 18 ++++++++++++++++++
+ 3 files changed, 30 insertions(+), 1 deletion(-)
+
+diff --git a/src/hydra/mesh.cpp b/src/hydra/mesh.cpp
+index fa35d6e3..1c08463e 100644
+--- a/src/hydra/mesh.cpp
++++ b/src/hydra/mesh.cpp
+@@ -212,6 +212,13 @@ void HdCyclesMesh::PopulatePoints(HdSceneDelegate *sceneDelegate)
+                 attr_P->data_for_write<packed_float3>());
+   }
+ 
++  /* La sauvegarde des positions non deplacees decrit celles-ci : de nouveaux
++   * points la perimeraient, et le displacement repartirait de la pose
++   * precedente au lieu de celle qu'on vient de poser. La jeter ici la fait
++   * reprendre au prochain calcul. */
++  attributes.remove(ATTR_STD_POSITION_UNDISPLACED);
++  attributes.remove(ATTR_STD_NORMAL_UNDISPLACED);
++
+   _geom->tag_position_modified();
+ }
+ 
+diff --git a/src/scene/mesh.cpp b/src/scene/mesh.cpp
+index 089ce24f..edd02fa1 100644
+--- a/src/scene/mesh.cpp
++++ b/src/scene/mesh.cpp
+@@ -761,7 +761,11 @@ void Mesh::add_vertex_normals()
+ 
+ void Mesh::add_undisplaced(Scene *scene)
+ {
+-  if (need_attribute(scene, ATTR_STD_POSITION_UNDISPLACED) &&
++  /* Egalement des que le maillage porte un vrai deplacement, meme si aucun
++   * shader ne demande la position non deplacee : c'est d'elle que repart
++   * read_shader_output, faute de quoi un second calcul de displacement
++   * s'ajouterait au premier. */
++  if ((need_attribute(scene, ATTR_STD_POSITION_UNDISPLACED) || has_true_displacement()) &&
+       !attributes.find(ATTR_STD_POSITION_UNDISPLACED))
+   {
+     /* Copy position to attribute. */
+diff --git a/src/scene/mesh_displace.cpp b/src/scene/mesh_displace.cpp
+index 5d1536d4..227d1588 100644
+--- a/src/scene/mesh_displace.cpp
++++ b/src/scene/mesh_displace.cpp
+@@ -92,6 +92,24 @@ static void read_shader_output(const Scene *scene,
+   const array<Node *> &mesh_used_shaders = mesh->get_used_shaders();
+   packed_float3 *mesh_verts = mesh->get_position_for_write();
+   const int num_verts = mesh->num_verts();
++
++  /* Repartir des positions non deplacees quand on les a. L'offset s'ajoute a
++   * la position courante : redeplacer un maillage deja deplace l'ajoute une
++   * seconde fois. Cycles compte sur l'hote pour reposer les positions avant
++   * chaque nouveau calcul - c'est ce que fait Blender en re-exportant le
++   * maillage - mais un hote qui ne touche qu'au shader n'a aucune raison de le
++   * faire, et la modification du displacement marque elle-meme la position
++   * comme modifiee (geometry.cpp), donc le calcul est bien relance. La
++   * sauvegarde ci-dessous, prise juste avant le premier deplacement, rend
++   * l'operation idempotente. */
++  if (const Attribute *attr_undisplaced = mesh->attributes.find(ATTR_STD_POSITION_UNDISPLACED)) {
++    const packed_float3 *undisplaced = attr_undisplaced->data<packed_float3>();
++    const size_t num_undisplaced = attr_undisplaced->buffer_size(mesh, ATTR_PRIM_GEOMETRY) /
++                                   sizeof(packed_float3);
++    if (num_undisplaced == static_cast<size_t>(num_verts)) {
++      std::copy_n(undisplaced, num_verts, mesh_verts);
++    }
++  }
+   const int num_motion_steps = mesh->get_motion_steps();
+   vector<bool> done(num_verts, false);
+ 
+-- 
+2.53.0.windows.2
+

@@ -1,7 +1,7 @@
 From 9895647024012c8b52ca42b7d0f962963ff79056 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 18:20:13 +0200
-Subject: [PATCH 45/53] hydra: rejeter une valeur d'enum hors registre plutot
+Subject: [PATCH 45/55] hydra: rejeter une valeur d'enum hors registre plutot
  que de la transmettre telle quelle
 
 Un materiau utilisateur portait subsurface_method=0 sur un principled bsdf --

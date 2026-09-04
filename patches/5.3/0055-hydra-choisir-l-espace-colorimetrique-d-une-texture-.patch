@@ -1,0 +1,123 @@
+From fdae81414d3f606d89c305826f636540d263d466 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Fri, 4 Sep 2026 13:10:17 +0200
+Subject: [PATCH 55/55] hydra: choisir l'espace colorimetrique d'une texture
+ dans un menu
+
+Le socket `colorspace` des noeuds image se remplissait a la main, et un
+nom mal orthographie sortait une erreur : les noms exacts ne s'inventent
+pas - celui de l'sRGB d'une configuration ACES est
+`sRGB Encoded Rec.709 (sRGB)`.
+
+Un menu deroulant les propose desormais, comme le File Color Space de
+MaterialX : les cinq noms que Cycles traite lui-meme, puis les espaces de
+la configuration OCIO active, alias compris. La liste se construit a
+l'ouverture du menu, puisqu'elle depend de la configuration, et le champ
+reste modifiable a la main - `menureplace` - pour un nom que la
+configuration connait sans qu'il apparaisse.
+
+Mesure, PNG uni a 128/255 sur une emission, config ACES d'Houdini :
+
+    colorspace laisse a "auto"              0,502   (pas de decodage)
+    "sRGB Encoded Rec.709 (sRGB)"           0,2158  (attendu : 0,2159)
+
+Le premier chiffre est l'anomalie A21, ouverte : la configuration ACES ne
+definit aucun espace nomme `sRGB`, qui est pourtant ce qu'annonce le
+fichier, et n'a ni role `default_byte` ni role `default`. Le menu la rend
+contournable ; il ne la corrige pas.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/CMakeLists.txt                  |  4 ++
+ src/hydra/resources/cycles_colorspaces.py | 64 +++++++++++++++++++++++
+ 2 files changed, 68 insertions(+)
+ create mode 100644 src/hydra/resources/cycles_colorspaces.py
+
+diff --git a/src/hydra/CMakeLists.txt b/src/hydra/CMakeLists.txt
+index 77f604b7..4187688d 100644
+--- a/src/hydra/CMakeLists.txt
++++ b/src/hydra/CMakeLists.txt
+@@ -248,6 +248,10 @@ if(WITH_CYCLES_HYDRA_RENDER_DELEGATE)
+     # n'apparait pas dans le menu tab et la bibliotheque de VOP reste
+     # inutilisable.
+     delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources" "cycles_builder.py" "${CYCLES_INSTALL_PATH}/houdini/scripts/python")
++    # Le menu des espaces colorimetriques des noeuds image : la liste sort de la
++    # configuration OCIO active, celle d'Houdini, donc elle se construit a
++    # l'ouverture du menu plutot que d'etre figee dans le noeud.
++    delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources" "cycles_colorspaces.py" "${CYCLES_INSTALL_PATH}/houdini/scripts/python")
+     delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources" "CyclesTools.shelf" "${CYCLES_INSTALL_PATH}/houdini/toolbar")
+     # Le traducteur de shaders USD pour le contexte cycles. Il n'existe que
+     # pour porter les reglages du materiau - le Cycles Material Properties -
+diff --git a/src/hydra/resources/cycles_colorspaces.py b/src/hydra/resources/cycles_colorspaces.py
+new file mode 100644
+index 00000000..b1cad23d
+--- /dev/null
++++ b/src/hydra/resources/cycles_colorspaces.py
+@@ -0,0 +1,64 @@
++"""Les espaces colorimétriques que Cycles accepte, pour le menu des nœuds image.
++
++Cycles résout le nom d'un espace dans **la configuration OCIO active** — celle
++que pointe `$OCIO`, donc celle d'Houdini — sauf pour cinq noms qu'il traite
++lui-même. D'où ce menu : la liste dépend de la configuration, elle ne peut pas
++être figée dans le nœud.
++
++Le menu reste **modifiable à la main** (`menureplace`) : un nom que la
++configuration connaît sans qu'il apparaisse ici — un alias, une entrée ajoutée
++après coup — doit rester saisissable.
++
++⚠️ La chaîne vide est le « auto » de Cycles : il demande alors à OCIO l'espace
++que le fichier annonce (`oiio:ColorSpace`, souvent `sRGB`). Une configuration
++ACES ne définit aucun espace portant ce nom-là — le sien s'appelle
++`sRGB Encoded Rec.709 (sRGB)` — et Cycles retombe alors sur le linéaire sans
++un mot : une texture 8 bits n'est pas décodée. C'est l'anomalie A21, et c'est
++précisément pour cela qu'on veut pouvoir choisir.
++"""
++
++# Les cinq noms que Cycles traite sans OCIO (`src/util/colorspace.cpp`).
++BUILTIN = (
++    ("", "Auto (from the file)"),
++    ("__builtin_srgb", "sRGB (built-in)"),
++    ("scene_linear", "Scene Linear"),
++    ("scene_linear_srgb", "Scene Linear sRGB"),
++    ("data", "Non-Color / Data"),
++)
++
++
++def config_colorspaces():
++    """Les espaces de la configuration OCIO active, alias compris."""
++    try:
++        import PyOpenColorIO as OCIO
++    except ImportError:
++        return []
++
++    try:
++        config = OCIO.GetCurrentConfig()
++    except Exception:
++        return []
++
++    entries = []
++    seen = set()
++    for space in config.getColorSpaces():
++        name = space.getName()
++        if name in seen:
++            continue
++        seen.add(name)
++        family = space.getFamily()
++        entries.append((name, "%s   [%s]" % (name, family) if family else name))
++        for alias in space.getAliases():
++            if alias not in seen:
++                seen.add(alias)
++                entries.append((alias, "%s   (alias de %s)" % (alias, name)))
++    return entries
++
++
++def menu():
++    """Jetons et libellés à plat, ce qu'attend un bloc `menureplace`."""
++    flat = []
++    for token, label in list(BUILTIN) + config_colorspaces():
++        flat.append(token)
++        flat.append(label)
++    return flat
+-- 
+2.53.0.windows.2
+

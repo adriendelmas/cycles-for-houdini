@@ -325,6 +325,25 @@ def menu_block(prop, indent):
     return lines
 
 
+def colorspace_menu(socket, indent):
+    """Le menu des espaces colorimétriques, pour un socket `colorspace`.
+
+    Le nom se résout dans la configuration OCIO active, celle d'Houdini : la
+    liste ne peut donc pas être figée ici, elle se construit à l'ouverture du
+    menu. `menureplace` la rend **modifiable à la main**, comme le File Color
+    Space de MaterialX — un alias que la configuration connaît sans qu'il
+    apparaisse doit rester saisissable, et une valeur écrite à la main ne doit
+    pas être effacée par le menu.
+    """
+    if socket != "colorspace":
+        return []
+    return [indent + "menureplace {",
+            indent + '    [ "import cycles_colorspaces" ]',
+            indent + '    [ "return cycles_colorspaces.menu()" ]',
+            indent + "    language python",
+            indent + "}"]
+
+
 def dialog_script(node_id, sdr_node):
     inputs = [n for n in sdr_node.GetShaderInputNames() if usable(sdr_node.GetShaderInput(n))]
     outputs = [n for n in sdr_node.GetShaderOutputNames() if usable(sdr_node.GetShaderOutput(n))]
@@ -389,6 +408,7 @@ def dialog_script(node_id, sdr_node):
             block.append("%s    size    %d" % (indent, comps))
         block.append("%s    default { %s }" % (indent, default_literal(prop, comps)))
         block += menu_block(prop, indent + "    ")
+        block += colorspace_menu(name, indent + "    ")
         # Le nom réel du socket Cycles, que le traducteur écrira en USD.
         if parm_name(name) != name:
             block.append('%s    parmtag { "sidefx::shader_parmname" "%s" }' % (indent, name))
@@ -516,6 +536,130 @@ def build_material_node(template):
     definition.save(LIBRARY)
 
 
+PROPERTIES_NAME = "cycles_material_properties"
+
+# Les réglages que porte le `Shader` de Cycles lui-même, et non un de ses nœuds
+# — le panneau Settings d'un matériau Blender. Les noms sont ceux des sockets de
+# `Shader` (`src/scene/shader.cpp`) : le delegate les cherche dans son NodeType,
+# donc un nom juste ici suffit, sans table de correspondance à tenir à jour.
+PROPERTIES = [
+    ("displacement_method", "string", '"both"', "Displacement Method",
+     [("bump", "Bump Only"), ("true", "Displacement Only"), ("both", "Displacement and Bump")]),
+    ("emission_sampling_method", "string", '"auto"', "Emission Sampling",
+     [("none", "None"), ("auto", "Auto"), ("front", "Front"), ("back", "Back"),
+      ("front_back", "Front and Back")]),
+    ("use_transparent_shadow", "toggle", '"1"', "Transparent Shadows", None),
+    ("use_bump_map_correction", "toggle", '"1"', "Bump Map Correction", None),
+    ("volume_sampling_method", "string", '"multiple_importance"', "Volume Sampling",
+     [("distance", "Distance"), ("equiangular", "Equiangular"),
+      ("multiple_importance", "Multiple Importance")]),
+    ("volume_interpolation_method", "string", '"linear"', "Volume Interpolation",
+     [("linear", "Linear"), ("cubic", "Cubic")]),
+    ("volume_step_rate", "float", '"1"', "Volume Step Rate", None),
+    ("pass_id", "integer", '"0"', "Pass ID", None),
+]
+
+
+def properties_parm(name, ptype, default, label, menu):
+    """Un réglage, et la case qui décide s'il est exporté.
+
+    La convention est celle d'Houdini pour les propriétés de rendu, relevée sur
+    `kma_material_properties` : un paramètre `__activate__<nom>` commande
+    l'export de `<nom>`, et seul ce qui est activé atterrit dans l'USD. Sans
+    cela chaque matériau porterait les huit réglages, et le défaut du delegate —
+    bump, ou both dès qu'un displacement est branché — ne pourrait plus
+    s'exprimer.
+
+    Les noms portent un deux-points, illégal dans un nom de paramètre Houdini :
+    `hou.text.encode` produit la forme `xn__…` qu'Houdini attend, et le
+    traducteur USD redonne le nom réel, `cycles:<socket>`.
+    """
+    activate = hou.text.encode("__activate__cycles:" + name)
+    value = hou.text.encode("cycles:" + name)
+    lines = ["    parm {",
+             '        name    "%s"' % activate,
+             '        label   "Activate"',
+             "        type    toggle",
+             "        nolabel",
+             '        default { "0" }',
+             '        parmtag { "sidefx::shader_isparm" "0" }',
+             "    }",
+             "    parm {",
+             '        name    "%s"' % value,
+             '        label   "%s"' % label,
+             "        type    %s" % ptype,
+             "        default { %s }" % default,
+             '        disablewhen "{ %s != 1 }"' % activate]
+    if menu:
+        lines.append("        menu {")
+        for token, mlabel in menu:
+            lines.append('            "%s"  "%s"' % (token, mlabel))
+        lines.append("        }")
+    lines.append("    }")
+    return lines
+
+
+def properties_dialog():
+    head = ["{",
+            "    name\t%s" % PROPERTIES_NAME,
+            "    script\t%s" % PROPERTIES_NAME,
+            '    label\t"Cycles Material Properties"',
+            "",
+            "    rendermask\t%s" % RENDER_CONTEXT,
+            "    shadertype\tgeneric",
+            "    externalshader\t1",
+            "    output	properties	properties	Properties",
+            "    signature	Float	default	{ properties }",
+            "",
+            "    outputoverrides\tdefault",
+            "    {",
+            "\t___begin\tauto",
+            "\t\t\t(0)",
+            "    }",
+            "",
+            "    parm {",
+            '        name    "signature"',
+            '        label   "Signature"',
+            "        type    float",
+            "        invisible",
+            '        default { "0" }',
+            "    }",
+            # Sans ce paramètre, `_propertiesShaderNodeSibling` (dans
+            # `husd/mtlxshadertranslator.py`) suppose Karma — il écrit
+            # littéralement `render_context = 'kma'` par défaut — et écarte le
+            # nœud de propriétés parce que le contexte visé, `cycles`, n'est
+            # pas dans la liste. Le nœud était alors posé, branché, activé, et
+            # n'atteignait jamais l'USD.
+            "    parm {",
+            '        name    "shader_propertiescontextname"',
+            '        label   "shader_propertiescontextname"',
+            "        type    string",
+            '        default { "%s" }' % RENDER_CONTEXT,
+            "        invisible",
+            "    }"]
+    body = []
+    for prop in PROPERTIES:
+        body += properties_parm(*prop)
+    return "\n".join(head + body + ["}", ""])
+
+
+def build_properties_node(template):
+    """Le nœud qui porte les réglages du matériau.
+
+    Displacement method, échantillonnage des volumes, ombres transparentes : ces
+    réglages ne sont pas des sockets de nœud, ils décrivent le `Shader`. Houdini
+    replie les paramètres d'un nœud de propriétés dans le prim Shader du
+    terminal, préfixés du moteur — `inputs:cycles:displacement_method` — et le
+    delegate les y relit. C'est ainsi que Karma procède avec ses `karma:*`."""
+    template.copyToHDAFile(LIBRARY, new_name=PROPERTIES_NAME,
+                           new_menu_name="Cycles Material Properties")
+    hou.hda.installFile(LIBRARY)
+    definition = hou.nodeType(hou.vopNodeTypeCategory(), PROPERTIES_NAME).definition()
+    definition.addSection("DialogScript", properties_dialog())
+    definition.addSection("Tools.shelf", TOOLS_SHELF % "Output")
+    definition.save(LIBRARY)
+
+
 # Le builder n'est PAS un type de nœud : c'est un `subnet` configuré, monté par
 # un outil du menu tab — voir `install/houdini/scripts/python/cycles_builder.py`
 # et `install/houdini/toolbar/CyclesTools.shelf`. C'est ainsi que Houdini
@@ -560,6 +704,8 @@ def main():
             child.destroy()
         build_material_node(template)
         print("Cycles Material ecrit")
+        build_properties_node(template)
+        print("Cycles Material Properties ecrit")
     except hou.Error as exc:
         print("builder: ECHEC %s" % str(exc).replace(chr(10), " ")[:70])
 

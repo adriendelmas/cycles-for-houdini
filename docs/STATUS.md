@@ -930,6 +930,23 @@ Le fichier annonce pourtant `oiio:ColorSpace = sRGB` (vérifié), et le socket
 `detect_known_colorspace` a donc pris une branche silencieuse. Le résultat est
 le même avec et sans `OCIO` pointant la config ACES d'Houdini.
 
+**Le pourquoi, mesuré depuis :** la configuration ACES d'Houdini ne définit
+**aucun** espace nommé `sRGB` — le sien s'appelle `sRGB Encoded Rec.709 (sRGB)`,
+avec `sRGB - Texture` pour alias — et n'a ni rôle `default_byte` ni rôle
+`default`. Or c'est exactement ce que `detect_known_colorspace` cherche, dans
+cet ordre, quand le socket est sur « auto ». Rien ne répond, et le repli est le
+linéaire.
+
+Poser l'espace à la main donne la bonne valeur, ce qui confirme le diagnostic
+et donne le contournement :
+
+| `colorspace` | valeur rendue |
+|---|---|
+| « auto » | 0,502 |
+| `sRGB Encoded Rec.709 (sRGB)` | **0,2158** |
+
+Le menu de la phase 21 rend ce choix accessible ; il ne corrige pas le défaut.
+
 ⚠️ **Pas encore confirmé comme un défaut de notre côté** : il reste à rendre la
 même texture avec Karma sous la même config OCIO. Si Karma donne 0,216, nous
 avons un vrai écart avec Blender ; s'il donne 0,502, c'est la convention de la
@@ -1330,3 +1347,43 @@ explicite. Il faut la scène qui l'exhibe pour aller plus loin.
 **Textures 4K : pas de surcoût côté batch.** Trois 4096² (base, rugosité,
 normale) sur husk : 2,7 s au total, 0,7 s avant la première trace. La lenteur
 signalée est donc à chercher dans le viewport, pas dans le chargement.
+
+## Phase 21 — Le displacement s'empilait, et un menu pour les espaces colorimétriques ✅
+
+Signalé : « quand je change la valeur de displacement en direct dans le
+viewport, à chaque changement c'est additif ». Exact, et la cause est nette.
+
+`read_shader_output` écrit `verts[v] = verts[v] + off`. Cycles compte donc sur
+l'hôte pour **reposer les positions d'origine** avant chaque nouveau calcul —
+Blender le fait en ré-exportant le maillage — alors que le calcul, lui, se
+relance tout seul : `GeometryManager::device_update` marque la position du
+maillage comme modifiée dès que `shader->need_update_displacement`. Un hôte qui
+ne touche qu'au shader n'a aucune raison de renvoyer des points, et déplace donc
+un maillage déjà déplacé.
+
+Un maillage **subdivisé** y échappait : la même fonction marque aussi le dicing
+comme modifié, la tessellation refait les sommets. Un maillage polygonal, non —
+d'où un défaut qui ne se voit que sur une partie des scènes.
+
+L'attribut `ATTR_STD_POSITION_UNDISPLACED` existait déjà, mais n'était pris que
+si un shader demandait la position non déplacée. Il l'est désormais dès qu'un
+maillage porte un vrai déplacement, et le calcul en repart : il devient
+idempotent. Côté delegate, poser de nouveaux points jette cette sauvegarde,
+sans quoi une géométrie animée repartirait de la pose précédente.
+
+Mesure — grille 40×40 non subdivisée, `scale` 0,4 en frame 1 puis 0,8 en frame
+2, husk rendant les deux dans la même session ; écart de la frame 2 à la même
+frame rendue seule :
+
+| | moyen | max |
+|---|---|---|
+| avant | 0,03047 | 1,06470 |
+| après | 0,00000 | 0,00049 |
+
+**Et un menu pour `colorspace`.** Le socket se remplissait à la main : les noms
+exacts ne s'inventent pas — l'sRGB d'une configuration ACES s'appelle
+`sRGB Encoded Rec.709 (sRGB)`. Le menu propose les cinq noms que Cycles traite
+lui-même, puis les espaces de la configuration OCIO active, alias compris, et
+reste modifiable à la main (`menureplace`) comme le File Color Space de
+MaterialX. La liste se construit à l'ouverture, puisqu'elle dépend de la
+configuration.
