@@ -1,7 +1,7 @@
 From 7296f68b88c471023f0b24f32b71f9f2fbd2c5a2 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 23:19:44 +0200
-Subject: [PATCH 50/62] hydra: rendre le display driver et le choix du
+Subject: [PATCH 50/65] hydra: rendre le display driver et le choix du
  peripherique utilisables
 
 Trois choses, toutes autour de la reactivite du viewport et du choix

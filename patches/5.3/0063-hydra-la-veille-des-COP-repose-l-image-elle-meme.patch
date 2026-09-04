@@ -1,0 +1,447 @@
+From 90b6c3309918e722b86c99ef7bb5bfb566237fd8 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Sat, 5 Sep 2026 00:53:45 +0200
+Subject: [PATCH 63/65] hydra: la veille des COP repose l'image elle-meme
+
+Salir le materiau et attendre qu'Hydra nous redemande une synchronisation
+ne suffisait pas : rien ne garantit que la demande revienne, et elle ne
+revenait pas - la texture restait celle du premier chargement, comme
+avant la veille.
+
+La veille fait donc le travail : elle relit les pixels et les repose sur
+les noeuds qui s'en servent, puis marque leur shader a recompiler. Le
+registre retient desormais le noeud et son shader, plus seulement
+l'identifiant du materiau, et le sondage se fait sous le verrou de scene,
+dans la passe de rendu - le seul fil ou cuire un noeud Houdini est sur.
+
+Un materiau qui rebatit son graphe efface ses inscriptions avant d'en
+reposer : sans quoi la veille irait ecrire sur des noeuds detruits.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/houdini_cop.cpp | 186 ++++++++++++++++++++------------------
+ src/hydra/houdini_cop.h   |  16 ++--
+ src/hydra/material.cpp    |  11 ++-
+ src/hydra/render_pass.cpp |  17 ++--
+ 4 files changed, 125 insertions(+), 105 deletions(-)
+
+diff --git a/src/hydra/houdini_cop.cpp b/src/hydra/houdini_cop.cpp
+index 965f39b0..20c76270 100644
+--- a/src/hydra/houdini_cop.cpp
++++ b/src/hydra/houdini_cop.cpp
+@@ -20,11 +20,11 @@
+ #include <pxr/imaging/hd/material.h>
+ #include <pxr/imaging/hd/tokens.h>
+ 
++#include <algorithm>
+ #include <chrono>
+ #include <cstring>
+ #include <map>
+ #include <memory>
+-#include <set>
+ #include <unordered_map>
+ #include <vector>
+ 
+@@ -74,19 +74,15 @@ std::unordered_map<std::string, CopPixelsPtr> &Cache()
+  * qui le dire : Solaris ignore la dependance entre un materiau et un noeud de
+  * composition. */
+ struct CopUser {
+-  PXR_NS::HdRenderIndex *renderIndex = nullptr;
+   PXR_NS::SdfPath materialId;
+-
+-  bool operator<(const CopUser &other) const
+-  {
+-    return (renderIndex != other.renderIndex) ? (renderIndex < other.renderIndex) :
+-                                                (materialId < other.materialId);
+-  }
++  Scene *scene = nullptr;
++  ShaderNode *node = nullptr;
++  Shader *shader = nullptr;
+ };
+ 
+-std::map<std::string, std::set<CopUser>> &Users()
++std::map<std::string, std::vector<CopUser>> &Users()
+ {
+-  static std::map<std::string, std::set<CopUser>> users;
++  static std::map<std::string, std::vector<CopUser>> users;
+   return users;
+ }
+ 
+@@ -313,6 +309,36 @@ class HoudiniCopImageLoader : public ImageLoader {
+   CopPixelsPtr _pixels;
+ };
+ 
++/* Poser une image sur un noeud, quelle que soit sa sorte. Rend faux si le noeud
++ * n'est pas un noeud image. */
++bool SetNodeImage(Scene *scene,
++                  ShaderNode *node,
++                  const std::string &opPath,
++                  const CopPixelsPtr &pixels)
++{
++  ImageSlotTextureNode *slotNode = nullptr;
++  ImageParams params;
++
++  if (ImageTextureNode *imageNode = dynamic_cast<ImageTextureNode *>(node)) {
++    params = imageNode->image_params();
++    slotNode = imageNode;
++  }
++  else if (EnvironmentTextureNode *envNode = dynamic_cast<EnvironmentTextureNode *>(node)) {
++    params = envNode->image_params();
++    slotNode = envNode;
++  }
++  else {
++    return false;
++  }
++
++  /* Nommer l'espace ici evite qu'un `colorspace` laisse a "auto" sur le noeud
++   * n'aille en deviner un autre : un COP travaille en lineaire. */
++  params.colorspace = u_colorspace_scene_linear;
++  slotNode->handle = scene->image_manager->add_image(
++      std::make_unique<HoudiniCopImageLoader>(opPath, pixels), params);
++  return true;
++}
++
+ }  // namespace
+ 
+ bool IsHoudiniCopPath(const std::string &path)
+@@ -322,26 +348,21 @@ bool IsHoudiniCopPath(const std::string &path)
+ 
+ void BindHoudiniCopImage(Scene *scene,
+                          ShaderNode *node,
+-                         PXR_NS::HdRenderIndex *renderIndex,
++                         Shader *shader,
+                          const PXR_NS::SdfPath &materialId)
+ {
+   if (scene == nullptr || node == nullptr) {
+     return;
+   }
+ 
+-  ImageSlotTextureNode *slotNode = nullptr;
+   ustring filename;
+-  ImageParams params;
+-
+-  if (ImageTextureNode *imageNode = dynamic_cast<ImageTextureNode *>(node)) {
++  if (const ImageTextureNode *imageNode = dynamic_cast<const ImageTextureNode *>(node)) {
+     filename = imageNode->get_filename();
+-    params = imageNode->image_params();
+-    slotNode = imageNode;
+   }
+-  else if (EnvironmentTextureNode *envNode = dynamic_cast<EnvironmentTextureNode *>(node)) {
++  else if (const EnvironmentTextureNode *envNode = dynamic_cast<const EnvironmentTextureNode *>(
++               node))
++  {
+     filename = envNode->get_filename();
+-    params = envNode->image_params();
+-    slotNode = envNode;
+   }
+   else {
+     return;
+@@ -369,37 +390,30 @@ void BindHoudiniCopImage(Scene *scene,
+     }
+   }
+ 
+-  if (!pixels) {
++  if (!pixels || !SetNodeImage(scene, node, opPath, pixels)) {
+     return;
+   }
+ 
+-  /* Retenir qui se sert de ce COP, pour pouvoir le salir quand il changera.
++  /* Retenir ce noeud, pour pouvoir lui reposer une image quand le COP changera.
+    * Seulement quand la lecture a reussi : un rendu batch, ou `hou` n'existe
+    * pas, n'a rien a surveiller. */
+-  if (renderIndex != nullptr && !materialId.IsEmpty()) {
++  if (!materialId.IsEmpty()) {
+     const thread_scoped_lock lock(CacheMutex());
+-    Users()[opPath].insert(CopUser{renderIndex, materialId});
++    Users()[opPath].push_back(CopUser{materialId, scene, node, shader});
+   }
+-
+-  /* Nommer l'espace ici evite qu'un `colorspace` laisse a "auto" sur le noeud
+-   * n'aille en deviner un autre. */
+-  params.colorspace = u_colorspace_scene_linear;
+-  slotNode->handle = scene->image_manager->add_image(
+-      std::make_unique<HoudiniCopImageLoader>(opPath, pixels), params);
+ }
+ 
+-/* La veille : Houdini ne previent personne qu'un COP a change, et Solaris ne
+- * connait pas la dependance entre un materiau et un noeud de composition. Sans
++/* La veille. Houdini ne previent personne qu'un COP a change, et Solaris ne
++ * connait pas la dependance entre un materiau et un noeud de composition : sans
+  * cela, la texture reste celle du premier chargement pour toute la session.
+  *
+  * On demande donc a intervalles menus si l'un des COP dont on s'est servi a
+- * besoin de recuire. `needsToCook` ne cuit rien : il ne fait que repondre. Le
+- * materiau qui l'emploie est alors sali, Hydra nous redemande une
+- * synchronisation, et c'est la - sur le fil de l'hote - que les pixels sont
+- * relus. */
+-void PollHoudiniCops()
++ * besoin de recuire, et on refait l'image sur place. Salir le materiau pour que
++ * Hydra nous redemande une synchronisation a ete essaye avant : rien ne
++ * garantit que la demande revienne, et elle ne revenait pas. */
++void PollHoudiniCops(Scene *scene)
+ {
+-  if (!PXR_NS::TfGetEnvSetting(CYCLES_COP_WATCH)) {
++  if (scene == nullptr || !PXR_NS::TfGetEnvSetting(CYCLES_COP_WATCH)) {
+     return;
+   }
+ 
+@@ -408,12 +422,11 @@ void PollHoudiniCops()
+    * microsecondes, mais rien ne sert de le faire a chaque image. */
+   static const auto kPollInterval = std::chrono::milliseconds(250);
+   /* Le temps de calme : on ne relit qu'une fois le COP immobile depuis ce
+-   * delai. Tirer un curseur ne declenche donc rien tant qu'on tire ; lacher
+-   * met a jour. */
++   * delai. Tirer un curseur ne declenche donc rien tant qu'on tire ; lacher met
++   * a jour. */
+   static const auto kQuietDelay = std::chrono::milliseconds(500);
+   /* Le filet : deux relectures du meme COP ne peuvent pas se suivre de plus
+-   * pres, quoi qu'il arrive. Une 4K coute 0,3 s a relire, une seconde entre
+-   * deux laisse le viewport respirer. */
++   * pres, quoi qu'il arrive. Une 4K coute 0,3 s a relire. */
+   static const auto kMinBetweenRefreshes = std::chrono::milliseconds(1000);
+ 
+   static clock::time_point lastPoll;
+@@ -423,18 +436,21 @@ void PollHoudiniCops()
+   }
+   lastPoll = now;
+ 
+-  std::vector<std::pair<std::string, std::set<CopUser>>> watched;
++  std::vector<std::string> paths;
+   {
+     const thread_scoped_lock lock(CacheMutex());
+     if (Users().empty()) {
+       return;
+     }
+-    watched.assign(Users().begin(), Users().end());
++    for (const auto &entry : Users()) {
++      paths.push_back(entry.first);
++    }
+   }
+ 
+   /* Ce qu'on a vu au sondage precedent, et quand. On se declenche sur le
+    * **changement** d'etat, pas sur l'etat : un COP qu'aucun panneau n'affiche
+-   * peut rester indefiniment a "doit recuire". */
++   * peut rester indefiniment a "doit recuire", et se declencher la-dessus
++   * relirait ses pixels quatre fois par seconde. */
+   struct Watch {
+     CopState seen;
+     clock::time_point movedAt{};
+@@ -443,9 +459,9 @@ void PollHoudiniCops()
+   };
+   static std::map<std::string, Watch> watches;
+ 
+-  for (const auto &entry : watched) {
+-    const CopState state = StateOf(entry.first);
+-    const auto inserted = watches.try_emplace(entry.first);
++  for (const std::string &path : paths) {
++    const CopState state = StateOf(path);
++    const auto inserted = watches.try_emplace(path);
+     Watch &watch = inserted.first->second;
+     if (inserted.second) {
+       /* Premier sondage de ce COP : on note son etat, sans rien conclure. */
+@@ -456,58 +472,48 @@ void PollHoudiniCops()
+     const bool moved = state.cookCount != watch.seen.cookCount ||
+                        (state.needsToCook && !watch.seen.needsToCook);
+     watch.seen = state;
+-
+     if (moved) {
+-      /* Il vient de bouger : le temps de calme repart de zero. */
+       watch.movedAt = now;
+       watch.pending = true;
+     }
+ 
+-    if (!watch.pending) {
+-      continue;
+-    }
+-
+-    /* Ce qu'on garde est peut-etre deja a jour : une lecture faite entre-temps
+-     * a pu remettre les deux d'accord. */
++    if (!watch.pending || now - watch.movedAt < kQuietDelay ||
++        now - watch.refreshedAt < kMinBetweenRefreshes)
+     {
+-      const thread_scoped_lock lock(CacheMutex());
+-      const auto it = Cache().find(entry.first);
+-      if (!state.needsToCook && it != Cache().end() && it->second &&
+-          it->second->cookCount == state.cookCount)
+-      {
+-        watch.pending = false;
+-        continue;
+-      }
+-    }
+-
+-    if (now - watch.movedAt < kQuietDelay) {
+-      /* Il bouge encore. */
+-      continue;
+-    }
+-    if (now - watch.refreshedAt < kMinBetweenRefreshes) {
+       continue;
+     }
+ 
+     watch.pending = false;
+     watch.refreshedAt = now;
+ 
+-    int marked = 0;
+-    for (const CopUser &user : entry.second) {
+-      if (user.renderIndex == nullptr ||
+-          user.renderIndex->GetSprim(PXR_NS::HdPrimTypeTokens->material, user.materialId) ==
+-              nullptr)
+-      {
+-        continue;
++    const CopPixelsPtr pixels = Capture(path);
++    if (!pixels) {
++      continue;
++    }
++
++    int refreshed = 0;
++    {
++      const thread_scoped_lock lock(CacheMutex());
++      Cache()[path] = pixels;
++      const auto it = Users().find(path);
++      if (it != Users().end()) {
++        for (const CopUser &user : it->second) {
++          if (user.scene != scene || user.node == nullptr) {
++            continue;
++          }
++          if (SetNodeImage(scene, user.node, path, pixels)) {
++            ++refreshed;
++            if (user.shader != nullptr) {
++              /* Sans quoi le graphe ne serait pas recompile, et le noeud
++               * garderait l'emplacement d'image qu'il avait deja. */
++              user.shader->tag_update(scene);
++            }
++          }
++        }
+       }
+-      /* DirtyParams suffit : la synchronisation reprend alors le chemin court,
+-       * qui relie les images sans rebatir le graphe. */
+-      user.renderIndex->GetChangeTracker().MarkSprimDirty(user.materialId,
+-                                                          PXR_NS::HdMaterial::DirtyParams);
+-      ++marked;
+     }
+ 
+-    LOG_INFO << "Houdini COP " << entry.first << " changed, refreshing " << marked
+-             << " material(s).";
++    LOG_INFO << "Houdini COP " << path << " changed, refreshed " << refreshed << " node(s).";
+   }
+ }
+ 
+@@ -515,9 +521,13 @@ void ForgetHoudiniCopUser(const PXR_NS::SdfPath &materialId)
+ {
+   const thread_scoped_lock lock(CacheMutex());
+   for (auto &entry : Users()) {
+-    for (auto it = entry.second.begin(); it != entry.second.end();) {
+-      it = (it->materialId == materialId) ? entry.second.erase(it) : std::next(it);
+-    }
++    auto &users = entry.second;
++    users.erase(std::remove_if(users.begin(),
++                               users.end(),
++                               [&materialId](const CopUser &user) {
++                                 return user.materialId == materialId;
++                               }),
++                users.end());
+   }
+ }
+ 
+diff --git a/src/hydra/houdini_cop.h b/src/hydra/houdini_cop.h
+index a84394fe..f180184c 100644
+--- a/src/hydra/houdini_cop.h
++++ b/src/hydra/houdini_cop.h
+@@ -13,6 +13,7 @@
+ 
+ CCL_NAMESPACE_BEGIN
+ class Scene;
++class Shader;
+ class ShaderNode;
+ CCL_NAMESPACE_END
+ 
+@@ -41,7 +42,7 @@ HDCYCLES_NAMESPACE_OPEN_SCOPE
+  * d'aplatissement reste la pour ce cas. */
+ void BindHoudiniCopImage(CCL_NS::Scene *scene,
+                          CCL_NS::ShaderNode *node,
+-                         PXR_NS::HdRenderIndex *renderIndex,
++                         CCL_NS::Shader *shader,
+                          const PXR_NS::SdfPath &materialId);
+ 
+ /* Vrai pour un chemin `op:`. */
+@@ -52,11 +53,14 @@ bool IsHoudiniCopPath(const std::string &path);
+  * restait donc celle du premier chargement.
+  *
+  * Cette veille demande a Houdini, a cadence menue, si l'un des COP dont on
+- * s'est servi a besoin de recuire, et salit alors le materiau qui l'emploie :
+- * Hydra nous redemande une synchronisation, et les pixels sont relus. A appeler
+- * depuis la passe de rendu, qui tourne sur le fil de l'hote - `needsToCook` ne
+- * cuit rien lui-meme, la lecture se fait plus tard, a la synchronisation. */
+-void PollHoudiniCops();
++ * s'est servi a besoin de recuire, et **refait l'image elle-meme** : elle relit
++ * les pixels et les repose sur les noeuds qui s'en servent. Passer par Hydra -
++ * salir le materiau et attendre qu'on nous redemande une synchronisation - ne
++ * suffisait pas : rien ne garantit que la demande revienne.
++ *
++ * A appeler depuis la passe de rendu, verrou de scene tenu : elle tourne sur le
++ * fil de l'hote, seul endroit ou cuire un noeud Houdini est sur. */
++void PollHoudiniCops(CCL_NS::Scene *scene);
+ 
+ /* Un materiau qui s'en va cesse d'etre surveille. */
+ void ForgetHoudiniCopUser(const PXR_NS::SdfPath &materialId);
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index 316bfe22..0d7c74b6 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -1890,11 +1890,16 @@ void HdCyclesMaterial::RefreshImageHandles()
+ void HdCyclesMaterial::BindHoudiniCopImages(Scene *scene, HdSceneDelegate *sceneDelegate)
+ {
+ #ifdef WITH_HOUDINI_COP
+-  HdRenderIndex *const renderIndex = sceneDelegate ? &sceneDelegate->GetRenderIndex() : nullptr;
++  (void)sceneDelegate;
++  /* Repartir d'une inscription vide : un graphe rebati donne des noeuds neufs,
++   * et garder les anciens laisserait la veille poser une image sur un noeud qui
++   * n'existe plus. */
++  ForgetHoudiniCopUser(GetId());
++
+   for (const auto &entry : _nodes) {
+-    BindHoudiniCopImage(scene, entry.second.node, renderIndex, GetId());
++    BindHoudiniCopImage(scene, entry.second.node, _shader, GetId());
+     for (const auto &helper : entry.second.helperNodes) {
+-      BindHoudiniCopImage(scene, helper.second, renderIndex, GetId());
++      BindHoudiniCopImage(scene, helper.second, _shader, GetId());
+     }
+   }
+ #else
+diff --git a/src/hydra/render_pass.cpp b/src/hydra/render_pass.cpp
+index 80ab6cc8..ef6329de 100644
+--- a/src/hydra/render_pass.cpp
++++ b/src/hydra/render_pass.cpp
+@@ -81,14 +81,6 @@ void HdCyclesRenderPass::_Execute(const HdRenderPassStateSharedPtr &renderPassSt
+   Scene *const scene = _renderParam->session->scene.get();
+   Session *const session = _renderParam->session;
+ 
+-#ifdef WITH_HOUDINI_COP
+-  /* Un COP qui change ne salit rien : Solaris ne connait pas la dependance
+-   * entre un materiau et un noeud de composition, et sans cette veille la
+-   * texture reste celle du premier chargement. C'est ici qu'elle a sa place -
+-   * la passe tourne sur le fil de l'hote, et elle ne fait qu'interroger. */
+-  PollHoudiniCops();
+-#endif
+-
+   if (session->progress.get_cancel()) {
+     /* A host that supports stopping the render cancels it before applying
+      * scene edits. Clear that state here rather than returning for good, so
+@@ -103,6 +95,15 @@ void HdCyclesRenderPass::_Execute(const HdRenderPassStateSharedPtr &renderPassSt
+      * an interactive session may only execute once per change, and the change
+      * then never reached the renderer. */
+     scene->mutex.lock();
++
++#ifdef WITH_HOUDINI_COP
++    /* Un COP qui change ne salit rien : Solaris ne connait pas la dependance
++     * entre un materiau et un noeud de composition, et sans cette veille la
++     * texture reste celle du premier chargement. C'est ici qu'elle a sa place -
++     * la passe tourne sur le fil de l'hote, seul endroit ou cuire un noeud
++     * Houdini est sur, et le verrou de scene est tenu. */
++    PollHoudiniCops(scene);
++#endif
+     auto *const renderDelegate = static_cast<HdCyclesDelegate *>(
+         GetRenderIndex()->GetRenderDelegate());
+ 
+-- 
+2.53.0.windows.2
+

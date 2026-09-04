@@ -1,7 +1,7 @@
 From 472138d6786835cc7693e07d2a949d07e56b6e11 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 4 Sep 2026 21:09:33 +0200
-Subject: [PATCH 61/62] hydra: un frein sur la veille des COP, et de quoi la
+Subject: [PATCH 61/65] hydra: un frein sur la veille des COP, et de quoi la
  couper
 
 La veille relisait des qu'un COP se declarait a recuire. Tirer un curseur

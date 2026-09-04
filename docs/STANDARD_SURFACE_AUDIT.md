@@ -28,7 +28,7 @@ conclure à tort qu'ils étaient morts :
 Le socket existe et la valeur est écrite : la piste est du côté de la base
 tangente que Cycles utilise pour orienter le lobe. Non résolu.
 
-## Non honorés — 12, et pourquoi
+## Non honorés — 10, et pourquoi
 
 ### Sans équivalent dans le nœud Cycles
 
@@ -42,38 +42,55 @@ tangente que Cycles utilise pour orienter le lobe. Non résolu.
 
 ### Mappables mais faux si mappés — laissés de côté sciemment
 
-- `transmission_extra_roughness` — MaterialX ne l'ajoute qu'au lobe de
-  transmission ; Cycles n'a qu'une rugosité pour tous les lobes. L'ajouter
-  rendrait rugueux des matériaux non transparents qui ne l'ont pas demandé.
+- `subsurface_color` — le sous-surfacique de Cycles tire déjà sa couleur de
+  `base_color`, donc l'entrée MaterialX ne dit rien de plus. Le seul moyen de
+  l'honorer vraiment serait une fermeture de sous-surface séparée, mêlée au
+  principled : le light path ne peut pas s'en charger, il n'a pas
+  d'`is_subsurface_ray`.
 
 ## Correspondances composites
 
-Trois paramètres n'ont pas de socket direct et passent par un nœud auxiliaire :
+Quatre paramètres n'ont pas de socket direct et passent par un nœud auxiliaire :
 
 | MaterialX | montage |
 |---|---|
 | `base` | `vector_math` multiply : `base_color × base` |
 | `specular` | `math` multiply par 0,5 → Specular IOR Level |
-| `transmission_color` | `mix_color` commandé par `light_path.is_transmission_ray` → Base Color |
-| `subsurface_color` | `mix_color` à hauteur de `subsurface`, multiplié à la couleur de base |
+| `transmission_color` | `glass_bsdf` mêlé au principled par le poids de transmission |
+| `transmission_extra_roughness` | `math` add : rugosité spéculaire + supplément → rugosité du verre |
 
-**`transmission_color` et `subsurface_color` étaient dans la liste d'en dessous**
-— écartés parce que les multiplier à `base_color` tachait aussi le diffus. Deux
-montages lèvent l'objection, tous deux mesurés :
+**`transmission_color` était dans la liste d'en dessous**
+— écarté parce que le multiplier à `base_color` tachait aussi le diffus. Un
+lobe de transmission séparé lève l'objection : chez MaterialX la transmission
+**est** un lobe à part, avec sa couleur et sa rugosité, quand Cycles en fait un
+étage du principled. Le montage suit MaterialX — principled sans transmission
+d'un côté, `glass_bsdf` de l'autre, mêlés par le poids de transmission.
 
-- la couleur de transmission ne touche que les rayons qui traversent, un
-  `light_path` commandant le mélange. Témoin : un matériau opaque à qui l'on
-  écrit un `transmission_color` vert rend **au pixel près** la même image ;
-- la couleur de sous-surface teinte la couleur de base **à hauteur du poids de
-  sous-surface** : nulle à 0, entière à 1, ce qui est exact aux deux bouts,
-  puisque le `principled_bsdf` mélange diffus et sous-surfacique selon ce même
-  poids et les colore tous deux par `base_color`.
+Mesuré, cube transmissif, `transmission_color` (1 / 0,1 / 0,1) :
 
-L'autre route pour la sous-surface — multiplier le **rayon** par la couleur —
-a été essayée et **inverse la teinte** : un `subsurface_color` rouge donne un
-objet cyan, le rouge diffusant plus loin au lieu de ressortir. Mesuré :
-référence neutre (2,01 / 2,01 / 2,01) → (2,01 / 3,01 / 3,17). Le montage retenu
-donne (2,01 / 0,74 / 0,44), soit la teinte demandée.
+| | valeur au centre |
+|---|---|
+| par un `light_path` (première version) | 0,519 / 0,265 / 0,265 |
+| par le lobe de verre | 0,493 / **0,032** / 0,032 |
+
+La première version ne teintait que les rayons **déjà** transmis, donc pas la
+première traversée — celle qu'on voit. Témoin inchangé dans les deux cas : un
+matériau opaque à qui l'on écrit un `transmission_color` rend au pixel près la
+même image.
+
+`transmission_extra_roughness` vient avec, puisque le verre a sa rugosité : elle
+vaut la spéculaire plus le supplément.
+
+⚠️ **Ce lobe perd la dispersion**, qui ne vit que sur le principled. Il n'est
+donc monté que pour les matériaux qui écrivent l'une des deux entrées qu'il sert
+— valeur posée ou fil branché. Un matériau qui n'y touche pas garde le
+principled entier, et l'audit montre bien `transmission_dispersion` toujours
+honoré à côté des deux nouveaux.
+
+**`subsurface_color` reste écarté**, à la demande : le sous-surfacique de Cycles
+tire déjà sa couleur de `base_color`. Il n'y a pas non plus de voie par le light
+path — ce nœud n'a pas d'`is_subsurface_ray`, le sous-surfacique n'étant pas un
+type de rayon mais une fermeture évaluée dans la même passe que le diffus.
 
 ⚠️ Le défaut MaterialX du rayon de diffusion, (1, 1, 1), est désormais posé
 explicitement : celui de Cycles est (1, 0,2, 0,1), une peau, et un réseau qui

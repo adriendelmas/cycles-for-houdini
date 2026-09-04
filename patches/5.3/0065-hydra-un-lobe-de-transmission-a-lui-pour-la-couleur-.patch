@@ -1,0 +1,264 @@
+From e322bb798505811fd48e2e6a093c50a03bc057eb Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Sat, 5 Sep 2026 01:13:51 +0200
+Subject: [PATCH 65/65] hydra: un lobe de transmission a lui, pour la couleur
+ et la rugosite que MaterialX lui donne
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+`transmission_color` passait par un `light_path` : la couleur n'etait
+prise que sur les rayons deja transmis, donc pas sur la premiere
+traversee, celle qu'on voit. `transmission_extra_roughness` n'allait
+nulle part - le principled n'a qu'une rugosite pour tous ses lobes.
+
+Les deux tiennent a la meme chose : chez Cycles la transmission est un
+etage du principled, chez MaterialX c'est un lobe a part, avec sa couleur
+et sa rugosite. Le montage suit donc MaterialX - le principled sans
+transmission d'un cote, un `glass_bsdf` de l'autre, meles par le poids de
+transmission, la rugosite du verre valant celle du speculaire plus le
+supplement.
+
+Mesure, cube transmissif, transmission_color (1, 0,1, 0,1) :
+
+    avant, par le light path   0,519 / 0,265 / 0,265
+    par le lobe de verre       0,493 / 0,032 / 0,032
+
+Le vert et le bleu s'eteignent enfin. Et transmission_extra_roughness a
+0,4 change l'image de 0,034 en moyenne, la ou il ne faisait rien.
+
+⚠️ Ce lobe perd la **dispersion**, qui ne vit que sur le principled. Il
+n'est donc monte que pour les materiaux qui ecrivent l'une des deux
+entrees qu'il sert - valeur posee ou fil branche, Hydra ne transmettant
+que ce que le reseau a pose. Un materiau qui n'y touche pas garde le
+principled entier : l'audit montre `transmission_dispersion` toujours
+honore a cote des deux nouveaux.
+
+Deux mecaniques ajoutees pour cela : un auxiliaire peut se placer **apres**
+le noeud principal - sa sortie devient celle du montage - et une
+correspondance peut se deriver d'une autre plutot que d'etre recopiee.
+
+Audit standard_surface : 29 entrees honorees sur 39, contre 28.
+Banc : 97 rendus, 0 probleme.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp | 137 ++++++++++++++++++++++++++++++++++++++++-
+ src/hydra/material.h   |   4 ++
+ 2 files changed, 139 insertions(+), 2 deletions(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index b2093336..dfdc9847 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -96,6 +96,13 @@ class UsdToCyclesMapping {
+     return _paramMap.find(name) != _paramMap.end();
+   }
+ 
++  /* De quoi deriver une variante d'une correspondance existante plutot que de
++   * la recopier entiere. */
++  void setParameterName(const TfToken &name, ustring target)
++  {
++    _paramMap[name] = std::move(target);
++  }
++
+   /* Sockets set to a constant when the node is created. Needed where one
+    * Cycles node covers several source nodes through a mode enum - a single
+    * `math` node stands in for every MaterialX arithmetic node, for one. */
+@@ -125,6 +132,12 @@ class UsdToCyclesMapping {
+      * so "Fac" and "Factor", not "fac" on both sides. */
+     std::vector<std::pair<const char *, const char *>> wires;
+     FixedMap fixedValues;
++    /* Quand il est rempli, la sortie du noeud principal entre dans ce socket de
++     * l'auxiliaire, et c'est l'auxiliaire qui devient la sortie du montage :
++     * de quoi poser un melange de fermetures apres le noeud principal plutot
++     * qu'avant lui. */
++    const char *takesMainOutput = nullptr;
++    const char *mainOutputName = nullptr;
+   };
+ 
+   const std::vector<Helper> &helpers() const
+@@ -439,6 +452,64 @@ UsdToCyclesMapping MakeMtlxStandardSurface()
+   return mapping;
+ }
+ 
++/* standard_surface, variante a lobe de transmission separe.
++ *
++ * Cycles teinte la transmission par `base_color` et n'a qu'une rugosite pour
++ * tous les lobes : ni `transmission_color` ni `transmission_extra_roughness`
++ * n'ont ou aller sur le principled. Un vrai lobe de verre, lui, a sa couleur
++ * et sa rugosite propres, et c'est ainsi que standard_surface est defini -
++ * la transmission y est un lobe a part.
++ *
++ * Le montage : le principled sans transmission d'un cote, un `glass_bsdf` de
++ * l'autre, meles par le poids de transmission.
++ *
++ * ⚠️ Ce que cette variante perd : la **dispersion**, qui ne vit que sur le
++ * principled. C'est pour cela qu'elle n'est prise que lorsque le reseau ecrit
++ * l'une des deux entrees qu'elle sert - un materiau qui n'y touche pas garde
++ * le principled entier, dispersion comprise.
++ *
++ * Le premier essai passait par un `light_path` : la couleur de transmission
++ * n'etait prise que sur les rayons deja transmis, donc pas sur la premiere
++ * traversee, celle qu'on voit. */
++UsdToCyclesMapping MakeMtlxStandardSurfaceGlass();
++
++const UsdToCyclesMapping MtlxStandardSurfaceGlass = MakeMtlxStandardSurfaceGlass();
++
++UsdToCyclesMapping MakeMtlxStandardSurfaceGlass()
++{
++  UsdToCyclesMapping mapping = MakeMtlxStandardSurface();
++
++  /* Le poids de transmission commande le melange, plus le principled. */
++  mapping.setParameterName(TfToken("transmission"), ustring("tmix:Fac"));
++  mapping.setParameterName(TfToken("transmission_color"), ustring("glass:color"));
++  mapping.setParameterName(TfToken("transmission_extra_roughness"), ustring("grough:value2"));
++  /* La rugosite du verre est celle du speculaire, plus le supplement. */
++  mapping.setParameterName(TfToken("specular_roughness"), ustring("roughness;grough:value1"));
++  mapping.setParameterName(TfToken("specular_IOR"), ustring("ior;glass:IOR"));
++  mapping.setParameterName(TfToken("normal"), ustring("normal;glass:normal"));
++
++  /* Le melange vient apres le principled : c'est lui la sortie du montage. */
++  mapping.addHelper({"tmix",
++                     "mix_closure",
++                     {},
++                     {{ustring("fac"), "0"}},
++                     "Closure1",
++                     "BSDF"});
++  mapping.addHelper({"glass",
++                     "glass_bsdf",
++                     {{"BSDF", "tmix:Closure2"}},
++                     {{ustring("color"), "1,1,1"}, {ustring("IOR"), "1.5"}}});
++  /* Les deux defauts de MaterialX : une rugosite speculaire de 0,2 et pas de
++   * supplement. */
++  mapping.addHelper({"grough",
++                     "math",
++                     {{"Value", "glass:Roughness"}},
++                     {{ustring("math_type"), "add"},
++                      {ustring("value1"), "0.2"},
++                      {ustring("value2"), "0.0"}}});
++  return mapping;
++}
++
+ /* An image node, with the wrapping and filtering MaterialX asks for.
+  *
+  * Three of the four address modes are spelled the same on both sides, so the
+@@ -2053,7 +2124,9 @@ void HdCyclesMaterial::UpdateConnections(NodeDesc &nodeDesc,
+                                        outputMapping->parameterName(upstreamOutputName, input) :
+                                        upstreamOutputName.GetString();
+ 
+-    ShaderOutput *output = FindOutput(srcNodeIt->second.node, outputName);
++    ShaderNode *const sourceNode = srcNodeIt->second.outputNode ? srcNodeIt->second.outputNode :
++                                                                  srcNodeIt->second.node;
++    ShaderOutput *output = FindOutput(sourceNode, outputName);
+ 
+     if (!output) {
+       LOG_WARNING << "MaterialX: Cycles node '" << srcNodeIt->second.node->name.c_str()
+@@ -2066,6 +2139,38 @@ void HdCyclesMaterial::UpdateConnections(NodeDesc &nodeDesc,
+   }
+ }
+ 
++namespace {
++
++/* Le reseau demande-t-il ce que seul un lobe de transmission separe sait
++ * rendre ? Une valeur ecrite comme un fil branche comptent : Hydra ne transmet
++ * que ce que le reseau a pose, donc leur seule presence dit l'intention. */
++bool AsksForGlassLobe(HdMaterialNodeSchema nodeSchema)
++{
++  static const TfToken kNames[] = {TfToken("transmission_color"),
++                                   TfToken("transmission_extra_roughness")};
++
++  HdMaterialNodeParameterContainerSchema params = nodeSchema.GetParameters();
++  for (const TfToken &name : kNames) {
++    for (const TfToken &authored : params.GetNames()) {
++      if (authored == name) {
++        return true;
++      }
++    }
++  }
++
++  HdMaterialConnectionVectorContainerSchema conns = nodeSchema.GetInputConnections();
++  for (const TfToken &name : kNames) {
++    for (const TfToken &connected : conns.GetNames()) {
++      if (connected == name) {
++        return true;
++      }
++    }
++  }
++  return false;
++}
++
++}  // namespace
++
+ unique_ptr<ShaderGraph> HdCyclesMaterial::BuildShaderGraph(HdMaterialNetworkSchema network)
+ {
+   _nodes.clear();
+@@ -2106,6 +2211,14 @@ unique_ptr<ShaderGraph> HdCyclesMaterial::BuildShaderGraph(HdMaterialNetworkSche
+         if (!nodeDesc.mapping) {
+           nodeDesc.mapping = FindMtlxMapping(nodeTypeId);
+         }
++        /* Le lobe de transmission separe ne se monte que pour les materiaux
++         * qui en ont besoin : il donne sa couleur et sa rugosite propres a la
++         * transmission, mais laisse la dispersion, qui ne vit que sur le
++         * principled. Un materiau qui n'ecrit ni l'une ni l'autre garde donc le
++         * principled entier. */
++        if (nodeDesc.mapping == &MtlxStandardSurface && AsksForGlassLobe(nodeSchema)) {
++          nodeDesc.mapping = &MtlxStandardSurfaceGlass;
++        }
+         if (nodeDesc.mapping) {
+           cyclesType = nodeDesc.mapping->nodeType();
+         }
+@@ -2137,6 +2250,23 @@ unique_ptr<ShaderGraph> HdCyclesMaterial::BuildShaderGraph(HdMaterialNetworkSche
+               }
+             }
+             nodeDesc.helperNodes[helper.name] = helperNode;
++
++            /* Un auxiliaire qui vient apres le noeud principal : la sortie de
++             * celui-ci y entre, et c'est lui que le reste du graphe lira. */
++            if (helper.takesMainOutput != nullptr) {
++              ShaderOutput *const mainOut = FindOutput(
++                  nodeDesc.node, helper.mainOutputName ? helper.mainOutputName : "BSDF");
++              ShaderInput *const into = helperNode->input(helper.takesMainOutput);
++              if (mainOut != nullptr && into != nullptr) {
++                graph->connect(mainOut, into);
++                nodeDesc.outputNode = helperNode;
++              }
++              else {
++                LOG_WARNING << "MaterialX: could not put '" << helper.nodeType
++                            << "' after '" << nodeDesc.node->name.c_str() << "'.";
++              }
++            }
++
+             for (const auto &wire : helper.wires) {
+               ShaderOutput *const from = helperNode->output(wire.first);
+               /* La cible est le noeud principal, ou un autre auxiliaire quand
+@@ -2206,7 +2336,10 @@ unique_ptr<ShaderGraph> HdCyclesMaterial::BuildShaderGraph(HdMaterialNetworkSche
+       continue;
+     }
+ 
+-    ShaderNode *const node = nodeIt->second.node;
++    /* La sortie du montage, qui n'est le noeud principal que s'il n'a rien
++     * apres lui. */
++    ShaderNode *const node = nodeIt->second.outputNode ? nodeIt->second.outputNode :
++                                                         nodeIt->second.node;
+ 
+     const char *inputName = nullptr;
+     const char *outputName = nullptr;
+diff --git a/src/hydra/material.h b/src/hydra/material.h
+index 98899a85..b6f8f0b6 100644
+--- a/src/hydra/material.h
++++ b/src/hydra/material.h
+@@ -39,6 +39,10 @@ class HdCyclesMaterial final : public PXR_NS::HdMaterial {
+  private:
+   struct NodeDesc {
+     CCL_NS::ShaderNode *node;
++    /* Ce que le reste du graphe lit de ce montage. C'est `node` sauf quand un
++     * auxiliaire vient apres lui - un melange de fermetures, par exemple - et
++     * devient alors la vraie sortie. */
++    CCL_NS::ShaderNode *outputNode = nullptr;
+     /* The auxiliary nodes a composite mapping asked for, by name: some
+      * MaterialX nodes need more than one Cycles node, and some of their inputs
+      * belong to those rather than to `node`. */
+-- 
+2.53.0.windows.2
+

@@ -1,0 +1,119 @@
+From 931cc9c1dbf4b481b55343a353152f9f23e69fa9 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Sat, 5 Sep 2026 00:53:45 +0200
+Subject: [PATCH 64/65] hydra: une image branchee sur une entree scalaire, et
+ la couleur de sous-surface retiree
+
+**Une image sur une entree scalaire tombait.** Le repli qui choisit `fac`
+quand la destination est un scalaire vaut pour un bruit ou une rampe ; le
+noeud image de Cycles, lui, n'a que `color` et `alpha`. Une image branchee
+sur la hauteur d'un heighttonormal disparaissait donc, avec
+"Cycles node 'image_texture' has no output 'fac'". La couleur y va
+desormais, et Cycles la ramene a un scalaire par moyenne, comme pour tout
+fil de couleur atterrissant sur un socket scalaire.
+
+**La teinte de sous-surface est retiree**, a la demande : le
+sous-surfacique de Cycles tire deja sa couleur de `base_color`, donc
+l'entree MaterialX ne dit rien de plus. Le montage qui la melait a la
+couleur de base disparait avec elle.
+
+Il n'y a pas d'autre voie par le light path : ce noeud n'a pas de
+`is_subsurface_ray`, et pour cause - le sous-surfacique n'est pas un type
+de rayon mais une fermeture evaluee dans la meme passe que le diffus.
+Seule une fermeture separee le distinguerait.
+
+Audit rejoue : 28 entrees honorees sur 39.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp | 46 +++++++++++++++---------------------------
+ 1 file changed, 16 insertions(+), 30 deletions(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index 0d7c74b6..b2093336 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -316,6 +316,8 @@ class MtlxFacOrColor : public UsdToCyclesMapping {
+  * Socket names verified against the Cycles node registry. Inputs with no
+  * Cycles counterpart are deliberately left unmapped and are ignored:
+  *  - base / specular: weights Cycles folds into other inputs,
++ *  - subsurface_color: la couleur du sous-surfacique chez Cycles est deja
++ *    `base_color`, donc l'entree MaterialX ne dit rien de plus,
+  *  - transmission_extra_roughness. */
+ UsdToCyclesMapping MakeMtlxStandardSurface();
+ 
+@@ -356,11 +358,8 @@ UsdToCyclesMapping MakeMtlxStandardSurface()
+          * is pinned to 1 below so the Abbe number is the only thing left to
+          * drive it, matching a slider MaterialX doesn't have. */
+         {TfToken("transmission_dispersion"), ustring("transmission_dispersion_abbe_number")},
+-        /* Le poids commande deux choses : celui du principled, et la part de
+-         * teinte de sous-surface melee a la couleur de base - voir `sscol`. */
+-        {TfToken("subsurface"), ustring("subsurface_weight;sscol:Factor")},
++        {TfToken("subsurface"), ustring("subsurface_weight")},
+         {TfToken("subsurface_radius"), ustring("subsurface_radius")},
+-        {TfToken("subsurface_color"), ustring("sscol:b")},
+         {TfToken("subsurface_scale"), ustring("subsurface_scale")},
+         {TfToken("subsurface_anisotropy"), ustring("subsurface_anisotropy")},
+         {TfToken("sheen"), ustring("sheen_weight")},
+@@ -427,38 +426,13 @@ UsdToCyclesMapping MakeMtlxStandardSurface()
+                       {ustring("a"), "0.8,0.8,0.8"},
+                       {ustring("b"), "1,1,1"}}});
+   mapping.addHelper({"tray", "light_path", {{"Is Transmission Ray", "tcol:Factor"}}, {}});
+-  /* La couleur de sous-surface. Cycles n'a pas d'albedo propre au
+-   * sous-surfacique : son `principled_bsdf` melange diffus et sous-surface
+-   * selon `subsurface_weight`, les deux tirant leur couleur de `base_color`.
+-   * On teinte donc la couleur de base par `subsurface_color`, mais **a la
+-   * hauteur du poids** : a 0 la couleur de base est intacte, a 1 elle vaut
+-   * l'albedo que MaterialX demande. C'est exact aux deux bouts, approche entre
+-   * les deux, et surtout ca ne tache pas le diffus d'un materiau qui ne fait
+-   * pas de sous-surface - l'objection qui avait fait ecarter cette entree.
+-   *
+-   * Mesure : multiplier plutot le *rayon* par la couleur, l'autre route
+-   * possible, inverse la teinte - un subsurface_color rouge rend l'objet
+-   * cyan, le rouge diffusant plus loin au lieu de ressortir. */
+-  mapping.addHelper({"sstint",
+-                     "vector_math",
+-                     {{"Vector", "tcol:A"}},
+-                     {{ustring("math_type"), "multiply"},
+-                      {ustring("vector1"), "0.8,0.8,0.8"},
+-                      {ustring("vector2"), "1,1,1"}}});
+-  mapping.addHelper({"sscol",
+-                     "mix_color",
+-                     {{"Result", "sstint:Vector2"}},
+-                     {{ustring("blend_type"), "mix"},
+-                      {ustring("fac"), "0"},
+-                      {ustring("a"), "1,1,1"},
+-                      {ustring("b"), "1,1,1"}}});
+   /* `base` is a weight on the diffuse colour and Cycles has no socket for it,
+    * so the colour is multiplied on the way in. Both MaterialX defaults are
+    * carried here - a base of 1 and a base_color of 0.8 grey - so a network that
+    * writes neither still gets what it would have got. */
+   mapping.addHelper({"basew",
+                      "vector_math",
+-                     {{"Vector", "sstint:Vector1"}},
++                     {{"Vector", "tcol:A"}},
+                      {{ustring("math_type"), "multiply"},
+                       {ustring("vector1"), "0.8,0.8,0.8"},
+                       {ustring("vector2"), "1,1,1"}}});
+@@ -490,6 +464,18 @@ class MtlxImageTexture : public MtlxFacOrColor {
+         *value = VtValue(std::string("black"));
+       }
+     }
++
++    /* Un noeud image de Cycles n'a que `color` et `alpha` : pas de `fac`. Le
++     * repli de MtlxFacOrColor sur `fac` vaut pour un bruit ou une rampe, pas
++     * ici - une image branchee sur une entree scalaire, la hauteur d'un
++     * heighttonormal par exemple, voyait sa connexion tomber avec
++     * "Cycles node 'image_texture' has no output 'fac'". La couleur y va, et
++     * Cycles la ramene a un scalaire par moyenne, comme pour tout fil de
++     * couleur atterrissant sur un socket scalaire. */
++    if (name == CyclesMaterialTokens->out) {
++      return "color";
++    }
++
+     return MtlxFacOrColor::parameterName(name, inputConnection, value);
+   }
+ };
+-- 
+2.53.0.windows.2
+
