@@ -1,0 +1,197 @@
+From 1cff67dec5a64396a111fb6f39e783958d78a15b Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Fri, 4 Sep 2026 23:05:58 +0200
+Subject: [PATCH 62/62] hydra: une texture qui change, et une camera dont on
+ sort
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Deux irritants signales, tous deux resolus jusqu'ici par un Restart
+Render fait a la main.
+
+**Une texture ne se rechargeait pas.** `ImageTextureNode::update_images`
+ne demande son image au gestionnaire que si le `handle` du noeud est
+vide : une fois l'image chargee, ecrire un autre nom de fichier sur le
+socket ne la remplace pas. Le graphe rebati - un Restart Render, ou toute
+edition qui salit la ressource - repartait de noeuds neufs et masquait le
+defaut ; une edition qui ne touche qu'aux parametres, elle, gardait
+l'ancienne image. Le handle est desormais vide des qu'un des sockets qui
+decrivent l'image a change, et Cycles la redemande. Son gestionnaire
+reconnait la meme image, donc rien n'est recharge pour rien.
+
+**Sortir d'une camera, ou y entrer**, change la source de la vue sans
+forcement modifier une valeur du noeud camera de Cycles : le cadrage
+pouvait rester celui de la precedente, la vue ne plus repondre, jusqu'a
+un Restart Render. La bascule est constatee et vaut remise a zero de la
+session, ce que ce Restart Render faisait.
+
+⚠️ Le piege, trouve en le vivant : une passe de rendu peut etre
+construite a neuf a chaque passe - c'est le cas en batch - donc la
+premiere observation ne doit **pas** compter comme une bascule. Sans ce
+garde, la session repartait de zero a chaque passe et le rendu
+n'accumulait plus rien : une scene qui prend 4,5 s tournait encore au
+bout de dix minutes, en repetant "Rendered 1 samples" a l'infini.
+
+Essayee et ecartee, la voie qui consiste a appliquer les matrices de
+l'etat de passe par-dessus le prim camera : les valeurs reconstruites
+depuis une projection different de celles du prim, le noeud camera se
+retrouve modifie a chaque image, et la session repart de zero
+indefiniment - meme symptome.
+
+Audit standard_surface : 48 scenes, 48 identiques au pixel pres.
+Banc : 97 rendus, 0 probleme.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp    | 37 +++++++++++++++++++++++++++++++++++++
+ src/hydra/material.h      |  4 ++++
+ src/hydra/render_pass.cpp | 29 ++++++++++++++++++++++++++++-
+ src/hydra/render_pass.h   |  6 ++++++
+ 4 files changed, 75 insertions(+), 1 deletion(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index bfa565f8..316bfe22 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -1525,6 +1525,7 @@ void HdCyclesMaterial::Sync(HdSceneDelegate *sceneDelegate,
+     if (network && !_nodes.empty() && !dirtyResource) {
+       UpdateParameters(network);
+       ApplyShaderSettings();
++      RefreshImageHandles();
+       BindHoudiniCopImages(lock.scene, sceneDelegate);
+       _shader->tag_update(lock.scene);
+     }
+@@ -1850,6 +1851,42 @@ void HdCyclesMaterial::UpdateParameters(NodeDesc &nodeDesc,
+  * Appele aussi quand seuls les parametres changent : le numero de cuisson du
+  * COP dit alors s'il faut relire, ce qui rend une retouche du COP visible sans
+  * relancer Houdini. */
++/* Un fichier de texture qui change en cours de session.
++ *
++ * `ImageTextureNode::update_images` ne demande son image au gestionnaire que
++ * si son `handle` est vide : une fois l'image chargee, ecrire un autre nom de
++ * fichier sur le socket ne la recharge pas. Le graphe rebati - un Restart
++ * Render, ou toute edition qui salit la ressource - repartait de noeuds neufs
++ * et masquait le probleme ; une edition qui ne touche qu'aux parametres, elle,
++ * gardait l'ancienne image.
++ *
++ * Vider le handle quand un des sockets qui decrivent l'image a change suffit :
++ * Cycles la redemande a la compilation suivante, et son gestionnaire la
++ * reconnait si c'est la meme, donc rien n'est recharge pour rien. */
++void HdCyclesMaterial::RefreshImageHandles()
++{
++  static const ustring kImageSockets[] = {ustring("filename"),
++                                          ustring("colorspace"),
++                                          ustring("alpha_type"),
++                                          ustring("interpolation"),
++                                          ustring("extension"),
++                                          ustring("tiles")};
++
++  for (const auto &entry : _nodes) {
++    ImageSlotTextureNode *const node = dynamic_cast<ImageSlotTextureNode *>(entry.second.node);
++    if (node == nullptr || node->handle.empty()) {
++      continue;
++    }
++    for (const ustring &name : kImageSockets) {
++      const SocketType *const socket = node->type->find_input(name);
++      if (socket != nullptr && node->socket_is_modified(*socket)) {
++        node->handle = ImageHandle();
++        break;
++      }
++    }
++  }
++}
++
+ void HdCyclesMaterial::BindHoudiniCopImages(Scene *scene, HdSceneDelegate *sceneDelegate)
+ {
+ #ifdef WITH_HOUDINI_COP
+diff --git a/src/hydra/material.h b/src/hydra/material.h
+index 82c9bd54..98899a85 100644
+--- a/src/hydra/material.h
++++ b/src/hydra/material.h
+@@ -71,6 +71,10 @@ class HdCyclesMaterial final : public PXR_NS::HdMaterial {
+ 
+   void ApplyShaderSettings();
+ 
++  /* Un noeud image garde son image tant que son `handle` n'est pas vide :
++   * changer son fichier ne suffit pas a la recharger. */
++  void RefreshImageHandles();
++
+   /* Les textures qui viennent d'un COP d'Houdini : leurs pixels se lisent ici,
+    * sur le thread de synchronisation, et se donnent a Cycles en memoire. */
+   void BindHoudiniCopImages(CCL_NS::Scene *scene, PXR_NS::HdSceneDelegate *sceneDelegate);
+diff --git a/src/hydra/render_pass.cpp b/src/hydra/render_pass.cpp
+index bdc249cd..80ab6cc8 100644
+--- a/src/hydra/render_pass.cpp
++++ b/src/hydra/render_pass.cpp
+@@ -140,6 +140,15 @@ void HdCyclesRenderPass::_Execute(const HdRenderPassStateSharedPtr &renderPassSt
+     scene->camera->set_full_width(framing.dataWindow.GetWidth());
+     scene->camera->set_full_height(framing.dataWindow.GetHeight());
+ 
++    /* Le prim camera d'un cote, les matrices de l'etat de passe de l'autre :
++     * les deux disent la meme vue, mais l'un porte en plus la profondeur de
++     * champ et les echantillons d'obturateur.
++     *
++     * Ne pas les melanger. Appliquer les matrices par-dessus le prim a ete
++     * essaye : les valeurs reconstruites depuis une projection different de
++     * celles du prim, le noeud camera se retrouvait modifie a chaque image,
++     * `need_reset()` etait vrai en permanence, et la session repartait de zero
++     * a chaque passe - le rendu n'avancait plus d'un echantillon. */
+     if (const auto *const camera = static_cast<const HdCyclesCamera *>(
+             renderPassState->GetCamera()))
+     {
+@@ -153,8 +162,26 @@ void HdCyclesRenderPass::_Execute(const HdRenderPassStateSharedPtr &renderPassSt
+                                           scene->camera);
+     }
+ 
++    /* Passer d'une camera a l'autre - entrer dans une camera USD, en sortir
++     * vers la vue libre - change la source de la vue, pas forcement une valeur
++     * du noeud camera de Cycles : le cadrage pouvait rester celui de la
++     * precedente, et la vue ne plus repondre, jusqu'a un Restart Render fait a
++     * la main. La bascule est donc constatee ici, et vaut remise a zero de la
++     * session, ce que ce Restart Render faisait. */
++    const HdCamera *const cameraPrim = renderPassState->GetCamera();
++    /* La premiere passe n'est pas une bascule : rien ne precede. Une passe de
++     * rendu peut etre construite a neuf - c'est le cas en batch - et croire a
++     * une bascule a chaque fois relancerait la session sans fin, sans qu'un
++     * echantillon ne s'accumule. */
++    const bool cameraSwitched = _haveLastCamera && cameraPrim != _lastCamera;
++    _lastCamera = cameraPrim;
++    _haveLastCamera = true;
++    if (cameraSwitched) {
++      scene->camera->tag_modified();
++    }
++
+     // Reset session if the session, scene, camera or AOV bindings changed
+-    if (scene->need_reset() || settingsVersion != _lastSettingsVersion) {
++    if (scene->need_reset() || settingsVersion != _lastSettingsVersion || cameraSwitched) {
+       _lastSettingsVersion = settingsVersion;
+ 
+       // Reset convergence state of all render buffers
+diff --git a/src/hydra/render_pass.h b/src/hydra/render_pass.h
+index fbcb2baa..da4dfc35 100644
+--- a/src/hydra/render_pass.h
++++ b/src/hydra/render_pass.h
+@@ -7,6 +7,7 @@
+ 
+ #include "hydra/config.h"
+ 
++#include <pxr/imaging/hd/camera.h>
+ #include <pxr/imaging/hd/renderPass.h>
+ 
+ HDCYCLES_NAMESPACE_OPEN_SCOPE
+@@ -30,6 +31,11 @@ class HdCyclesRenderPass final : public PXR_NS::HdRenderPass {
+ 
+   HdCyclesSession *_renderParam;
+   unsigned int _lastSettingsVersion = 0;
++  /* La camera de la passe precedente. Changer de camera - entrer dans une
++   * camera USD, en sortir - ne modifie pas forcement une valeur du noeud
++   * camera de Cycles, et la bascule passait alors inapercue. */
++  const PXR_NS::HdCamera *_lastCamera = nullptr;
++  bool _haveLastCamera = false;
+ };
+ 
+ HDCYCLES_NAMESPACE_CLOSE_SCOPE
+-- 
+2.53.0.windows.2
+

@@ -1,7 +1,7 @@
 From 36053b65885905c51157d9db5055daeb20735ffb Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 12:37:33 +0200
-Subject: [PATCH 22/61] hydra: translate the bulk of the MaterialX node library
+Subject: [PATCH 22/62] hydra: translate the bulk of the MaterialX node library
 
 Replaces the chain of ifs with a prefix table, longest match winning, so a
 specific variant can sit in front of its family. Two factories cover most of

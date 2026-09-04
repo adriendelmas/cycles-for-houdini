@@ -1579,3 +1579,40 @@ de journal dit quel COP a changé et combien de matériaux en dépendent —
 
 Ordre de grandeur, pour situer le frein : une relecture coûte ~0,3 s en 4K,
 ~20 ms en 1K. En dessous de 2K, la veille est transparente.
+
+## Phase 25 — Deux « Restart Render » de moins ✅
+
+Deux irritants signalés, tous deux contournés jusqu'ici par un Restart Render
+fait à la main.
+
+**Une texture ne se rechargeait pas.** `ImageTextureNode::update_images` ne
+demande son image au gestionnaire **que si le `handle` du nœud est vide** : une
+fois l'image chargée, écrire un autre nom de fichier sur le socket ne la
+remplace pas. Le graphe rebâti — un Restart Render, ou toute édition qui salit
+la ressource — repartait de nœuds neufs et masquait le défaut ; une édition qui
+ne touche qu'aux paramètres gardait l'ancienne image. Le handle est maintenant
+vidé dès qu'un des sockets décrivant l'image change, et Cycles la redemande ;
+son gestionnaire reconnaît la même image, donc rien n'est rechargé pour rien.
+
+Mesuré au passage, côté batch : deux frames avec un `filename` différent
+donnent bien deux textures différentes, avant comme après — ce chemin-là
+passait déjà par une reconstruction du graphe.
+
+**Sortir d'une caméra, ou y entrer**, change la source de la vue sans forcément
+modifier une valeur du nœud caméra de Cycles : le cadrage pouvait rester celui
+de la précédente, la vue ne plus répondre. La bascule est constatée et vaut
+remise à zéro de la session — ce que faisait le Restart Render.
+
+⚠️ **Le piège, trouvé en le vivant.** Une passe de rendu peut être construite à
+neuf à chaque passe — c'est le cas en batch — donc la première observation ne
+doit **pas** compter comme une bascule. Sans ce garde, la session repartait de
+zéro à chaque passe : une scène qui prend 4,5 s tournait encore au bout de dix
+minutes, en répétant `Rendered 1 samples` à l'infini.
+
+Essayée et écartée, la voie qui consiste à appliquer les matrices de l'état de
+passe par-dessus le prim caméra : les valeurs reconstruites depuis une
+projection diffèrent de celles du prim, le nœud caméra se retrouve modifié à
+chaque image, et la session repart de zéro indéfiniment — même symptôme.
+
+Audit `standard_surface` : **48 scènes, 48 identiques au pixel près**.
+Banc : 97 rendus, 0 problème.
