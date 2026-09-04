@@ -1,7 +1,7 @@
 From e537177740fc47e17528eb28b99f76b6221f8290 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 4 Sep 2026 16:02:52 +0200
-Subject: [PATCH 57/58] hydra: la couleur de transmission et celle de
+Subject: [PATCH 57/59] hydra: la couleur de transmission et celle de
  sous-surface, enfin traduites
 
 Deux entrees de standard_surface n'allaient nulle part, et l'audit disait

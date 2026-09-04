@@ -1,7 +1,7 @@
 From aa49feb429cc06d51218160fe93b247a020b803e Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 4 Sep 2026 04:07:57 +0200
-Subject: [PATCH 52/58] hydra: les terminaux dont la sortie ne s'appelle pas
+Subject: [PATCH 52/59] hydra: les terminaux dont la sortie ne s'appelle pas
  BSDF n'etaient jamais branches
 
 Un displacement Cycles natif ne faisait rien. Ni relief, ni meme le bump

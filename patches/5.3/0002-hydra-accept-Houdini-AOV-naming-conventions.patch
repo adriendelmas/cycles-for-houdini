@@ -1,7 +1,7 @@
 From 027fe517bcac6cb72035a6ed323ae41906f2e089 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 01:38:53 +0200
-Subject: [PATCH 02/58] hydra: accept Houdini AOV naming conventions
+Subject: [PATCH 02/59] hydra: accept Houdini AOV naming conventions
 
 husk passes a UsdRenderVar's driver:parameters:aov:husk:name through as the
 Hydra AOV name rather than a standard HdAovTokens value. Houdini spells the

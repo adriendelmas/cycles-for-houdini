@@ -1,7 +1,7 @@
 From 523832907daabda5998ac99916d081b22d5d2948 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 03:26:39 +0200
-Subject: [PATCH 08/58] hydra: do not build an unusable GL context for the
+Subject: [PATCH 08/59] hydra: do not build an unusable GL context for the
  display driver
 
 gl_context_create() reads the calling thread's current GL context twice: once

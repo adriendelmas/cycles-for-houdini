@@ -1487,3 +1487,49 @@ depuis hython : Copernicus n'y compile pas ses noyaux OpenCL — vérifié avec 
 **sans** notre package, donc ce n'est pas nous — et husk n'a pas de module `hou`,
 donc le chemin `op:` n'y existe pas du tout. Le contrat de la fonction d'écriture
 est mesuré ; le reste est du raisonnement, à valider d'un rendu.
+
+## Phase 24 — Les textures d'un COP, en mémoire ✅
+
+Le chemin `op:` était cuit vers un EXR temporaire que Cycles relisait. Mesuré
+sur une texture 4096×4096, les trois morceaux du détour :
+
+| étape | temps |
+|---|---|
+| recomposition RGBA en Python | 0,41 s |
+| écriture du fichier (201 Mo d'EXR) | 2,44 s |
+| relecture par Cycles | 0,20 s |
+| **par texture** | **~3,1 s** |
+
+Trois textures — base, rugosité, normale — font donc **neuf secondes** de
+viewport figé au premier sync, sur le thread de synchronisation. Et le format
+n'y pouvait rien : l'EXR est déjà le plus rapide de ceux que
+`hou.saveImageDataToFile` accepte (png 5,8 s, tif 4,8 s, jpg 2,5 s).
+
+**Le fichier disparaît.** Les pixels sont lus une fois en mémoire et donnés à
+Cycles par un `ImageLoader` à nous — la méthode de Blender pour ses propres
+images. `allBufferElements` rend directement quatre canaux en demi-flottant, ce
+qui supprime aussi la recomposition Python.
+
+Deux choses viennent avec :
+
+* **la fraîcheur.** L'ancien cache gardait le chemin du fichier pour toute la
+  session : retoucher son COP ne se voyait qu'au redémarrage d'Houdini. Le
+  cache porte désormais le **numéro de cuisson** du nœud, et l'`equals()` du
+  chargeur aussi — une nouvelle cuisson est une nouvelle image ;
+* **l'espace colorimétrique**, nommé plutôt que deviné : un COP travaille en
+  linéaire.
+
+Le retournement vertical de la phase 23 reste, mais il se fait maintenant à la
+lecture, ligne à ligne, une seule fois.
+
+Ce qui ne change pas : la lecture reste sur le thread de synchronisation —
+cuire un nœud Houdini depuis un thread de travail ferait tomber l'hôte — et un
+rendu batch ne voit toujours pas les COPs, le LOP d'aplatissement restant la
+route pour la ferme.
+
+⚠️ **Ce qui reste à vérifier dans le viewport** : que Houdini salisse bien le
+matériau quand le COP change. Le numéro de cuisson dit s'il faut relire, encore
+faut-il qu'on nous redemande une synchronisation ; si Solaris ne le fait pas,
+il faudra toucher le matériau. Mesuré ce qui pouvait l'être : un `op:` qui ne
+désigne rien ne produit plus qu'un avertissement le nommant, et le rendu va au
+bout.

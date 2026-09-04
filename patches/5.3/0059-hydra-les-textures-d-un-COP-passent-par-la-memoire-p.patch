@@ -1,0 +1,650 @@
+From 0d9b26cee0316dea4261756c73bc432ddc5c8eb9 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Fri, 4 Sep 2026 18:54:49 +0200
+Subject: [PATCH 59/59] hydra: les textures d'un COP passent par la memoire,
+ plus par un fichier
+
+Un `op:` etait cuit vers un EXR temporaire que Cycles relisait ensuite.
+Mesure sur une texture 4096x4096 : 0,4 s de recomposition RGBA en Python,
+2,4 s d'ecriture pour 201 Mo de fichier, 0,2 s de relecture. Trois
+secondes par texture, sur le thread de synchronisation, donc autant de
+viewport fige - et le format n'y pouvait rien, l'EXR etant deja le plus
+rapide des formats que la fonction accepte (png 5,8 s, tif 4,8 s).
+
+Le fichier disparait. Les pixels sont lus une fois, en memoire, et donnes
+a Cycles par un ImageLoader a nous, comme Blender le fait pour ses propres
+images. `allBufferElements` rend directement quatre canaux en
+demi-flottant, ce qui supprime aussi la recomposition en Python.
+
+Deux choses viennent avec :
+
+* **la fraicheur.** L'ancien cache gardait le chemin du fichier pour toute
+  la session : retoucher son COP ne se voyait qu'au redemarrage
+  d'Houdini. Le cache porte desormais le numero de cuisson du noeud, et
+  `equals()` du chargeur aussi - une nouvelle cuisson est une nouvelle
+  image, que Cycles recharge ;
+* **l'espace colorimetrique.** Un COP travaille en lineaire ; le chargeur
+  le dit, la ou un devinement sur des demi-flottants aurait pu appliquer
+  autre chose.
+
+Le retournement vertical reste, mais il se fait desormais a la lecture,
+une fois, ligne a ligne : le buffer d'un COP commence en bas quand Cycles
+lit sa premiere ligne comme le haut de l'image.
+
+La lecture reste sur le thread de synchronisation - cuire un noeud
+Houdini depuis un thread de travail ferait tomber l'hote - et le chargeur
+ne fait que servir ce qui a deja ete lu.
+
+Verifie : un `op:` qui ne designe rien ne fait plus qu'un avertissement
+qui le nomme, et le rendu va au bout. Banc : 97 rendus, 0 probleme.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/houdini_cop.cpp | 377 +++++++++++++++++++++++++++-----------
+ src/hydra/houdini_cop.h   |  37 ++--
+ src/hydra/material.cpp    |  31 ++++
+ src/hydra/material.h      |   4 +
+ src/hydra/node_util.cpp   |  17 +-
+ 5 files changed, 337 insertions(+), 129 deletions(-)
+
+diff --git a/src/hydra/houdini_cop.cpp b/src/hydra/houdini_cop.cpp
+index a959651e..46b7b454 100644
+--- a/src/hydra/houdini_cop.cpp
++++ b/src/hydra/houdini_cop.cpp
+@@ -4,38 +4,57 @@
+ 
+ #include "hydra/houdini_cop.h"
+ 
++#include "scene/image.h"
++#include "scene/scene.h"
++#include "scene/shader_nodes.h"
+ #include "util/log.h"
+-#include "util/path.h"
+ #include "util/thread.h"
+ 
+-#include <pxr/base/tf/hash.h>
++#include <pxr/base/tf/pySafePython.h>
++
+ #include <pxr/base/tf/pyInterpreter.h>
+ #include <pxr/base/tf/pyLock.h>
+-#include <pxr/base/tf/stringUtils.h>
+ 
+-#include <filesystem>
++#include <cstring>
++#include <memory>
+ #include <unordered_map>
++#include <vector>
+ 
+ HDCYCLES_NAMESPACE_OPEN_SCOPE
+ 
++using namespace CCL_NS;
++
+ namespace {
+ 
+ const char *const kPrefix = "op:";
+ 
+-thread_mutex &CookMutex()
++/* Les pixels d'un COP, une fois lus : du demi-flottant RGBA, premiere ligne en
++ * haut, ce que Cycles attend d'un chargeur. Partages entre les noeuds qui
++ * nomment le meme COP, et d'une synchronisation a l'autre tant qu'il n'a pas
++ * recuit. */
++struct CopPixels {
++  int width = 0;
++  int height = 0;
++  int cookCount = -1;
++  std::vector<uint8_t> data;
++};
++
++using CopPixelsPtr = std::shared_ptr<const CopPixels>;
++
++thread_mutex &CacheMutex()
+ {
+   static thread_mutex mutex;
+   return mutex;
+ }
+ 
+-std::unordered_map<std::string, std::string> &CookCache()
++std::unordered_map<std::string, CopPixelsPtr> &Cache()
+ {
+-  static std::unordered_map<std::string, std::string> cache;
++  static std::unordered_map<std::string, CopPixelsPtr> cache;
+   return cache;
+ }
+ 
+-/* `op:/img/net/OUT_COLOR[1]` names a plane of a node. Only the node part
+- * addresses something hou.node() can find. */
++/* `op:/stage/copnet/OUT[1]` nomme un plan d'un noeud. Seule la partie noeud
++ * designe quelque chose que hou.node() sait trouver. */
+ std::string NodePathOf(const std::string &opPath)
+ {
+   std::string node = opPath.substr(strlen(kPrefix));
+@@ -46,114 +65,264 @@ std::string NodePathOf(const std::string &opPath)
+   return node;
+ }
+ 
+-std::string OutputPathFor(const std::string &opPath)
++/* Le code que lit Houdini. Il range son resultat dans le dictionnaire qu'on lui
++ * donne plutot que d'ecrire quoi que ce soit.
++ *
++ * `allBufferElements` sait rendre directement quatre canaux en demi-flottant :
++ * plus de recomposition RGBA en Python, qui coutait a elle seule 0,4 s sur une
++ * 4K. */
++const char *const kCaptureCode =
++    "_ok = False\n"
++    "try:\n"
++    "    import hou\n"
++    "    _n = hou.node(_path)\n"
++    "    if _n is not None:\n"
++    "        _l = _n.layer()\n"
++    "        if _l is not None:\n"
++    "            _w, _h = _l.bufferResolution()\n"
++    "            _cook = _n.cookCount()\n"
++    "            _bytes = _l.allBufferElements(hou.imageLayerStorageType.Float16, 4)\n"
++    "            _ok = True\n"
++    "except Exception as _e:\n"
++    "    _err = str(_e)\n";
++
++const char *const kCookCountCode = "_cook = -1\n"
++                                   "try:\n"
++                                   "    import hou\n"
++                                   "    _n = hou.node(_path)\n"
++                                   "    if _n is not None:\n"
++                                   "        _cook = _n.cookCount()\n"
++                                   "except Exception:\n"
++                                   "    pass\n";
++
++long LongFrom(PyObject *dict, const char *name)
+ {
+-  /* Hash the whole path, plane index included, so two planes of one node do
+-   * not collide. */
+-  const std::string name = "hdcycles_cop_" + std::to_string(PXR_NS::TfHash()(opPath)) + ".exr";
+-  std::filesystem::path out = std::filesystem::temp_directory_path() / name;
+-  /* Forward slashes only: the path is pasted into a Python string literal
+-   * below, where a backslash would start an escape. */
+-  return PXR_NS::TfStringReplace(out.string(), "\\", "/");
++  PyObject *const value = PyDict_GetItemString(dict, name);
++  return (value && PyLong_Check(value)) ? PyLong_AsLong(value) : -1;
+ }
+ 
+-}  // namespace
++/* Fait tourner un bout de Python avec `_path` pose, et rend son dictionnaire.
++ * L'appelant en extrait ce qu'il veut, puis le relache. */
++PyObject *RunWithPath(const char *code, const std::string &nodePath)
++{
++  PyObject *const main = PyImport_AddModule("__main__");
++  if (main == nullptr) {
++    PyErr_Clear();
++    return nullptr;
++  }
++
++  PyObject *const globals = PyModule_GetDict(main);
++  PyObject *const locals = PyDict_New();
++  if (locals == nullptr) {
++    PyErr_Clear();
++    return nullptr;
++  }
++
++  PyObject *const path = PyUnicode_FromString(nodePath.c_str());
++  PyDict_SetItemString(locals, "_path", path);
++  Py_XDECREF(path);
++
++  PyObject *const result = PyRun_String(code, Py_file_input, globals, locals);
++  Py_XDECREF(result);
++  if (result == nullptr) {
++    PyErr_Clear();
++    Py_DECREF(locals);
++    return nullptr;
++  }
++  return locals;
++}
++
++/* Lit les pixels du COP. A n'appeler que depuis le thread de synchronisation :
++ * cuire un noeud Houdini depuis un thread de travail ferait tomber l'hote. */
++CopPixelsPtr Capture(const std::string &opPath)
++{
++  PXR_NS::TfPyInitialize();
++  const PXR_NS::TfPyLock pyLock;
++
++  PyObject *const locals = RunWithPath(kCaptureCode, NodePathOf(opPath));
++  if (locals == nullptr) {
++    return nullptr;
++  }
++
++  PyObject *const ok = PyDict_GetItemString(locals, "_ok");
++  PyObject *const bytes = PyDict_GetItemString(locals, "_bytes");
++  const long width = LongFrom(locals, "_w");
++  const long height = LongFrom(locals, "_h");
++  const long cookCount = LongFrom(locals, "_cook");
++
++  if (ok == nullptr || !PyObject_IsTrue(ok) || bytes == nullptr || !PyBytes_Check(bytes) ||
++      width <= 0 || height <= 0)
++  {
++    PyObject *const err = PyDict_GetItemString(locals, "_err");
++    const char *const text = err ? PyUnicode_AsUTF8(err) : nullptr;
++    LOG_WARNING << "Could not read Houdini COP " << opPath << ": "
++                << (text ? text : "the node does not exist or has no layer")
++                << ". The texture will be missing.";
++    PyErr_Clear();
++    Py_DECREF(locals);
++    return nullptr;
++  }
++
++  char *raw = nullptr;
++  Py_ssize_t size = 0;
++  PyBytes_AsStringAndSize(bytes, &raw, &size);
++
++  const size_t rowBytes = static_cast<size_t>(width) * 4 * sizeof(uint16_t);
++  const size_t expected = rowBytes * static_cast<size_t>(height);
++  if (raw == nullptr || static_cast<size_t>(size) != expected) {
++    LOG_WARNING << "Houdini COP " << opPath << " gave " << size << " bytes where " << expected
++                << " were expected; the texture will be missing.";
++    Py_DECREF(locals);
++    return nullptr;
++  }
++
++  auto pixels = std::make_shared<CopPixels>();
++  pixels->width = static_cast<int>(width);
++  pixels->height = static_cast<int>(height);
++  pixels->cookCount = static_cast<int>(cookCount);
++  pixels->data.resize(expected);
++
++  /* Le buffer d'un COP commence en bas, a la maniere d'Houdini, la ou Cycles
++   * lit sa premiere ligne comme le haut de l'image - mesure : une texture dont
++   * la premiere ligne est rouge ressort rouge en haut. D'ou le retournement,
++   * fait une fois a la lecture plutot qu'a chaque acces. */
++  for (long y = 0; y < height; ++y) {
++    std::memcpy(pixels->data.data() + static_cast<size_t>(y) * rowBytes,
++                raw + static_cast<size_t>(height - 1 - y) * rowBytes,
++                rowBytes);
++  }
++
++  Py_DECREF(locals);
++
++  LOG_INFO << "Read Houdini COP " << opPath << " (" << width << "x" << height << ", cook "
++           << cookCount << ") into memory.";
++  return pixels;
++}
+ 
+-std::string ResolveHoudiniCopPath(const std::string &path)
++/* Le numero de cuisson du noeud, pour savoir si ce qu'on garde est encore bon.
++ * Sans lui la texture restait celle de la premiere lecture pour toute la
++ * session : retoucher son COP ne se voyait qu'au redemarrage d'Houdini. */
++int CookCountOf(const std::string &opPath)
+ {
+-  if (path.compare(0, strlen(kPrefix), kPrefix) != 0) {
+-    return std::string();
+-  }
+-
+-  const CCL_NS::thread_scoped_lock lock(CookMutex());
+-
+-  auto &cache = CookCache();
+-  const auto it = cache.find(path);
+-  if (it != cache.end()) {
+-    return it->second;
+-  }
+-
+-  const std::string nodePath = NodePathOf(path);
+-  const std::string outPath = OutputPathFor(path);
+-
+-  /* The destination is decided here rather than read back from Python, which
+-   * keeps this to a single call with nothing to unmarshal. */
+-  /* Two compositing systems to cover, and neither is reachable as a file.
+-   *
+-   * The older COP2 nodes write an image themselves. Copernicus nodes do not
+-   * carry that method at all, but they do expose their pixels live through
+-   * hou.ImageLayer - which is read straight out and written here, so nothing
+-   * is added to the user's scene and no output node has to be wired up.
+-   *
+-   * Guarded as a whole so this stays quiet outside an interactive session: a
+-   * batch render has no `hou` module, and no node to read either. */
+-  const std::string code = "try:\n"
+-                           "    import hou\n"
+-                           "    _n = hou.node('" +
+-                           nodePath +
+-                           "')\n"
+-                           "    if _n is not None:\n"
+-                           "        if hasattr(_n, 'saveImage'):\n"
+-                           "            _n.saveImage('" +
+-                           outPath +
+-                           "')\n"
+-                           "        else:\n"
+-                           "            import array\n"
+-                           "            _l = _n.layer()\n"
+-                           "            _w, _h = _l.bufferResolution()\n"
+-                           "            _c = _l.channelCount()\n"
+-                           "            _src = array.array('f')\n"
+-                           "            _src.frombytes(_l.allBufferElements())\n"
+-                           "            _px = _w * _h\n"
+-                           /* saveImageDataToFile only accepts RGBA, and it takes a
+-                            * sequence of floats - handing it the raw buffer lets a
+-                            * single-channel image through on a coincidence of byte
+-                            * count and then writes the bytes as if they were
+-                            * values. Build the four channels explicitly. */
+-                           "            if _c == 4:\n"
+-                           "                _dst = _src\n"
+-                           "            else:\n"
+-                           "                _dst = array.array('f', bytes(_px * 16))\n"
+-                           "                if _c == 1:\n"
+-                           "                    _dst[0::4] = _src\n"
+-                           "                    _dst[1::4] = _src\n"
+-                           "                    _dst[2::4] = _src\n"
+-                           "                else:\n"
+-                           "                    _dst[0::4] = _src[0::_c]\n"
+-                           "                    _dst[1::4] = _src[1::_c]\n"
+-                           "                    _dst[2::4] = _src[2::_c] if _c > 2 else _src[1::_c]\n"
+-                           "                _dst[3::4] = array.array('f', [1.0]) * _px\n"
+-                           /* `flip_vertical`, et il le faut : hou.saveImageDataToFile
+-                            * ecrit la premiere ligne de donnees comme scanline du haut
+-                            * - c'est sa documentation - alors que le buffer d'un COP
+-                            * commence en bas, a la maniere d'Houdini. Sans ce drapeau
+-                            * la texture sort retournee, ce qui se voit comme un V
+-                            * inverse et se corrige a la main par un facteur -1. */
+-                           "            hou.saveImageDataToFile(_dst, _w, _h, '" +
+-                           outPath +
+-                           "', True)\n"
+-                           "except Exception:\n"
+-                           "    pass\n";
++  PXR_NS::TfPyInitialize();
++  const PXR_NS::TfPyLock pyLock;
+ 
++  PyObject *const locals = RunWithPath(kCookCountCode, NodePathOf(opPath));
++  if (locals == nullptr) {
++    return -1;
++  }
++  const long cook = LongFrom(locals, "_cook");
++  Py_DECREF(locals);
++  return static_cast<int>(cook);
++}
++
++/* Le chargeur : il ne lit rien, il sert ce qui a deja ete lu. */
++class HoudiniCopImageLoader : public ImageLoader {
++ public:
++  HoudiniCopImageLoader(std::string opPath, CopPixelsPtr pixels)
++      : _opPath(std::move(opPath)), _pixels(std::move(pixels))
+   {
+-    PXR_NS::TfPyInitialize();
+-    const PXR_NS::TfPyLock pyLock;
+-    PXR_NS::TfPyRunString(code, Py_file_input);
+   }
+ 
+-  std::string result;
+-  if (CCL_NS::path_exists(outPath)) {
+-    result = outPath;
+-    LOG_INFO << "Cooked Houdini COP " << path << " to " << outPath;
++  bool load_metadata(ImageMetaData &metadata,
++                     const ImageLoaderParams & /*params*/,
++                     Progress & /*progress*/) override
++  {
++    metadata.width = _pixels->width;
++    metadata.height = _pixels->height;
++    metadata.channels = 4;
++    metadata.type = IMAGE_DATA_TYPE_HALF4;
++    /* Un COP travaille en lineaire, comme tout ce qui sort d'Houdini : il n'y a
++     * rien a decoder. */
++    metadata.colorspace = u_colorspace_scene_linear;
++    metadata.is_compressible_as_srgb = false;
++    return true;
++  }
++
++  bool load_pixels(const ImageMetaData &metadata, void *pixels) override
++  {
++    std::memcpy(pixels, _pixels->data.data(), _pixels->data.size());
++    metadata.conform_pixels(pixels);
++    return true;
++  }
++
++  string name() const override
++  {
++    return _opPath;
++  }
++
++  bool equals(const ImageLoader &other) const override
++  {
++    const HoudiniCopImageLoader &o = static_cast<const HoudiniCopImageLoader &>(other);
++    /* Meme COP et meme cuisson : la meme image. */
++    return _opPath == o._opPath && _pixels->cookCount == o._pixels->cookCount;
++  }
++
++ private:
++  std::string _opPath;
++  CopPixelsPtr _pixels;
++};
++
++}  // namespace
++
++bool IsHoudiniCopPath(const std::string &path)
++{
++  return path.compare(0, strlen(kPrefix), kPrefix) == 0;
++}
++
++void BindHoudiniCopImage(Scene *scene, ShaderNode *node)
++{
++  if (scene == nullptr || node == nullptr) {
++    return;
++  }
++
++  ImageSlotTextureNode *slotNode = nullptr;
++  ustring filename;
++  ImageParams params;
++
++  if (ImageTextureNode *imageNode = dynamic_cast<ImageTextureNode *>(node)) {
++    filename = imageNode->get_filename();
++    params = imageNode->image_params();
++    slotNode = imageNode;
++  }
++  else if (EnvironmentTextureNode *envNode = dynamic_cast<EnvironmentTextureNode *>(node)) {
++    filename = envNode->get_filename();
++    params = envNode->image_params();
++    slotNode = envNode;
+   }
+   else {
+-    LOG_WARNING << "Could not cook Houdini COP " << path
+-                << ", the texture will be missing. Check that the node exists "
+-                   "and can be rendered.";
++    return;
++  }
++
++  if (!IsHoudiniCopPath(filename.string())) {
++    return;
++  }
++
++  const std::string opPath = filename.string();
++  CopPixelsPtr pixels;
++  {
++    const thread_scoped_lock lock(CacheMutex());
++    auto &cache = Cache();
++    const int cookCount = CookCountOf(opPath);
++    const auto it = cache.find(opPath);
++    if (it != cache.end() && it->second && it->second->cookCount == cookCount) {
++      pixels = it->second;
++    }
++    else {
++      pixels = Capture(opPath);
++      cache[opPath] = pixels;
++    }
++  }
++
++  if (!pixels) {
++    return;
+   }
+ 
+-  cache[path] = result;
+-  return result;
++  /* Nommer l'espace ici evite qu'un `colorspace` laisse a "auto" sur le noeud
++   * n'aille en deviner un autre. */
++  params.colorspace = u_colorspace_scene_linear;
++  slotNode->handle = scene->image_manager->add_image(
++      std::make_unique<HoudiniCopImageLoader>(opPath, pixels), params);
+ }
+ 
+ HDCYCLES_NAMESPACE_CLOSE_SCOPE
+diff --git a/src/hydra/houdini_cop.h b/src/hydra/houdini_cop.h
+index 5a7bc95f..3100664f 100644
+--- a/src/hydra/houdini_cop.h
++++ b/src/hydra/houdini_cop.h
+@@ -8,24 +8,37 @@
+ 
+ #include <string>
+ 
++CCL_NAMESPACE_BEGIN
++class Scene;
++class ShaderNode;
++CCL_NAMESPACE_END
++
+ HDCYCLES_NAMESPACE_OPEN_SCOPE
+ 
+ /* Houdini lets a texture path point straight at a compositing node with
+- * `op:/img/net/OUT`. Nothing hands those pixels to a third party as a file:
+- * the USD asset resolver returns an asset of size zero, and Houdini's own
++ * `op:/stage/copnet/OUT`. Nothing hands those pixels to a third party as a
++ * file: the USD asset resolver returns an asset of size zero, and Houdini's own
+  * image layer refuses the path outright - both measured. The only thing that
+- * produces pixels is cooking the node, so that is what this does, writing the
+- * result to an image file and returning its path.
++ * produces pixels is cooking the node.
+  *
+- * Cooking happens here, while the material is being synced, rather than when
+- * Cycles loads the image: image loading runs on Cycles' worker threads, and
+- * cooking a Houdini node from one of those would take the host down.
++ * Les pixels sont pris **en memoire** et donnes a Cycles par un ImageLoader a
++ * nous, comme Blender le fait pour ses propres images. Le detour par un fichier
++ * qu'on ecrivait avant coutait, mesure sur une 4K : 0,4 s de decoupage en
++ * Python, 2,4 s d'ecriture pour 201 Mo d'EXR temporaire, 0,2 s de relecture -
++ * trois secondes par texture, et un fichier jamais reecrit de la session, donc
++ * une texture figee des qu'on retouchait le COP.
+  *
+- * Both compositing systems are handled: COP2 nodes save an image themselves,
+- * while Copernicus nodes expose their pixels live through hou.ImageLayer.
++ * La lecture se fait ici, pendant la synchronisation du materiau, et jamais
++ * depuis le chargeur : celui-ci tourne sur les threads de travail de Cycles, ou
++ * cuire un noeud Houdini ferait tomber l'hote. Le chargeur ne fait que servir
++ * ce qui a deja ete lu.
+  *
+- * Returns an empty string for a path that is not an `op:` path, and for a COP
+- * that could not be cooked. Results are cached per path for the session. */
+-std::string ResolveHoudiniCopPath(const std::string &path);
++ * Sans effet si le chemin n'est pas un `op:`, si le noeud n'existe pas, ou hors
++ * d'une session Houdini - un rendu batch n'a pas de module `hou`, et le LOP
++ * d'aplatissement reste la pour ce cas. */
++void BindHoudiniCopImage(CCL_NS::Scene *scene, CCL_NS::ShaderNode *node);
++
++/* Vrai pour un chemin `op:`. */
++bool IsHoudiniCopPath(const std::string &path);
+ 
+ HDCYCLES_NAMESPACE_CLOSE_SCOPE
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index 86e26285..e6178476 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -7,6 +7,10 @@
+ #include <set>
+ #include "hydra/material.h"
+ 
++#ifdef WITH_HOUDINI_COP
++#  include "hydra/houdini_cop.h"
++#endif
++
+ #include "util/log.h"
+ 
+ #include <vector>
+@@ -1521,6 +1525,7 @@ void HdCyclesMaterial::Sync(HdSceneDelegate *sceneDelegate,
+     if (network && !_nodes.empty() && !dirtyResource) {
+       UpdateParameters(network);
+       ApplyShaderSettings();
++      BindHoudiniCopImages(lock.scene);
+       _shader->tag_update(lock.scene);
+     }
+     else {
+@@ -1558,6 +1563,7 @@ void HdCyclesMaterial::Sync(HdSceneDelegate *sceneDelegate,
+        * choix a l'utilisateur, nous aussi. */
+       _shader->set_displacement_method(_hasDisplacement ? DISPLACE_BOTH : DISPLACE_BUMP);
+       ApplyShaderSettings();
++      BindHoudiniCopImages(lock.scene);
+ 
+       _shader->set_graph(std::move(graph));
+       _shader->tag_update(lock.scene);
+@@ -1833,6 +1839,31 @@ void HdCyclesMaterial::UpdateParameters(NodeDesc &nodeDesc,
+  * shading. Nommer un socket qui n'existe pas est signale plutot qu'ignore :
+  * c'est la meme regle que pour `cycles:integrator:<socket>`, un nom mal
+  * orthographie etant indiscernable d'un reglage sans effet. */
++/* Les textures venues d'un COP d'Houdini.
++ *
++ * Un `op:` n'est pas un fichier : rien n'en donne les pixels a un tiers, seul
++ * le noeud cuit les produit. Ils sont lus ici - sur le thread de
++ * synchronisation, jamais depuis le chargeur de Cycles, qui tourne sur des
++ * threads de travail ou cuire un noeud Houdini ferait tomber l'hote - et
++ * remis a Cycles en memoire, comme Blender le fait pour ses propres images.
++ *
++ * Appele aussi quand seuls les parametres changent : le numero de cuisson du
++ * COP dit alors s'il faut relire, ce qui rend une retouche du COP visible sans
++ * relancer Houdini. */
++void HdCyclesMaterial::BindHoudiniCopImages(Scene *scene)
++{
++#ifdef WITH_HOUDINI_COP
++  for (const auto &entry : _nodes) {
++    BindHoudiniCopImage(scene, entry.second.node);
++    for (const auto &helper : entry.second.helperNodes) {
++      BindHoudiniCopImage(scene, helper.second);
++    }
++  }
++#else
++  (void)scene;
++#endif
++}
++
+ void HdCyclesMaterial::ApplyShaderSettings()
+ {
+   if (!_shader) {
+diff --git a/src/hydra/material.h b/src/hydra/material.h
+index f8cdf0be..ef9390d7 100644
+--- a/src/hydra/material.h
++++ b/src/hydra/material.h
+@@ -71,6 +71,10 @@ class HdCyclesMaterial final : public PXR_NS::HdMaterial {
+ 
+   void ApplyShaderSettings();
+ 
++  /* Les textures qui viennent d'un COP d'Houdini : leurs pixels se lisent ici,
++   * sur le thread de synchronisation, et se donnent a Cycles en memoire. */
++  void BindHoudiniCopImages(CCL_NS::Scene *scene);
++
+   CCL_NS::Shader *_shader = nullptr;
+   std::unordered_map<PXR_NS::SdfPath, NodeDesc, PXR_NS::SdfPath::Hash> _nodes;
+ };
+diff --git a/src/hydra/node_util.cpp b/src/hydra/node_util.cpp
+index 4af79e86..23cc1bc0 100644
+--- a/src/hydra/node_util.cpp
++++ b/src/hydra/node_util.cpp
+@@ -6,9 +6,6 @@
+ #include <optional>
+ #include "hydra/node_util.h"
+ 
+-#ifdef WITH_HOUDINI_COP
+-#  include "hydra/houdini_cop.h"
+-#endif
+ #include "util/transform.h"
+ 
+ #include <pxr/base/gf/matrix3d.h>
+@@ -156,16 +153,10 @@ template<> ustring convertToCycles<ustring>(const VtValue &value)
+     const std::string &resolved = path.GetResolvedPath();
+     std::string filename = resolved.empty() ? path.GetAssetPath() : resolved;
+ 
+-#ifdef WITH_HOUDINI_COP
+-    /* A Houdini `op:` path names a compositing node, not a file. Cook it here,
+-     * while the prim is being synced, and hand Cycles the resulting image -
+-     * the loader itself runs on worker threads where cooking a Houdini node
+-     * would take the host down. */
+-    const std::string cooked = ResolveHoudiniCopPath(filename);
+-    if (!cooked.empty()) {
+-      filename = cooked;
+-    }
+-#endif
++    /* Un chemin `op:` nomme un noeud de composition, pas un fichier. Il reste
++     * tel quel sur le socket : c'est a lui que `BindHoudiniCopImage` reconnait
++     * un COP, pour en lire les pixels une fois la synchronisation faite et les
++     * donner a Cycles sans passer par le disque. */
+ 
+     return ustring(filename);
+   }
+-- 
+2.53.0.windows.2
+

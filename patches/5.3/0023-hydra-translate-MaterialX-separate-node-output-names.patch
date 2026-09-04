@@ -1,7 +1,7 @@
 From 0a96eb8701f188dc9e5d6428da56ed2d0b744c0e Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 12:47:20 +0200
-Subject: [PATCH 23/58] hydra: translate MaterialX separate node output names
+Subject: [PATCH 23/59] hydra: translate MaterialX separate node output names
 
 MaterialX names a separate node's outputs outx/outy/outz and outr/outg/outb;
 Cycles names them x/y/z and r/g/b. Without the rename the connection was
