@@ -1827,3 +1827,61 @@ pas sur la fraîche.
 
 Audit `standard_surface` : 48 scènes, écart max 7 × 10⁻⁸ — l'arrondi du demi-flottant, rien d'autre.
 Banc Cycles : 97 rendus, 0 problème. Banc MaterialX : 10 nœuds, 0 problème.
+
+## Phase 31 — De quoi mesurer un viewport qui traîne ✅
+
+Signalé : « avec Karma je bouge le viewport et ça rend quasiment à l'instant,
+Cycles met 4-5 s avant de commencer ». Précision de l'utilisateur, qui a
+réorienté tout le diagnostic : le CPU est **à peine** plus vif que le GPU. La
+cause est donc commune aux deux périphériques — ce n'est pas le retour des
+pixels depuis la carte.
+
+Ce qui a été écarté par la mesure, sur quatre images à caméra animée :
+
+| soupçon | mesure |
+|---|---|
+| le displacement se retessellise au mouvement de caméra | le maillage n'est synchronisé qu'**une** fois sur quatre images |
+| la géométrie ou le BVH se refont | `tri_verts`, `optix blas`, `svm_nodes` : une allocation, pas quatre |
+| la synchronisation de scène est lente | premier échantillon à ~0,5 s après un changement de caméra |
+
+Le retard est donc dans le chemin interactif, que `husk` ne parcourt pas. D'où
+un chronomètre, permanent et discret, dans `_Execute` — qui tourne **sur le fil
+de l'hôte**, donc tout ce qu'il passe là, le viewport le passe figé :
+
+    Passe de rendu : 812 ms sur le fil de l'hote (verrou 3.1, veille COP 780.4,
+                     camera et AOV 1.2, relance 27.3).
+
+Rien tant que le total reste sous 50 ms. Au-delà, chaque poste est nommé, parce
+que « le rendu est lent » ne dit pas s'il attend un verrou de scène, un COP qui
+recuit, ou une session qui repart. S'y ajoutent deux lignes : par où les pixels
+remontent à l'hôte, avec le nom de l'Hgi reçu — la ligne se répète si la passe
+de rendu est reconstruite, ce qui est en soi un signal — et, à chaque relance,
+sa cause : scène, caméra, réglages, bascule de caméra.
+
+**Un défaut trouvé en chemin, dans la veille des COP.** Relire un COP le cuit —
+c'est `layer()` qui s'en charge, mesuré : `cookCount 4, needsToCook True` avant,
+`5, False` après. Or on notait l'état d'**avant** la relecture. Le sondage
+suivant comparait l'état d'après à celui d'avant, concluait que le COP avait
+bougé, et relisait une seconde fois : une 4K de plus à lire sur le fil de
+l'hôte, à retéléverser, et un graphe à recompiler, pour rien, à chaque édition.
+L'état retenu est désormais celui d'après la lecture.
+
+**Un journal, encore fallait-il pouvoir le lire.** Cycles écrit sur la sortie
+standard, ce qui suppose un hôte qui en ait une. Houdini est une application
+graphique : sous Windows son processus n'a **pas de console**, et tout ce que le
+delegate raconte se perd — la première tentative de relevé s'est arrêtée là.
+`CYCLES_LOG_FILE=<chemin>` détourne le journal vers un fichier, vidé à chaque
+ligne, donc lisible pendant que Houdini tourne et survivant à un plantage. Le
+point d'accroche existait déjà en amont (`log_init` prend une fonction de
+journal), il n'était simplement branché sur rien.
+
+    $env:CYCLES_LOGGING = "1"; $env:CYCLES_LOG_FILE = "E:/cycles.log"
+
+**Le displacement, au passage.** La question « où règle-t-on le type de
+displacement » a sa réponse depuis la phase 24 : sur le nœud
+`Cycles Material Properties`, paramètre *Displacement Method*, avec sa case
+`__activate__` comme toute propriété de rendu chez Houdini. Vérifié de bout en
+bout sur la même scène — bump 2,363, true 4,013, both 3,001 en valeur moyenne,
+trois rendus bien distincts. Le *Render Geometry Settings* LOP n'affichera
+jamais Cycles : c'est un nœud à onglets par moteur et SideFX n'en fournit un que
+pour Karma. Cycles met ce réglage sur le matériau, comme Blender.
