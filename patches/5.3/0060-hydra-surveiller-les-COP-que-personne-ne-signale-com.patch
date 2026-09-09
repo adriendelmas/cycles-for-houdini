@@ -1,7 +1,7 @@
 From 3a27f078ed15a4d03cfad35c0fd56dfeff69de78 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 4 Sep 2026 19:40:15 +0200
-Subject: [PATCH 60/65] hydra: surveiller les COP, que personne ne signale
+Subject: [PATCH 60/67] hydra: surveiller les COP, que personne ne signale
  comme changes
 
 Les pixels etaient bien relus quand on nous redemandait une
@@ -424,6 +424,3 @@ index fa0d66f0..bdc249cd 100644
    if (session->progress.get_cancel()) {
      /* A host that supports stopping the render cancels it before applying
       * scene edits. Clear that state here rather than returning for good, so
--- 
-2.53.0.windows.2
-

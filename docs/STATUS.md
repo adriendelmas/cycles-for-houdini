@@ -1616,3 +1616,87 @@ chaque image, et la session repart de zéro indéfiniment — même symptôme.
 
 Audit `standard_surface` : **48 scènes, 48 identiques au pixel près**.
 Banc : 97 rendus, 0 problème.
+
+## Phase 26 — La caméra qui manquait au découpage ✅
+
+Signalé : « c'est toujours beaucoup plus long à rendre et charger que Karma ».
+
+Mesuré d'abord, en lot, sur deux scènes rendues par `husk` à 960×540 :
+
+| | Karma CPU | Karma XPU | Cycles GPU |
+|---|---|---|---|
+| `au_base` | 11,1 s | 12,4 s | **4,5 s** |
+| scène utilisateur | — | 10,3 s | **4,6 s** |
+
+Donc pas le rendu en lot : Cycles y est deux fois plus rapide. Le journal de
+Cycles a dit où passait le temps.
+
+```
+Buffer allocate: optix temp index data, 247 960 800 bytes  (236 Mo)
+Buffer allocate: optix blas,          1 306 628 864 bytes  (1,22 Go)
+Objects BVH build pool statistics: Total time: 0,552 s
+```
+
+Pour un `grid` de **980 faces**. Cycles découpait dix millions de triangles.
+
+**Pourquoi.** Un maillage `catmullClark` passe par le découpage adaptatif de
+Cycles, mesuré en pixels — donc rapporté à une caméra, `scene->dicing_camera`.
+Cycles la crée ; personne ne la renseignait. Restée à l'identité, elle voyait
+toute surface comme immense, et le découpage montait jusqu'au plafond fixé par
+le niveau de raffinement d'Houdini.
+
+Elle suit désormais la caméra de rendu, comme dans Blender :
+
+| | avant | après |
+|---|---|---|
+| index des triangles | 236 Mo | 12,2 Mo |
+| BLAS OptiX | 1,22 Go | 64 Mo |
+| construction du BVH | 0,552 s | 0,220 s |
+| scène utilisateur, bout en bout | 4,65 s | 3,28 s |
+
+Image **identique au pixel près** avant/après (`hoiiotool --diff` : PASS). Le
+prix se payait à chaque édition, pas seulement au chargement : c'est le
+viewport qui en profite le plus.
+
+Banc : 97 rendus, 0 problème.
+
+## Phase 27 — Le viewport Vulkan voit enfin les matériaux ✅
+
+Signalé : « la preview vulkan est pas liée aux nœuds cycles ».
+
+Le viewport d'Houdini ne sait rendre que deux choses : du MaterialX, qu'il
+compile lui-même, et de l'`UsdPreviewSurface`. Un matériau Cycles n'étant ni
+l'un ni l'autre, il ressortait gris.
+
+Solaris prévoit pourtant le pont — à côté du shader propre au moteur, il écrit
+un `UsdPreviewSurface` construit par un *preview shader translator*. Celui
+d'origine lit des étiquettes `ogl_*` posées sur les paramètres du VOP ; nos
+nœuds sont engendrés depuis le registre Sdr et n'en portent aucune. La liste
+d'entrées revenait vide et l'écriture était abandonnée **sans un mot**. Les
+scènes de banc en gardent la trace : `HoudiniHasAutoPreviewShader = 1` posé sur
+le shader, et aucun prim `UsdPreviewSurface` dans les 97 fichiers.
+
+Plutôt que de tatouer des centaines de paramètres engendrés, le traducteur lit
+le graphe Cycles lui-même. Ce qu'il en tire :
+
+| entrée de l'aperçu | source Cycles |
+|---|---|
+| `diffuseColor` | `base_color`, ou `color` selon le terminal |
+| `roughness`, `metallic`, `ior`, `opacity` | les sockets de même sens |
+| `emissiveColor` | `emission_color` × `emission_strength` |
+| `normal` | `normal`, en remontant à travers un `normal_map` |
+| `displacement` | `outputs:cycles:displacement`, pas le shader de surface |
+
+Une entrée branchée sur une texture donne un `UsdUVTexture` avec son mode de
+bouclage et son espace colorimétrique ; on remonte aussi à travers un `bump`,
+un `gamma`, un `invert` et quelques autres. La normale est lue en `raw` avec
+l'échelle 2 et le biais −1 qu'attend l'aperçu, le displacement recentré sur le
+`midlevel` du nœud.
+
+Quatorze terminaux sont couverts, du `principled_bsdf` à l'`emission`. Les
+valeurs non écrites reprennent les défauts de Cycles et non ceux de l'aperçu —
+sans quoi une `base_color` laissée telle quelle passait de 0,8 à 0,18, soit un
+viewport nettement plus sombre que le rendu.
+
+Vérifié en batch sur un matériau à quatre textures : les quatre entrées, leurs
+quatre `UsdUVTexture` et le lecteur de primvar `st` sont bien écrits.

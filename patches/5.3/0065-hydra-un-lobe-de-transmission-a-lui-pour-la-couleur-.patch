@@ -1,7 +1,7 @@
 From e322bb798505811fd48e2e6a093c50a03bc057eb Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sat, 5 Sep 2026 01:13:51 +0200
-Subject: [PATCH 65/65] hydra: un lobe de transmission a lui, pour la couleur
+Subject: [PATCH 65/67] hydra: un lobe de transmission a lui, pour la couleur
  et la rugosite que MaterialX lui donne
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
@@ -259,6 +259,3 @@ index 98899a85..b6f8f0b6 100644
      /* The auxiliary nodes a composite mapping asked for, by name: some
       * MaterialX nodes need more than one Cycles node, and some of their inputs
       * belong to those rather than to `node`. */
--- 
-2.53.0.windows.2
-

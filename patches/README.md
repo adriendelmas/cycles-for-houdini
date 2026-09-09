@@ -5,7 +5,7 @@ vivent sur une branche a nous, en commits separes par sujet. Cette serie en est
 l'export par `git format-patch`.
 
     patches/5.2/   38 correctifs, base 3b97e190 (branche release/5.2)
-    patches/5.3/   65 correctifs, base 8424ed53 (branche main)
+    patches/5.3/   67 correctifs, base 8424ed53 (branche main)
 
 `tools/bootstrap.py` fait le chemin complet -- clone, `git am`, compilation.
 A la main, sur un clone deja pose :
@@ -95,6 +95,8 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0063` | hydra: la veille des COP repose l'image elle-meme |
 | `0064` | hydra: une image branchee sur une entree scalaire, et la couleur de sous-surface retiree |
 | `0065` | hydra: un lobe de transmission a lui, pour la couleur et la rugosite que MaterialX lui donne |
+| `0066` | hydra: donner a Cycles la camera qui sert a decouper les subdivisions |
+| `0067` | hydra: un shader d'apercu pour les materiaux Cycles, sinon le viewport reste gris |
 
 ---
 

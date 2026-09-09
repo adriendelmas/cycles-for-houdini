@@ -1,7 +1,7 @@
 From be8c24ed7af6405457545190cda09957fb0c759a Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 19:54:38 +0200
-Subject: [PATCH 48/65] hydra: la dispersion du MaterialX standard_surface,
+Subject: [PATCH 48/67] hydra: la dispersion du MaterialX standard_surface,
  vers le principled bsdf qui la porte enfin
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
@@ -98,6 +98,3 @@ index 4c1c0bc4..6b9bf9da 100644
    /* The helper drives the level unconditionally, so it has to carry MaterialX's
     * own default of 1 for the case where the network never writes `specular` at
     * all - otherwise an unauthored input would be actively set to something
--- 
-2.53.0.windows.2
-

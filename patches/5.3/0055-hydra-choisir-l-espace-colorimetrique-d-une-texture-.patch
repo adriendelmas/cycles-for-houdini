@@ -1,7 +1,7 @@
 From fdae81414d3f606d89c305826f636540d263d466 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 4 Sep 2026 13:10:17 +0200
-Subject: [PATCH 55/65] hydra: choisir l'espace colorimetrique d'une texture
+Subject: [PATCH 55/67] hydra: choisir l'espace colorimetrique d'une texture
  dans un menu
 
 Le socket `colorspace` des noeuds image se remplissait a la main, et un
@@ -118,6 +118,3 @@ index 00000000..b1cad23d
 +        flat.append(token)
 +        flat.append(label)
 +    return flat
--- 
-2.53.0.windows.2
-
