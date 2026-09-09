@@ -1654,9 +1654,19 @@ Elle suit désormais la caméra de rendu, comme dans Blender :
 | construction du BVH | 0,552 s | 0,220 s |
 | scène utilisateur, bout en bout | 4,65 s | 3,28 s |
 
-Image **identique au pixel près** avant/après (`hoiiotool --diff` : PASS). Le
-prix se payait à chaque édition, pas seulement au chargement : c'est le
-viewport qui en profite le plus.
+Image **identique au pixel près** sur la scène utilisateur (`hoiiotool --diff` :
+PASS). Le prix se payait à chaque édition, pas seulement au chargement : c'est
+le viewport qui en profite le plus.
+
+Autre mesure, sur `au_base_4` — la variante à `subsurface` de l'audit, la plus
+lourde du lot : **≥ 120 s sans le correctif, 21 s avec**.
+
+Les 48 scènes de l'audit bougent, elles, mais de peu : erreur moyenne au pire
+4,6 × 10⁻⁴, RSB 65 dB, et les pixels concernés sont sur le cube subdivisé. C'est
+la conséquence attendue d'un découpage au pixel plutôt qu'un découpage vingt
+fois trop fin. Deux rendus du même build sont, eux, identiques au bit près —
+donc ce n'est pas du bruit, c'est bien le maillage qui a changé. Les références
+locales ont été refaites.
 
 Banc : 97 rendus, 0 problème.
 
@@ -1700,3 +1710,52 @@ viewport nettement plus sombre que le rendu.
 
 Vérifié en batch sur un matériau à quatre textures : les quatre entrées, leurs
 quatre `UsdUVTexture` et le lecteur de primvar `st` sont bien écrits.
+
+## Phase 28 — La traduction MaterialX, chiffrée ✅
+
+Signalé : « le traducteur des nœuds MaterialX fonctionne pas vraiment ». Sans
+mesure, impossible de savoir ce que ça recouvre. `tools/mtlx_coverage.py` la
+donne : il relit la table de correspondances dans `material.cpp`, applique la
+règle du delegate — le préfixe le plus long l'emporte — et la confronte à la
+bibliothèque MaterialX 1.39.5 livrée avec Houdini.
+
+| | avant | après |
+|---|---|---|
+| catégories couvertes | 120 | **131** |
+| nodedefs | 549 | **647** sur 823, soit 79 % |
+
+**Deux entrées ne pouvaient rien attraper.** `and` et `or` étaient inscrits
+sous `ND_and_` et `ND_or_` ; MaterialX les nomme `ND_logical_and` et
+`ND_logical_or`. Aucun graphe n'a jamais pu les atteindre depuis que la table
+existe. `not` s'y ajoute.
+
+**Le passe-plat manquait.** MaterialX pose un `dot` pour router un fil et un
+`convert` pour changer de type — deux choses que Cycles fait sur le lien
+lui-même. Sans correspondance, la chaîne se coupait là : un graphe venu d'un
+autre logiciel, où l'un et l'autre abondent, y perdait ses textures. C'est le
+candidat le plus probable au « fonctionne pas vraiment ».
+
+S'ajoutent `constant`, `saturate`, `contrast`, `hextiledimage` et la famille
+`gltf_image`. Le nœud hexagonal existait déjà dans le moteur — il vient de la
+**PR Blender 158054**, intégrée ici pour les bruits MaterialX — sans que rien
+ne l'atteigne depuis un réseau MaterialX.
+
+Un cas de `convert` n'est pas un passe-plat : `convert_<type>_surfaceshader`
+fait une surface qui **émet** la couleur donnée, et devient un nœud `emission`.
+
+⚠️ **Le piège.** `contrast` sur une couleur passait d'abord par le nœud `math`
+de Cycles, qui est **scalaire** : la couleur y était réduite à sa moyenne et
+ressortait grise. Une vérification « pas noir » aurait laissé passer. D'où
+`tools/bench_mtlx.py`, qui compare la valeur rendue à la valeur attendue :
+`contrast` ×2 pivot 0,5 sur (0,9 0,2 0,1) doit donner (1,3 0 0), et le donne.
+
+Le détail de ce qui manque encore, et pourquoi, est dans
+`docs/MATERIALX_COVERAGE.md`. En résumé : 11 nodedefs demandent un type matrice
+que Cycles n'a pas, 8 un canal alpha sur une couleur, 2 une notion de temps ;
+58 demandent un mécanisme de sortie choisie par un paramètre (`switch`,
+`swizzle`, `extract`, `ramp4`) ; le reste est faisable et listé par ordre
+d'utilité.
+
+Banc MaterialX : 10 nœuds, 0 problème. Banc Cycles : 97 rendus, 0 problème.
+Audit `standard_surface` : 48 scènes, aucun écart au-delà de 4,6 × 10⁻⁴ —
+voir la phase 26, c'est le découpage qui a changé, pas l'ombrage.

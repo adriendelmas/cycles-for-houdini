@@ -10,3 +10,4 @@ tests/usd/*.png
 tests/usd/t?.exr
 __pycache__/
 *.pyc
+tests/usd/bench-mtlx/
