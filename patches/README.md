@@ -5,7 +5,7 @@ vivent sur une branche a nous, en commits separes par sujet. Cette serie en est
 l'export par `git format-patch`.
 
     patches/5.2/   38 correctifs, base 3b97e190 (branche release/5.2)
-    patches/5.3/   68 correctifs, base 8424ed53 (branche main)
+    patches/5.3/   70 correctifs, base 8424ed53 (branche main)
 
 `tools/bootstrap.py` fait le chemin complet -- clone, `git am`, compilation.
 A la main, sur un clone deja pose :
@@ -98,6 +98,8 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0066` | hydra: donner a Cycles la camera qui sert a decouper les subdivisions |
 | `0067` | hydra: un shader d'apercu pour les materiaux Cycles, sinon le viewport reste gris |
 | `0068` | hydra: le passe-plat MaterialX, deux entrees mortes, et six familles de plus |
+| `0069` | hydra: ne plus retourner l'image d'un COP, les deux bouts la rangent deja pareil |
+| `0070` | hydra: le taux de decoupage des subdivisions, dans les reglages de rendu |
 
 ---
 

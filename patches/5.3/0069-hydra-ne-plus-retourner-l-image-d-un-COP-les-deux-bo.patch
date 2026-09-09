@@ -1,0 +1,71 @@
+From 67770647b724eb25b908fdf75daa26c7f3bd4d84 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Wed, 9 Sep 2026 22:24:20 +0200
+Subject: [PATCH 69/70] hydra: ne plus retourner l'image d'un COP, les deux
+ bouts la rangent deja pareil
+
+Le correctif precedent ajoutait un retournement a la lecture. Il etait de trop,
+et c'est lui qui mettait la texture a l'envers. Deux mesures le disent.
+
+Cote Houdini : un COP `uvmap` lu par `allBufferElements` donne V = -0,999 sur la
+**premiere** ligne du buffer et +0,999 sur la derniere. La premiere ligne est
+donc le bas de l'image.
+
+Cote Cycles : son lecteur de fichiers appelle OIIO avec `flip_y = true` par
+defaut (`ImageMetaData::oiio_load_pixels`) - un pas de ligne negatif partant de
+la derniere ligne, donc la ligne du haut du fichier atterrit a la fin du buffer.
+La premiere ligne d'une image Cycles est, elle aussi, le bas.
+
+Les deux conventions etaient deja identiques ; les desaccorder retournait
+l'image. La lecture redevient un `memcpy`.
+
+Etalonne sur le chemin fichier, qui ne passe pas par nous : un PNG rouge en haut
+et bleu en bas, pose sur un plan dont v vaut 1 en haut, ressort rouge en haut -
+rouge mesure a y=20, bleu a y=44 sur un rendu de 64 pixels.
+
+La lecon, pour la troisieme fois sur ce sujet : une convention de rangement se
+lit dans le code de celui qui la fixe, pas dans une image qu'on regarde.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/houdini_cop.cpp | 27 ++++++++++++++++++---------
+ 1 file changed, 18 insertions(+), 9 deletions(-)
+
+diff --git a/src/hydra/houdini_cop.cpp b/src/hydra/houdini_cop.cpp
+index 20c76270..c0f29529 100644
+--- a/src/hydra/houdini_cop.cpp
++++ b/src/hydra/houdini_cop.cpp
+@@ -222,15 +222,24 @@ CopPixelsPtr Capture(const std::string &opPath)
+   pixels->cookCount = static_cast<int>(cookCount);
+   pixels->data.resize(expected);
+ 
+-  /* Le buffer d'un COP commence en bas, a la maniere d'Houdini, la ou Cycles
+-   * lit sa premiere ligne comme le haut de l'image - mesure : une texture dont
+-   * la premiere ligne est rouge ressort rouge en haut. D'ou le retournement,
+-   * fait une fois a la lecture plutot qu'a chaque acces. */
+-  for (long y = 0; y < height; ++y) {
+-    std::memcpy(pixels->data.data() + static_cast<size_t>(y) * rowBytes,
+-                raw + static_cast<size_t>(height - 1 - y) * rowBytes,
+-                rowBytes);
+-  }
++  /* Aucun retournement : les deux bouts rangent deja leurs lignes du bas vers
++   * le haut, et les retourner mettait la texture a l'envers.
++   *
++   * Mesure du cote d'Houdini : un COP `uvmap` lu par `allBufferElements` donne
++   * V = -0,999 sur la premiere ligne du buffer et V = +0,999 sur la derniere.
++   * La premiere ligne est donc le **bas** de l'image.
++   *
++   * Mesure du cote de Cycles : son lecteur de fichiers appelle OIIO avec
++   * `flip_y = true` par defaut (`ImageMetaData::oiio_load_pixels`), c'est-a-dire
++   * un pas de ligne negatif partant de la derniere ligne - la ligne du haut du
++   * fichier atterrit a la fin du buffer. La premiere ligne d'une image Cycles
++   * est donc, elle aussi, le **bas**.
++   *
++   * Verifie de bout en bout : un PNG rouge en haut et bleu en bas, pose sur un
++   * plan dont v vaut 1 en haut, ressort rouge en haut (mesure : rouge a y=20,
++   * bleu a y=44 sur un rendu de 64 pixels). Le chemin fichier et le chemin COP
++   * partagent desormais la meme convention. */
++  std::memcpy(pixels->data.data(), raw, expected);
+ 
+   Py_DECREF(locals);
+ 

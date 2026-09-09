@@ -123,6 +123,10 @@ def main():
         ("cycles:sample_offset", "Sample Offset", "integer", "int", "0"),
         ("cycles:time_limit", "Time Limit", "float", "float", "0"),
         ("cycles:threads", "Threads", "integer", "int", "0"),
+        # Le pas du decoupage adaptatif des subdivisions, en pixels par
+        # micropolygone. Blender en expose deux, 1 px au rendu et 8 px dans la
+        # vue ; ici un seul, mais qui se change sans recompiler.
+        ("cycles:dicing_rate", "Dicing Rate", "float", "float", "1"),
     ]
 
     grouped = {"Session": [emit_parm(*s) for s in session]}

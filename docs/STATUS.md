@@ -1654,19 +1654,25 @@ Elle suit désormais la caméra de rendu, comme dans Blender :
 | construction du BVH | 0,552 s | 0,220 s |
 | scène utilisateur, bout en bout | 4,65 s | 3,28 s |
 
-Image **identique au pixel près** sur la scène utilisateur (`hoiiotool --diff` :
-PASS). Le prix se payait à chaque édition, pas seulement au chargement : c'est
-le viewport qui en profite le plus.
+Le prix se payait à chaque édition, pas seulement au chargement : c'est le
+viewport qui en profite le plus.
 
 Autre mesure, sur `au_base_4` — la variante à `subsurface` de l'audit, la plus
 lourde du lot : **≥ 120 s sans le correctif, 21 s avec**.
 
-Les 48 scènes de l'audit bougent, elles, mais de peu : erreur moyenne au pire
-4,6 × 10⁻⁴, RSB 65 dB, et les pixels concernés sont sur le cube subdivisé. C'est
-la conséquence attendue d'un découpage au pixel plutôt qu'un découpage vingt
-fois trop fin. Deux rendus du même build sont, eux, identiques au bit près —
-donc ce n'est pas du bruit, c'est bien le maillage qui a changé. Les références
-locales ont été refaites.
+⚠️ **Une vérification qui n'en était pas une.** Le premier contrôle d'image a
+comparé deux rendus de la scène utilisateur et conclu « identiques au pixel
+près ». Les deux étaient **noirs** : `husk` ne trouve pas la caméra de cette
+scène sans qu'on la lui nomme, et `--diff` répond PASS sur deux images vides
+aussi bien que sur deux images justes. Une comparaison d'images ne vaut rien
+sans un contrôle que l'image contient quelque chose.
+
+La vraie mesure est l'audit : les 48 scènes bougent, mais de peu — erreur
+moyenne au pire 4,6 × 10⁻⁴, RSB 65 dB, et les pixels concernés sont sur le cube
+subdivisé. C'est la conséquence attendue d'un découpage au pixel plutôt qu'un
+découpage vingt fois trop fin. Deux rendus du même build sont, eux, identiques
+au bit près — donc ce n'est pas du bruit, c'est bien le maillage qui a changé.
+Les références locales ont été refaites.
 
 Banc : 97 rendus, 0 problème.
 
@@ -1759,3 +1765,65 @@ d'utilité.
 Banc MaterialX : 10 nœuds, 0 problème. Banc Cycles : 97 rendus, 0 problème.
 Audit `standard_surface` : 48 scènes, aucun écart au-delà de 4,6 × 10⁻⁴ —
 voir la phase 26, c'est le découpage qui a changé, pas l'ombrage.
+
+## Phase 29 — L'image des COP était à l'envers, et on la retournait ✅
+
+Signalé, encore : « l'image est toujours pas dans le bon sens quand ça vient
+des COP ». Le correctif précédent avait ajouté un retournement à la lecture.
+Il était de trop, et voici les deux mesures qui le disent.
+
+**Côté Houdini.** Un COP `uvmap` lu par `allBufferElements` donne
+`V = −0,999` sur la **première** ligne du buffer et `+0,999` sur la dernière.
+La première ligne est donc le **bas** de l'image.
+
+**Côté Cycles.** Son lecteur de fichiers appelle OIIO avec `flip_y = true` par
+défaut (`ImageMetaData::oiio_load_pixels`) : un pas de ligne négatif partant de
+la dernière ligne, donc la ligne du haut du fichier atterrit **à la fin** du
+buffer. La première ligne d'une image Cycles est, elle aussi, le **bas**.
+
+Les deux bouts rangent déjà pareil. Retourner l'un des deux les désaccordait —
+c'était le retournement lui-même qui mettait la texture à l'envers. Supprimé,
+la lecture est désormais un `memcpy`.
+
+Étalonné sur le chemin fichier, qui ne passe pas par nous : un PNG rouge en
+haut et bleu en bas, posé sur un plan dont `v` vaut 1 en haut, ressort **rouge
+en haut** — rouge mesuré à y=20, bleu à y=44 sur un rendu de 64 pixels. Les
+deux chemins partagent maintenant la même convention.
+
+La leçon, pour la troisième fois sur ce sujet : une convention de rangement se
+lit **dans le code de celui qui la fixe**, pas dans une image qu'on regarde.
+`flip_y = true` était la réponse depuis le début.
+
+## Phase 30 — Le taux de découpage, dans les Render Settings ✅
+
+La phase 26 a donné une caméra au découpage adaptatif ; il restait à en donner
+le pas. `cycles:dicing_rate` — combien de pixels vaut un micropolygone — arrive
+dans l'onglet *Session*, à côté de `Samples`. Blender en expose deux, 1 px au
+rendu et 8 px dans la vue ; ici un seul, mais qui se change sans recompiler.
+
+Mesuré sur la scène de l'audit, en 720×360 :
+
+| taux | index des triangles | triangles | écart d'image vs 1 px |
+|---|---|---|---|
+| 1 px | 471 576 o | 19 649 | — |
+| 4 px | 32 472 o | 1 353 | 2,8 × 10⁻⁵ |
+| 8 px | 8 880 o | 370 | 8,0 × 10⁻⁵ |
+
+Cinquante-trois fois moins de triangles pour un écart d'image de 8 × 10⁻⁵ sur
+cette scène-là. Doubler le taux divise le nombre de micropolygones par quatre.
+
+Changer le réglage repose la valeur sur les maillages déjà synchronisés, sinon
+il n'aurait porté que sur ce qui arrive après lui. Le journal dit désormais, par
+maillage subdivisé, le taux et le niveau maximum retenus — sans quoi un
+découpage en millions de triangles ne se voit que dans la mémoire du
+périphérique, où personne ne pense à regarder.
+
+⚠️ **Deux pièges de mesure**, tous deux rencontrés ici. `husk` n'utilise le prim
+`RenderSettings` de la scène que si on ne lui donne ni `--camera` ni `--res` —
+sinon il l'ignore, et un réglage qu'on croit poser n'atteint jamais le delegate.
+Et un arbre de plugins temporaire posé dans `PXR_PLUGINPATH_NAME` ne l'emporte
+pas sur celui du package : les premiers essais tournaient sur la DLL installée,
+pas sur la fraîche.
+
+Audit `standard_surface` : 48 scènes, écart max 7 × 10⁻⁸ — l'arrondi du demi-flottant, rien d'autre.
+Banc Cycles : 97 rendus, 0 problème. Banc MaterialX : 10 nœuds, 0 problème.
