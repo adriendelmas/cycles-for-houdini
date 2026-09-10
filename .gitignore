@@ -11,3 +11,4 @@ tests/usd/t?.exr
 __pycache__/
 *.pyc
 tests/usd/bench-mtlx/
+tests/usd/bench-hair/

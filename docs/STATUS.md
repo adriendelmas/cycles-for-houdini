@@ -1885,3 +1885,129 @@ bout sur la même scène — bump 2,363, true 4,013, both 3,001 en valeur moyenn
 trois rendus bien distincts. Le *Render Geometry Settings* LOP n'affichera
 jamais Cycles : c'est un nœud à onglets par moteur et SideFX n'en fournit un que
 pour Karma. Cycles met ce réglage sur le matériau, comme Blender.
+
+## Phase 32 — La carte était pleine ✅ / ❌
+
+Signalé : « Cycles GPU est plus lent que Cycles CPU, je comprends pas ». Sur une
+RTX 3090 c'est impossible — sauf si le périphérique ne calcule pas.
+
+Le journal de mise au point, écrit dans un fichier faute de console, l'a dit :
+
+```
+Local memory reserved 0 bytes. (0B)
+Buffer allocate: __sbt,              1 504 octets  in host memory   ← 1,5 Ko !
+Buffer allocate: full_image_half_000,   128 Mo     in host memory
+Buffer allocate: full_image_half4_001,  512 Mo     in host memory
+Buffer allocate: tri_vindex,           19,9 Mo     in host memory
+```
+
+Un tampon de **1,5 Ko** qui n'entre pas en mémoire de périphérique : il ne
+restait rien. Tout — textures, géométrie, nœuds SVM — est parti en mémoire
+hôte, lue par le bus PCIe. D'où un GPU plus lent qu'un CPU.
+
+Deux relevés `nvidia-smi` : **115 Mo libres** sur 24 576 avec Houdini ouvert,
+**23 774 Mo** avec Houdini fermé. Ce n'est pas nous : nos trois images sont en
+mémoire hôte, elles n'ont jamais touché la carte. C'est Copernicus, dont les
+couches vivent sur le GPU — vérifié sur un COP de test, `onGPU: True` — et qui
+remplit la carte **avant** que Cycles ne construise sa scène.
+
+L'utilisateur a confirmé le diagnostic sans le savoir : **Karma GPU est lui
+aussi plus lent que Karma CPU**, moins fort mais nettement. Deux moteurs
+indépendants qui s'inversent sur la même carte ne s'expliquent pas par un défaut
+dans l'un ou l'autre.
+
+**Ce qui est corrigé de notre côté :**
+
+| | |
+|---|---|
+| canaux des COP | un masque, une hauteur, une rugosité n'ont qu'un canal ; on les servait en RGBA. 8K : 512 Mo → 128 Mo |
+| référence à la couche | lâchée dès la copie faite, plutôt qu'au ramasse-miettes |
+| avertissement mémoire | Cycles crie enfin, une fois par session, quand il bascule en mémoire hôte |
+
+Le repli en mémoire hôte est le plus coûteux du moteur et le plus discret : il ne
+s'écrivait qu'en niveau `debug`, que personne n'allume pour rendre. Il s'annonce
+désormais avec le libre et le total.
+
+❌ **Deux tentatives écartées, à ne pas rejouer.** Le rendu progressif de Cycles
+(`use_resolution_divider`, actif par défaut en amont, désactivé par le delegate
+Hydra) a été essayé deux fois.
+
+* La première fois sans toucher au pilote d'affichage : celui-ci verse le tampon
+  dans une texture pleine taille, donc l'image réduite ressortait **en petit et
+  répétée dans le bas du viewport**.
+* La seconde avec l'agrandissement écrit — texture d'appoint à la taille réduite
+  puis `glBlitFramebuffer` en filtrage linéaire. Techniquement correct, l'image
+  finale identique au pixel près. **Écarté quand même** : « ça marchait mieux et
+  plus rapidement avant », et l'usage tranche.
+
+La leçon est plus large que ce drapeau : le raisonnement disait qu'un
+échantillon pleine résolution à trois secondes ne peut pas être interactif, et
+c'était vrai. Mais la cause n'était pas là où il fallait montrer une image moins
+chère — elle était dans une carte pleine où même la géométrie se lit par le bus.
+Rendre progressif un moteur qui attend le bus n'accélère rien.
+
+## Phase 33 — Les cheveux MaterialX ✅
+
+Signalé : « aucun moyen de shader les hair sur MaterialX avec Cycles, le
+traducteur ne prend pas le chiang hair BSDF ». Il manquait cinq nœuds, et le
+plus bête d'entre eux coupait tout : `surface`, qui fait d'un BSDF nu un shader
+de surface. Sans lui, le terminal ne recevait rien — même un BSDF qu'on aurait
+su traduire.
+
+Le graphe canonique est celui de l'exemple *SimpleHair* livré avec Houdini, et
+c'est exactement ce qu'écrit un réseau construit avec les nœuds `mtlx*`
+d'Houdini, vérifié dans hython :
+
+    deon_hair_absorption_from_melanin ─┐
+    chiang_hair_absorption_from_color ─┴─ mix ─┐
+    chiang_hair_roughness ─────────────────────┼─ chiang_hair_bsdf ─ surface
+                                                      (R, TT, TRT)
+
+| nœud MaterialX | chez Cycles |
+|---|---|
+| `chiang_hair_bsdf` | `principled_hair_bsdf`, modèle Chiang, paramétré par l'absorption |
+| `chiang_hair_roughness` | transmis tel quel, sans conversion |
+| `chiang_hair_absorption_from_color` | la formule de MaterialX, en nœuds |
+| `deon_hair_absorption_from_melanin` | la formule de MaterialX, en nœuds |
+| `surface` | un mélange de fermetures : BSDF + EDF, et l'opacité avec du transparent |
+
+**MaterialX et Cycles implémentent le même papier**, Chiang et al. 2016, avec
+les mêmes polynômes. La seule différence est l'endroit où chacun convertit la
+rugosité : MaterialX la convertit dans `chiang_hair_roughness` et donne au BSDF
+une variance ; Cycles attend la rugosité « artiste » et convertit lui-même, au
+facteur √(π/8) près que MaterialX applique à l'usage. D'où deux règles :
+`chiang_hair_roughness` ne convertit rien, et une rugosité écrite en valeur sur
+le BSDF est ramenée à beta en inversant les polynômes.
+
+Les lobes TT et TRT n'ont pas de rugosité propre chez Cycles, qui les dérive à
+v/4 et 4v — exactement les échelles par défaut de MaterialX, 0,5 et 2 au carré.
+
+**La mélanine de MaterialX n'utilise pas les constantes de Cycles.** Se brancher
+sur la paramétrisation mélanine native aurait donné une autre teinte ; la
+formule est refaite nœud par nœud, comme celle de l'absorption depuis une
+couleur. Quand les entrées sont constantes, Cycles replie tout à la compilation.
+
+Vérifié par `tools/bench_hair.py`, qui compare chaque traduction à un résultat
+connu :
+
+| comparaison | écart moyen |
+|---|---|
+| BSDF MaterialX **vs** principled hair natif de Cycles | **0** — identique au bit près |
+| mélanine **vs** absorption calculée à la main | 8,0 × 10⁻⁵ |
+| absorption depuis une couleur **vs** paramétrisation couleur de Cycles | 7,2 × 10⁻⁵ |
+| rugosité écrite en variance **vs** rugosité par `chiang_hair_roughness` | 1,8 × 10⁻⁴ |
+
+Et le matériau construit avec les vrais nœuds d'Houdini rend identique au bit
+près à la scène de test, sans un avertissement.
+
+**Au passage, les connexions visent enfin plusieurs sockets.** Une valeur savait
+déjà atteindre `a;b` ; un fil non. La rugosité azimutale de l'absorption depuis
+une couleur, branchée sur un paramètre, doit atteindre les cinq termes du
+polynôme qui en dérive l'absorption, pas le premier seulement.
+
+Couverture MaterialX : 647 → **652 nodedefs**, 131 → **136 catégories**.
+
+**Ce qui n'est pas traduit :** `tint_R`, `tint_TT`, `tint_TRT` — le modèle de
+Chiang de Cycles n'a pas de teinte par lobe. Laissées à blanc, elles ne changent
+rien ; modifiées, elles s'annoncent par un avertissement. `curve_direction` de
+même.

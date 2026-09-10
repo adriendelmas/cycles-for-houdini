@@ -7,7 +7,7 @@ bibliothèque MaterialX 1.39.5 livrée avec Houdini 22.0.368.
 |---|---|
 | bibliothèque | 245 catégories, 898 nodedefs |
 | dont à traduire | 205 catégories, 823 nodedefs |
-| **couvert** | **131 catégories, 647 nodedefs — 79 %** |
+| **couvert** | **136 catégories, 652 nodedefs — 79 %** |
 
 Les 40 catégories écartées du dénominateur ne sont pas des nœuds de shading :
 les matériaux et les lumières, que Hydra transmet par ses propres primitives,
@@ -97,7 +97,6 @@ valeur d'un paramètre, ou une entrée variadique :
 | `blur` (6) | un flou de voisinage, que Cycles ne sait pas faire sur un graphe |
 | `gltf_normalmap`, `gltf_anisotropy_image`, `gltf_iridescence_thickness` | le reste de la famille glTF |
 | `artistic_ior`, `open_pbr_anisotropy`, `roughness_anisotropy`, `roughness_dual`, `glossiness_anisotropy` | conversions de paramètres |
-| `chiang_hair_*`, `deon_hair_*` | les cheveux, que Cycles a mais nomme autrement |
 | `generalized_schlick_bsdf`, `thin_film_bsdf`, `thin_surface`, `surface_unlit`, `gooch_shade`, `disney_*` | des fermetures sans équivalent direct |
 
 **Un nœud sans correspondance est annoncé**, pas ignoré : le delegate écrit
@@ -109,3 +108,11 @@ Cycles et non par `TF_WARN`, qu'husk avale.
 `tools/bench_mtlx.py` rend un matériau par nœud testé et vérifie la valeur qui
 en sort, pas seulement que l'image ne soit pas noire — c'est ce qui a attrapé
 le `contrast` gris.
+
+## Les cheveux, ajoutés le 2026-09-10
+
+`chiang_hair_bsdf`, `chiang_hair_roughness`, `chiang_hair_absorption_from_color`,
+`deon_hair_absorption_from_melanin`, et `surface` qui en fait un shader. Exacts,
+comparés au principled hair natif de Cycles par `tools/bench_hair.py` — voir la
+phase 33 de `STATUS.md`. Seules les teintes par lobe (`tint_R`, `tint_TT`,
+`tint_TRT`) restent sans équivalent chez Cycles.
