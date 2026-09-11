@@ -1,0 +1,49 @@
+From b8d34214125df9637ec2b54541ab47d60188d49b Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Fri, 11 Sep 2026 17:01:21 +0200
+Subject: [PATCH 74/74] hydra: crediter Ben Houston a la tete de la traduction
+ MaterialX
+
+La traduction MaterialX suit le blender-materialx-importer de Ben Houston
+(MIT) : c'est la reference de ce qu'il faut porter vers Cycles et de la
+maniere, et sa liste de categories a ete la premiere grille de la mesure de
+couverture. Les bruits MaterialX exacts et l'image en tuiles hexagonales que
+cette traduction vise sont la partie Cycles de sa PR Blender #158054 (Apache
+2.0), portee par le patch 0025.
+
+Rien de cela n'etait dit dans le code. C'est desormais ecrit la ou quelqu'un qui
+lit la traduction le trouvera.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index 150f4301..06437830 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -270,6 +270,23 @@ namespace {
+  * be removable in one piece: once Cycles understands MaterialX natively, the
+  * translation is no longer needed and the "mtlx" render context can be dropped.
+  * Keep it self-contained.
++ *
++ * Credits. The translation follows Ben Houston's blender-materialx-importer
++ * (https://github.com/bhouston/blender-materialx-importer, MIT licence,
++ * Copyright (c) 2026 Ben Houston), a validated MaterialX importer for Blender:
++ * it is the reference for which MaterialX nodes to carry over to Cycles and
++ * how, and its list of supported node categories was the first checklist of
++ * the coverage work, before tools/mtlx_coverage.py measured against the whole
++ * MaterialX library. The translation itself is
++ * written in C++ against this delegate's mapping machinery; what it owes the
++ * importer is the map of the ground.
++ *
++ * The MaterialX-exact procedural noise and hex-tiled image nodes this block
++ * targets (mx_noise_texture, mx_hextiled_image_texture) are his too: they are
++ * the Cycles side of his Blender pull request #158054
++ * (https://projects.blender.org/blender/blender/pulls/158054, Apache 2.0),
++ * validated against the MaterialX reference renderer by his material-fidelity
++ * suite, and carried in this series as a patch.
+  * ------------------------------------------------------------------------ */
+ 
+ /* A mapping states its fixed values as text, which suits the enum sockets that

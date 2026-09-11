@@ -5,7 +5,7 @@ vivent sur une branche a nous, en commits separes par sujet. Cette serie en est
 l'export par `git format-patch`.
 
     patches/5.2/   38 correctifs, base 3b97e190 (branche release/5.2)
-    patches/5.3/   73 correctifs, base 8424ed53 (branche main)
+    patches/5.3/   74 correctifs, base 8424ed53 (branche main)
 
 `tools/bootstrap.py` fait le chemin complet -- clone, `git am`, compilation.
 A la main, sur un clone deja pose :
@@ -54,7 +54,7 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0022` | hydra: translate the bulk of the MaterialX node library |
 | `0023` | hydra: translate MaterialX separate node output names |
 | `0024` | hydra: composite mappings, plus the transform and ramp nodes |
-| `0025` | kernel/scene: MaterialX-exact procedural noise nodes |
+| `0025` | kernel/scene: MaterialX-exact procedural noise nodes — Cycles side of Blender PR #158054, by Ben Houston |
 | `0026` | hydra: spread a scalar across a vector socket |
 | `0027` | hydra: translate MaterialX noise onto the MaterialX noise node |
 | `0028` | hydra: eleven more MaterialX families, and a general composite mechanism |
@@ -103,6 +103,7 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0071` | hydra: de quoi mesurer un viewport qui traine, et un journal qui arrive quelque part |
 | `0072` | hydra: une carte pleine qui se dit, et des COP qui ne pesent que leurs canaux |
 | `0073` | hydra: les cheveux MaterialX, et le noeud surface qui coupait tout |
+| `0074` | hydra: crediter Ben Houston a la tete de la traduction MaterialX |
 
 ---
 

@@ -1,5 +1,18 @@
 # MaterialX — ce qui est traduit, ce qui ne l'est pas
 
+> **Crédits.** Cette traduction suit la carte tracée par **Ben Houston** :
+> [blender-materialx-importer](https://github.com/bhouston/blender-materialx-importer)
+> (licence MIT), un importeur MaterialX validé pour Blender, est la référence
+> de ce qu'il faut traduire vers Cycles et de la manière ; sa liste de
+> catégories prises en charge a été la première grille de la mesure de
+> couverture, avant que `tools/mtlx_coverage.py` ne mesure contre la
+> bibliothèque MaterialX entière. Les bruits MaterialX exacts et
+> l'image en tuiles hexagonales viennent de sa
+> [PR Blender #158054](https://projects.blender.org/blender/blender/pulls/158054)
+> (Apache 2.0), validée au pixel près contre le rendu de référence de
+> MaterialX par sa suite [material-fidelity](https://material-fidelity.ben3d.ca),
+> et portée ici par le patch `0025`.
+
 Mesuré le 2026-09-09 avec `hython tools/mtlx_coverage.py --list`, contre la
 bibliothèque MaterialX 1.39.5 livrée avec Houdini 22.0.368.
 

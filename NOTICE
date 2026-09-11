@@ -14,3 +14,23 @@ patches against that source (see patches/), not as a copy of it.
 
 Some of those patches port work from Blender's own development, in which case
 the patch message names the upstream pull request it comes from.
+
+The MaterialX to Cycles translation owes its map to Ben Houston's work:
+
+    blender-materialx-importer -- https://github.com/bhouston/blender-materialx-importer
+    Copyright (c) 2026 Ben Houston
+    Licensed under the MIT License
+
+    The reference for which MaterialX nodes to translate to Cycles and how.
+    Its list of supported node categories was the first checklist of the
+    coverage work, before tools/mtlx_coverage.py measured against the whole
+    MaterialX library. The translation in this project
+    is written in C++ against the Hydra delegate's own mapping machinery.
+
+    Blender pull request #158054 -- https://projects.blender.org/blender/blender/pulls/158054
+    MaterialX-compatible (pixel perfect) noise shader nodes, by Ben Houston
+    Licensed under the Apache License, Version 2.0, as part of Blender
+
+    Its Cycles side -- the MaterialX-exact noise and hex-tiled image nodes,
+    validated against the MaterialX reference renderer by his material-fidelity
+    suite -- is carried by patch 0025 of the 5.3 series.

@@ -22,6 +22,7 @@ where the work went.
 - **MaterialX to Cycles translation** inside the delegate, so a MaterialX network
   authored anywhere in a USD pipeline renders in Cycles. Includes MaterialX's
   procedural noise implemented exactly, as native SVM and OSL kernel nodes.
+  Both follow Ben Houston's work — see [Credits](#credits).
 - **Copernicus COP textures read live**, without a round trip through disk.
 - Motion blur on animated transforms **and on deforming geometry** — meshes,
   curves and point clouds alike, from time-sampled points or from a
@@ -128,6 +129,24 @@ bit-identical between 5.2 and 5.3.
 
 - Karma's own material context (`kma:`) falls back to UsdPreviewSurface.
 - An intermittent CUDA "illegal address" on some scene edits, under investigation.
+
+## Credits
+
+The MaterialX translation is built on the map drawn by **Ben Houston**:
+
+- **[blender-materialx-importer](https://github.com/bhouston/blender-materialx-importer)**
+  (MIT) — a validated MaterialX importer for Blender, and the reference for
+  which MaterialX nodes to carry over to Cycles and how. Its list of supported
+  node categories was the first checklist of the coverage work, before
+  `tools/mtlx_coverage.py` measured against the whole MaterialX library.
+- **[Blender PR #158054](https://projects.blender.org/blender/blender/pulls/158054)**
+  (Apache 2.0) — MaterialX-compatible noise shader nodes, validated pixel for
+  pixel against the MaterialX reference renderer by his
+  [material-fidelity](https://material-fidelity.ben3d.ca) suite. Its Cycles side
+  — the exact noise and hex-tiled image nodes — is carried as patch `0025`.
+
+Cycles itself, and the Hydra delegate this project extends, are the Blender
+Foundation's and its contributors'.
 
 ## Licence
 

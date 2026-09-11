@@ -3,6 +3,19 @@
 Inventaire mesuré sur Houdini 22.0.368 : **239 VOP `mtlx*`** placeables dans
 l'interface, pour **161 nœuds Cycles** disponibles.
 
+> **Crédits.** Cette traduction suit la carte tracée par **Ben Houston** :
+> [blender-materialx-importer](https://github.com/bhouston/blender-materialx-importer)
+> (licence MIT), un importeur MaterialX validé pour Blender, est la référence
+> de ce qu'il faut traduire vers Cycles et de la manière ; sa liste de
+> catégories prises en charge a été la première grille de la mesure de
+> couverture, avant que `tools/mtlx_coverage.py` ne mesure contre la
+> bibliothèque MaterialX entière. Les bruits MaterialX exacts et
+> l'image en tuiles hexagonales viennent de sa
+> [PR Blender #158054](https://projects.blender.org/blender/blender/pulls/158054)
+> (Apache 2.0), validée au pixel près contre le rendu de référence de
+> MaterialX par sa suite [material-fidelity](https://material-fidelity.ben3d.ca),
+> et portée ici par le patch `0025`.
+
 Convention : `[x]` fait et **vérifié au rendu**, `[~]` mappé mais non vérifié,
 `[ ]` à faire, `[-]` sans équivalent Cycles, écarté avec la raison.
 
@@ -173,7 +186,8 @@ section.
 ### D'où vient `mx_noise_texture`
 
 Le nœud n'est pas dans Cycles amont : il vient de la
-[PR Blender #158054](https://projects.blender.org/blender/blender/pulls/158054),
+[PR Blender #158054](https://projects.blender.org/blender/blender/pulls/158054)
+de Ben Houston,
 dont la partie Cycles est isolée et purement additive, donc reprise telle
 quelle dans la série de patchs (à deux ajustements près, voir les patchs).
 
