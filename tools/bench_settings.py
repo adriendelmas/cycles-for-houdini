@@ -137,6 +137,41 @@ CATCHER = """    def Sphere "ball"
     }"""
 
 
+# Two spheres; the sun lights only the left one through its lightLink
+# collection.
+LINKED = """    def DistantLight "sun" (
+        prepend apiSchemas = ["CollectionAPI:lightLink"]
+    )
+    {
+        float inputs:intensity = 3
+        bool inputs:normalize = 1
+        uniform bool collection:lightLink:includeRoot = 0
+        rel collection:lightLink:includes = </world/a>
+    }
+    def Sphere "a"
+    {
+        double radius = 0.8
+        double3 xformOp:translate = (-1, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+    def Sphere "b"
+    {
+        double radius = 0.8
+        double3 xformOp:translate = (1, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }"""
+
+# The catcher scene without the catcher, and the sphere left out of the sun's
+# shadow link: the ground under it stays lit.
+UNSHADOWED = CATCHER.replace("        bool primvars:cycles:object:shadow_catcher = 1" + chr(10), "").replace(
+    """    def DistantLight "sun"
+    {""", """    def DistantLight "sun" (
+        prepend apiSchemas = ["CollectionAPI:shadowLink"]
+    )
+    {
+        rel collection:shadowLink:excludes = </world/ball>""")
+
+
 def corner(img):
     return img[2, 2]
 
@@ -223,6 +258,15 @@ CASES = [
      lambda img: None if img[RES - 4, 4, 3] < 0.05 and img[45, RES // 2, 3] > 0.1 else
      "plane alpha %.3f away from the shadow, %.3f under it"
      % (img[RES - 4, 4, 3], img[45, RES // 2, 3])),
+    ("light_link", LINKED, "", [],
+     # The dome (1) lights both, 0.8 on a 0.8 albedo; the sun only the left.
+     lambda img: None if img[32, 18, 0] > 1.2 and abs(img[32, 46, 0] - 0.8) < 0.05 else
+     "linked sphere %.3f, unlinked %.3f: expected dome and sun, dome only (0.8)"
+     % (img[32, 18, 0], img[32, 46, 0])),
+    ("shadow_link", UNSHADOWED, "", [],
+     lambda img: None if img[45, RES // 2, 0] > 0.9 * img[60, RES // 2, 0] else
+     "ground %.3f under the sphere, %.3f away: the sphere is out of the shadow link"
+     % (img[45, RES // 2, 0], img[60, RES // 2, 0])),
     ("volume_cd", VOLUME, "", [],
      lambda img: None if centre(img)[0] > 2.0 * centre(img)[1] else
      "volume %s, expected red from the Cd field" % centre(img).round(3)),

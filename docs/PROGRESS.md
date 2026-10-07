@@ -42,7 +42,7 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | Cylinder light | 🟡 | 0.95 of Karma | Rectangle approximation, one-sided |
 | IES, colour temperature, textures | ✅ | upstream | |
 | `visibleInPrimaryRay`, `shadowEnable` | ✅ | upstream | |
-| Light linking, shadow linking | ❌ | code read | No category reading (K-24) |
+| Light linking, shadow linking | ✅ | `bench_settings.py` | Hydra's light linking scene index → Cycles light and shadow sets (K-24, 0089); no light filters |
 | `shadow:color`, `diffuse`/`specular` multipliers, light filters | ❌ | code read | |
 | Dome `textureFormat` | ❌ | code read | Lat-long assumed |
 | Camera: perspective, ortho, DoF, apertures | ✅ | phase 2 | |

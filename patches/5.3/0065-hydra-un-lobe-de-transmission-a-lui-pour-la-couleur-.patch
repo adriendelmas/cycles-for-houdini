@@ -1,7 +1,7 @@
 From e322bb798505811fd48e2e6a093c50a03bc057eb Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sat, 5 Sep 2026 01:13:51 +0200
-Subject: [PATCH 65/88] hydra: un lobe de transmission a lui, pour la couleur
+Subject: [PATCH 65/89] hydra: un lobe de transmission a lui, pour la couleur
  et la rugosite que MaterialX lui donne
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8

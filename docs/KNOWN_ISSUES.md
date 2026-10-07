@@ -272,10 +272,16 @@ Instances born or dying inside the shutter stay sharp. `tools/bench_motion.py`
 measures the trail of a transform, deforming points, instance positions and
 an instancer transform (6 cases).
 
-### K-24 No light linking or shadow linking — confirmed
+### K-24 No light linking or shadow linking — confirmed — **fixed** (0089)
 No code reads Hydra categories (`HdCategoriesSchema`, `lightLink`/`shadowLink`
 collections). Cycles supports it since 4.0 (`Object::light_set_membership`,
 `Light::light_set_membership`, `shadow_set_membership`).
+
+Fixed 2026-10-08: Hydra's light linking scene index is registered for
+Cycles; the session turns categories into light and shadow sets (one per
+distinct combination of linked categories, at most 63). Measured in
+`bench_settings.py` (`light_link`, `shadow_link`). Light filters and
+per-instance categories are not handled.
 
 ### K-25 Five passes only — confirmed — **fixed** (0087), manifest left
 `session.cpp:21` maps color, depth, normal, primId, instanceId and the Houdini
