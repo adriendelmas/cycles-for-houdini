@@ -24,7 +24,8 @@ import OpenImageIO as oiio
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INSTALL = os.environ.get("CYCLES_INSTALL_DIR", "install")
-BENCH = os.path.join(ROOT, "tests", "usd", "bench" if INSTALL == "install" else "bench-53")
+VERSION = "5.2" if INSTALL == "install" else "5.3"
+BENCH = os.path.join(ROOT, "tests", "nodes", VERSION)
 OUTPUT = os.path.join(BENCH, "output")
 REFERENCES = os.path.join(BENCH, "references")
 

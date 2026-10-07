@@ -276,7 +276,7 @@ should not imply the viewport is "linked" to the Cycles nodes.
 ## D. Repository and tests
 
 ### K-50 Benches overwrite their own references — confirmed — **fixed** (2680470)
-`tools/bench_render.py` wrote to `tests/usd/bench-53/images/`, the directory
+`tools/bench_render.py` wrote to `tests/usd/bench-53/images/` (today `tests/nodes/5.3/references/`), the directory
 git tracked as references, and `bench_diff.py` compared against `_baseline.exr`
 only. Now `references/` is tracked, `output/` is ignored, and `bench_diff.py`
 compares the two with a tolerance and moves a reference only on `--accept`.

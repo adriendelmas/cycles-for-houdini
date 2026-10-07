@@ -26,7 +26,9 @@ These predate the map above and stay as written. They are in French.
 | [CYCLES_VOPS.md](CYCLES_VOPS.md) | Inventory of the generated VOP library. |
 | [ENVIRONMENT.md](ENVIRONMENT.md) | The build machine: toolchain and library versions. |
 
-The patch series has its own notes in [`../patches/README.md`](../patches/README.md), one entry per patch, with the bug each one fixes.
+The patch series has its own notes in [`../patches/README.md`](../patches/README.md), one entry per patch, with the bug each one fixes. The test tree is described in [`../tests/README.md`](../tests/README.md): which folder holds scenes, which holds references, and which a script writes into.
+
+Images of the journal live in `images/`; nothing rendered by a test goes in `docs/`.
 
 ## Keeping this in step
 

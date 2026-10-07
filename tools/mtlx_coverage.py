@@ -30,7 +30,7 @@ INLINE = ("ND_add_", "ND_subtract_", "ND_multiply_", "ND_divide_")
 NOT_SHADING = re.compile(
     r"^(Lama|Usd|surfacematerial|volumematerial|displacementmaterial|surface$|"
     r"volume$|light$|point_light|spot_light|directional_light|"
-    r"arrayappend|osl_set_ci|.*_to_lin_rec709$|standard_surface_to_)"
+    r"arrayappend|osl_set_ci|.*_to_lin_rec709$|standard_surface_to_|open_pbr_surface_to_)"
 )
 
 PREFIX_RE = re.compile(r'\{"(ND_[A-Za-z0-9_]*)"')

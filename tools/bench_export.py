@@ -18,7 +18,8 @@ sys.path.insert(0, os.path.join(ROOT, INSTALL, "houdini", "scripts", "python"))
 hou.hda.installFile(os.path.join(ROOT, INSTALL, "houdini", "otls", "cycles_vops.hda"))
 import cycles_builder  # noqa: E402
 
-OUT = os.path.join(ROOT, "tests", "usd", "bench" if INSTALL == "install" else "bench-53")
+VERSION = "5.2" if INSTALL == "install" else "5.3"
+OUT = os.path.join(ROOT, "tests", "nodes", VERSION)
 if not os.path.isdir(OUT):
     os.makedirs(OUT)
 

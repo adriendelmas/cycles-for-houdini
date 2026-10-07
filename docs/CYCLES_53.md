@@ -32,7 +32,7 @@ exige un poids de transmission et une échelle de dispersion tous deux positifs.
 Un nombre d'Abbe **bas** disperse **fort** — c'est l'inverse de l'intuition, mais
 c'est la définition du nombre d'Abbe en optique.
 
-Vérifié au rendu (`tests/usd/disp/`) : à dispersion 0 les trois canaux sont
+Vérifié au rendu (`tests/scenes/displacement/`) : à dispersion 0 les trois canaux sont
 rigoureusement identiques ; à 1 ils se séparent, et l'écart croît du rouge vers
 le bleu.
 
@@ -116,5 +116,5 @@ CYCLES_INSTALL_DIR=install-53 hython tools/bench_export.py
 CYCLES_INSTALL_DIR=install-53 hython tools/bench_render.py
 ```
 
-Les résultats du banc vont dans `tests/usd/bench-53/` pour ne pas écraser ceux
+Les résultats du banc vont dans `tests/nodes/5.3/` pour ne pas écraser ceux
 de la 5.2 et permettre la comparaison entre versions.

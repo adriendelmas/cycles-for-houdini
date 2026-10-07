@@ -23,7 +23,7 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT = os.path.join(ROOT, "tests", "usd", "bench-hair")
+OUT = os.path.join(ROOT, "tests", "materialx", "hair")
 os.makedirs(OUT, exist_ok=True)
 HFS = os.path.join(os.environ.get("HFS", "E:/Side Effects Software/Houdini22.0.368"), "bin")
 

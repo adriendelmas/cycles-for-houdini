@@ -27,7 +27,7 @@ Lancement :
 
 ## Phase 2 — Première image ✅
 
-![premier rendu](milestone-first-render.png)
+![premier rendu](images/milestone-first-render.png)
 
 Rendu par : `husk --renderer HdCyclesPlugin --camera /world/camera --res 480 270
 --output geo.exr geo_only.usda`
@@ -38,7 +38,7 @@ displayColor, ombres de contact, path tracing sur 128 threads
 
 ## Phase 3 — Lumières, instancing, subdivision ✅
 
-![phase 3](milestone-phase3.png)
+![phase 3](images/milestone-phase3.png)
 
 Validé sur `tests/usd/phase3.usda` :
 
@@ -56,7 +56,7 @@ scène de test mal écrite.
 
 ## Phase 4a — Nœuds Cycles natifs dans USD ✅
 
-![phase 4a](milestone-phase4-sdr.png)
+![phase 4a](images/milestone-phase4-sdr.png)
 
 **161 nœuds Cycles** sont publiés dans le registre Sdr d'USD (patch 0004), avec
 leurs types, valeurs par défaut et options d'enum lues du registre Cycles.
@@ -73,7 +73,7 @@ mais sans aucun matériau, ce qui est trompeur.
 
 ## Phase 4b — Traduction MaterialX ✅
 
-![phase 4b](milestone-phase4b-materialx.png)
+![phase 4b](images/milestone-phase4b-materialx.png)
 
 Les trois objets ci-dessus sont rendus depuis des matériaux **MaterialX**
 `ND_standard_surface_surfaceshader` : métal (`metalness=1`,
@@ -97,7 +97,7 @@ mappées et ignorées — c'est documenté dans le code.
 
 ## Phase 5 — Curves, points, volumes ✅
 
-![phase 5](milestone-phase5.png)
+![phase 5](images/milestone-phase5.png)
 
 Validé sur `tests/usd/phase5.usda` :
 
@@ -130,7 +130,7 @@ Les alias de nommage Houdini (`C`, `Pz`, `N`) passent par le patch 0002.
 
 ### Motion blur d'objet : absent
 
-![motion blur](gap-motionblur.png)
+![motion blur](images/gap-motionblur.png)
 
 Voir l'anomalie A7 ci-dessous.
 
@@ -268,7 +268,7 @@ une conclusion erronée.
 
 ### A7 — Motion blur d'objet ✅ RÉSOLU (patch 0010)
 
-![motion blur](milestone-motionblur.png)
+![motion blur](images/milestone-motionblur.png)
 
 Résolu. Détail dans `patches/README.md`. Ce qui suit décrit l'état initial.
 
@@ -510,7 +510,7 @@ La branche voisine, celle qui ne met a jour que les parametres, appelait bien
 
 ### Displacement
 
-![displacement](milestone-displacement.png)
+![displacement](images/milestone-displacement.png)
 
 Deux manques cumules :
 
@@ -870,7 +870,7 @@ lui-même, le pas central à l'indice 0.
 Les **trois** géométries en bénéficient — maillage, courbes, nuage de points —
 par un échantillonnage partagé.
 
-![flou de deformation](milestone-deform.png)
+![flou de deformation](images/milestone-deform.png)
 
 Avant en haut, après en bas. Le cube vert n'a pas de transform animée : seuls
 ses points bougent. Le rouge, animé par sa transform, sert de témoin — les deux
@@ -974,7 +974,7 @@ Or c'est exactement ce qu'écrit Houdini dès que la normale vit sur les
 point. Un maillage aux normales lisses rendait donc facetté — l'inverse du
 défaut d'origine.
 
-![normales par coin](milestone-normals.png)
+![normales par coin](images/milestone-normals.png)
 
 À gauche ce que donnait un maillage à normales par coin, à droite ce qu'il
 donne. Même géométrie, mêmes normales : seule leur lecture a changé.

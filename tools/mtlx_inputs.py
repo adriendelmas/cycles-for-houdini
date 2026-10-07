@@ -14,7 +14,7 @@ delegate's own warnings - which name the node path - are sorted per nodedef.
 
 Reports, for the routed nodedefs: clean (no warning), inputs dropped, output
 not found, node missing. `--list` prints the dropped inputs per nodedef.
-The stage and the log stay in tests/usd/bench-mtlx/inputs/ for inspection.
+The stage and the log stay in tests/materialx/output/inputs/ for inspection.
 """
 
 import math
@@ -28,7 +28,7 @@ import MaterialX as mx
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HFS = os.path.join(os.environ.get("HFS", "E:/Side Effects Software/Houdini22.0.368"), "bin")
 SOURCE = os.path.join(ROOT, "external", "cycles-53", "src", "hydra", "material.cpp")
-OUT = os.path.join(ROOT, "tests", "usd", "bench-mtlx", "inputs")
+OUT = os.path.join(ROOT, "tests", "materialx", "output", "inputs")
 if not os.path.isdir(OUT):
     os.makedirs(OUT)
 
@@ -37,7 +37,7 @@ INLINE = ("ND_add_", "ND_subtract_", "ND_multiply_", "ND_divide_")
 NOT_SHADING = re.compile(
     r"^(Lama|Usd|surfacematerial|volumematerial|displacementmaterial|"
     r"light$|point_light|spot_light|directional_light|"
-    r"arrayappend|osl_set_ci|.*_to_lin_rec709$|standard_surface_to_)"
+    r"arrayappend|osl_set_ci|.*_to_lin_rec709$|standard_surface_to_|open_pbr_surface_to_)"
 )
 PREFIX_RE = re.compile(r'\{"(ND_[A-Za-z0-9_]*)"')
 

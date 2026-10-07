@@ -30,7 +30,7 @@ form (`/e/...`).
 | Command | Scope | Proves | Does **not** prove |
 |---|---|---|---|
 | `hython tools/bench_export.py` | 97 native Cycles VOPs | Each VOP exports through the real Solaris translator to USD | Values |
-| `python tools/bench_render.py` | Same 97 scenes | No delegate warning, image present, not black; renders into `tests/usd/bench-53/output/` (ignored) | That the image is right |
+| `python tools/bench_render.py` | Same 97 scenes | No delegate warning, image present, not black; renders into `tests/nodes/5.3/output/` (ignored) | That the image is right |
 | `hython tools/bench_diff.py [--accept node\|all]` | `output/` vs `references/` | Each node matches its committed reference (off by less than `1e-3` absolute or 1 % relative on 99.5 % of pixels); lists nodes inert against `_baseline.exr`; `cycles_set_normal` is reported, not counted (A19) | - |
 | `hython tools/bench_mtlx.py [name]` | 11 MaterialX nodes (+3 textured with `CYCLES_BENCH_TEXTURE`) | Rendered colour within 2 % of a value **computed from the MaterialX definition**, file named next to each formula | Anything the plane's mean cannot see: directions, closures |
 | `hython tools/bench_hair.py` | 4 pairs | MaterialX Chiang hair equals native principled hair, error < 1e-3 | - |
@@ -60,7 +60,7 @@ default so that Hydra forwards it, wired to a terminal the way its output type
 requires (surfaces directly, BSDF/EDF through `surface`, VDF through `volume`,
 values into `standard_surface.base_color`). One husk render at one sample;
 the delegate's warnings carry the material path and are sorted per nodedef.
-The stage and the log stay in `tests/usd/bench-mtlx/inputs/`.
+The stage and the log stay in `tests/materialx/output/inputs/`.
 
 ### 2. Value: `bench_mtlx.py`
 
@@ -77,7 +77,7 @@ spread). To add: every `_color3`/`_vector3` variant of each math family
 ### 3. Image: `bench_render.py` + `bench_diff.py`
 
 ```
-tests/usd/bench-53/
+tests/nodes/5.3/
     scenes/        generated
     references/    tracked - rendered once, reviewed, committed on purpose
     output/        ignored - what the last run produced

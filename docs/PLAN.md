@@ -25,7 +25,7 @@ trusted.
 
 | Task | Closes | Done when |
 |---|---|---|
-| Separate bench output from references: `tests/usd/bench-53/images/` becomes `references/` (tracked) and `output/` (ignored); `bench_diff.py` compares output to reference per node with a tolerance | K-50 | `git status` clean after a bench run; a deliberate one-line regression in `material.cpp` is caught |
+| Separate bench output from references: `tests/usd/bench-53/images/` becomes `tests/nodes/5.3/references/` (tracked) and `output/` (ignored); `bench_diff.py` compares output to reference per node with a tolerance | K-50 | `git status` clean after a bench run; a deliberate one-line regression in `material.cpp` is caught |
 | Expected values in `bench_mtlx.py` computed from the MaterialX source expressions, not from the renderer; add `mix`, `plus`, `layer`, `saturate`, `facingratio`, `geomcolor` cases | K-52 | `saturate` case **fails** before phase 1 and passes after |
 | `mtlx_coverage.py` reports three numbers: routed, input-complete (every nodedef input has a mapping or a documented omission), render-verified | K-51 | README quotes the third number |
 | Re-measure the render pass with a timestamp per statement in the camera/AOV bucket | K-31 | The 4 s is attributed to a named call |

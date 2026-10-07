@@ -1,18 +1,19 @@
+# Cycles itself, its builds and the installs: rebuilt by tools/bootstrap.py.
 external/cycles/
 external/cycles-53/
 build/
 install/
 install-53/
 *.user
-*.log
-tests/usd/*.exr
-tests/usd/*.png
-tests/usd/t?.exr
 __pycache__/
 *.pyc
-tests/usd/bench-mtlx/
-tests/usd/bench-hair/
+*.log
 
-# Bench output: compared against the committed references, never committed.
-tests/usd/bench/output/
-tests/usd/bench-53/output/
+# Rendered output never lives next to the scenes or the references. Each bench
+# writes into one of these; the references it compares against are tracked.
+tests/nodes/*/scenes/
+tests/nodes/*/output/
+tests/materialx/output/
+tests/materialx/hair/
+tests/materialx/standard_surface/*.exr
+tests/scratch/

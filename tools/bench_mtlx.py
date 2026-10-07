@@ -27,7 +27,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HFS = os.path.join(os.environ.get("HFS", "E:/Side Effects Software/Houdini22.0.368"), "bin")
-OUT = os.path.join(ROOT, "tests", "usd", "bench-mtlx")
+OUT = os.path.join(ROOT, "tests", "materialx", "output")
 if not os.path.isdir(OUT):
     os.makedirs(OUT)
 
@@ -77,22 +77,54 @@ def Xform "world"
     {
         def Material "M"
         {
-            token outputs:mtlx:surface.connect = </world/Materials/M/surf.outputs:out>
+%s
+        }
+    }
+}
+"""
+
+# How the probe reaches the surface terminal, by the kind of value it produces.
+# A colour drives the base colour of a specular-free standard_surface; a BSDF
+# goes through `surface`; a surfaceshader is the terminal itself.
+TERMINALS = {
+    "color": """            token outputs:mtlx:surface.connect = </world/Materials/M/surf.outputs:out>
             def Shader "surf"
             {
                 uniform token info:id = "ND_standard_surface_surfaceshader"
                 float inputs:specular = 0
                 color3f inputs:base_color.connect = </world/Materials/M/probe.outputs:out>
                 token outputs:out
-            }
-            def Shader "probe"
+            }""",
+    "bsdf": """            token outputs:mtlx:surface.connect = </world/Materials/M/surf.outputs:out>
+            def Shader "surf"
             {
-                %s
-            }
-        }
-    }
+                uniform token info:id = "ND_surface"
+                token inputs:bsdf.connect = </world/Materials/M/probe.outputs:out>
+                token outputs:out
+            }""",
+    "surface": """            token outputs:mtlx:surface.connect = </world/Materials/M/probe.outputs:out>""",
 }
-"""
+
+
+def shader(name, lines):
+    body = "\n".join("                " + l for l in lines)
+    return '            def Shader "%s"\n            {\n%s\n            }' % (name, body)
+
+
+# A Lambert lobe, the same the colour template's standard_surface reduces to
+# at specular zero, so the closure cases share its gain.
+def diffuse(name, color):
+    return shader(name, ['uniform token info:id = "ND_oren_nayar_diffuse_bsdf"',
+                         "color3f inputs:color = %s" % rgb(color),
+                         "float inputs:roughness = 0",
+                         "token outputs:out"])
+
+
+def matte(name, color):
+    return shader(name, ['uniform token info:id = "ND_standard_surface_surfaceshader"',
+                         "float inputs:specular = 0",
+                         "color3f inputs:base_color = %s" % rgb(color),
+                         "token outputs:out"])
 
 # The factor between a base colour and the rendered mean, measured on a case
 # whose answer is known - a constant of one.
@@ -139,11 +171,23 @@ def mx_contrast(c, amount, pivot):
 
 
 def rgb(c):
-    return "(%g, %g, %g)" % c
+    return "(%g, %g, %g)" % tuple(c)
 
+
+def add3(a, b):
+    return tuple(x + y for x, y in zip(a, b))
+
+
+def scale3(a, s):
+    return tuple(x * s for x in a)
+
+
+RED, BLUE = (0.9, 0.2, 0.1), (0.1, 0.2, 0.9)
 
 # (name, body of the `probe` prim, expected colour or None, options)
-# Options: `mesh` adds lines to the mesh prim; `tol` overrides the tolerance.
+# Options: `mesh` adds lines to the mesh prim; `tol` overrides the tolerance;
+# `terminal` picks how the probe reaches the surface (see TERMINALS); `extra`
+# adds shader prims the probe connects to.
 CASES = [
     ("dot", [
         'uniform token info:id = "ND_dot_color3"',
@@ -215,6 +259,52 @@ CASES = [
         'uniform token info:id = "ND_facingratio_float"',
         "float outputs:out",
     ], (0.96, 0.96, 0.96), {"tol": 0.04}),
+    # Closures. pbrlib `mix` is mix(bg, fg, mix) like the colour one; `add`
+    # sums; `multiply` scales by a weight. Two Lambert lobes give a mean that
+    # is the same function of their colours.
+    ("closure_mix", [
+        'uniform token info:id = "ND_mix_bsdf"',
+        "token inputs:fg.connect = </world/Materials/M/d1.outputs:out>",
+        "token inputs:bg.connect = </world/Materials/M/d2.outputs:out>",
+        "float inputs:mix = 0.75",
+        "token outputs:out",
+    ], mx_mix(BLUE, RED, 0.75), {"terminal": "bsdf",
+                                  "extra": [diffuse("d1", RED), diffuse("d2", BLUE)]}),
+    ("closure_add", [
+        'uniform token info:id = "ND_add_bsdf"',
+        "token inputs:in1.connect = </world/Materials/M/d1.outputs:out>",
+        "token inputs:in2.connect = </world/Materials/M/d2.outputs:out>",
+        "token outputs:out",
+    ], add3((0.3, 0.1, 0.0), (0.1, 0.2, 0.3)), {
+        "terminal": "bsdf",
+        "extra": [diffuse("d1", (0.3, 0.1, 0.0)), diffuse("d2", (0.1, 0.2, 0.3))]}),
+    ("closure_scale", [
+        'uniform token info:id = "ND_multiply_bsdfF"',
+        "token inputs:in1.connect = </world/Materials/M/d1.outputs:out>",
+        "float inputs:in2 = 0.5",
+        "token outputs:out",
+    ], scale3((0.8, 0.4, 0.2), 0.5), {"terminal": "bsdf",
+                                       "extra": [diffuse("d1", (0.8, 0.4, 0.2))]}),
+    ("surface_mix", [
+        'uniform token info:id = "ND_mix_surfaceshader"',
+        "token inputs:fg.connect = </world/Materials/M/s1.outputs:out>",
+        "token inputs:bg.connect = </world/Materials/M/s2.outputs:out>",
+        "float inputs:mix = 0.25",
+        "token outputs:out",
+    ], mx_mix(BLUE, RED, 0.25), {"terminal": "surface",
+                                  "extra": [matte("s1", RED), matte("s2", BLUE)]}),
+    # `layer` has no exact Cycles form (a Fresnel-weighted mix stands in); the
+    # case only asks that a dielectric over a diffuse renders, and not black.
+    ("layer", [
+        'uniform token info:id = "ND_layer_bsdf"',
+        "token inputs:top.connect = </world/Materials/M/coat.outputs:out>",
+        "token inputs:base.connect = </world/Materials/M/d1.outputs:out>",
+        "token outputs:out",
+    ], None, {"terminal": "bsdf",
+              "extra": [diffuse("d1", RED),
+                        shader("coat", ['uniform token info:id = "ND_dielectric_bsdf"',
+                                        "float inputs:ior = 1.5",
+                                        "token outputs:out"])]}),
 ]
 
 TEXTURED = [
@@ -230,10 +320,12 @@ env.setdefault("CYCLES_LOGGING", "1")
 env.setdefault("CYCLES_LOGGING_LEVEL", "warning")
 
 
-def render(name, body, mesh_extra):
+def render(name, body, options):
+    material = [TERMINALS[options.get("terminal", "color")], shader("probe", body)]
+    material += options.get("extra", [])
     scene = os.path.join(OUT, name + ".usda")
     open(scene, "w", encoding="utf-8").write(
-        SCENE % (mesh_extra, "\n                ".join(body)))
+        SCENE % (options.get("mesh", ""), "\n".join(material)))
     exr = os.path.join(OUT, name + ".exr")
     if os.path.exists(exr):
         os.remove(exr)
@@ -273,7 +365,7 @@ def main():
     print("%-18s %-9s %s" % ("node", "state", "detail"))
     problems = []
     for name, body, expected, options in cases:
-        exr, warns, log = render(name, body, options.get("mesh", ""))
+        exr, warns, log = render(name, body, options)
         tol = options.get("tol", 0.02)
         if not os.path.exists(exr):
             state = "NO IMAGE"

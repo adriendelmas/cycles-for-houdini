@@ -16,7 +16,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HFS = os.path.join(os.environ.get("HFS", "E:/Side Effects Software/Houdini22.0.368"), "bin")
 # Quelle installation viser : `install` pour la 5.2, `install-53` pour la 5.3.
 INSTALL = os.environ.get("CYCLES_INSTALL_DIR", "install")
-BENCH = os.path.join(ROOT, "tests", "usd", "bench" if INSTALL == "install" else "bench-53")
+VERSION = "5.2" if INSTALL == "install" else "5.3"
+BENCH = os.path.join(ROOT, "tests", "nodes", VERSION)
 SCENES = os.path.join(BENCH, "scenes")
 # What the run produces; the committed references live next door in
 # references/ and move only through bench_diff.py --accept.
@@ -25,7 +26,8 @@ for d in (SCENES, IMAGES):
     if not os.path.isdir(d):
         os.makedirs(d)
 
-BASE = open(os.path.join(ROOT, "tests", "usd", "phase4b_mtlx.usda"), encoding="utf-8").read()
+BASE = open(os.path.join(ROOT, "tests", "materialx", "scenes", "phase4b_mtlx.usda"),
+            encoding="utf-8").read()
 
 env = dict(os.environ)
 # A PXR_PLUGINPATH_NAME already in the environment wins: that is how a freshly

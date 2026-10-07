@@ -109,7 +109,7 @@ carries your own paths — there is nothing to edit by hand.
 |---|---|
 | `patches/5.2/`, `patches/5.3/` | our changes to Cycles, one commit per subject |
 | `tools/` | the Material Builder generator, the test benches, bootstrap |
-| `tests/usd/` | 97 single-node scenes and their reference images |
+| `tests/` | the node bench and its references, the MaterialX scenes, the feature scenes — see [tests/README.md](tests/README.md) |
 | `docs/` | the project map — start at [docs/README.md](docs/README.md) |
 
 The patch series is the interesting part: each patch is a self-contained fix with
