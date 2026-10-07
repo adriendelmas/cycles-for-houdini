@@ -14,6 +14,15 @@ the bug reproduces the mistakes already in the journal.
 Nothing renders differently after this phase; everything that follows can be
 trusted.
 
+> **Status 2026-10-07: done**, except two items. Bench split (commit
+> `2680470`); `bench_mtlx.py` computes its expected values from the MaterialX
+> definitions and carries 11 cases; the three coverage numbers exist
+> (`mtlx_coverage.py` 652 routed, `mtlx_inputs.py` 511 input-complete,
+> `bench_mtlx.py` 11 value-verified); `count_nodes.py` settles the node count;
+> the render-pass stopwatch is split (patch 0076). Open: the K-31 reading
+> needs a live Houdini viewport, and README's numbers are updated in the same
+> commit as this note.
+
 | Task | Closes | Done when |
 |---|---|---|
 | Separate bench output from references: `tests/usd/bench-53/images/` becomes `references/` (tracked) and `output/` (ignored); `bench_diff.py` compares output to reference per node with a tolerance | K-50 | `git status` clean after a bench run; a deliberate one-line regression in `material.cpp` is caught |
@@ -27,6 +36,13 @@ trusted.
 
 One-line fixes with outsized effect. Do them together and regenerate the
 patch series once.
+
+> **Status 2026-10-07: done** (patch 0076). All seven rows; `mix`, `plus`,
+> `saturate`, `geomcolor` and `facingratio` pass the value bench exactly.
+> Fixing `geomcolor` uncovered K-19 - float3 primvars copied at the wrong
+> stride, an upstream bug that corrupted every per-vertex colour - fixed as
+> patch 0075. Still to value-test: the six other blends, `viewdirection`, the
+> colour-space names.
 
 | Task | Closes |
 |---|---|

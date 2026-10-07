@@ -11,6 +11,7 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | Feature | State | Verified by | Notes |
 |---|---|---|---|
 | Polygon meshes, triangulation, primvars | ✅ | 97-node bench, user scenes | |
+| Per-vertex colours and vector primvars | ✅ | `geomcolor` bench case exact | Garbage until 2026-10-07 (K-19, patch 0075) |
 | Face-varying (corner) normals | ✅ | bit-identical vs per-point normals | |
 | Smooth/flat from authored normals | ✅ | measured | |
 | Catmull-Clark subdivision, creases, corners | 🟡 | measured | Only when Hydra's `refineLevel > 0`; the max dicing level *is* that display hint (K-30) |
@@ -95,8 +96,11 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 
 ## Materials - MaterialX
 
-The coverage tool reports 652/823 nodedefs; that number counts prefix hits.
-This table says what actually renders right.
+Three numbers, measured 2026-10-07 (commands in [TESTING.md](TESTING.md)):
+**652** of 823 nodedefs route to a mapping (`mtlx_coverage.py`), **511** of
+those keep every input, output and node when rendered with all inputs authored
+(`mtlx_inputs.py`), and **11** are verified against a value computed from the
+MaterialX definition (`bench_mtlx.py`). This table says what renders right.
 
 | Family | State | Notes |
 |---|---|---|
@@ -106,12 +110,12 @@ This table says what actually renders right.
 | `normalmap`, `bump`, `displacement` | ✅ | |
 | `heighttonormal` | 🐞 | Outputs a world normal, not a tangent map (K-12) |
 | `texcoord`, `position`, `normal`, `tangent` | 🟡 | `position` object space ✅; `normal`/`tangent` world space; no UV set index |
-| `geomcolor` | 🐞 | No attribute name (K-06) |
+| `geomcolor` | ✅ | Exact since 2026-10-07 (K-06, K-19); `index` not carried |
 | `geompropvalue` | 🟡 | Scalar output only |
 | MaterialX noises (perlin, fractal, cell, worley, unified) | ✅ | Exact kernel from PR 158054 |
 | `checkerboard`, `randomcolor`, `ramplr` | ✅ / 🟡 | `ramptb` is the diagonal gradient |
-| `mix` | 🐞 | Inverted (K-01) |
-| `plus`, `minus`, `difference`, `burn`, `dodge`, `screen`, `overlay` | 🐞 | Inverted (K-02) |
+| `mix` | ✅ | Exact since 2026-10-07 (K-01) |
+| `plus`, `minus`, `difference`, `burn`, `dodge`, `screen`, `overlay` | ✅ | Orientation fixed (K-02); `plus` value-tested, the others not yet |
 | `mix`/`add`/`multiply` of BSDF, EDF, VDF, surfaceshader | 🐞 | Sent to colour/scalar nodes (K-03) |
 | `surface` | ✅ | Added 2026-09-10 |
 | `volume` | ❌ | Missing; MaterialX volumes cannot reach the terminal (K-04) |
@@ -119,13 +123,13 @@ This table says what actually renders right.
 | add/sub/mul/div, scalar and vector | ✅ | Split by type suffix |
 | Other math on colour/vector (`absval`, `floor`, `min`, `max`, `power`, `clamp`, `remap`, `smoothstep`...) | 🐞 | Scalar node, colour averaged to grey (K-07) |
 | `contrast` scalar and vector | ✅ | |
-| `saturate` | 🐞 | HSV scaling, not luma lerp (K-08) |
+| `saturate` | ✅ | MaterialX nodegraph, ACEScg luma, exact since 2026-10-07 (K-08) |
 | `invert`, `luminance`, `rgbtohsv`, `hsvtorgb` | 🟡 | `amount` and `lumacoeffs` unmapped |
 | `ifgreater`, `ifgreatereq`, `ifequal` | ✅ | Per type |
 | `logical_and/or/not` | ✅ | |
 | `dot`, `convert` pass-through, `constant` | ✅ | |
 | `rotate2d/3d`, `place2d`, `transform*` | 🟡 | `place2d` pivot/order unverified |
-| `facingratio`, `viewdirection` | 🐞 | Both inverted (K-10, K-11) |
+| `facingratio`, `viewdirection` | ✅ / 🟡 | `facingratio` exact for its defaults (K-10); `viewdirection` negated, untested (K-11) |
 | `conductor_bsdf` | 🐞 | `ior`/`extinction` unmapped: white glossy (K-13) |
 | `dielectric_bsdf`, diffuse, sheen, translucent, subsurface | 🟡 | Approximate: `tint`, `scatter_mode`, anisotropy unmapped |
 | `uniform_edf` and the other EDFs | 🟡 | All become `emission` |
@@ -153,6 +157,6 @@ This table says what actually renders right.
 |---|---|---|
 | Patch series regenerable from the worktree | ✅ | 74 patches |
 | Bootstrap from a clean clone | 🟡 | Written, not re-run end to end since the 5.3 move |
-| Regression tests on images | ❌ | Benches overwrite their own references (see [TESTING.md](TESTING.md)) |
-| Code and messages in English | ❌ | French comments and log lines throughout (K-35) |
-| README numbers reproducible | 🟡 | 163 / 161 / 97 disagree; coverage overstated |
+| Regression tests on images | ✅ | `references/` tracked, `output/` ignored, `bench_diff.py --accept` (K-50) |
+| Code and messages in English | 🟡 | New code in English since 2026-10-07; French comments remain in older code (K-53) |
+| README numbers reproducible | ✅ | `count_nodes.py`: 163 / 64 / 99 / 97 (K-54) |

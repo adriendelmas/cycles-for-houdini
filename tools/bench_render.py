@@ -28,7 +28,9 @@ for d in (SCENES, IMAGES):
 BASE = open(os.path.join(ROOT, "tests", "usd", "phase4b_mtlx.usda"), encoding="utf-8").read()
 
 env = dict(os.environ)
-env["PXR_PLUGINPATH_NAME"] = os.path.join(ROOT, INSTALL, "houdini", "dso", "usd_plugins")
+# A PXR_PLUGINPATH_NAME already in the environment wins: that is how a freshly
+# built DLL is tested from a temporary tree while Houdini holds the installed one.
+env.setdefault("PXR_PLUGINPATH_NAME", os.path.join(ROOT, INSTALL, "houdini", "dso", "usd_plugins"))
 env["PATH"] = HFS + ";" + env["PATH"]
 
 

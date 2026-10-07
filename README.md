@@ -134,7 +134,7 @@ Every published node gets its own USD scene, is rendered, and is checked for
 warnings, for a non-black image, and for a difference against a baseline:
 
 ```
-python tools/bench_export.py && python tools/bench_render.py && python tools/bench_diff.py
+hython tools/bench_export.py && python tools/bench_render.py && hython tools/bench_diff.py
 ```
 
 97 nodes pass that check on both engines, and the full MaterialX scene renders
@@ -147,10 +147,11 @@ not compare against committed reference images — is set out in
 The complete list, with line numbers, is [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md).
 The ones a user meets first:
 
-- MaterialX `mix` and the compositing blends are inverted (`fg`/`bg` swapped),
-  mixes of BSDFs go to a colour node, and `volume` is missing — the MaterialX
-  coverage number counts nodedefs that *route* to a mapping, not ones that
-  translate correctly.
+- MaterialX mixes of BSDFs go to a colour node and `volume` is missing, so a
+  network that mixes two closures or describes a volume loses them. Of the
+  652 nodedefs that route to a mapping, 511 keep every input when rendered
+  (`tools/mtlx_inputs.py`); 11 are value-checked against the MaterialX
+  definition (`tools/bench_mtlx.py`).
 - OpenPBR, glTF and Disney surfaces are aliased to the `standard_surface`
   table and lose most of their inputs.
 - No light linking, per-object visibility flags, extra AOVs or cryptomatte;

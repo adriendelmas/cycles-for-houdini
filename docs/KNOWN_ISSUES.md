@@ -10,16 +10,20 @@ Paths are relative to `external/cycles-53/src/hydra/` unless stated.
 
 ## A. MaterialX translation - wrong results
 
-### K-01 `mix` is inverted — confirmed
-`material.cpp:654` wires `fg → a`, `bg → b`, `mix → fac`. MaterialX:
+### K-01 `mix` is inverted — confirmed — **fixed** (patch 0076, 2026-10-07)
+`material.cpp:654` wired `fg → a`, `bg → b`, `mix → fac`. MaterialX:
 `mix(bg, fg, mix)` (`stdlib_genglsl_impl.mtlx:604`), so `mix = 1` yields `fg`.
-Cycles `mix_color`: `fac = 1` yields `b`. Fix: `fg → b`, `bg → a`.
+Cycles `mix_color`: `fac = 1` yields `b`. Fix: `fg → b`, `bg → a`. Bench case
+`mix`: (0.300, 0.200, 0.700) before, (0.700, 0.200, 0.300) after, expected
+(0.7, 0.2, 0.3).
 
-### K-02 The seven compositing blends are inverted — confirmed
-`material.cpp:734` (`MakeMtlxBlend`) uses the same `fg → a`, `bg → b`.
+### K-02 The seven compositing blends are inverted — confirmed — **fixed** (0076)
+`material.cpp:734` (`MakeMtlxBlend`) used the same `fg → a`, `bg → b`.
 MaterialX `plus`: `mix·(bg+fg) + (1−mix)·bg = bg + mix·fg`
 (`stdlib_genglsl_impl.mtlx:546`). Cycles blend `add`: `a + fac·b`. Same fix
 as K-01, for `plus`, `minus`, `difference`, `burn`, `dodge`, `screen`, `overlay`.
+Bench case `plus` passes; the other six share the code and are not yet
+value-tested.
 
 ### K-03 Closure mix/add/multiply go to colour and scalar nodes — confirmed
 `material.cpp:1833` `{"ND_mix_", &MtlxMix}` also catches `ND_mix_bsdf`,
@@ -46,11 +50,12 @@ MaterialX volume network can reach the volume terminal. Same shape as the
 fall to the "no input" warning. Metal, IOR, emission, opacity and normal are
 lost. Each needs its own table; `gltf_pbr` and `disney_principled` likewise.
 
-### K-06 `geomcolor` reads nothing — confirmed
-`material.cpp:1195` creates an `attribute` node with no `attribute` value;
-`AttributeNode::attributes()` requests an attribute named `""`. Fix:
-`setFixedValues({{"attribute", "displayColor"}})` (the primvar name the mesh
-stores it under).
+### K-06 `geomcolor` reads nothing — confirmed — **fixed** (0076 + 0075)
+`material.cpp:1195` created an `attribute` node with no `attribute` value;
+`AttributeNode::attributes()` requested an attribute named `""`. Fixed with
+`attribute = displayColor`. That exposed K-19: with the name right the colour
+was still garbage, because the mesh wrote float3 primvars at the wrong stride.
+Bench case `geomcolor`: (0.200, 0.600, 0.900) exact after both fixes.
 
 ### K-07 Colour and vector variants of scalar operators collapse to grey — confirmed
 `isVector` (`material.cpp:1927`) is only consulted for add/sub/mul/div. Every
@@ -63,12 +68,14 @@ floor, ceil, fraction, modulo, minimum, maximum, sine, cosine, tangent;
 `clamp` and `map_range` have a vector data type. Power, sqrt, exp, ln need
 three scalar helpers.
 
-### K-08 `saturate` is not the MaterialX formula — confirmed
-`material.cpp:1424` uses `hsv.saturation`. MaterialX: `lerp(dot(in, lumacoeffs), in, amount)`.
-For `(0.9, 0.2, 0.1)` at 0.2: MaterialX `(0.45, 0.31, 0.29)`, this code
-`(0.90, 0.76, 0.74)`. The bench's expected value (`tools/bench_mtlx.py:122`)
-was derived from the implementation and therefore passes. Fix: `rgb_to_bw` +
-`mix_color` with `fac = amount`, `a = luma`, `b = in`.
+### K-08 `saturate` is not the MaterialX formula — confirmed — **fixed** (0076)
+`material.cpp:1424` used `hsv.saturation`. MaterialX (`stdlib_ng.mtlx`,
+`NG_saturate_color3`): `mix(luminance(in, lumacoeffs), in, amount)` with
+ACEScg coefficients by default, not Rec.709. For `(0.9, 0.2, 0.1)` at 0.2:
+MaterialX `(0.488, 0.348, 0.328)`, the old code `(0.90, 0.76, 0.74)`. The
+bench's expected value had been derived from the implementation. Fixed with a
+`vector_math` dot product (which also honours a connected `lumacoeffs`)
+feeding `mix_color.a`; bench case `saturate` passes exactly.
 
 ### K-09 `layer` is a 50/50 mix — probable
 `material.cpp:1197` maps `top`/`base` to `mix_closure` and never sets `fac`
@@ -77,14 +84,19 @@ A coat over a base loses half the base. Cycles has no exact node; the nearest
 is `add_closure` for thin coats, or a `layer_weight`-driven mix. Document the
 approximation chosen.
 
-### K-10 `facingratio` is inverted — confirmed
-`material.cpp:1204` returns `layer_weight.Facing`, which is 0 facing the
-camera; MaterialX `facingratio` is 1 facing the camera (`invert = false`).
-Fix: `1 − Facing` through a `math` helper, or `dot(N, I)` via `vector_math`.
+### K-10 `facingratio` is inverted — confirmed — **fixed** (0076)
+`material.cpp:1204` returned `layer_weight.Facing`, which is 0 facing the
+camera; MaterialX `facingratio` (nprlib, `NG_facingratio_float`) is
+`|dot(V, N)|` with its defaults, 1 facing the camera. Fixed as
+`abs(dot(Incoming, Normal))`; bench case `facingratio`: 0.034 before, 0.966
+after on the bench plane (0.96 expected from the perspective spread).
+`invert`, `faceforward` and connected `viewdirection`/`normal` are still not
+carried and are reported.
 
-### K-11 `viewdirection` points the wrong way — confirmed
-`material.cpp:1210` returns `geometry.Incoming` (surface → camera). MaterialX:
-camera → surface. Negate through `vector_math scale −1`.
+### K-11 `viewdirection` points the wrong way — probable — **fixed** (0076)
+`material.cpp:1210` returned `geometry.Incoming` (surface → camera). The
+MaterialX HwViewDirection node emits `normalize(P − viewPosition)`, camera →
+surface. Negated. No bench case: the plane's mean cannot see a direction.
 
 ### K-12 `heighttonormal` outputs a world normal — probable
 `material.cpp:1149` maps it to `bump`, whose output is a shading normal.
@@ -108,10 +120,11 @@ quantity. All render *something*; none say they are approximate.
 ### K-15 `UsdPreviewSurface` gaps — confirmed
 `UsdTransform2d` is a token (`material.cpp:69`) with no mapping in `findUsd`.
 `UsdUVTexture.scale`/`bias`/`fallback` are unmapped, so the standard normal-map
-encoding (`scale 2, bias −1`) renders wrong. `sourceColorSpace` is passed
-verbatim (`material.cpp:2011`); `raw` and `sRGB` must become `data` and
-`__builtin_srgb`. `displacement` on the preview surface finds no
-`Displacement` output on `principled_bsdf`.
+encoding (`scale 2, bias −1`) renders wrong. `sourceColorSpace` was passed
+verbatim (`material.cpp:2011`); `raw`, `sRGB` and `auto` now become `data`,
+`__builtin_srgb` and the empty string (0076, not yet value-tested).
+`displacement` on the preview surface finds no `Displacement` output on
+`principled_bsdf`.
 
 ### K-16 `kma` is declared, never read — confirmed
 `render_delegate.cpp:410` lists `kma` in `GetMaterialRenderContexts`;
@@ -129,6 +142,19 @@ Only the first UV set; `normal`/`tangent` are world space while the nodedef
 default is object space (differs once the object rotates). Noted in STATUS A11.
 
 ## B. Geometry and scene
+
+### K-19 float3 primvars copied at the wrong stride — confirmed — **fixed** (0075)
+`util.cpp:266-277` (`ApplyPrimvars`) widened every `GfVec3f` to the padded
+sixteen-byte `float3` before copying, while `Attribute::data_sizeof()` returns
+`sizeof(packed_float3)`, twelve bytes, since Cycles moved its attributes to the
+packed type. The copy ran at the wrong stride and four bytes per element past
+the buffer. Every per-vertex colour or vector a shader read was garbage: a
+constant `(0.2, 0.6, 0.9)` displayColor came back `(0.47, 0.38, 0.47)` through
+the native `attribute` and `vertex_color` nodes alike. UVs (float2) and
+normals (their own path) were unaffected, which is why it went unseen.
+Upstream bug; a `GfVec3f` is exactly a `packed_float3`, so the array is now
+copied as is. The 97-node references rendered before this fix are wrong for
+every node that reads a vector primvar.
 
 ### K-20 Curve type, basis and wrap are ignored — confirmed
 `curves.cpp:221-233` read `type`, `basis`, `wrap`, use them only to size the
@@ -208,9 +234,11 @@ the viewport.
 The stopwatch reported `camera et AOV 4033.6 ms, verrou 0, relance 0.005`.
 That bucket (`render_pass.cpp`, between `tPolled` and `tCamera`) holds only
 AOV binding comparison, `set_full_width/height`, `ApplyCameraSettings`, the
-dicing-camera copy and a pointer compare. None of it should take 4 s. Either
-the brackets are misplaced or something blocks there. Re-measure with one
-timestamp per statement before touching anything else about interactivity.
+dicing-camera copy and a pointer compare. None of it should take 4 s. Since
+0076 the log line (`Render pass: ... (lock, COP poll, AOV bindings, camera,
+dicing camera, reset, start)`) splits that stretch three ways; the next
+reading in a live Houdini session will name the call. Needs the user's
+viewport scene; cannot be reproduced under husk.
 
 ### K-32 The pass takes the scene lock unconditionally — by design, with a cost
 `render_pass.cpp:125` (`scene->mutex.lock()`, patch 0014). While the render
@@ -247,22 +275,35 @@ should not imply the viewport is "linked" to the Cycles nodes.
 
 ## D. Repository and tests
 
-### K-50 Benches overwrite their own references — confirmed
-`tools/bench_render.py` writes to `tests/usd/bench-53/images/`, the directory
-git tracks as references, and `bench_diff.py` compares against `_baseline.exr`
-only. 72 tracked EXRs are modified in the working tree right now. There is no
-image-to-image regression test. See [TESTING.md](TESTING.md).
+### K-50 Benches overwrite their own references — confirmed — **fixed** (2680470)
+`tools/bench_render.py` wrote to `tests/usd/bench-53/images/`, the directory
+git tracked as references, and `bench_diff.py` compared against `_baseline.exr`
+only. Now `references/` is tracked, `output/` is ignored, and `bench_diff.py`
+compares the two with a tolerance and moves a reference only on `--accept`.
 
-### K-51 Coverage counts prefixes — confirmed
+### K-51 Coverage counts prefixes — confirmed — measured
 `tools/mtlx_coverage.py` resolves a nodedef as "covered" when any table prefix
 matches it. K-03, K-05 and K-07 are all counted as covered. The README's
-"652/823 - 79 %" is a routing number, not a correctness number.
+"652/823" is a routing number. `tools/mtlx_inputs.py` (2026-10-07) renders
+every routed nodedef with all its inputs authored and sorts the delegate's
+warnings per nodedef. First measurement, after 0076:
 
-### K-52 Bench expected values derived from the code — confirmed
-`tools/bench_mtlx.py` `CASES` carry expected colours computed from what the
-implementation does (K-08). Expected values must come from the MaterialX
-definition - ideally rendered by MaterialX's own `MaterialXView` or computed
-from the `genglsl` source code.
+| | |
+|---|---|
+| routed | 652 |
+| clean - every input, output and node found | **511** |
+| inputs dropped | 120 (many are inputs with no Cycles counterpart: image `default`, `framerange`, `layer`; others are real, see K-05, K-13, K-14) |
+| output not found | 15 - the closure `mix_*`/`multiply_*`/`dot_*` families (K-03) and `flake2d/3d`, `gltf_colorimage` |
+| node missing | 6 - every VDF, through the missing `ND_volume` (K-04) |
+
+A third number, value-verified by rendering against the MaterialX
+definition, is `bench_mtlx.py`'s case count: 11.
+
+### K-52 Bench expected values derived from the code — confirmed — **fixed**
+`tools/bench_mtlx.py` now computes every expected colour from the MaterialX
+source expression or nodegraph, with the file named next to the formula, and
+carries `mix`, `plus`, `saturate`, `geomcolor` and `facingratio` cases. Five of
+them failed on the old DLL and pass on the new one.
 
 ### K-53 Code and log messages in French — confirmed
 `material.cpp` (180 lines), `houdini_cop.cpp` (62), `render_pass.cpp` (47),
@@ -271,7 +312,9 @@ French (`Affichage :`, `Rendu relance :`, `Passe de rendu :`, in
 `render_pass.cpp:64,241,283`). The project rule is English in code; the repo
 is public and the patches are meant for upstream.
 
-### K-54 README numbers disagree — confirmed
-README says 163 nodes, STATUS says 161, the bench covers 97 (the 100 exposed
-VOPs minus the three that do not terminate a surface). Pick one and derive it
-from a command.
+### K-54 README numbers disagree — confirmed — **fixed**
+`hython tools/count_nodes.py` derives them all from the Sdr registry: 163
+published, 64 `convert_*` hidden, 99 exposed as VOPs (plus the generated
+`cycles_material` terminal makes the 100 of CYCLES_VOPS.md), 97 probed by the
+bench (99 minus `cycles_output` and `cycles_aov_output`). STATUS.md's 161 was
+the 5.2 count.

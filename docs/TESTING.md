@@ -30,39 +30,51 @@ form (`/e/...`).
 | Command | Scope | Proves | Does **not** prove |
 |---|---|---|---|
 | `hython tools/bench_export.py` | 97 native Cycles VOPs | Each VOP exports through the real Solaris translator to USD | Values |
-| `python tools/bench_render.py` | Same 97 scenes | No delegate warning, image present, not black | That the image is right. **Overwrites** `tests/usd/bench-53/images/*.exr`, the directory git tracks (K-50) |
-| `python tools/bench_diff.py` | Same images | Each node changes the image against `_baseline.exr` | Direction or magnitude of the change |
-| `hython tools/bench_mtlx.py [name]` | 7 MaterialX nodes (+3 textured with `CYCLES_BENCH_TEXTURE`) | Rendered colour within 2 % of an expected value | That the expected value is MaterialX's: `saturate`'s was derived from the code (K-52) |
+| `python tools/bench_render.py` | Same 97 scenes | No delegate warning, image present, not black; renders into `tests/usd/bench-53/output/` (ignored) | That the image is right |
+| `hython tools/bench_diff.py [--accept node\|all]` | `output/` vs `references/` | Each node matches its committed reference (off by less than `1e-3` absolute or 1 % relative on 99.5 % of pixels); lists nodes inert against `_baseline.exr`; `cycles_set_normal` is reported, not counted (A19) | - |
+| `hython tools/bench_mtlx.py [name]` | 11 MaterialX nodes (+3 textured with `CYCLES_BENCH_TEXTURE`) | Rendered colour within 2 % of a value **computed from the MaterialX definition**, file named next to each formula | Anything the plane's mean cannot see: directions, closures |
 | `hython tools/bench_hair.py` | 4 pairs | MaterialX Chiang hair equals native principled hair, error < 1e-3 | - |
-| `hython tools/mtlx_coverage.py [--list]` | MaterialX library vs the table | Which nodedefs route to *some* mapping | Which translate correctly (K-51) |
+| `hython tools/mtlx_coverage.py [--list]` | MaterialX library vs the table | Which nodedefs route to *some* mapping (652/823) | Which translate correctly |
+| `hython tools/mtlx_inputs.py [--list] [pattern]` | Every routed nodedef, all inputs authored, one husk run | Which nodedefs keep every input, output and node (511/652 on 2026-10-07); `--list` names what each one loses | Values |
+| `hython tools/count_nodes.py` | Sdr registry | The node counts the docs quote: 163 published, 64 hidden, 99 VOPs, 97 probed | - |
 | `scratchpad/audit_surface.py` (local) | 39 `standard_surface` inputs | Each input changes the image, references local and gitignored | Agreement with Karma beyond the four measured cases |
 
-Taken together: today's suite catches a node that stops rendering, a socket
-rename, and a dead parameter. It does not catch an inverted mix, a greyed
-colour, or a mistranslated OpenPBR input - which is exactly what
-KNOWN_ISSUES.md is full of.
+Taken together: the suite catches a node that stops rendering, a socket
+rename, a dead parameter, a dropped input (`mtlx_inputs.py`), and - for the
+eleven cases it carries - a wrong value. It does not yet catch a wrong closure
+mix or a mistranslated OpenPBR input; those come with phases 2 and 4.
 
-## What a real suite looks like
+Testing a freshly built DLL while Houdini holds the installed one: every
+bench honours a `PXR_PLUGINPATH_NAME` already in the environment, so the
+temporary-tree recipe above applies to all of them.
 
-Phase 0 of [PLAN.md](PLAN.md). Four layers, cheapest first.
+## The four layers of the suite
 
-### 1. Unit: the mapping table
+Cheapest first. Layers 1 and 3 exist since 2026-10-07; layer 2 exists and
+grows with every phase; layer 4 is still a one-off.
 
-A `hython` script that, for every MaterialX nodedef the table claims, lists the
-nodedef's inputs (from `MaterialX.loadLibraries`) and checks each has either a
-mapping entry or a documented omission. No render. Output: the
-"input-complete" number for the README.
+### 1. Inputs: `mtlx_inputs.py`
 
-### 2. Value: one plane, one node, one expected colour
+One stage, one material per routed nodedef, every input authored at its
+default so that Hydra forwards it, wired to a terminal the way its output type
+requires (surfaces directly, BSDF/EDF through `surface`, VDF through `volume`,
+values into `standard_surface.base_color`). One husk render at one sample;
+the delegate's warnings carry the material path and are sorted per nodedef.
+The stage and the log stay in `tests/usd/bench-mtlx/inputs/`.
 
-`bench_mtlx.py` generalised: the probe drives `base_color` of a specular-free
-surface under a flat light, and the rendered mean divided by the measured gain
-(5.544) must match an expected colour to 2 %. Expected colours come from the
-MaterialX `genglsl` source expressions evaluated in Python - never from the
-renderer. Every `_float`, `_color3`, `_vector3` variant of a family is a
-separate case; colour cases use a non-grey input so a collapse to grey fails.
+### 2. Value: `bench_mtlx.py`
 
-### 3. Image: references under version control, outputs outside it
+The probe drives `base_color` of a specular-free surface under a flat light,
+and the rendered mean divided by the measured gain (5.544) must match an
+expected colour to 2 %. Expected colours come from the MaterialX source
+expressions and nodegraphs evaluated in Python, each with its file named -
+never from the renderer. Colour cases use a non-grey input so a collapse to
+grey fails. A case may add lines to the mesh (`geomcolor` writes a vertex
+colour) or widen its tolerance (`facingratio`, 0.04 for the perspective
+spread). To add: every `_color3`/`_vector3` variant of each math family
+(phase 3), the six other blends, the closures through a second template.
+
+### 3. Image: `bench_render.py` + `bench_diff.py`
 
 ```
 tests/usd/bench-53/
@@ -72,10 +84,10 @@ tests/usd/bench-53/
 ```
 
 `bench_diff.py` compares `output/<name>.exr` to `references/<name>.exr` with
-`hoiiotool --fail 1e-3 --failpercent 0.5 --diff` and lists the failures. A
-reference moves only by an explicit `--accept <name>`, which is a reviewed
-commit. The same layout for the MaterialX and hair benches and for the
-`standard_surface` audit, whose references stop being local.
+OpenImageIO in Python - a pixel fails beyond `1e-3` absolute *and* 1 % relative, 0.5 % of pixels may fail - and exits non-zero on a
+regression. A reference moves only by `--accept <name>` (or `all`), which is a
+reviewed commit. Still to do: the same layout for the MaterialX and hair
+benches and for the `standard_surface` audit, whose references are local.
 
 ### 4. Agreement: Cycles against Karma
 
