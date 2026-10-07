@@ -311,12 +311,21 @@ not seen by the camera; the dome's ray visibility now reaches the background
 (it went to the light's object, which camera rays never look at), and a dome
 is camera-visible by default. `cycles:film:exposure` is a linear multiplier.
 
-### K-27 Nothing is read per object — confirmed
+### K-27 Nothing is read per object — confirmed — **fixed** (0088)
 `geometry.inl:231` sets `PATH_RAY_VISIBILITY_ALL` or 0. No per-prim ray
 visibility, holdout, shadow catcher, light group, caustics caster/receiver,
 shadow terminator offset, per-object dicing rate or `use_adaptive_subdivision`.
 Karma reads `primvars:karma:object:*`; the equivalent `primvars:cycles:object:*`
 does not exist.
+
+Fixed 2026-10-08: `primvars:cycles:object:*` (ray visibility per type,
+holdout, shadow catcher, caustics, light group, shadow terminator, dicing
+rate) and Karma's `rendervisibility` expressions and `holdoutmode`; shown by
+the Render Geometry Settings LOP through `HdCyclesPlugin_Geometry.ds`. The
+approximate shadow catcher reports about 0.2 alpha where the plane loses half
+its light under a dome. Left: changing the render settings' dicing rate
+overwrites per-prim rates until those prims sync again; light groups have no
+pass yet.
 
 ### K-28 Render tags and purposes are not honoured — probable
 `render_pass.cpp:99` ignores `renderTags`; rprims never check their tag. A

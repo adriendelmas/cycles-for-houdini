@@ -1,0 +1,1068 @@
+From 351a5324b5c4829c649a19b9379b3de21944e290 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 8 Oct 2026 00:26:50 +0200
+Subject: [PATCH 88/88] hydra: les proprietes par objet - visibilite par rayon,
+ holdout, shadow catcher
+
+Rien ne se reglait par objet : la visibilite valait tout ou rien. Les
+primvars constants `primvars:cycles:object:*` pilotent maintenant
+l'objet Cycles de chaque instance :
+- visibility:camera, diffuse, glossy, transmission, shadow,
+  volume_scatter ;
+- holdout, shadow_catcher, caustics_caster, caustics_receiver ;
+- lightgroup, les deux decalages du shadow terminator ;
+- dicing_rate, qui passe avant celui des reglages de rendu.
+
+Une scene reglee pour Karma rend pareil : son expression de visibilite
+(`primvars:karma:object:rendervisibility`, `-primary`, `primary|shadow`...)
+et son holdoutmode (matte -> holdout, background -> shadow catcher) sont
+lus aussi, les noms de Cycles l'emportant. Sans passe shadow_catcher, le
+catcher est replie de facon approchee dans la beauty, comme Blender le
+fait.
+
+HdCyclesPlugin_Geometry.ds, genere avec les reglages globaux, les montre
+dans le noeud Render Geometry Settings d'Houdini.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/CMakeLists.txt                      |   5 +
+ src/hydra/geometry.h                          |   2 +
+ src/hydra/geometry.inl                        |  13 +-
+ src/hydra/mesh.cpp                            |   5 +-
+ src/hydra/object_properties.cpp               | 179 ++++++++++
+ src/hydra/object_properties.h                 |  45 +++
+ .../resources/HdCyclesPluginGPU_Geometry.ds   | 334 ++++++++++++++++++
+ .../resources/HdCyclesPlugin_Geometry.ds      | 334 ++++++++++++++++++
+ src/hydra/session.cpp                         |   8 +
+ 9 files changed, 922 insertions(+), 3 deletions(-)
+ create mode 100644 src/hydra/object_properties.cpp
+ create mode 100644 src/hydra/object_properties.h
+ create mode 100644 src/hydra/resources/HdCyclesPluginGPU_Geometry.ds
+ create mode 100644 src/hydra/resources/HdCyclesPlugin_Geometry.ds
+
+diff --git a/src/hydra/CMakeLists.txt b/src/hydra/CMakeLists.txt
+index e199b770..bf6c23ce 100644
+--- a/src/hydra/CMakeLists.txt
++++ b/src/hydra/CMakeLists.txt
+@@ -30,6 +30,7 @@ set(SRC_HD_CYCLES_HEADERS
+   geometry.h
+   geometry.inl
+   implicit_surface.h
++  object_properties.h
+   instancer.h
+   light.h
+   material.h
+@@ -52,6 +53,7 @@ set(SRC_HD_CYCLES
+   file_reader.cpp
+   geometry.cpp
+   implicit_surface.cpp
++  object_properties.cpp
+   instancer.cpp
+   light.cpp
+   material.cpp
+@@ -238,6 +240,9 @@ if(WITH_CYCLES_HYDRA_RENDER_DELEGATE)
+     # renderer name - hence one per plugin variant.
+     delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources" "HdCyclesPlugin_Global.ds" "${CYCLES_INSTALL_PATH}/houdini/soho/parameters")
+     delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources" "HdCyclesPluginGPU_Global.ds" "${CYCLES_INSTALL_PATH}/houdini/soho/parameters")
++    # And the per-object properties, for the Render Geometry Settings LOP.
++    delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources" "HdCyclesPlugin_Geometry.ds" "${CYCLES_INSTALL_PATH}/houdini/soho/parameters")
++    delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources" "HdCyclesPluginGPU_Geometry.ds" "${CYCLES_INSTALL_PATH}/houdini/soho/parameters")
+     # Cycles cannot read Houdini's op: texture paths - neither the USD asset
+     # resolver nor Houdini's own image layer will hand a third party the pixels
+     # of a COP - so ship a LOP that cooks them to files beforehand, plus the
+diff --git a/src/hydra/geometry.h b/src/hydra/geometry.h
+index 0784a16b..36479edc 100644
+--- a/src/hydra/geometry.h
++++ b/src/hydra/geometry.h
+@@ -6,6 +6,7 @@
+ #pragma once
+ 
+ #include "hydra/config.h"
++#include "hydra/object_properties.h"
+ 
+ #include <pxr/imaging/hd/rprim.h>
+ 
+@@ -44,6 +45,7 @@ template<typename Base, typename CyclesBase> class HdCyclesGeometry : public Bas
+    * render param et qu'il lui faut ces bornes pour echantillonner une
+    * geometrie qui se deforme. */
+   bool _motionBlur = false;
++  HdCyclesObjectProperties _objectProperties;
+   float _shutterOpen = 0.0f;
+   float _shutterClose = 0.0f;
+   /* L'obturateur est en images, les velocites d'USD en unites par seconde :
+diff --git a/src/hydra/geometry.inl b/src/hydra/geometry.inl
+index 8bc07699..f64d0c56 100644
+--- a/src/hydra/geometry.inl
++++ b/src/hydra/geometry.inl
+@@ -305,9 +305,18 @@ void HdCyclesGeometry<Base, CyclesBase>::Sync(HdSceneDelegate *sceneDelegate,
+     }
+   }
+ 
+-  if (HdChangeTracker::IsVisibilityDirty(*dirtyBits, id)) {
++  /* Per-object properties ride on constant primvars (object_properties.h);
++   * new instances need them too. */
++  const bool propertiesDirty = HdChangeTracker::IsAnyPrimvarDirty(*dirtyBits, id);
++  if (propertiesDirty) {
++    _objectProperties = HdCyclesObjectProperties::Read(HdPrimvarsSchema::GetFromParent(primDs));
++  }
++  if (propertiesDirty || HdChangeTracker::IsVisibilityDirty(*dirtyBits, id) ||
++      HdChangeTracker::IsTransformDirty(*dirtyBits, id) ||
++      HdChangeTracker::IsInstancerDirty(*dirtyBits, id))
++  {
+     for (Object *instance : _instances) {
+-      instance->set_visibility(Base::IsVisible() ? PATH_RAY_VISIBILITY_ALL : 0);
++      _objectProperties.Apply(instance, Base::IsVisible());
+     }
+   }
+ 
+diff --git a/src/hydra/mesh.cpp b/src/hydra/mesh.cpp
+index 864cd042..f63e36dc 100644
+--- a/src/hydra/mesh.cpp
++++ b/src/hydra/mesh.cpp
+@@ -706,7 +706,10 @@ void HdCyclesMesh::PopulateTopology(HdSceneDelegate *sceneDelegate)
+         sceneDelegate->GetRenderIndex().GetRenderDelegate());
+     const auto *const session = static_cast<HdCyclesSession *>(
+         cyclesDelegate->GetRenderParam());
+-    const float dicingRate = session->GetDicingRate();
++    /* A prim's own rate (`primvars:cycles:object:dicing_rate`) first. */
++    const float dicingRate = _objectProperties.dicingRate > 0.0f ?
++                                 std::max(0.1f, _objectProperties.dicingRate) :
++                                 session->GetDicingRate();
+     const int maxLevel = session->GetMaxSubdivisions();
+     _geom->set_subd_dicing_rate(dicingRate);
+     _geom->set_subd_max_level(maxLevel);
+diff --git a/src/hydra/object_properties.cpp b/src/hydra/object_properties.cpp
+new file mode 100644
+index 00000000..8f50fb5f
+--- /dev/null
++++ b/src/hydra/object_properties.cpp
+@@ -0,0 +1,179 @@
++/* SPDX-FileCopyrightText: 2026 Blender Foundation
++ *
++ * SPDX-License-Identifier: Apache-2.0 */
++
++#include "hydra/object_properties.h"
++#include "hydra/util.h"
++#include "kernel/types.h"
++#include "scene/object.h"
++
++#include <pxr/base/tf/stringUtils.h>
++#include <pxr/imaging/hd/primvarSchema.h>
++
++HDCYCLES_NAMESPACE_OPEN_SCOPE
++
++namespace {
++
++const std::string kCycles = "cycles:object:";
++const std::string kKarma = "karma:object:";
++
++/* One ray type of Karma's visibility expressions, as Cycles bits. Karma's
++ * `sss` rays have no Cycles visibility flag of their own. */
++uint KarmaRay(const std::string &name)
++{
++  if (name == "*") {
++    return PATH_RAY_VISIBILITY_ALL;
++  }
++  if (name == "primary" || name == "camera") {
++    return PATH_RAY_VISIBILITY_CAMERA;
++  }
++  if (name == "shadow") {
++    return PATH_RAY_VISIBILITY_SHADOW;
++  }
++  if (name == "diffuse") {
++    return PATH_RAY_VISIBILITY_DIFFUSE;
++  }
++  if (name == "reflect" || name == "glossy") {
++    return PATH_RAY_VISIBILITY_GLOSSY;
++  }
++  if (name == "refract" || name == "transmission") {
++    return PATH_RAY_VISIBILITY_TRANSMIT;
++  }
++  if (name == "volume") {
++    return PATH_RAY_VISIBILITY_VOLUME_SCATTER;
++  }
++  return 0;
++}
++
++bool ReadBool(const HdPrimvarsSchema &primvars, const std::string &name, bool &out)
++{
++  const VtValue value = ReadPrimvar(primvars, TfToken(name));
++  if (value.IsEmpty()) {
++    return false;
++  }
++  if (value.IsHolding<bool>()) {
++    out = value.UncheckedGet<bool>();
++    return true;
++  }
++  if (value.CanCast<int>()) {
++    out = VtValue::Cast<int>(value).UncheckedGet<int>() != 0;
++    return true;
++  }
++  return false;
++}
++
++bool ReadFloat(const HdPrimvarsSchema &primvars, const std::string &name, float &out)
++{
++  const VtValue value = ReadPrimvar(primvars, TfToken(name));
++  if (!value.IsEmpty() && value.CanCast<float>()) {
++    out = VtValue::Cast<float>(value).UncheckedGet<float>();
++    return true;
++  }
++  return false;
++}
++
++bool ReadString(const HdPrimvarsSchema &primvars, const std::string &name, std::string &out)
++{
++  const VtValue value = ReadPrimvar(primvars, TfToken(name));
++  if (value.IsHolding<std::string>()) {
++    out = value.UncheckedGet<std::string>();
++    return true;
++  }
++  if (value.IsHolding<TfToken>()) {
++    out = value.UncheckedGet<TfToken>().GetString();
++    return true;
++  }
++  return false;
++}
++
++}  // namespace
++
++uint HdCyclesObjectProperties::ParseKarmaVisibility(const std::string &expression)
++{
++  /* A union (`|`) of intersections (`&`) of ray names, each one negated by a
++   * leading `-`. Empty: seen by nothing. */
++  uint result = 0;
++  for (const std::string &term : TfStringSplit(expression, "|")) {
++    uint bits = PATH_RAY_VISIBILITY_ALL;
++    bool any = false;
++    for (std::string factor : TfStringSplit(term, "&")) {
++      factor = TfStringTrim(factor);
++      if (factor.empty()) {
++        continue;
++      }
++      any = true;
++      if (factor[0] == '-') {
++        bits &= ~KarmaRay(TfStringTrim(factor.substr(1)));
++      }
++      else {
++        bits &= KarmaRay(factor);
++      }
++    }
++    if (any) {
++      result |= bits;
++    }
++  }
++  return result;
++}
++
++HdCyclesObjectProperties HdCyclesObjectProperties::Read(const HdPrimvarsSchema &primvars)
++{
++  HdCyclesObjectProperties p;
++  p.visibility = PATH_RAY_VISIBILITY_ALL;
++  if (!primvars) {
++    return p;
++  }
++
++  /* Karma's first, so that the Cycles names authored next to them win. */
++  std::string expression;
++  if (ReadString(primvars, kKarma + "rendervisibility", expression)) {
++    p.visibility = ParseKarmaVisibility(expression);
++  }
++  float holdoutMode = 0.0f;
++  if (ReadFloat(primvars, kKarma + "holdoutmode", holdoutMode)) {
++    /* Karma's matte cuts the object out of the image, alpha and all: a
++     * Cycles holdout. Its background mode keeps the shadows and reflections
++     * the object receives over a transparent film: a shadow catcher. */
++    p.holdout = int(holdoutMode) == 1;
++    p.shadowCatcher = int(holdoutMode) == 2;
++  }
++
++  static const std::pair<const char *, uint> rays[] = {
++      {"visibility:camera", PATH_RAY_VISIBILITY_CAMERA},
++      {"visibility:diffuse", PATH_RAY_VISIBILITY_DIFFUSE},
++      {"visibility:glossy", PATH_RAY_VISIBILITY_GLOSSY},
++      {"visibility:transmission", PATH_RAY_VISIBILITY_TRANSMIT},
++      {"visibility:shadow", PATH_RAY_VISIBILITY_SHADOW},
++      {"visibility:volume_scatter", PATH_RAY_VISIBILITY_VOLUME_SCATTER},
++  };
++  for (const auto &[name, bit] : rays) {
++    bool seen = true;
++    if (ReadBool(primvars, kCycles + name, seen)) {
++      p.visibility = seen ? (p.visibility | bit) : (p.visibility & ~bit);
++    }
++  }
++
++  ReadBool(primvars, kCycles + "holdout", p.holdout);
++  ReadBool(primvars, kCycles + "shadow_catcher", p.shadowCatcher);
++  ReadBool(primvars, kCycles + "caustics_caster", p.causticsCaster);
++  ReadBool(primvars, kCycles + "caustics_receiver", p.causticsReceiver);
++  ReadString(primvars, kCycles + "lightgroup", p.lightgroup);
++  ReadFloat(primvars, kCycles + "shadow_terminator_shading_offset", p.terminatorShadingOffset);
++  ReadFloat(primvars, kCycles + "shadow_terminator_geometry_offset", p.terminatorGeometryOffset);
++  ReadFloat(primvars, kCycles + "dicing_rate", p.dicingRate);
++  return p;
++}
++
++void HdCyclesObjectProperties::Apply(Object *object, const bool visible) const
++{
++  object->set_visibility(visible ? (visibility & PATH_RAY_VISIBILITY_ALL) : 0);
++  object->set_use_holdout(holdout);
++  object->set_is_shadow_catcher(shadowCatcher);
++  object->set_is_caustics_caster(causticsCaster);
++  object->set_is_caustics_receiver(causticsReceiver);
++  object->set_lightgroup(ustring(lightgroup));
++  object->set_shadow_terminator_shading_offset(terminatorShadingOffset);
++  object->set_shadow_terminator_geometry_offset(terminatorGeometryOffset);
++}
++
++HDCYCLES_NAMESPACE_CLOSE_SCOPE
+diff --git a/src/hydra/object_properties.h b/src/hydra/object_properties.h
+new file mode 100644
+index 00000000..8445ddf6
+--- /dev/null
++++ b/src/hydra/object_properties.h
+@@ -0,0 +1,45 @@
++/* SPDX-FileCopyrightText: 2026 Blender Foundation
++ *
++ * SPDX-License-Identifier: Apache-2.0 */
++
++#pragma once
++
++#include "hydra/config.h"
++#include "util/types.h"
++#include "util/unique_ptr.h"
++
++#include <pxr/imaging/hd/primvarsSchema.h>
++
++#include <string>
++
++HDCYCLES_NAMESPACE_OPEN_SCOPE
++
++/* What a prim says about the Cycles objects drawing it, as constant primvars:
++ * `primvars:cycles:object:*`, the names Houdini's Render Geometry Settings
++ * node writes from HdCyclesPlugin_Geometry.ds, and the Karma ones a scene set
++ * up for Karma already carries (`primvars:karma:object:rendervisibility`,
++ * `holdoutmode`). The Cycles names win where both are authored. */
++struct HdCyclesObjectProperties {
++  /* PATH_RAY_VISIBILITY_* bits. */
++  uint visibility = ~0u;
++  bool holdout = false;
++  bool shadowCatcher = false;
++  bool causticsCaster = false;
++  bool causticsReceiver = false;
++  std::string lightgroup;
++  float terminatorShadingOffset = 0.0f;
++  float terminatorGeometryOffset = 0.1f;
++  /* Pixels per micropolygon for this prim; 0 keeps the render setting. */
++  float dicingRate = 0.0f;
++
++  static HdCyclesObjectProperties Read(const PXR_NS::HdPrimvarsSchema &primvars);
++
++  /* Sets the object's sockets. `visible` is the prim's own visibility. */
++  void Apply(CCL_NS::Object *object, bool visible) const;
++
++  /* Karma's render visibility: `*`, `primary|shadow`, `-diffuse&-reflect`...
++   * Exposed for tests. */
++  static uint ParseKarmaVisibility(const std::string &expression);
++};
++
++HDCYCLES_NAMESPACE_CLOSE_SCOPE
+diff --git a/src/hydra/resources/HdCyclesPluginGPU_Geometry.ds b/src/hydra/resources/HdCyclesPluginGPU_Geometry.ds
+new file mode 100644
+index 00000000..20f2a4fb
+--- /dev/null
++++ b/src/hydra/resources/HdCyclesPluginGPU_Geometry.ds
+@@ -0,0 +1,334 @@
++/// Generated by tools/gen_render_properties.py - do not edit by hand.
++/// Per-object properties for the Cycles Hydra delegate.
++
++#include "$HFS/houdini/soho/parameters/CommonMacros.ds"
++{
++    name        "cycles"
++    label       "Cycles"
++    parmtag     { spare_opfilter        "!!SHOP/PROPERTIES!!" }
++    parmtag     { spare_classtags       "render" }
++
++    groupcollapsible {
++        name "cycles_object_visibility"
++        label "Visibility"
++        grouptag { "group_default" "1" }
++    parm {
++        name    "xn__primvarscyclesobjectvisibilitycamera_control_sdcggk"
++        label   "Camera Rays"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'bool')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__primvarscyclesobjectvisibilitycamera_rzbggk"
++        label   "Camera Rays"
++        type    toggle
++        size    1
++        default { 1 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "bool" }
++        disablewhen  R"({ xn__primvarscyclesobjectvisibilitycamera_control_sdcggk == block } { xn__primvarscyclesobjectvisibilitycamera_control_sdcggk == none })"
++    }
++    parm {
++        name    "xn__primvarscyclesobjectvisibilitydiffuse_control_ffcggk"
++        label   "Diffuse Rays"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'bool')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__primvarscyclesobjectvisibilitydiffuse_e1bggk"
++        label   "Diffuse Rays"
++        type    toggle
++        size    1
++        default { 1 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "bool" }
++        disablewhen  R"({ xn__primvarscyclesobjectvisibilitydiffuse_control_ffcggk == block } { xn__primvarscyclesobjectvisibilitydiffuse_control_ffcggk == none })"
++    }
++    parm {
++        name    "xn__primvarscyclesobjectvisibilityglossy_control_sdcggk"
++        label   "Glossy Rays"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'bool')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__primvarscyclesobjectvisibilityglossy_rzbggk"
++        label   "Glossy Rays"
++        type    toggle
++        size    1
++        default { 1 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "bool" }
++        disablewhen  R"({ xn__primvarscyclesobjectvisibilityglossy_control_sdcggk == block } { xn__primvarscyclesobjectvisibilityglossy_control_sdcggk == none })"
++    }
++    parm {
++        name    "xn__primvarscyclesobjectvisibilitytransmission_control_kncggk"
++        label   "Transmission Rays"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'bool')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__primvarscyclesobjectvisibilitytransmission_j9bggk"
++        label   "Transmission Rays"
++        type    toggle
++        size    1
++        default { 1 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "bool" }
++        disablewhen  R"({ xn__primvarscyclesobjectvisibilitytransmission_control_kncggk == block } { xn__primvarscyclesobjectvisibilitytransmission_control_kncggk == none })"
++    }
++    parm {
++        name    "xn__primvarscyclesobjectvisibilityshadow_control_sdcggk"
++        label   "Shadow Rays"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'bool')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__primvarscyclesobjectvisibilityshadow_rzbggk"
++        label   "Shadow Rays"
++        type    toggle
++        size    1
++        default { 1 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "bool" }
++        disablewhen  R"({ xn__primvarscyclesobjectvisibilityshadow_control_sdcggk == block } { xn__primvarscyclesobjectvisibilityshadow_control_sdcggk == none })"
++    }
++    parm {
++        name    "xn__primvarscyclesobjectvisibilityvolume_scatter_control_tqcggk"
++        label   "Volume Scatter Rays"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'bool')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__primvarscyclesobjectvisibilityvolume_scatter_sdcggk"
++        label   "Volume Scatter Rays"
++        type    toggle
++        size    1
++        default { 1 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "bool" }
++        disablewhen  R"({ xn__primvarscyclesobjectvisibilityvolume_scatter_control_tqcggk == block } { xn__primvarscyclesobjectvisibilityvolume_scatter_control_tqcggk == none })"
++    }
++    }
++    groupcollapsible {
++        name "cycles_object_shading"
++        label "Shading"
++        grouptag { "group_default" "1" }
++    parm {
++        name    "xn__primvarscyclesobjectholdout_control_4xbgg"
++        label   "Holdout"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'bool')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__primvarscyclesobjectholdout_3kbgg"
++        label   "Holdout"
++        type    toggle
++        size    1
++        default { 0 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "bool" }
++        disablewhen  R"({ xn__primvarscyclesobjectholdout_control_4xbgg == block } { xn__primvarscyclesobjectholdout_control_4xbgg == none })"
++    }
++    parm {
++        name    "xn__primvarscyclesobjectshadow_catcher_control_j9bgg"
++        label   "Shadow Catcher"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'bool')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__primvarscyclesobjectshadow_catcher_iwbgg"
++        label   "Shadow Catcher"
++        type    toggle
++        size    1
++        default { 0 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "bool" }
++        disablewhen  R"({ xn__primvarscyclesobjectshadow_catcher_control_j9bgg == block } { xn__primvarscyclesobjectshadow_catcher_control_j9bgg == none })"
++    }
++    parm {
++        name    "xn__primvarscyclesobjectcaustics_caster_control_5bcgg"
++        label   "Cast Shadow Caustics"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'bool')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__primvarscyclesobjectcaustics_caster_4xbgg"
++        label   "Cast Shadow Caustics"
++        type    toggle
++        size    1
++        default { 0 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "bool" }
++        disablewhen  R"({ xn__primvarscyclesobjectcaustics_caster_control_5bcgg == block } { xn__primvarscyclesobjectcaustics_caster_control_5bcgg == none })"
++    }
++    parm {
++        name    "xn__primvarscyclesobjectcaustics_receiver_control_ffcgg"
++        label   "Receive Shadow Caustics"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'bool')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__primvarscyclesobjectcaustics_receiver_e1bgg"
++        label   "Receive Shadow Caustics"
++        type    toggle
++        size    1
++        default { 0 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "bool" }
++        disablewhen  R"({ xn__primvarscyclesobjectcaustics_receiver_control_ffcgg == block } { xn__primvarscyclesobjectcaustics_receiver_control_ffcgg == none })"
++    }
++    parm {
++        name    "xn__primvarscyclesobjectlightgroup_control_02bgg"
++        label   "Light Group"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'string')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__primvarscyclesobjectlightgroup_zpbgg"
++        label   "Light Group"
++        type    string
++        size    1
++        default { "" }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "string" }
++        disablewhen  R"({ xn__primvarscyclesobjectlightgroup_control_02bgg == block } { xn__primvarscyclesobjectlightgroup_control_02bgg == none })"
++    }
++    parm {
++        name    "xn__primvarscyclesobjectshadow_terminator_shading_offset_control_u3cgg"
++        label   "Shadow Terminator Shading Offset"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'float')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__primvarscyclesobjectshadow_terminator_shading_offset_tqcgg"
++        label   "Shadow Terminator Shading Offset"
++        type    float
++        size    1
++        default { 0 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "float" }
++        disablewhen  R"({ xn__primvarscyclesobjectshadow_terminator_shading_offset_control_u3cgg == block } { xn__primvarscyclesobjectshadow_terminator_shading_offset_control_u3cgg == none })"
++    }
++    parm {
++        name    "xn__primvarscyclesobjectshadow_terminator_geometry_offset_control_h5cgg"
++        label   "Shadow Terminator Geometry Offset"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'float')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__primvarscyclesobjectshadow_terminator_geometry_offset_gscgg"
++        label   "Shadow Terminator Geometry Offset"
++        type    float
++        size    1
++        default { 0.1 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "float" }
++        disablewhen  R"({ xn__primvarscyclesobjectshadow_terminator_geometry_offset_control_h5cgg == block } { xn__primvarscyclesobjectshadow_terminator_geometry_offset_control_h5cgg == none })"
++    }
++    }
++    groupcollapsible {
++        name "cycles_object_dicing"
++        label "Dicing"
++        grouptag { "group_default" "1" }
++    parm {
++        name    "xn__primvarscyclesobjectdicing_rate_control_n4bgg"
++        label   "Dicing Rate"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'float')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__primvarscyclesobjectdicing_rate_mrbgg"
++        label   "Dicing Rate"
++        type    float
++        size    1
++        default { 0 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "float" }
++        disablewhen  R"({ xn__primvarscyclesobjectdicing_rate_control_n4bgg == block } { xn__primvarscyclesobjectdicing_rate_control_n4bgg == none })"
++    }
++    }
++}
+diff --git a/src/hydra/resources/HdCyclesPlugin_Geometry.ds b/src/hydra/resources/HdCyclesPlugin_Geometry.ds
+new file mode 100644
+index 00000000..20f2a4fb
+--- /dev/null
++++ b/src/hydra/resources/HdCyclesPlugin_Geometry.ds
+@@ -0,0 +1,334 @@
++/// Generated by tools/gen_render_properties.py - do not edit by hand.
++/// Per-object properties for the Cycles Hydra delegate.
++
++#include "$HFS/houdini/soho/parameters/CommonMacros.ds"
++{
++    name        "cycles"
++    label       "Cycles"
++    parmtag     { spare_opfilter        "!!SHOP/PROPERTIES!!" }
++    parmtag     { spare_classtags       "render" }
++
++    groupcollapsible {
++        name "cycles_object_visibility"
++        label "Visibility"
++        grouptag { "group_default" "1" }
++    parm {
++        name    "xn__primvarscyclesobjectvisibilitycamera_control_sdcggk"
++        label   "Camera Rays"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'bool')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__primvarscyclesobjectvisibilitycamera_rzbggk"
++        label   "Camera Rays"
++        type    toggle
++        size    1
++        default { 1 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "bool" }
++        disablewhen  R"({ xn__primvarscyclesobjectvisibilitycamera_control_sdcggk == block } { xn__primvarscyclesobjectvisibilitycamera_control_sdcggk == none })"
++    }
++    parm {
++        name    "xn__primvarscyclesobjectvisibilitydiffuse_control_ffcggk"
++        label   "Diffuse Rays"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'bool')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__primvarscyclesobjectvisibilitydiffuse_e1bggk"
++        label   "Diffuse Rays"
++        type    toggle
++        size    1
++        default { 1 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "bool" }
++        disablewhen  R"({ xn__primvarscyclesobjectvisibilitydiffuse_control_ffcggk == block } { xn__primvarscyclesobjectvisibilitydiffuse_control_ffcggk == none })"
++    }
++    parm {
++        name    "xn__primvarscyclesobjectvisibilityglossy_control_sdcggk"
++        label   "Glossy Rays"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'bool')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__primvarscyclesobjectvisibilityglossy_rzbggk"
++        label   "Glossy Rays"
++        type    toggle
++        size    1
++        default { 1 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "bool" }
++        disablewhen  R"({ xn__primvarscyclesobjectvisibilityglossy_control_sdcggk == block } { xn__primvarscyclesobjectvisibilityglossy_control_sdcggk == none })"
++    }
++    parm {
++        name    "xn__primvarscyclesobjectvisibilitytransmission_control_kncggk"
++        label   "Transmission Rays"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'bool')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__primvarscyclesobjectvisibilitytransmission_j9bggk"
++        label   "Transmission Rays"
++        type    toggle
++        size    1
++        default { 1 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "bool" }
++        disablewhen  R"({ xn__primvarscyclesobjectvisibilitytransmission_control_kncggk == block } { xn__primvarscyclesobjectvisibilitytransmission_control_kncggk == none })"
++    }
++    parm {
++        name    "xn__primvarscyclesobjectvisibilityshadow_control_sdcggk"
++        label   "Shadow Rays"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'bool')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__primvarscyclesobjectvisibilityshadow_rzbggk"
++        label   "Shadow Rays"
++        type    toggle
++        size    1
++        default { 1 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "bool" }
++        disablewhen  R"({ xn__primvarscyclesobjectvisibilityshadow_control_sdcggk == block } { xn__primvarscyclesobjectvisibilityshadow_control_sdcggk == none })"
++    }
++    parm {
++        name    "xn__primvarscyclesobjectvisibilityvolume_scatter_control_tqcggk"
++        label   "Volume Scatter Rays"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'bool')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__primvarscyclesobjectvisibilityvolume_scatter_sdcggk"
++        label   "Volume Scatter Rays"
++        type    toggle
++        size    1
++        default { 1 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "bool" }
++        disablewhen  R"({ xn__primvarscyclesobjectvisibilityvolume_scatter_control_tqcggk == block } { xn__primvarscyclesobjectvisibilityvolume_scatter_control_tqcggk == none })"
++    }
++    }
++    groupcollapsible {
++        name "cycles_object_shading"
++        label "Shading"
++        grouptag { "group_default" "1" }
++    parm {
++        name    "xn__primvarscyclesobjectholdout_control_4xbgg"
++        label   "Holdout"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'bool')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__primvarscyclesobjectholdout_3kbgg"
++        label   "Holdout"
++        type    toggle
++        size    1
++        default { 0 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "bool" }
++        disablewhen  R"({ xn__primvarscyclesobjectholdout_control_4xbgg == block } { xn__primvarscyclesobjectholdout_control_4xbgg == none })"
++    }
++    parm {
++        name    "xn__primvarscyclesobjectshadow_catcher_control_j9bgg"
++        label   "Shadow Catcher"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'bool')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__primvarscyclesobjectshadow_catcher_iwbgg"
++        label   "Shadow Catcher"
++        type    toggle
++        size    1
++        default { 0 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "bool" }
++        disablewhen  R"({ xn__primvarscyclesobjectshadow_catcher_control_j9bgg == block } { xn__primvarscyclesobjectshadow_catcher_control_j9bgg == none })"
++    }
++    parm {
++        name    "xn__primvarscyclesobjectcaustics_caster_control_5bcgg"
++        label   "Cast Shadow Caustics"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'bool')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__primvarscyclesobjectcaustics_caster_4xbgg"
++        label   "Cast Shadow Caustics"
++        type    toggle
++        size    1
++        default { 0 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "bool" }
++        disablewhen  R"({ xn__primvarscyclesobjectcaustics_caster_control_5bcgg == block } { xn__primvarscyclesobjectcaustics_caster_control_5bcgg == none })"
++    }
++    parm {
++        name    "xn__primvarscyclesobjectcaustics_receiver_control_ffcgg"
++        label   "Receive Shadow Caustics"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'bool')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__primvarscyclesobjectcaustics_receiver_e1bgg"
++        label   "Receive Shadow Caustics"
++        type    toggle
++        size    1
++        default { 0 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "bool" }
++        disablewhen  R"({ xn__primvarscyclesobjectcaustics_receiver_control_ffcgg == block } { xn__primvarscyclesobjectcaustics_receiver_control_ffcgg == none })"
++    }
++    parm {
++        name    "xn__primvarscyclesobjectlightgroup_control_02bgg"
++        label   "Light Group"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'string')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__primvarscyclesobjectlightgroup_zpbgg"
++        label   "Light Group"
++        type    string
++        size    1
++        default { "" }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "string" }
++        disablewhen  R"({ xn__primvarscyclesobjectlightgroup_control_02bgg == block } { xn__primvarscyclesobjectlightgroup_control_02bgg == none })"
++    }
++    parm {
++        name    "xn__primvarscyclesobjectshadow_terminator_shading_offset_control_u3cgg"
++        label   "Shadow Terminator Shading Offset"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'float')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__primvarscyclesobjectshadow_terminator_shading_offset_tqcgg"
++        label   "Shadow Terminator Shading Offset"
++        type    float
++        size    1
++        default { 0 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "float" }
++        disablewhen  R"({ xn__primvarscyclesobjectshadow_terminator_shading_offset_control_u3cgg == block } { xn__primvarscyclesobjectshadow_terminator_shading_offset_control_u3cgg == none })"
++    }
++    parm {
++        name    "xn__primvarscyclesobjectshadow_terminator_geometry_offset_control_h5cgg"
++        label   "Shadow Terminator Geometry Offset"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'float')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__primvarscyclesobjectshadow_terminator_geometry_offset_gscgg"
++        label   "Shadow Terminator Geometry Offset"
++        type    float
++        size    1
++        default { 0.1 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "float" }
++        disablewhen  R"({ xn__primvarscyclesobjectshadow_terminator_geometry_offset_control_h5cgg == block } { xn__primvarscyclesobjectshadow_terminator_geometry_offset_control_h5cgg == none })"
++    }
++    }
++    groupcollapsible {
++        name "cycles_object_dicing"
++        label "Dicing"
++        grouptag { "group_default" "1" }
++    parm {
++        name    "xn__primvarscyclesobjectdicing_rate_control_n4bgg"
++        label   "Dicing Rate"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'float')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__primvarscyclesobjectdicing_rate_mrbgg"
++        label   "Dicing Rate"
++        type    float
++        size    1
++        default { 0 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "float" }
++        disablewhen  R"({ xn__primvarscyclesobjectdicing_rate_control_n4bgg == block } { xn__primvarscyclesobjectdicing_rate_control_n4bgg == none })"
++    }
++    }
++}
+diff --git a/src/hydra/session.cpp b/src/hydra/session.cpp
+index 383ade3c..3020a01d 100644
+--- a/src/hydra/session.cpp
++++ b/src/hydra/session.cpp
+@@ -456,6 +456,14 @@ void HdCyclesSession::SyncAovBindings(const HdRenderPassAovBindingVector &aovBin
+       pass->set_name(ustring(string_printf("%s%02d", prefix, i)));
+     }
+   }
++  /* Without its own passes a shadow catcher is folded into the beauty
++   * approximately, as Blender does - otherwise it would render as plain
++   * geometry. */
++  bool shadowCatcherPass = false;
++  for (const Pass *pass : scene->passes) {
++    shadowCatcherPass |= pass->get_type() == PASS_SHADOW_CATCHER;
++  }
++  scene->film->set_use_approximate_shadow_catcher(!shadowCatcherPass);
+   scene->film->set_cryptomatte_passes(CryptomatteType(cryptoKinds));
+   scene->film->set_cryptomatte_depth(cryptoLayers);
+ }

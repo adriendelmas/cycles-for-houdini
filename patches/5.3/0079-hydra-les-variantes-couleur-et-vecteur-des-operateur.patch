@@ -1,7 +1,7 @@
 From c1c014c5849701ae343222e149a4a1ddfef2d029 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 17:39:22 +0200
-Subject: [PATCH 79/87] hydra: les variantes couleur et vecteur des operateurs
+Subject: [PATCH 79/88] hydra: les variantes couleur et vecteur des operateurs
  MaterialX, et trois operateurs scalaires faux
 
 Le noeud math de Cycles est scalaire : une couleur qui y entre est moyennee.

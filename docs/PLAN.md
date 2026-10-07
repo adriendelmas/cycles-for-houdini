@@ -152,7 +152,7 @@ because round implicit surfaces needed it looked at.
 |---|---|
 | ✅ Pass table extended to every Cycles `PassType` with Houdini spellings; shader AOVs from `aov_output` names; cryptomatte object/material/asset with the film settings it needs (0087; manifest left) | K-25 |
 | ✅ Film settings: transparent background, transparent glass, exposure, pixel filter (0086) | K-26 |
-| `primvars:cycles:object:*`: ray visibility, holdout, shadow catcher, light group, caustics, dicing rate, adaptive subdivision; read in `geometry.inl` | K-27 |
+| ✅ `primvars:cycles:object:*`: ray visibility, holdout, shadow catcher, light group, caustics, dicing rate; Karma's visibility and holdout read too (0088) | K-27 |
 | Light linking and shadow linking from Hydra categories | K-24 |
 | Render tags honoured; proxy/render purposes measured | K-28 |
 | ✅ Subdivision independent of `refineLevel`; `cycles:max_subdivisions` setting (0084, done early with A1) | K-30 |

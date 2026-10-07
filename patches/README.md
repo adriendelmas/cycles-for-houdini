@@ -117,6 +117,7 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0085` | hydra: huit cles par segment de courbe cubique, pour suivre la forme |
 | `0086` | hydra: le flou qui revient, les champs de volume d'Houdini, et le film transparent |
 | `0087` | hydra: les passes de rendu - lumieres, LPE de Karma, cryptomatte, AOV de shader |
+| `0088` | hydra: les proprietes par objet - visibilite par rayon, holdout, shadow catcher |
 
 ---
 

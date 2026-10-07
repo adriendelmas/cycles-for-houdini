@@ -109,6 +109,34 @@ VOLUME = """    def Volume "vol" (prepend apiSchemas = ["MaterialBindingAPI"])
 TRANSPARENT = "        bool cycles:background:transparent = 1"
 
 
+def sphere_with(lines):
+    return SPHERE.replace("double radius = 1", "double radius = 1" + chr(10) + lines)
+
+
+# A ground plane under a sphere, lit from above: the plane catches its shadow.
+CATCHER = """    def Sphere "ball"
+    {
+        double radius = 0.5
+        double3 xformOp:translate = (0, -0.5, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+    def Mesh "ground"
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(-3, -1, 3), (3, -1, 3), (3, -1, -3), (-3, -1, -3)]
+        uniform token subdivisionScheme = "none"
+        bool primvars:cycles:object:shadow_catcher = 1
+    }
+    def DistantLight "sun"
+    {
+        float inputs:intensity = 3
+        bool inputs:normalize = 1
+        float3 xformOp:rotateXYZ = (-120, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:rotateXYZ"]
+    }"""
+
+
 def corner(img):
     return img[2, 2]
 
@@ -177,6 +205,24 @@ CASES = [
      lambda img: None if trail(img) > 20 else "trail %d px, expected a blur" % trail(img)),
     ("motion_off", MOVING, TRANSPARENT, ["--frame", "1.5", "--disable-motionblur"],
      lambda img: None if trail(img) < 16 else "trail %d px, expected sharp" % trail(img)),
+    ("hidden_camera", sphere_with("        bool primvars:cycles:object:visibility:camera = 0"), "", [],
+     lambda img: None if centre(img)[0] > 0.95 else
+     "centre %s, expected the dome through a camera-invisible sphere" % centre(img).round(3)),
+    ("karma_visibility", sphere_with('        string primvars:karma:object:rendervisibility = "-primary"'),
+     "", [],
+     lambda img: None if centre(img)[0] > 0.95 else
+     "centre %s, expected the dome: Karma's -primary" % centre(img).round(3)),
+    ("holdout", sphere_with("        bool primvars:cycles:object:holdout = 1"), "", [],
+     lambda img: None if centre(img)[3] < 0.01 and corner(img)[3] > 0.99 else
+     "centre %s, corner %s: expected a hole in an opaque image"
+     % (centre(img).round(3), corner(img).round(3))),
+    # The plane is below the camera; the shadow it catches shows just in
+    # front of the sphere's foot (row 45, alpha about 0.2: the approximate
+    # catcher folds the dome light in), the rest of it must be clear.
+    ("shadow_catcher", CATCHER, TRANSPARENT, [],
+     lambda img: None if img[RES - 4, 4, 3] < 0.05 and img[45, RES // 2, 3] > 0.1 else
+     "plane alpha %.3f away from the shadow, %.3f under it"
+     % (img[RES - 4, 4, 3], img[45, RES // 2, 3])),
     ("volume_cd", VOLUME, "", [],
      lambda img: None if centre(img)[0] > 2.0 * centre(img)[1] else
      "volume %s, expected red from the Cd field" % centre(img).round(3)),
