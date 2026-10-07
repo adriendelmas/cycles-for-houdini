@@ -31,7 +31,7 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | Per-instance primvars | ✅ | `bench_instances.py` 5/5 | `instance` primvars as object attributes, nested instancers, `displayColor` → Object Info colour (0082) |
 | Constant scalar primvars (`float x = 0.5`) | ✅ | rendered | Read uninitialised memory before 0082; doubles and ints now converted |
 | Implicit surfaces (Sphere, Cube...) | ✅ | `bench_implicit.py` 6/6 | Our scene index meshes them, 64 segments, smooth normals (A1, 0083) |
-| OpenVDB volumes | ✅ | phase 5 | `openvdbAsset` only; `vel` not recognised as velocity (K-33) |
+| OpenVDB volumes | ✅ | phase 5, `bench_settings.py` | `openvdbAsset` only; Houdini `vel`/`Cd` aliased (K-33, 0086) |
 | Volume step size, clipping per prim | ❌ | code read | |
 
 ## Lights and camera
@@ -57,11 +57,11 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | Device menu (Render › Cycles Render Device) | ✅ | phase 19 | Per installation, not per scene |
 | Render Settings tab (integrator sockets) | ✅ | 59 properties | Generated from the integrator |
 | `samples`, `time_limit`, `sample_offset`, `dicing_rate` | ✅ | measured | |
-| Shutter from settings, motion blur toggle | 🟡 | measured | Toggle only turns off in a live session (K-34) |
+| Shutter from settings, motion blur toggle | ✅ | `bench_settings.py` (batch) | Both flags, resync when blur returns (K-34, 0086); live toggle unmeasured |
 | AOVs: color, depth, normal, primId, instanceId, P | ✅ | phase 6 | Houdini names `C`, `N`, `P`, `Pz` |
 | Light passes, AO, mist, motion vectors, cryptomatte, shader AOVs | ❌ | code read | Five passes exist (K-25) |
-| Transparent background | 🟡 | code read | Only when no dome light is present (K-26) |
-| Film exposure, pixel filter | ❌ | code read | |
+| Transparent background | ✅ | `bench_settings.py` | `cycles:background:transparent`, or a dome hidden from camera rays (K-26, 0086) |
+| Film exposure, pixel filter | ✅ | `bench_settings.py` (exposure) | Any film/background socket as `cycles:film:*`, `cycles:background:*` (0086) |
 | Denoising (OIDN/OptiX) | ✅ | integrator sockets | |
 | Per-object ray visibility, holdout, shadow catcher, light groups, caustics flags | ❌ | code read | Nothing read per prim beyond on/off (K-27) |
 | Render tags / purposes | ❌ | code read | `proxy` and `render` both render (K-28) |

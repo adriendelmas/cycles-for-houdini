@@ -115,6 +115,7 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0083` | hydra: les surfaces implicites USD rendues, en maillages fins |
 | `0084` | hydra: un maillage Catmull-Clark subdivise sans attendre l'indice d'affichage |
 | `0085` | hydra: huit cles par segment de courbe cubique, pour suivre la forme |
+| `0086` | hydra: le flou qui revient, les champs de volume d'Houdini, et le film transparent |
 
 ---
 

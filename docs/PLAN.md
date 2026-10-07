@@ -151,14 +151,14 @@ because round implicit surfaces needed it looked at.
 | Task | Closes |
 |---|---|
 | Pass table extended to every Cycles `PassType` with Houdini spellings; shader AOVs from `aov_output` names; cryptomatte object/material/asset with the film settings it needs | K-25 |
-| Film settings: transparent background, transparent glass, exposure, pixel filter | K-26 |
+| ✅ Film settings: transparent background, transparent glass, exposure, pixel filter (0086) | K-26 |
 | `primvars:cycles:object:*`: ray visibility, holdout, shadow catcher, light group, caustics, dicing rate, adaptive subdivision; read in `geometry.inl` | K-27 |
 | Light linking and shadow linking from Hydra categories | K-24 |
 | Render tags honoured; proxy/render purposes measured | K-28 |
 | ✅ Subdivision independent of `refineLevel`; `cycles:max_subdivisions` setting (0084, done early with A1) | K-30 |
 | `background = true` under husk, measured against Karma on three scenes | K-29 |
-| Motion blur toggle symmetric; `shadow:color`, light multipliers | K-34 |
-| Volume field aliases (`vel`, `Cd`) | K-33 |
+| ✅ Motion blur toggle symmetric (0086); `shadow:color`, light multipliers still to do | K-34 |
+| ✅ Volume field aliases (`vel`, `Cd`) (0086) | K-33 |
 
 Done when: a Karma ROP-style render settings node produces beauty, depth,
 normal, diffuse/glossy/transmission, cryptomatte and two shader AOVs through

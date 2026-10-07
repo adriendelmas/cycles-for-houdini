@@ -1,7 +1,7 @@
 From 509079f59361b0b04a55df20d2096737e1c8cc7b Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 9 Sep 2026 17:24:38 +0200
-Subject: [PATCH 66/85] hydra: donner a Cycles la camera qui sert a decouper
+Subject: [PATCH 66/86] hydra: donner a Cycles la camera qui sert a decouper
  les subdivisions
 
 Cycles cree une `dicing_camera` et personne ne la renseignait : elle restait a

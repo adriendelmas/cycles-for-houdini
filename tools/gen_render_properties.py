@@ -143,12 +143,30 @@ def main():
           ("ribbon", "Ribbon (flat, camera facing)")]),
     ]
 
-    grouped = {"Session": [emit_parm(*s) for s in session]}
+    # Film and background sockets, reached by name like the integrator's
+    # (`cycles:film:<socket>`, `cycles:background:<socket>`). A curated few:
+    # the rest of those nodes is driven by the delegate itself.
+    film = [
+        # Unset, the film is transparent unless a dome light is seen by the
+        # camera; set, it wins either way.
+        ("cycles:background:transparent", "Transparent Background", "toggle", "bool", "0"),
+        ("cycles:background:transparent_glass", "Transparent Glass", "toggle", "bool", "0"),
+        ("cycles:background:transparent_roughness_threshold", "Transparent Glass Roughness",
+         "float", "float", "0.1"),
+        # A linear multiplier, not stops.
+        ("cycles:film:exposure", "Exposure", "float", "float", "1"),
+        ("cycles:film:filter_type", "Pixel Filter", "string", "string", '"box"',
+         [("box", "Box"), ("gaussian", "Gaussian"), ("blackman_harris", "Blackman-Harris")]),
+        ("cycles:film:filter_width", "Pixel Filter Width", "float", "float", "1"),
+    ]
+
+    grouped = {"Session": [emit_parm(*s) for s in session],
+               "Film": [emit_parm(*f) for f in film]}
     for name, label, parm_type, usd_type, default in sockets:
         grouped.setdefault(group_for(name), []).append(
             emit_parm("cycles:integrator:" + name, label, parm_type, usd_type, default))
 
-    order = ["Session", "Sampling", "Light Paths", "Volumes", "Caustics",
+    order = ["Session", "Film", "Sampling", "Light Paths", "Volumes", "Caustics",
              "Denoising", "Guiding", "Ambient Occlusion", "Advanced"]
 
     body = []

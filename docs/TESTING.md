@@ -52,6 +52,7 @@ after a Cycles standard attribute (`heat`, `density`, `color`, `temperature`,
 | `hython tools/bench_motion.py [name]` | 6 ways to move a square | The blur trail is as long as the shutter says: own transform, points, PointInstancer positions, instancer transform; still ones stay sharp | Deformation by velocity |
 | `hython tools/bench_instances.py [name]` | 3 instanced squares, flat and nested | Each instance's `displayColor` and float primvar reach an attribute node and Object Info; an outer instancer's primvar reaches nested instances | - |
 | `hython tools/bench_implicit.py` | Sphere, Cube, Cylinder, Cone, Capsule, Plane | Each renders with the silhouette its attributes give, along its axis (6 % tolerance; 0.4 % measured) | Shading |
+| `hython tools/bench_settings.py [name]` | Render settings and per-prim properties, one small scene each | Dome opaque by default, film transparent on request, exposure, motion blur on and off, Houdini `Cd` volume field read as colour | The live motion-blur toggle (needs a Hydra session) |
 | `hython tools/count_nodes.py` | Sdr registry | The node counts the docs quote: 163 published, 64 hidden, 99 VOPs, 97 probed | - |
 | `scratchpad/audit_surface.py` (local) | 39 `standard_surface` inputs | Each input changes the image, references local and gitignored | Agreement with Karma beyond the four measured cases |
 

@@ -1,7 +1,7 @@
 From 8ce55bea246914578e5a3e35abfa2116c3057a44 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 16:46:27 +0200
-Subject: [PATCH 75/85] hydra: les primvars float3 etaient copies au mauvais
+Subject: [PATCH 75/86] hydra: les primvars float3 etaient copies au mauvais
  pas, et lus en vrac
 
 ApplyPrimvars elargissait chaque GfVec3f en float3 - seize octets, le type

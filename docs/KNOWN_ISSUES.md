@@ -285,11 +285,17 @@ cryptomatte, denoising albedo/normal, light groups, or shader AOVs
 (`aov_output` nodes exist but no RenderVar can select them). A RenderVar with
 any other name logs "Unknown pass" and is dropped.
 
-### K-26 No transparent background with a dome light — confirmed
+### K-26 No transparent background with a dome light — confirmed — **fixed** (0086)
 `session.cpp:137-150`: `background->set_transparent(true)` only when no
 background light exists. With a dome light the alpha is opaque and there is no
 setting to change it. Expose film transparency (`Background::transparent`,
 `transparent_glass`, `transparent_roughness_threshold`) as render settings.
+
+Fixed 2026-10-07: `cycles:film:<socket>` and `cycles:background:<socket>`
+reach those nodes by name. Unset, the film is transparent when the dome is
+not seen by the camera; the dome's ray visibility now reaches the background
+(it went to the light's object, which camera rays never look at), and a dome
+is camera-visible by default. `cycles:film:exposure` is a linear multiplier.
 
 ### K-27 Nothing is read per object — confirmed
 `geometry.inl:231` sets `PATH_RAY_VISIBILITY_ALL` or 0. No per-prim ray
@@ -338,16 +344,24 @@ thread holds the lock in `device_update`, Houdini's UI thread waits. The
 try-lock it replaced dropped edits. A middle path: try-lock, and when it fails
 mark the pass dirty so Hydra calls `_Execute` again next frame.
 
-### K-33 Houdini volume field names — probable
+### K-33 Houdini volume field names — confirmed — **fixed** (0086)
 `volume.cpp:55-70` recognise `density`, `color`, `flame`, `heat`,
 `temperature`, `velocity`. Houdini writes `vel` and `Cd`. Only `density`
 matches; the rest become named attributes a native shader can still read, but
 `ATTR_STD_VOLUME_VELOCITY` (motion blur) is never set.
 
-### K-34 Motion blur toggle only turns off — confirmed
+Fixed 2026-10-07: `vel`/`v` alias velocity, `Cd` aliases colour; a shader
+asking for `Cd` by name still gets it. Measured: a red `Cd` grid read by a
+principled volume under `color` renders red (grey before).
+
+### K-34 Motion blur toggle only turns off — confirmed — **fixed** (0086)
 `render_delegate.cpp:587-597`: `disableMotionBlur`/`instantaneousShutter`
 true disables; false does nothing. In a live session the blur never comes back
 until the delegate is recreated.
+
+Fixed 2026-10-07: both flags tracked; blur is on when neither is set, and
+prims synced without it or over another shutter are synced again. Batch
+behaviour measured (`bench_settings.py`); the live toggle needs Houdini.
 
 ## C. Houdini side
 
