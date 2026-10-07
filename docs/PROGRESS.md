@@ -89,23 +89,28 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 |---|---|---|
 | Surface inputs | ✅ | |
 | `UsdUVTexture` wrap, file | ✅ | |
-| `UsdUVTexture` `scale`/`bias`, `fallback` | ❌ | Normal maps wrong (K-15) |
-| `UsdTransform2d` | ❌ | Declared, never mapped (K-15) |
-| `sourceColorSpace = raw` | 🐞 | Name unknown to Cycles (K-15) |
+| `UsdUVTexture` per-channel outputs | ✅ | Were averaged (K-56); 4 bench cases |
+| `UsdUVTexture` `scale`/`bias` | ✅ | rgb only (K-15) |
+| `UsdUVTexture` `fallback` | ❌ | |
+| `UsdTransform2d` | 🟡 | Mapped to `mapping` (K-15); untested |
+| `sourceColorSpace` | ✅ | `raw`/`sRGB`/`auto` spelled for Cycles |
+| Preview surface defaults | ✅ | Diffuse 0.18 pinned - was 0.8 (K-55) |
 | `displacement`, `occlusion`, `opacityThreshold` | ❌ | |
 
 ## Materials - MaterialX
 
 Three numbers, measured 2026-10-07 (commands in [TESTING.md](TESTING.md)):
-**652** of 823 nodedefs route to a mapping (`mtlx_coverage.py`), **528** of
+**652** of 823 nodedefs route to a mapping (`mtlx_coverage.py`), **543** of
 those keep every input, output and node when rendered with all inputs authored
-(`mtlx_inputs.py`), and **16** are verified against a value computed from the
-MaterialX definition (`bench_mtlx.py`). This table says what renders right.
+(`mtlx_inputs.py`), **36** are verified against a value computed from the
+MaterialX definition (`bench_mtlx.py`), and the five surface models keep their
+own defaults for unauthored inputs (`mtlx_defaults.py`). This table says what renders right.
 
 | Family | State | Notes |
 |---|---|---|
 | `standard_surface` | ✅ | 29 of 39 inputs measured; separate glass lobe when `transmission_color` is authored |
-| `open_pbr_surface`, `disney_principled`, `gltf_pbr` | 🐞 | Aliased to the standard_surface table; most inputs miss (K-05) |
+| `open_pbr_surface`, `disney_principled`, `gltf_pbr` | ✅ | Own tables since 2026-10-07 (K-05); defaults verified by `mtlx_defaults.py`; each lists its dropped inputs |
+| Unauthored inputs of every surface | ✅ | MaterialX / USD defaults pinned (K-55) |
 | `image`, `tiledimage`, `hextiledimage`, `gltf_image` | ✅ | `constant` wrap only exact for black |
 | `normalmap`, `bump`, `displacement` | ✅ | |
 | `heighttonormal` | 🐞 | Outputs a world normal, not a tangent map (K-12) |
@@ -122,10 +127,12 @@ MaterialX definition (`bench_mtlx.py`). This table says what renders right.
 | `volume` | ✅ | Added 2026-10-07 (K-04); no value case yet |
 | `layer` | 🟡 | Fresnel-weighted mix, IOR 1.5: right for a dielectric top, approximate otherwise (K-09) |
 | add/sub/mul/div, scalar and vector | ✅ | Split by type suffix |
-| Other math on colour/vector (`absval`, `floor`, `min`, `max`, `power`, `clamp`, `remap`, `smoothstep`...) | 🐞 | Scalar node, colour averaged to grey (K-07) |
+| Other math on colour/vector (`absval`, `floor`, `min`, `max`, `power`, `clamp`, `remap`, `smoothstep`...) | ✅ | Vector twins since 2026-10-07 (K-07); 15 bench cases |
+| `ln`, `modulo`, `atan2` (scalar) | ✅ | Were wrong: base 0.5, truncated modulo, operands unmapped (K-07) |
 | `contrast` scalar and vector | ✅ | |
 | `saturate` | ✅ | MaterialX nodegraph, ACEScg luma, exact since 2026-10-07 (K-08) |
-| `invert`, `luminance`, `rgbtohsv`, `hsvtorgb` | 🟡 | `amount` and `lumacoeffs` unmapped |
+| `invert`, `luminance` | ✅ | `amount - in`; ACEScg `lumacoeffs` |
+| `rgbtohsv`, `hsvtorgb` | 🟡 | Untested |
 | `ifgreater`, `ifgreatereq`, `ifequal` | ✅ | Per type |
 | `logical_and/or/not` | ✅ | |
 | `dot`, `convert` pass-through, `constant` | ✅ | |
@@ -150,7 +157,7 @@ MaterialX definition (`bench_mtlx.py`). This table says what renders right.
 | Preview translator | 🟡 | See above |
 | `op:` textures in husk / on a farm | ❌ | `flatten_op_textures` exists, nothing automates it |
 | COP cache eviction | ❌ | Pixels kept for the session |
-| Karma Material Builder (`kma`) | ❌ | Context declared, never read (K-16) |
+| Karma Material Builder (`kma`) | ✅ | Read after `mtlx` since 2026-10-07 (K-16) |
 
 ## Repository and process
 

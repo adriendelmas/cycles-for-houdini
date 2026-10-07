@@ -32,10 +32,11 @@ form (`/e/...`).
 | `hython tools/bench_export.py` | 97 native Cycles VOPs | Each VOP exports through the real Solaris translator to USD | Values |
 | `python tools/bench_render.py` | Same 97 scenes | No delegate warning, image present, not black; renders into `tests/nodes/5.3/output/` (ignored) | That the image is right |
 | `hython tools/bench_diff.py [--accept node\|all]` | `output/` vs `references/` | Each node matches its committed reference (off by less than `1e-3` absolute or 1 % relative on 99.5 % of pixels); lists nodes inert against `_baseline.exr`; `cycles_set_normal` is reported, not counted (A19) | - |
-| `hython tools/bench_mtlx.py [name]` | 16 MaterialX nodes (+3 textured with `CYCLES_BENCH_TEXTURE`), colours and closures | Rendered colour within 2 % of a value **computed from the MaterialX definition**, file named next to each formula | Anything the plane's mean cannot see: directions, volumes |
+| `hython tools/bench_mtlx.py [name]` | 36 MaterialX nodes (+3 textured with `CYCLES_BENCH_TEXTURE`), colours and closures | Rendered colour within 2 % of a value **computed from the MaterialX definition**, file named next to each formula | Anything the plane's mean cannot see: directions, volumes |
 | `hython tools/bench_hair.py` | 4 pairs | MaterialX Chiang hair equals native principled hair, error < 1e-3 | - |
 | `hython tools/mtlx_coverage.py [--list]` | MaterialX library vs the table | Which nodedefs route to *some* mapping (652/823) | Which translate correctly |
-| `hython tools/mtlx_inputs.py [--list] [pattern]` | Every routed nodedef, all inputs authored, one husk run | Which nodedefs keep every input, output and node (528/652 on 2026-10-07); `--list` names what each one loses | Values |
+| `hython tools/mtlx_inputs.py [--list] [pattern]` | Every routed nodedef, all inputs authored, one husk run | Which nodedefs keep every input, output and node (543/652 on 2026-10-07); `--list` names what each one loses | Values |
+| `hython tools/mtlx_defaults.py [pattern]` | standard_surface, OpenPBR, glTF, Disney, UsdPreviewSurface | A lit sphere renders the same with no input authored and with every input authored at its model's default (8x8 block means, so noise cannot pass for a difference); the sphere must be lit | Values of authored inputs |
 | `hython tools/count_nodes.py` | Sdr registry | The node counts the docs quote: 163 published, 64 hidden, 99 VOPs, 97 probed | - |
 | `scratchpad/audit_surface.py` (local) | 39 `standard_surface` inputs | Each input changes the image, references local and gitignored | Agreement with Karma beyond the four measured cases |
 

@@ -82,6 +82,11 @@ tolerance; `bench_mtlx.py` has one case per closure family.
 
 ## Phase 3 — Types everywhere (2 days)
 
+> **Status 2026-10-07: main row done** (patch 0079): vector twins for every
+> math family, plus `ln`, `modulo`, `atan2` fixed in scalar form; 15 bench
+> cases. Left: `heighttonormal` (K-12), `geompropvalue` vector outputs,
+> colour4 alpha (K-17), `texcoord.index` and object-space normals (K-18).
+
 | Task | Closes |
 |---|---|
 | Generalise the scalar/vector split: every `MakeMtlxOp` family gets a vector twin selected by `isVector`; `clamp`/`remap`/`smoothstep` switch `data_type`/`clamp_type` to vector; power/sqrt/exp/ln on colour via three scalar helpers on `separate_color` → `combine_color` | K-07 |
@@ -95,6 +100,15 @@ every mapped math family against its scalar twin on a grey input (must match)
 and on a coloured input (must *not* be grey).
 
 ## Phase 4 — Surfaces beyond standard_surface (3 days)
+
+> **Status 2026-10-07: done** (patch 0080), with one finding the plan had
+> not foreseen: every surface model took Cycles' defaults for the inputs
+> Houdini leaves unwritten (K-55) - an untouched UsdPreviewSurface rendered
+> four times too bright. `tools/mtlx_defaults.py` now guards that for all
+> five models. OpenPBR, glTF and Disney have their own tables;
+> UsdUVTexture channels (K-56), scale/bias, UsdTransform2d and the `kma`
+> context are handled. Left: `specular_rotation`, `coat_affect_*`, the
+> preview surface's displacement, `fallback`.
 
 | Task | Closes |
 |---|---|

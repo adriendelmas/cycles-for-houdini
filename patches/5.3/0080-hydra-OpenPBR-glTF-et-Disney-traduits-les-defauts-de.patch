@@ -1,0 +1,537 @@
+From 9af7050ff8ddd6cccda9a3dbc50cd842f35cff8e Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Wed, 7 Oct 2026 17:53:25 +0200
+Subject: [PATCH 80/80] hydra: OpenPBR, glTF et Disney traduits, les defauts de
+ chaque surface, UsdUVTexture par canal, kma
+
+Les trois surfaces MaterialX autres que standard_surface pointaient sur sa
+table : la plupart de leurs entrees tombaient. Chacune a maintenant la
+sienne, chaque entree traduite ou nommee comme abandonnee dans le code :
+OpenPBR sur les auxiliaires de standard_surface avec ses noms, ses unites
+(film mince en micrometres, rayon et echelle de sous-surface inverses) et
+ses defauts ; glTF avec ceux de la specification (blanc, metal 1, rugosite
+1), son sheen sans poids, son iridescence, sa dispersion et sa rotation
+d'anisotropie converties ; Disney avec ses teintes en melange du blanc vers
+la couleur de base et son clearcoatGloss ramene a une rugosite.
+
+Hydra ne transmet que les entrees ecrites, et Houdini n'ecrit que ce que
+l'utilisateur a touche : chaque entree laissee de cote prenait le defaut du
+principled de Cycles et non celui de son modele. Pour standard_surface, une
+rugosite speculaire de 0,5 au lieu de 0,2, une echelle de sous-surface de
+0,005 au lieu de 1, et trois autres ; pour UsdPreviewSurface, une couleur
+diffuse de 0,8 au lieu de 0,18 - une surface d'apercu intacte rendait
+quatre fois trop clair. Les defauts sont epingles table par table, et
+tools/mtlx_defaults.py le garde : une sphere sans entree ecrite et avec
+toutes ecrites a leur defaut doivent rendre pareil. Sur la DLL precedente
+les cinq modeles differaient, sur celle-ci aucun.
+
+UsdUVTexture : r, g et b allaient tous sur la sortie couleur, moyennee sur
+une entree scalaire - une rugosite lue dans le vert d'une texture ORM
+recevait la moyenne des trois canaux. Chaque canal sort d'un separate_color,
+rgb passe par rgb * scale + bias. UsdTransform2d devient un noeud mapping.
+Le contexte kma, declare mais jamais lu, l'est apres mtlx : c'etait la
+vraie cause de l'anomalie A17, mise au compte d'Houdini par le journal.
+
+Bancs : MaterialX 36/36 (cinq cas de texture et kma nouveaux, quatre en
+echec sur la DLL precedente), defauts 5/5, mtlx_inputs 543 sans perte, 97
+noeuds sans regression, cheveux 4/0.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp | 416 +++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 400 insertions(+), 16 deletions(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index c0152e37..517802b7 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -27,6 +27,10 @@
+ #include "scene/shader_graph.h"
+ #include "scene/shader_nodes.h"
+ 
++#include <pxr/base/gf/math.h>
++#include <pxr/base/gf/vec2d.h>
++#include <pxr/base/gf/vec2f.h>
++#include <pxr/base/gf/vec3f.h>
+ #include <pxr/imaging/hd/material.h>
+ #include <pxr/imaging/hd/materialConnectionSchema.h>
+ #include <pxr/imaging/hd/materialNetworkSchema.h>
+@@ -55,6 +59,7 @@ static SdfPath MaterialNodeNameToSdfPath(const TfToken &nodeName)
+ TF_DEFINE_PRIVATE_TOKENS(CyclesMaterialTokens,
+     (cycles)
+     (mtlx)
++    (kma)
+     (out)
+     ((cyclesSurface, "cycles:surface"))
+     ((cyclesDisplacement, "cycles:displacement"))
+@@ -275,6 +280,91 @@ class UsdToCyclesTexture : public UsdToCyclesMapping {
+       }
+     }
+ 
++    /* The outputs. `scale` and `bias` apply to the colour on its way out
++     * (rgb * scale + bias, the standard normal-map encoding is scale 2, bias
++     * -1), so `rgb` is read after the helper that applies them; and each
++     * single channel is a channel - a roughness read from `g` of a packed
++     * occlusion/roughness/metal texture used to get the average of all three.
++     * Alpha comes straight off the image: the alpha components of scale and
++     * bias are not carried. */
++    if (inputConnection) {
++      static const TfToken r("r"), g("g"), b("b"), a("a"), rgb("rgb");
++      if (name == rgb) {
++        return "sb:Vector";
++      }
++      if (name == r) {
++        return "sep:Red";
++      }
++      if (name == g) {
++        return "sep:Green";
++      }
++      if (name == b) {
++        return "sep:Blue";
++      }
++      if (name == a) {
++        return "alpha";
++      }
++    }
++
++    return UsdToCyclesMapping::parameterName(name, inputConnection, value);
++  }
++};
++
++/* UsdTransform2d -> Cycles mapping, which applies scale, then rotation, then
++ * translation, the order the USD spec gives. The values change shape on the
++ * way: a rotation in degrees about the texture's Z becomes a radian vector,
++ * two-component scale and translation become three-component ones. Only
++ * values are transformed; a connected rotation or scale is linked as is. */
++class UsdToCyclesTransform2d : public UsdToCyclesMapping {
++ public:
++  using UsdToCyclesMapping::UsdToCyclesMapping;
++
++  std::string parameterName(const TfToken &name,
++                            const ShaderInput *inputConnection,
++                            VtValue *value) const override
++  {
++    static const TfToken in("in"), rotation("rotation"), scale("scale"),
++        translation("translation"), result("result");
++    if (inputConnection && name == result) {
++      return "vector";
++    }
++    if (name == in) {
++      return "vector";
++    }
++    auto vec2 = [](const VtValue &v, const float fallback, GfVec2f *out) {
++      if (v.IsHolding<GfVec2f>()) {
++        *out = v.UncheckedGet<GfVec2f>();
++        return true;
++      }
++      if (v.IsHolding<GfVec2d>()) {
++        const GfVec2d d = v.UncheckedGet<GfVec2d>();
++        *out = GfVec2f(float(d[0]), float(d[1]));
++        return true;
++      }
++      *out = GfVec2f(fallback);
++      return false;
++    };
++    if (name == rotation) {
++      if (value) {
++        const float degrees = VtValue::Cast<float>(*value).GetWithDefault(0.0f);
++        *value = VtValue(GfVec3f(0.0f, 0.0f, GfDegreesToRadians(degrees)));
++      }
++      return "rotation";
++    }
++    if (name == scale) {
++      GfVec2f s;
++      if (value && vec2(*value, 1.0f, &s)) {
++        *value = VtValue(GfVec3f(s[0], s[1], 1.0f));
++      }
++      return "scale";
++    }
++    if (name == translation) {
++      GfVec2f t;
++      if (value && vec2(*value, 0.0f, &t)) {
++        *value = VtValue(GfVec3f(t[0], t[1], 0.0f));
++      }
++      return "location";
++    }
+     return UsdToCyclesMapping::parameterName(name, inputConnection, value);
+   }
+ };
+@@ -451,7 +541,20 @@ UsdToCyclesMapping MakeMtlxStandardSurface()
+                            * chair qu'il n'avait pas demandee. Le defaut de
+                            * MaterialX est pose ici, et la correspondance
+                            * ci-dessus le remplace des que le reseau l'ecrit. */
+-                          {ustring("subsurface_radius"), "1,1,1"}});
++                          {ustring("subsurface_radius"), "1,1,1"},
++                          /* The other inputs whose MaterialX default is not
++                           * Cycles': each one an unauthored input would
++                           * otherwise take from the principled BSDF. Found by
++                           * tools/mtlx_defaults.py, which renders a sphere
++                           * with no input written and with every input
++                           * written at its default and wants the same image.
++                           * The subsurface scale is in scene units on both
++                           * sides; Cycles' 0.005 is a skin in metres. */
++                          {ustring("roughness"), "0.2"},
++                          {ustring("subsurface_scale"), "1"},
++                          {ustring("sheen_roughness"), "0.3"},
++                          {ustring("coat_roughness"), "0.1"},
++                          {ustring("thin_film_ior"), "1.5"}});
+   /* The helper drives the level unconditionally, so it has to carry MaterialX's
+    * own default of 1 for the case where the network never writes `specular` at
+    * all - otherwise an unauthored input would be actively set to something
+@@ -493,6 +596,229 @@ UsdToCyclesMapping MakeMtlxStandardSurface()
+   return mapping;
+ }
+ 
++/* OpenPBR, on the same principled BSDF and the same helpers as
++ * standard_surface: the two models share their lobes, not their names, units
++ * or defaults. Every input of open_pbr_surface.mtlx is named here, either
++ * mapped or listed as dropped.
++ *
++ * - `subsurface_radius` is a distance and `subsurface_radius_scale` a colour,
++ *   the other way round from Cycles: they land on scale and radius.
++ * - `thin_film_thickness` is in micrometres and weighted by
++ *   `thin_film_weight`; Cycles wants nanometres. A product and a factor of a
++ *   thousand.
++ * - The dispersion pair is Cycles' own pair, same meaning.
++ * - `fuzz` becomes sheen - Cycles' microfibre sheen is not OpenPBR's fuzz
++ *   model, the colour and the weight are what carry over.
++ * - Dropped, for want of a counterpart: `coat_darkening`, the two roughness
++ *   anisotropies' exact parametrisation (sent to `anisotropic` as is),
++ *   `transmission_depth`, `transmission_scatter`,
++ *   `transmission_scatter_anisotropy`, `subsurface_color` (Cycles colours
++ *   subsurface by the base colour), `geometry_coat_tangent`. */
++UsdToCyclesMapping MakeMtlxOpenPbr()
++{
++  UsdToCyclesMapping m = MakeMtlxStandardSurface();
++  m.setParameterName(TfToken("base_weight"), ustring("basew:vector2"));
++  m.setParameterName(TfToken("base_diffuse_roughness"), ustring("diffuse_roughness"));
++  m.setParameterName(TfToken("base_metalness"), ustring("metallic"));
++  m.setParameterName(TfToken("specular_weight"), ustring("spec:value1"));
++  m.setParameterName(TfToken("specular_ior"), ustring("ior"));
++  m.setParameterName(TfToken("specular_roughness_anisotropy"), ustring("anisotropic"));
++  m.setParameterName(TfToken("transmission_weight"), ustring("transmission_weight"));
++  m.setParameterName(TfToken("transmission_dispersion_scale"),
++                     ustring("transmission_dispersion_scale"));
++  m.setParameterName(TfToken("transmission_dispersion_abbe_number"),
++                     ustring("transmission_dispersion_abbe_number"));
++  m.setParameterName(TfToken("subsurface_weight"), ustring("subsurface_weight"));
++  m.setParameterName(TfToken("subsurface_radius"), ustring("subsurface_scale"));
++  m.setParameterName(TfToken("subsurface_radius_scale"), ustring("subsurface_radius"));
++  m.setParameterName(TfToken("subsurface_scatter_anisotropy"), ustring("subsurface_anisotropy"));
++  m.setParameterName(TfToken("fuzz_weight"), ustring("sheen_weight"));
++  m.setParameterName(TfToken("fuzz_color"), ustring("sheen_tint"));
++  m.setParameterName(TfToken("fuzz_roughness"), ustring("sheen_roughness"));
++  m.setParameterName(TfToken("coat_weight"), ustring("coat_weight"));
++  m.setParameterName(TfToken("coat_ior"), ustring("coat_ior"));
++  m.setParameterName(TfToken("thin_film_weight"), ustring("tfw:value1"));
++  m.setParameterName(TfToken("thin_film_thickness"), ustring("tfw:value2"));
++  m.setParameterName(TfToken("thin_film_ior"), ustring("thin_film_ior"));
++  m.setParameterName(TfToken("emission_luminance"), ustring("emission_strength"));
++  m.setParameterName(TfToken("geometry_opacity"), ustring("alpha"));
++  m.setParameterName(TfToken("geometry_thin_walled"), ustring("thin_wall"));
++  m.setParameterName(TfToken("geometry_normal"), ustring("normal"));
++  m.setParameterName(TfToken("geometry_tangent"), ustring("tangent"));
++  m.setParameterName(TfToken("geometry_coat_normal"), ustring("coat_normal"));
++
++  /* OpenPBR's defaults, open_pbr_surface.mtlx. */
++  m.setFixedValues({{ustring("transmission_dispersion_scale"), "0"},
++                    {ustring("transmission_dispersion_abbe_number"), "20"},
++                    {ustring("subsurface_radius"), "1,0.5,0.25"},
++                    {ustring("subsurface_scale"), "1"},
++                    {ustring("roughness"), "0.3"},
++                    {ustring("sheen_roughness"), "0.5"},
++                    {ustring("coat_roughness"), "0"},
++                    {ustring("coat_ior"), "1.6"},
++                    {ustring("thin_film_ior"), "1.4"}});
++
++  /* thin_film_thickness [nm] = weight * thickness [um] * 1000. The scale
++   * helper first, so the product can be wired into it. */
++  m.addHelper({"tfs",
++               "math",
++               {{"Value", "Thin Film Thickness"}},
++               {{ustring("math_type"), "multiply"},
++                {ustring("value1"), "0"},
++                {ustring("value2"), "1000"}}});
++  m.addHelper({"tfw",
++               "math",
++               {{"Value", "tfs:Value1"}},
++               {{ustring("math_type"), "multiply"},
++                {ustring("value1"), "0"},
++                {ustring("value2"), "0.5"}}});
++  return m;
++}
++
++const UsdToCyclesMapping MtlxOpenPbr = MakeMtlxOpenPbr();
++
++/* glTF PBR (gltf_pbr.mtlx) on the principled BSDF. Its defaults are the glTF
++ * specification's - white, fully metallic, fully rough - very far from
++ * Cycles', so all of them are pinned.
++ *
++ * - `specular` is KHR_materials_specular's factor, neutral at one: halved
++ *   onto Cycles' level, like standard_surface's.
++ * - Sheen has no weight in glTF; its colour is the weight. Cycles' sheen is
++ *   switched fully on and tinted by that colour, black meaning none.
++ * - `iridescence` weights `iridescence_thickness` (nanometres) into the thin
++ *   film.
++ * - `dispersion` is 20 / Abbe number; with Cycles' Abbe number pinned at 20
++ *   the scale is the glTF value as is.
++ * - `anisotropy_rotation` is in radians, Cycles' rotation a fraction of a
++ *   turn.
++ * - `alpha` is passed whatever `alpha_mode` says: an OPAQUE material with an
++ *   alpha below one renders see-through here.
++ * - Dropped: `occlusion`, `thickness`, `attenuation_distance`,
++ *   `attenuation_color`, `alpha_cutoff`. */
++UsdToCyclesMapping MakeMtlxGltfPbr()
++{
++  UsdToCyclesMapping m{"principled_bsdf",
++                       {
++                           {TfToken("base_color"), ustring("base_color")},
++                           {TfToken("metallic"), ustring("metallic")},
++                           {TfToken("roughness"), ustring("roughness")},
++                           {TfToken("normal"), ustring("normal")},
++                           {TfToken("tangent"), ustring("tangent")},
++                           {TfToken("transmission"), ustring("transmission_weight")},
++                           {TfToken("specular"), ustring("spec:value1")},
++                           {TfToken("specular_color"), ustring("specular_tint")},
++                           {TfToken("ior"), ustring("ior")},
++                           {TfToken("alpha"), ustring("alpha")},
++                           {TfToken("iridescence"), ustring("irid:value1")},
++                           {TfToken("iridescence_ior"), ustring("thin_film_ior")},
++                           {TfToken("iridescence_thickness"), ustring("irid:value2")},
++                           {TfToken("sheen_color"), ustring("sheen_tint")},
++                           {TfToken("sheen_roughness"), ustring("sheen_roughness")},
++                           {TfToken("clearcoat"), ustring("coat_weight")},
++                           {TfToken("clearcoat_roughness"), ustring("coat_roughness")},
++                           {TfToken("clearcoat_normal"), ustring("coat_normal")},
++                           {TfToken("emissive"), ustring("emission_color")},
++                           {TfToken("emissive_strength"), ustring("emission_strength")},
++                           {TfToken("anisotropy_strength"), ustring("anisotropic")},
++                           {TfToken("anisotropy_rotation"), ustring("arot:value1")},
++                           {TfToken("dispersion"), ustring("transmission_dispersion_scale")},
++                           {CyclesMaterialTokens->out, ustring("BSDF")},
++                       }};
++  m.setFixedValues({{ustring("base_color"), "1,1,1"},
++                    {ustring("metallic"), "1"},
++                    {ustring("roughness"), "1"},
++                    {ustring("ior"), "1.5"},
++                    {ustring("sheen_weight"), "1"},
++                    {ustring("sheen_tint"), "0,0,0"},
++                    {ustring("sheen_roughness"), "0"},
++                    {ustring("coat_roughness"), "0"},
++                    {ustring("emission_color"), "0,0,0"},
++                    {ustring("emission_strength"), "1"},
++                    {ustring("thin_film_ior"), "1.3"},
++                    {ustring("transmission_dispersion_abbe_number"), "20"}});
++  m.addHelper({"spec",
++               "math",
++               {{"Value", "Specular IOR Level"}},
++               {{ustring("math_type"), "multiply"},
++                {ustring("value1"), "1.0"},
++                {ustring("value2"), "0.5"}}});
++  m.addHelper({"irid",
++               "math",
++               {{"Value", "Thin Film Thickness"}},
++               {{ustring("math_type"), "multiply"},
++                {ustring("value1"), "0"},
++                {ustring("value2"), "100"}}});
++  m.addHelper({"arot",
++               "math",
++               {{"Value", "Anisotropic Rotation"}},
++               {{ustring("math_type"), "multiply"},
++                {ustring("value1"), "0"},
++                {ustring("value2"), "0.15915494"}}});
++  return m;
++}
++
++const UsdToCyclesMapping MtlxGltfPbr = MakeMtlxGltfPbr();
++
++/* Disney's principled BRDF (disney_principled.mtlx), the model Blender's
++ * principled BSDF descends from - most inputs carry straight over.
++ *
++ * - `specular` 0.5 is an F0 of 0.04, which is Cycles' level 0.5: same scale.
++ * - `specularTint` and `sheenTint` are floats tinting towards the base
++ *   colour; Cycles' tints are colours. A mix from white to the base colour by
++ *   the tint amount gives them.
++ * - `clearcoatGloss` maps to a microfacet alpha of lerp(0.1, 0.001, gloss) in
++ *   Disney's paper; Cycles' roughness is sqrt(alpha). Gloss 1 lands on 0.032,
++ *   Cycles' own coat default.
++ * - Defaults are Disney's: a 0.16 grey base, sheen tint 0.5. */
++UsdToCyclesMapping MakeMtlxDisneyPrincipled()
++{
++  UsdToCyclesMapping m{"principled_bsdf",
++                       {
++                           {TfToken("baseColor"), ustring("base_color;stint:b;shtint:b")},
++                           {TfToken("metallic"), ustring("metallic")},
++                           {TfToken("roughness"), ustring("roughness")},
++                           {TfToken("anisotropic"), ustring("anisotropic")},
++                           {TfToken("specular"), ustring("specular_ior_level")},
++                           {TfToken("specularTint"), ustring("stint:fac")},
++                           {TfToken("sheen"), ustring("sheen_weight")},
++                           {TfToken("sheenTint"), ustring("shtint:fac")},
++                           {TfToken("clearcoat"), ustring("coat_weight")},
++                           {TfToken("clearcoatGloss"), ustring("cg:value1")},
++                           {TfToken("specTrans"), ustring("transmission_weight")},
++                           {TfToken("ior"), ustring("ior")},
++                           {TfToken("subsurface"), ustring("subsurface_weight")},
++                           {TfToken("subsurfaceDistance"), ustring("subsurface_radius")},
++                           {TfToken("normal"), ustring("normal")},
++                           {TfToken("tangent"), ustring("tangent")},
++                           {CyclesMaterialTokens->out, ustring("BSDF")},
++                       }};
++  m.setFixedValues({{ustring("base_color"), "0.16,0.16,0.16"},
++                    {ustring("subsurface_radius"), "1,1,1"},
++                    {ustring("subsurface_scale"), "1"}});
++  auto tint = [](const char *const name, const char *const target, const char *const fac) {
++    return UsdToCyclesMapping::Helper{name,
++                                      "mix_color",
++                                      {{"Result", target}},
++                                      {{ustring("blend_type"), "mix"},
++                                       {ustring("fac"), fac},
++                                       {ustring("a"), "1,1,1"},
++                                       {ustring("b"), "0.16,0.16,0.16"}}};
++  };
++  m.addHelper(tint("stint", "Specular Tint", "0"));
++  m.addHelper(tint("shtint", "Sheen Tint", "0.5"));
++  m.addHelper({"cr", "math", {{"Value", "Coat Roughness"}}, {{ustring("math_type"), "sqrt"}}});
++  m.addHelper({"cg",
++               "math",
++               {{"Value", "cr:Value1"}},
++               {{ustring("math_type"), "multiply_add"},
++                {ustring("value1"), "1"},
++                {ustring("value2"), "-0.099"},
++                {ustring("value3"), "0.1"}}});
++  return m;
++}
++
++const UsdToCyclesMapping MtlxDisneyPrincipled = MakeMtlxDisneyPrincipled();
++
+ /* standard_surface, variante a lobe de transmission separe.
+  *
+  * Cycles teinte la transmission par `base_color` et n'a qu'une rugosite pour
+@@ -1864,9 +2190,9 @@ const std::vector<MtlxEntry> &MtlxTable()
+   static const std::vector<MtlxEntry> table = {
+       /* Surfaces and terminals. */
+       {"ND_standard_surface_surfaceshader", &MtlxStandardSurface},
+-      {"ND_open_pbr_surface", &MtlxStandardSurface},
+-      {"ND_disney_principled", &MtlxStandardSurface},
+-      {"ND_gltf_pbr", &MtlxStandardSurface},
++      {"ND_open_pbr_surface_surfaceshader", &MtlxOpenPbr},
++      {"ND_disney_principled", &MtlxDisneyPrincipled},
++      {"ND_gltf_pbr", &MtlxGltfPbr},
+       {"ND_displacement_vector3", &MtlxVectorDisplacement},
+       {"ND_displacement_", &MtlxDisplacement},
+ 
+@@ -2396,21 +2722,49 @@ class UsdToCycles {
+             {TfToken("clearcoatRoughness"), ustring("coat_roughness")},
+             {TfToken("opacity"), ustring("alpha")},
+             /* opacityThreshold, occlusion: no counterpart.
+-             * displacement: carried by the material's displacement terminal. */
++             * displacement: carried by the material's displacement terminal.
++             * specularColor is taken whatever useSpecularWorkflow says. */
+         }};
++    /* UsdPreviewSurface's own defaults where Cycles' differ: a diffuse of
++     * 0.18 (Cycles 0.8 - an unauthored diffuseColor rendered four times too
++     * bright), a coat roughness of 0.01. */
+     mapping.setFixedValues({{ustring("emission_strength"), "1"},
+-                            {ustring("emission_color"), "0,0,0"}});
++                            {ustring("emission_color"), "0,0,0"},
++                            {ustring("base_color"), "0.18,0.18,0.18"},
++                            {ustring("coat_roughness"), "0.01"}});
+     return mapping;
+   }();
+-  const UsdToCyclesTexture UsdUVTexture = {
+-      "image_texture",
+-      {
+-          {CyclesMaterialTokens->st, ustring("vector")},
+-          {CyclesMaterialTokens->wrapS, ustring("extension")},
+-          {CyclesMaterialTokens->wrapT, ustring("extension")},
+-          {TfToken("file"), ustring("filename")},
+-          {TfToken("sourceColorSpace"), ustring("colorspace")},
+-      }};
++  const UsdToCyclesTexture UsdUVTexture = [] {
++    UsdToCyclesTexture m{"image_texture",
++                         {
++                             {CyclesMaterialTokens->st, ustring("vector")},
++                             {CyclesMaterialTokens->wrapS, ustring("extension")},
++                             {CyclesMaterialTokens->wrapT, ustring("extension")},
++                             {TfToken("file"), ustring("filename")},
++                             {TfToken("sourceColorSpace"), ustring("colorspace")},
++                             {TfToken("scale"), ustring("sb:vector2")},
++                             {TfToken("bias"), ustring("sb:vector3")},
++                         }};
++    /* The channel split, then scale and bias after the image: rgb * scale +
++     * bias. The split is declared first so the multiply-add can wire into
++     * it. */
++    m.addHelper({"sep", "separate_color", {}, {}});
++    UsdToCyclesMapping::Helper sb{"sb",
++                                  "vector_math",
++                                  {{"Vector", "sep:Color"}},
++                                  {{ustring("math_type"), "multiply_add"},
++                                   {ustring("vector2"), "1,1,1"},
++                                   {ustring("vector3"), "0,0,0"}}};
++    sb.takesMainOutput = "Vector1";
++    sb.mainOutputName = "Color";
++    m.addHelper(std::move(sb));
++    return m;
++  }();
++  const UsdToCyclesTransform2d UsdTransform2d = [] {
++    UsdToCyclesTransform2d m{"mapping", {}};
++    m.setFixedValues({{ustring("mapping_type"), "point"}});
++    return m;
++  }();
+   const UsdToCyclesMapping UsdPrimvarReader = {"attribute",
+                                                {{TfToken("varname"), ustring("attribute")}}};
+ 
+@@ -2423,6 +2777,9 @@ class UsdToCycles {
+     if (usdNodeType == CyclesMaterialTokens->UsdUVTexture) {
+       return &UsdUVTexture;
+     }
++    if (usdNodeType == CyclesMaterialTokens->UsdTransform2d) {
++      return &UsdTransform2d;
++    }
+     if (usdNodeType == CyclesMaterialTokens->UsdPrimvarReader_float ||
+         usdNodeType == CyclesMaterialTokens->UsdPrimvarReader_float2 ||
+         usdNodeType == CyclesMaterialTokens->UsdPrimvarReader_float3 ||
+@@ -2490,6 +2847,13 @@ void HdCyclesMaterial::Sync(HdSceneDelegate *sceneDelegate,
+       /* MaterialX networks are translated to Cycles nodes, see sMtlxToCycles. */
+       network = matSchema.GetMaterialNetwork(CyclesMaterialTokens->mtlx);
+     }
++    if (!network) {
++      /* A Karma Material Builder writes the same MaterialX nodes under its
++       * own context. The delegate declared `kma` among its render contexts
++       * but never asked for that network, and fell to the preview surface
++       * Houdini writes alongside. */
++      network = matSchema.GetMaterialNetwork(CyclesMaterialTokens->kma);
++    }
+     if (!network) {
+       network = matSchema.GetMaterialNetwork();
+     }
+@@ -3203,7 +3567,27 @@ void HdCyclesMaterial::UpdateConnections(NodeDesc &nodeDesc,
+       const std::string outputName = outputMapping ?
+                                          outputMapping->parameterName(upstreamOutputName, input) :
+                                          upstreamOutputName.GetString();
+-      ShaderOutput *output = FindOutput(sourceNode, outputName);
++      ShaderOutput *output = nullptr;
++      {
++        /* An output named "<helper>:<socket>" lives on one of the mapping's
++         * helpers - a texture's separate channels, for one. */
++        const std::pair<std::string, std::string> split = SplitHelperTarget(outputName);
++        if (!split.first.empty()) {
++          const auto it = srcNodeIt->second.helperNodes.find(split.first);
++          if (it != srcNodeIt->second.helperNodes.end()) {
++            output = FindOutput(it->second, split.second);
++          }
++        }
++        else {
++          output = FindOutput(sourceNode, outputName);
++          /* A node with a helper after it still has outputs of its own that
++           * the helper does not carry - an image's alpha past the helper that
++           * scales its colour. */
++          if (!output && sourceNode != srcNodeIt->second.node) {
++            output = FindOutput(srcNodeIt->second.node, outputName);
++          }
++        }
++      }
+       if (!output) {
+         /* The name failed; the type may not. A surface shader feeding a mix
+          * arrives as `out` and lands on a principled_bsdf whose closure is

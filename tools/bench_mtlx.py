@@ -21,6 +21,7 @@ is how an HSV-based `saturate` passed for months.
 `CYCLES_BENCH_TEXTURE` adds the three textured cases, which need a file.
 """
 
+import math
 import os
 import subprocess
 import sys
@@ -184,6 +185,23 @@ def scale3(a, s):
 
 RED, BLUE = (0.9, 0.2, 0.1), (0.1, 0.2, 0.9)
 
+FLAT_TEXEL = (0.2, 0.9, 0.4, 0.6)
+
+
+def uvtex(extra, output):
+    return (['uniform token info:id = "UsdUVTexture"',
+             "asset inputs:file = @flat.exr@",
+             'token inputs:sourceColorSpace = "raw"'] + extra + [output])
+
+
+def write_flat_texture():
+    """A 4x4 texture of one texel value, raw float, beside the scenes."""
+    import OpenImageIO as oiio
+    spec = oiio.ImageSpec(4, 4, 4, oiio.FLOAT)
+    buf = oiio.ImageBuf(spec)
+    oiio.ImageBufAlgo.fill(buf, list(FLAT_TEXEL))
+    buf.write(os.path.join(OUT, "flat.exr"))
+
 # (name, body of the `probe` prim, expected colour or None, options)
 # Options: `mesh` adds lines to the mesh prim; `tol` overrides the tolerance;
 # `terminal` picks how the probe reaches the surface (see TERMINALS); `extra`
@@ -293,6 +311,77 @@ CASES = [
         "token outputs:out",
     ], mx_mix(BLUE, RED, 0.25), {"terminal": "surface",
                                   "extra": [matte("s1", RED), matte("s2", BLUE)]}),
+    # Colour and vector variants of the scalar operators (phase 3). Each input
+    # is coloured, so a translation that collapses to grey cannot pass.
+    # Formulas from stdlib_genglsl_impl.mtlx / stdlib_ng.mtlx.
+] + [
+    (name, ['uniform token info:id = "%s"' % nodedef] + inputs + [out], expected, {})
+    for name, nodedef, inputs, out, expected in [
+        ("clamp_color3", "ND_clamp_color3",
+         ["color3f inputs:in = (1.4, 0.5, 0.05)", "color3f inputs:low = (0.1, 0.1, 0.1)",
+          "color3f inputs:high = (0.8, 0.8, 0.8)"], "color3f outputs:out",
+         tuple(min(max(x, 0.1), 0.8) for x in (1.4, 0.5, 0.05))),
+        ("max_color3", "ND_max_color3",
+         ["color3f inputs:in1 = (0.9, 0.2, 0.1)", "color3f inputs:in2 = (0.3, 0.6, 0.2)"],
+         "color3f outputs:out", (0.9, 0.6, 0.2)),
+        ("power_color3", "ND_power_color3",
+         ["color3f inputs:in1 = (0.5, 0.25, 0.81)", "color3f inputs:in2 = (2, 2, 0.5)"],
+         "color3f outputs:out", (0.25, 0.0625, 0.9)),
+        ("sqrt_color3", "ND_sqrt_color3",
+         ["color3f inputs:in = (0.25, 0.49, 0.04)"], "color3f outputs:out", (0.5, 0.7, 0.2)),
+        ("exp_color3", "ND_exp_color3",
+         ["color3f inputs:in = (-1, -2, -0.5)"], "color3f outputs:out",
+         tuple(math.exp(x) for x in (-1, -2, -0.5))),
+        ("ln_float", "ND_ln_float",
+         ["float inputs:in = 2"], "float outputs:out", (math.log(2),) * 3),
+        ("modulo_float", "ND_modulo_float",
+         ["float inputs:in1 = -0.25", "float inputs:in2 = 1"], "float outputs:out",
+         (0.75, 0.75, 0.75)),
+        ("modulo_color3", "ND_modulo_color3",
+         ["color3f inputs:in1 = (-0.25, 1.3, 0.5)", "color3f inputs:in2 = (1, 1, 1)"],
+         "color3f outputs:out", (0.75, 0.3, 0.5)),
+        ("invert_color3", "ND_invert_color3",
+         ["color3f inputs:in = (0.2, 0.5, 0.7)", "color3f inputs:amount = (1, 1, 1)"],
+         "color3f outputs:out", (0.8, 0.5, 0.3)),
+        ("invert_float", "ND_invert_float",
+         ["float inputs:in = 0.2", "float inputs:amount = 0.9"], "float outputs:out",
+         (0.7, 0.7, 0.7)),
+        ("remap_color3", "ND_remap_color3",
+         ["color3f inputs:in = (0.5, 0.25, 0.75)", "color3f inputs:outlow = (0.2, 0.2, 0.2)",
+          "color3f inputs:outhigh = (0.6, 0.6, 0.6)"], "color3f outputs:out",
+         tuple(0.2 + 0.4 * x for x in (0.5, 0.25, 0.75))),
+        ("smoothstep_color3", "ND_smoothstep_color3",
+         ["color3f inputs:in = (0.5, 0.25, 0.75)"], "color3f outputs:out",
+         tuple(3 * x * x - 2 * x * x * x for x in (0.5, 0.25, 0.75))),
+        ("luminance_color3", "ND_luminance_color3",
+         ["color3f inputs:in = (0.9, 0.2, 0.1)"], "color3f outputs:out",
+         mx_luminance((0.9, 0.2, 0.1))),
+        ("atan2_float", "ND_atan2_float",
+         ["float inputs:iny = 1", "float inputs:inx = 2"], "float outputs:out",
+         (math.atan2(1, 2),) * 3),
+        ("atan2_vector3", "ND_atan2_vector3",
+         ["float3 inputs:iny = (1, 0.5, 0.2)", "float3 inputs:inx = (2, 1, 1)"],
+         "float3 outputs:out",
+         tuple(math.atan2(y, x) for y, x in ((1, 2), (0.5, 1), (0.2, 1)))),
+    ]
+] + [
+    # UsdUVTexture (phase 4): one flat texel (0.2, 0.9, 0.4), alpha 0.6, read
+    # raw. Each output is its channel, and rgb * scale + bias is applied on the
+    # way out (UsdPreviewSurface spec). The channels used to arrive averaged.
+    ("uvtex_rgb", uvtex(["float4 inputs:scale = (0.5, 1, 2, 1)",
+                         "float4 inputs:bias = (0.1, 0, 0, 0)"], "float3 outputs:rgb"),
+     (0.2 * 0.5 + 0.1, 0.9, 0.4 * 2), {"probe_out": "rgb"}),
+    ("uvtex_g", uvtex([], "float outputs:g"), (0.9, 0.9, 0.9), {"probe_out": "g"}),
+    ("uvtex_b", uvtex([], "float outputs:b"), (0.4, 0.4, 0.4), {"probe_out": "b"}),
+    ("uvtex_a", uvtex([], "float outputs:a"), (0.6, 0.6, 0.6), {"probe_out": "a"}),
+    # A Karma Material Builder writes the same MaterialX nodes under the `kma`
+    # render context; the delegate must read that network, not the
+    # UsdPreviewSurface fallback Houdini writes beside it.
+    ("kma_context", [
+        'uniform token info:id = "ND_constant_color3"',
+        "color3f inputs:value = (0.3, 0.7, 0.2)",
+        "color3f outputs:out",
+    ], (0.3, 0.7, 0.2), {"context": "kma"}),
     # `layer` has no exact Cycles form (a Fresnel-weighted mix stands in); the
     # case only asks that a dielectric over a diffuse renders, and not black.
     ("layer", [
@@ -321,7 +410,10 @@ env.setdefault("CYCLES_LOGGING_LEVEL", "warning")
 
 
 def render(name, body, options):
-    material = [TERMINALS[options.get("terminal", "color")], shader("probe", body)]
+    terminal = TERMINALS[options.get("terminal", "color")].replace(
+        "probe.outputs:out", "probe.outputs:" + options.get("probe_out", "out")).replace(
+        "outputs:mtlx:surface", "outputs:%s:surface" % options.get("context", "mtlx"))
+    material = [terminal, shader("probe", body)]
     material += options.get("extra", [])
     scene = os.path.join(OUT, name + ".usda")
     open(scene, "w", encoding="utf-8").write(
@@ -350,6 +442,7 @@ def averages(exr):
 
 
 def main():
+    write_flat_texture()
     cases = list(CASES)
     if TEX:
         for name, nodedef in TEXTURED:

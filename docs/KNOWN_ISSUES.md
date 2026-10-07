@@ -47,7 +47,15 @@ the denominator. `absorption_vdf` and `anisotropic_vdf` are mapped but no
 MaterialX volume network can reach the volume terminal. Same shape as the
 `ND_surface` gap fixed on 2026-09-10: `volume(vdf, edf)` → `add_closure`.
 
-### K-05 OpenPBR, Disney and glTF surfaces are aliased, not translated — confirmed
+### K-05 OpenPBR, Disney and glTF surfaces are aliased, not translated — confirmed — **fixed** (0080)
+Three tables of their own, each input mapped or listed as dropped in the code:
+OpenPBR on the standard_surface helpers with its names, units (thin film in
+micrometres, subsurface radius/scale swapped) and defaults; glTF with the
+specification's defaults (white, metallic 1, roughness 1) and sheen,
+iridescence, dispersion and anisotropy rotation converted; Disney principled
+with its tints as white-to-base mixes and the clearcoat gloss converted to a
+roughness. `tools/mtlx_defaults.py` checks all three plus standard_surface and
+UsdPreviewSurface. Original note:
 `material.cpp:1710-1712` point `ND_open_pbr_surface`, `ND_disney_principled`,
 `ND_gltf_pbr` at the `standard_surface` table. OpenPBR inputs
 (`base_weight`, `base_metalness`, `specular_weight`, `specular_ior`,
@@ -63,7 +71,16 @@ lost. Each needs its own table; `gltf_pbr` and `disney_principled` likewise.
 was still garbage, because the mesh wrote float3 primvars at the wrong stride.
 Bench case `geomcolor`: (0.200, 0.600, 0.900) exact after both fixes.
 
-### K-07 Colour and vector variants of scalar operators collapse to grey — confirmed
+### K-07 Colour and vector variants of scalar operators collapse to grey — confirmed — **fixed** (0079)
+`FindMtlxVectorTwin` gives every family a vector twin: `vector_math` where
+it has the operation, separate → three `math` → combine for exp, ln, sqrt,
+asin, acos, atan2, min(max()) for clamp, `vector_map_range` for remap, range
+and smoothstep. Fifteen bench cases with coloured inputs; on the previous DLL
+clamp, max and sqrt came out grey. Three scalar operators were wrong too and
+are fixed in the same patch: `ln` (Cycles' logarithm takes its base on the
+second input, 0.5 by default - it returned ln(x)/ln(0.5)), `modulo` (MaterialX
+floors, Cycles truncated) and `atan2` (operands `iny`/`inx`, never mapped).
+`invert` became `amount - in`, `luminance` takes ACEScg weights. Original note:
 `isVector` (`material.cpp:1927`) is only consulted for add/sub/mul/div. Every
 other family - `absval`, `sign`, `floor`, `ceil`, `round`, `fract`, `modulo`,
 `min`, `max`, `power`, `sqrt`, `sin`..., `clamp`, `remap`, `range`,
@@ -130,7 +147,35 @@ transmission) unmapped. `subsurface_bsdf`: `anisotropy` unmapped.
 is a transmittance. `ambientocclusion.coneangle → distance` is not the same
 quantity. All render *something*; none say they are approximate.
 
-### K-15 `UsdPreviewSurface` gaps — confirmed
+### K-55 Unauthored surface inputs took Cycles' defaults — confirmed — **fixed** (0080)
+Hydra forwards only authored inputs, and Houdini authors only what the user
+touched, so every untouched input of a surface took the principled BSDF's
+default rather than its own model's. `standard_surface`: specular roughness
+0.5 instead of 0.2, subsurface scale 0.005 instead of 1, coat roughness 0.03
+instead of 0.1, sheen roughness 0.5 instead of 0.3, thin film IOR 1.33 instead
+of 1.5. `UsdPreviewSurface`: diffuse 0.8 instead of 0.18 - an untouched
+preview surface rendered four times too bright. `tools/mtlx_defaults.py`
+renders a sphere with no input written and with every input written at its
+default; on the previous DLL all five surfaces differed (up to 40 % of the
+image blocks), now none does. Defaults are pinned per table.
+
+### K-56 UsdUVTexture channels were averaged — confirmed — **fixed** (0080)
+`r`, `g` and `b` were all routed to the image's `color` output; plugged into
+a scalar input, that colour was averaged. A roughness read from the green
+channel of a packed occlusion/roughness/metal texture got the mean of all
+three. Each channel now comes off a `separate_color` helper, and `rgb` passes
+`rgb * scale + bias` first. Bench cases `uvtex_g`, `uvtex_b` returned the
+whole colour on the previous DLL.
+
+### K-15 `UsdPreviewSurface` gaps — confirmed — **mostly fixed** (0080)
+Fixed: `scale`/`bias` (rgb only; their alpha components are not carried),
+per-channel outputs (K-56), `UsdTransform2d` onto a `mapping` node (rotation
+degrees to radians, 2D scale and translation widened; values only, a
+connected rotation is linked unconverted), `sourceColorSpace` names, the
+preview surface's own defaults (K-55). Still open: `fallback`,
+`UsdPreviewSurface.displacement`, `occlusion`, `opacityThreshold`, and
+`specularColor` is taken whatever `useSpecularWorkflow` says.
+`UsdTransform2d` has no value case yet. Original note:
 `UsdTransform2d` is a token (`material.cpp:69`) with no mapping in `findUsd`.
 `UsdUVTexture.scale`/`bias`/`fallback` are unmapped, so the standard normal-map
 encoding (`scale 2, bias −1`) renders wrong. `sourceColorSpace` was passed
@@ -139,7 +184,11 @@ verbatim (`material.cpp:2011`); `raw`, `sRGB` and `auto` now become `data`,
 `displacement` on the preview surface finds no `Displacement` output on
 `principled_bsdf`.
 
-### K-16 `kma` is declared, never read — confirmed
+### K-16 `kma` is declared, never read — confirmed — **fixed** (0080)
+`Sync` now reads `cycles`, then `mtlx`, then `kma`, then the universal
+network. Bench case `kma_context`: grey (the preview fallback) on the previous
+DLL, the network's colour now. This was STATUS A17's real cause - the journal
+had put it on Houdini's side. Original note:
 `render_delegate.cpp:410` lists `kma` in `GetMaterialRenderContexts`;
 `material.cpp:2088-2094` reads `cycles`, then `mtlx`, then the universal
 network. A Karma Material Builder's `kma` network is never consulted. Add it
