@@ -1,7 +1,7 @@
 From 90b6c3309918e722b86c99ef7bb5bfb566237fd8 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sat, 5 Sep 2026 00:53:45 +0200
-Subject: [PATCH 63/89] hydra: la veille des COP repose l'image elle-meme
+Subject: [PATCH 63/90] hydra: la veille des COP repose l'image elle-meme
 
 Salir le materiau et attendre qu'Hydra nous redemande une synchronisation
 ne suffisait pas : rien ne garantit que la demande revienne, et elle ne

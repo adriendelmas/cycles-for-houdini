@@ -1,7 +1,7 @@
 From cc74d5f56c61a8a3758fba69fdedf5ae253536db Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 17:13:13 +0200
-Subject: [PATCH 78/89] hydra: les fermetures MaterialX - mix, add, multiply,
+Subject: [PATCH 78/90] hydra: les fermetures MaterialX - mix, add, multiply,
  volume, layer, conductor
 
 Les familles typees par leur suffixe passaient par la table des prefixes :
