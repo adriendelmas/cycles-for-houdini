@@ -18,7 +18,9 @@ HFS = os.path.join(os.environ.get("HFS", "E:/Side Effects Software/Houdini22.0.3
 INSTALL = os.environ.get("CYCLES_INSTALL_DIR", "install")
 BENCH = os.path.join(ROOT, "tests", "usd", "bench" if INSTALL == "install" else "bench-53")
 SCENES = os.path.join(BENCH, "scenes")
-IMAGES = os.path.join(BENCH, "images")
+# What the run produces; the committed references live next door in
+# references/ and move only through bench_diff.py --accept.
+IMAGES = os.path.join(BENCH, "output")
 for d in (SCENES, IMAGES):
     if not os.path.isdir(d):
         os.makedirs(d)

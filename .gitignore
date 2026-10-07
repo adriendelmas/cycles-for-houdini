@@ -12,3 +12,7 @@ __pycache__/
 *.pyc
 tests/usd/bench-mtlx/
 tests/usd/bench-hair/
+
+# Bench output: compared against the committed references, never committed.
+tests/usd/bench/output/
+tests/usd/bench-53/output/
