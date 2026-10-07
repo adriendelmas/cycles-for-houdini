@@ -1,0 +1,277 @@
+# Known issues
+
+Numbered so that PLAN.md and PROGRESS.md can point at them. Each entry names
+the line that is wrong and how the claim was checked. "Confirmed" means read
+in the code *and* checked against the MaterialX definition shipped with
+Houdini 22.0.368 (`$HFS/houdini/materialx/libraries`) or against Cycles'
+kernel; "probable" means read in the code only.
+
+Paths are relative to `external/cycles-53/src/hydra/` unless stated.
+
+## A. MaterialX translation - wrong results
+
+### K-01 `mix` is inverted — confirmed
+`material.cpp:654` wires `fg → a`, `bg → b`, `mix → fac`. MaterialX:
+`mix(bg, fg, mix)` (`stdlib_genglsl_impl.mtlx:604`), so `mix = 1` yields `fg`.
+Cycles `mix_color`: `fac = 1` yields `b`. Fix: `fg → b`, `bg → a`.
+
+### K-02 The seven compositing blends are inverted — confirmed
+`material.cpp:734` (`MakeMtlxBlend`) uses the same `fg → a`, `bg → b`.
+MaterialX `plus`: `mix·(bg+fg) + (1−mix)·bg = bg + mix·fg`
+(`stdlib_genglsl_impl.mtlx:546`). Cycles blend `add`: `a + fac·b`. Same fix
+as K-01, for `plus`, `minus`, `difference`, `burn`, `dodge`, `screen`, `overlay`.
+
+### K-03 Closure mix/add/multiply go to colour and scalar nodes — confirmed
+`material.cpp:1833` `{"ND_mix_", &MtlxMix}` also catches `ND_mix_bsdf`,
+`ND_mix_edf`, `ND_mix_vdf`, `ND_mix_surfaceshader`, `ND_mix_displacementshader`
+and sends them to `mix_color`. `ND_add_bsdf`/`ND_add_edf` take the `ND_add_`
+branch (`material.cpp:1942`) onto the scalar `math`; `ND_multiply_bsdfC/F`,
+`_edfC/F`, `_vdfC/F` onto `math`/`vector_math`. The closure connection is
+dropped with a warning. Needed: `mix_closure` (with the K-01 orientation:
+`fg → Closure2`), `add_closure`, and for multiply a `mix_closure` against
+`transparent_bsdf` or a `surface_mix_weight` write.
+
+### K-04 `ND_volume` is missing — confirmed
+Not in `MtlxTable()`, and `tools/mtlx_coverage.py` excludes `volume$` from
+the denominator. `absorption_vdf` and `anisotropic_vdf` are mapped but no
+MaterialX volume network can reach the volume terminal. Same shape as the
+`ND_surface` gap fixed on 2026-09-10: `volume(vdf, edf)` → `add_closure`.
+
+### K-05 OpenPBR, Disney and glTF surfaces are aliased, not translated — confirmed
+`material.cpp:1710-1712` point `ND_open_pbr_surface`, `ND_disney_principled`,
+`ND_gltf_pbr` at the `standard_surface` table. OpenPBR inputs
+(`base_weight`, `base_metalness`, `specular_weight`, `specular_ior`,
+`emission_luminance`, `geometry_opacity`, `geometry_normal`, `fuzz_*`,
+`coat_darkening`...; `bxdf/open_pbr_surface.mtlx`) are not in that table and
+fall to the "no input" warning. Metal, IOR, emission, opacity and normal are
+lost. Each needs its own table; `gltf_pbr` and `disney_principled` likewise.
+
+### K-06 `geomcolor` reads nothing — confirmed
+`material.cpp:1195` creates an `attribute` node with no `attribute` value;
+`AttributeNode::attributes()` requests an attribute named `""`. Fix:
+`setFixedValues({{"attribute", "displayColor"}})` (the primvar name the mesh
+stores it under).
+
+### K-07 Colour and vector variants of scalar operators collapse to grey — confirmed
+`isVector` (`material.cpp:1927`) is only consulted for add/sub/mul/div. Every
+other family - `absval`, `sign`, `floor`, `ceil`, `round`, `fract`, `modulo`,
+`min`, `max`, `power`, `sqrt`, `sin`..., `clamp`, `remap`, `range`,
+`smoothstep` - maps to the scalar `math`, `clamp` or `map_range` in float
+mode, and `convertToCycles<float>` averages the colour. `ND_clamp_color3`,
+`ND_max_color3`, `ND_power_color3` render grey. `vector_math` has absolute,
+floor, ceil, fraction, modulo, minimum, maximum, sine, cosine, tangent;
+`clamp` and `map_range` have a vector data type. Power, sqrt, exp, ln need
+three scalar helpers.
+
+### K-08 `saturate` is not the MaterialX formula — confirmed
+`material.cpp:1424` uses `hsv.saturation`. MaterialX: `lerp(dot(in, lumacoeffs), in, amount)`.
+For `(0.9, 0.2, 0.1)` at 0.2: MaterialX `(0.45, 0.31, 0.29)`, this code
+`(0.90, 0.76, 0.74)`. The bench's expected value (`tools/bench_mtlx.py:122`)
+was derived from the implementation and therefore passes. Fix: `rgb_to_bw` +
+`mix_color` with `fac = amount`, `a = luma`, `b = in`.
+
+### K-09 `layer` is a 50/50 mix — probable
+`material.cpp:1197` maps `top`/`base` to `mix_closure` and never sets `fac`
+(Cycles default 0.5). MaterialX vertical layering is `top + (1 − albedo(top))·base`.
+A coat over a base loses half the base. Cycles has no exact node; the nearest
+is `add_closure` for thin coats, or a `layer_weight`-driven mix. Document the
+approximation chosen.
+
+### K-10 `facingratio` is inverted — confirmed
+`material.cpp:1204` returns `layer_weight.Facing`, which is 0 facing the
+camera; MaterialX `facingratio` is 1 facing the camera (`invert = false`).
+Fix: `1 − Facing` through a `math` helper, or `dot(N, I)` via `vector_math`.
+
+### K-11 `viewdirection` points the wrong way — confirmed
+`material.cpp:1210` returns `geometry.Incoming` (surface → camera). MaterialX:
+camera → surface. Negate through `vector_math scale −1`.
+
+### K-12 `heighttonormal` outputs a world normal — probable
+`material.cpp:1149` maps it to `bump`, whose output is a shading normal.
+MaterialX outputs a tangent-space normal *map* (`(0.5, 0.5, 1)` when flat)
+meant for a following `normalmap`. The chain `heighttonormal → normalmap`
+therefore breaks. Either detect the chain and collapse it, or build the
+tangent map from `bump` − N through a `vector_transform` to tangent space.
+
+### K-13 `conductor_bsdf` loses its colour — confirmed
+`material.cpp:1250` maps to `glossy_bsdf` and leaves `ior`/`extinction`
+unmapped: every conductor is white. Cycles 4.3+ `metallic_bsdf` with
+`fresnel_type = physical_conductor` takes exactly `ior` and `extinction`.
+
+### K-14 Approximate closures without a note in the log — probable
+`dielectric_bsdf`: `tint` and `scatter_mode` (R-only coats become glass with
+transmission) unmapped. `subsurface_bsdf`: `anisotropy` unmapped.
+`absorption_vdf.absorption` is a coefficient, Cycles `absorption_volume.color`
+is a transmittance. `ambientocclusion.coneangle → distance` is not the same
+quantity. All render *something*; none say they are approximate.
+
+### K-15 `UsdPreviewSurface` gaps — confirmed
+`UsdTransform2d` is a token (`material.cpp:69`) with no mapping in `findUsd`.
+`UsdUVTexture.scale`/`bias`/`fallback` are unmapped, so the standard normal-map
+encoding (`scale 2, bias −1`) renders wrong. `sourceColorSpace` is passed
+verbatim (`material.cpp:2011`); `raw` and `sRGB` must become `data` and
+`__builtin_srgb`. `displacement` on the preview surface finds no
+`Displacement` output on `principled_bsdf`.
+
+### K-16 `kma` is declared, never read — confirmed
+`render_delegate.cpp:410` lists `kma` in `GetMaterialRenderContexts`;
+`material.cpp:2088-2094` reads `cycles`, then `mtlx`, then the universal
+network. A Karma Material Builder's `kma` network is never consulted. Add it
+after `mtlx` (the nodes are the same MaterialX nodedefs).
+
+### K-17 Colour4 and alpha are dropped throughout — probable
+`image_color4.out` becomes `color` (alpha lost), `separate4_color.outa` has
+no socket, `combine4_*` drop the fourth input, `constant_vector4` averages.
+Acceptable for most networks; should be logged once per material.
+
+### K-18 `texcoord.index`, `normal.space`, `tangent.space` ignored — probable
+Only the first UV set; `normal`/`tangent` are world space while the nodedef
+default is object space (differs once the object rotates). Noted in STATUS A11.
+
+## B. Geometry and scene
+
+### K-20 Curve type, basis and wrap are ignored — confirmed
+`curves.cpp:221-233` read `type`, `basis`, `wrap`, use them only to size the
+topology, then hand every key to Cycles, which evaluates a Catmull-Rom through
+all keys. Bézier control points are treated as on-curve points, `periodic`
+curves are open, `curveIndices` (indexed curves) index the wrong points. Houdini
+hair (linear or `catmullRom`, non-indexed) is fine; other DCCs' curves are not.
+Fix: convert Bézier/B-spline to Catmull-Rom keys, close periodic curves,
+expand indices.
+
+### K-21 `widths` with `varying` interpolation are ignored — confirmed
+`curves.cpp:139` and `pointcloud.cpp:135` handle `constant` and `vertex` only.
+USD cubic curves commonly author `varying` widths; the radius stays
+uninitialised. `varying` on a cubic curve has one value per segment end:
+resample to keys.
+
+### K-22 Hair shape is fixed to ribbons — confirmed
+`session.cpp:62` passes a default-constructed `SceneParams`: `hair_shape = CURVE_RIBBON`,
+`hair_subdivisions = 3`, `shadingsystem = SVM`, `texture_limit = 0`. None is
+exposed. Thick 3D curves (`CURVE_THICK`) matter for yarns and for OptiX's
+hardware curve intersection. Expose `cycles:hair_shape` and
+`cycles:hair_subdivisions`; they are session-creation parameters like `device`,
+so they need the same late-setting warning.
+
+### K-23 Instances never blur — confirmed
+`instancer.cpp:58-60` read instance primvars at time 0. A PointInstancer with
+animated positions renders sharp while its prototype blurs. Sample the
+instance primvars at the three shutter times like `geometry.inl` does for the
+prim transform.
+
+### K-24 No light linking or shadow linking — confirmed
+No code reads Hydra categories (`HdCategoriesSchema`, `lightLink`/`shadowLink`
+collections). Cycles supports it since 4.0 (`Object::light_set_membership`,
+`Light::light_set_membership`, `shadow_set_membership`).
+
+### K-25 Five passes only — confirmed
+`session.cpp:21` maps color, depth, normal, primId, instanceId and the Houdini
+spellings `C`, `Cf`, `N`, `P`, `Pz`. No diffuse/glossy/transmission direct or
+indirect, emission, AO, shadow catcher, mist, position, UV, motion vectors,
+cryptomatte, denoising albedo/normal, light groups, or shader AOVs
+(`aov_output` nodes exist but no RenderVar can select them). A RenderVar with
+any other name logs "Unknown pass" and is dropped.
+
+### K-26 No transparent background with a dome light — confirmed
+`session.cpp:137-150`: `background->set_transparent(true)` only when no
+background light exists. With a dome light the alpha is opaque and there is no
+setting to change it. Expose film transparency (`Background::transparent`,
+`transparent_glass`, `transparent_roughness_threshold`) as render settings.
+
+### K-27 Nothing is read per object — confirmed
+`geometry.inl:231` sets `PATH_RAY_VISIBILITY_ALL` or 0. No per-prim ray
+visibility, holdout, shadow catcher, light group, caustics caster/receiver,
+shadow terminator offset, per-object dicing rate or `use_adaptive_subdivision`.
+Karma reads `primvars:karma:object:*`; the equivalent `primvars:cycles:object:*`
+does not exist.
+
+### K-28 Render tags and purposes are not honoured — probable
+`render_pass.cpp:99` ignores `renderTags`; rprims never check their tag. A
+prim with `purpose = proxy` and its `render` sibling both render. To be
+confirmed in Solaris with a proxy/render pair.
+
+### K-29 `background = false` under husk — confirmed
+`render_delegate.cpp:90` builds every session in interactive mode, batch
+included: no tiling, progressive buffer updates, `use_auto_tile` inert.
+Upstream does the same, but it is a candidate for the batch-speed gap against
+Karma and must be measured (same scene, `background` true vs false).
+
+### K-30 Subdivision depends on a display hint — confirmed
+`mesh.cpp:478-485` only subdivide when `refineLevel > 0`, and `mesh.cpp:704`
+sets the maximum dicing level *to* `refineLevel`. That value is Hydra's
+display complexity (`husk --complexity`, 0-3; Solaris display options), not a
+property of the mesh. A `catmullClark` mesh should subdivide regardless, with
+a render setting for the max level (Blender: 12) and the display hint left to
+the viewport.
+
+### K-31 Four seconds unexplained in the render pass — measured, unresolved
+The stopwatch reported `camera et AOV 4033.6 ms, verrou 0, relance 0.005`.
+That bucket (`render_pass.cpp`, between `tPolled` and `tCamera`) holds only
+AOV binding comparison, `set_full_width/height`, `ApplyCameraSettings`, the
+dicing-camera copy and a pointer compare. None of it should take 4 s. Either
+the brackets are misplaced or something blocks there. Re-measure with one
+timestamp per statement before touching anything else about interactivity.
+
+### K-32 The pass takes the scene lock unconditionally — by design, with a cost
+`render_pass.cpp:125` (`scene->mutex.lock()`, patch 0014). While the render
+thread holds the lock in `device_update`, Houdini's UI thread waits. The
+try-lock it replaced dropped edits. A middle path: try-lock, and when it fails
+mark the pass dirty so Hydra calls `_Execute` again next frame.
+
+### K-33 Houdini volume field names — probable
+`volume.cpp:55-70` recognise `density`, `color`, `flame`, `heat`,
+`temperature`, `velocity`. Houdini writes `vel` and `Cd`. Only `density`
+matches; the rest become named attributes a native shader can still read, but
+`ATTR_STD_VOLUME_VELOCITY` (motion blur) is never set.
+
+### K-34 Motion blur toggle only turns off — confirmed
+`render_delegate.cpp:587-597`: `disableMotionBlur`/`instantaneousShutter`
+true disables; false does nothing. In a live session the blur never comes back
+until the delegate is recreated.
+
+## C. Houdini side
+
+### K-40 `op:` textures fail under husk — confirmed
+`houdini_cop.cpp` needs `hou.node()` on a live session; husk has no node
+graph, so the capture warns and the texture is missing. `flatten_op_textures`
+exists; nothing runs it automatically when a USD Render ROP is used.
+
+### K-41 COP pixel cache never evicts — confirmed
+`houdini_cop.cpp` `Cache()` keeps every captured layer for the session: an 8K
+RGBA half layer is 536 MB of host memory per COP, on top of Cycles' own copy.
+
+### K-42 The preview translator stops at one image — by design
+`cycles.py` follows one relay chain per input. A `mix_color` of two textures,
+a procedural, or a ramp show as the default value. Acceptable, but the README
+should not imply the viewport is "linked" to the Cycles nodes.
+
+## D. Repository and tests
+
+### K-50 Benches overwrite their own references — confirmed
+`tools/bench_render.py` writes to `tests/usd/bench-53/images/`, the directory
+git tracks as references, and `bench_diff.py` compares against `_baseline.exr`
+only. 72 tracked EXRs are modified in the working tree right now. There is no
+image-to-image regression test. See [TESTING.md](TESTING.md).
+
+### K-51 Coverage counts prefixes — confirmed
+`tools/mtlx_coverage.py` resolves a nodedef as "covered" when any table prefix
+matches it. K-03, K-05 and K-07 are all counted as covered. The README's
+"652/823 - 79 %" is a routing number, not a correctness number.
+
+### K-52 Bench expected values derived from the code — confirmed
+`tools/bench_mtlx.py` `CASES` carry expected colours computed from what the
+implementation does (K-08). Expected values must come from the MaterialX
+definition - ideally rendered by MaterialX's own `MaterialXView` or computed
+from the `genglsl` source code.
+
+### K-53 Code and log messages in French — confirmed
+`material.cpp` (180 lines), `houdini_cop.cpp` (62), `render_pass.cpp` (47),
+`mesh.cpp` (24) and others carry French comments; four `LOG_INFO` lines are
+French (`Affichage :`, `Rendu relance :`, `Passe de rendu :`, in
+`render_pass.cpp:64,241,283`). The project rule is English in code; the repo
+is public and the patches are meant for upstream.
+
+### K-54 README numbers disagree — confirmed
+README says 163 nodes, STATUS says 161, the bench covers 97 (the 100 exposed
+VOPs minus the three that do not terminate a surface). Pick one and derive it
+from a command.

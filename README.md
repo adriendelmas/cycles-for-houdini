@@ -35,11 +35,14 @@ The device is fixed when the render session is built, so it cannot come from a
 Render Settings node — and it describes the machine rather than the scene, so it
 is a per-installation preference the `.hip` does not carry.
 
-The GL display driver is on, which is what makes the viewport refresh as
-promptly as Blender's. It misbehaved in Houdini's viewport in four distinct
-ways; three were crashes, all fixed and documented in the patch series. The
-fourth, wrong pixels, has never been confirmed fixed and only shows in the
-viewport — `CYCLES_DISPLAY_DRIVER=0` falls back to the output driver.
+The GL display driver is on **when Houdini's viewport runs on OpenGL**: Cycles
+then writes straight into a texture the host owns, which is what makes the
+viewport refresh as promptly as Blender's. Under a Vulkan viewport, and under
+husk, rendering goes through the output driver and the buffer is read back on
+every refresh. The display driver misbehaved in Houdini's viewport in four
+distinct ways; three were crashes, all fixed and documented in the patch
+series. The fourth, wrong pixels, has never been confirmed fixed and only shows
+in the viewport — `CYCLES_DISPLAY_DRIVER=0` falls back to the output driver.
 
 ## Cycles versions
 
@@ -107,27 +110,54 @@ carries your own paths — there is nothing to edit by hand.
 | `patches/5.2/`, `patches/5.3/` | our changes to Cycles, one commit per subject |
 | `tools/` | the Material Builder generator, the test benches, bootstrap |
 | `tests/usd/` | 97 single-node scenes and their reference images |
-| `docs/` | build notes, status, audits — **in French** |
+| `docs/` | the project map — start at [docs/README.md](docs/README.md) |
 
 The patch series is the interesting part: each patch is a self-contained fix with
 a message explaining the bug it addresses. A dozen of them are plain bugs in the
 upstream delegate and are candidates for contribution back to Blender.
 
+## Documentation
+
+| | |
+|---|---|
+| [docs/GOALS.md](docs/GOALS.md) | what "working correctly" means, and what is out of scope |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | the four layers, every file's role, the data path, the MaterialX mapping machinery |
+| [docs/PROGRESS.md](docs/PROGRESS.md) | the feature matrix: works / partial / missing / wrong, with how each was verified |
+| [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) | numbered defects with the file and line |
+| [docs/PLAN.md](docs/PLAN.md) | the phases that take the project to its goals, each with its acceptance test |
+| [docs/TESTING.md](docs/TESTING.md) | the benches, what each proves, and the regression suite to build |
+| [docs/STATUS.md](docs/STATUS.md) | the dated journal of what was tried and measured (French) |
+
 ## Testing
 
-Every published node gets its own USD scene, is rendered, and is compared against
-a reference to confirm it actually changes the image.
+Every published node gets its own USD scene, is rendered, and is checked for
+warnings, for a non-black image, and for a difference against a baseline:
 
 ```
 python tools/bench_export.py && python tools/bench_render.py && python tools/bench_diff.py
 ```
 
-97 nodes, 0 failures on both engines. The full MaterialX scene renders
-bit-identical between 5.2 and 5.3.
+97 nodes pass that check on both engines, and the full MaterialX scene renders
+bit-identical between 5.2 and 5.3. What this does and does not prove — it does
+not compare against committed reference images — is set out in
+[docs/TESTING.md](docs/TESTING.md).
 
 ## Known gaps
 
-- Karma's own material context (`kma:`) falls back to UsdPreviewSurface.
+The complete list, with line numbers, is [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md).
+The ones a user meets first:
+
+- MaterialX `mix` and the compositing blends are inverted (`fg`/`bg` swapped),
+  mixes of BSDFs go to a colour node, and `volume` is missing — the MaterialX
+  coverage number counts nodedefs that *route* to a mapping, not ones that
+  translate correctly.
+- OpenPBR, glTF and Disney surfaces are aliased to the `standard_surface`
+  table and lose most of their inputs.
+- No light linking, per-object visibility flags, extra AOVs or cryptomatte;
+  no transparent background once a dome light is present.
+- Curves: USD basis and wrap are ignored, `varying` widths are not read, and
+  hair is always rendered as ribbons.
+- Karma's own material context (`kma:`) is declared but not read.
 - An intermittent CUDA "illegal address" on some scene edits, under investigation.
 
 ## Credits

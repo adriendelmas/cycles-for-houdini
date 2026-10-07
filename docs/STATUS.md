@@ -1,4 +1,11 @@
-# État d'avancement
+# Journal d'avancement
+
+> Ce fichier est le **journal** : ce qui a été tenté, mesuré et décidé, phase
+> par phase, dans l'ordre. Il ne décrit pas l'état courant — plusieurs
+> conclusions ci-dessous ont été corrigées depuis. L'état courant est dans
+> [PROGRESS.md](PROGRESS.md), les défauts connus dans
+> [KNOWN_ISSUES.md](KNOWN_ISSUES.md), la suite dans [PLAN.md](PLAN.md). La
+> carte des documents est [README.md](README.md).
 
 ## Phase 0 — Build ✅
 
