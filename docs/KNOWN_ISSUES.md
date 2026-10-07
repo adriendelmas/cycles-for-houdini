@@ -309,13 +309,18 @@ included: no tiling, progressive buffer updates, `use_auto_tile` inert.
 Upstream does the same, but it is a candidate for the batch-speed gap against
 Karma and must be measured (same scene, `background` true vs false).
 
-### K-30 Subdivision depends on a display hint — confirmed
+### K-30 Subdivision depends on a display hint — confirmed — **fixed** (0084)
 `mesh.cpp:478-485` only subdivide when `refineLevel > 0`, and `mesh.cpp:704`
 sets the maximum dicing level *to* `refineLevel`. That value is Hydra's
 display complexity (`husk --complexity`, 0-3; Solaris display options), not a
 property of the mesh. A `catmullClark` mesh should subdivide regardless, with
 a render setting for the max level (Blender: 12) and the display hint left to
 the viewport.
+
+Fixed 2026-10-07: `catmullClark` always subdivides, capped by
+`cycles:max_subdivisions` (12); bilinear still waits for the hint. husk's
+default complexity already set a refine level, so batch renders looked right
+before; the viewport at low complexity rendered the cage.
 
 ### K-31 Four seconds unexplained in the render pass — measured, unresolved
 The stopwatch reported `camera et AOV 4033.6 ms, verrou 0, relance 0.005`.

@@ -112,6 +112,9 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0080` | hydra: OpenPBR, glTF et Disney traduits, les defauts de chaque surface, UsdUVTexture par canal, kma |
 | `0081` | hydra: les courbes USD rendues ou USD les place, en tubes, et le reglage Curve Shape |
 | `0082` | hydra: les instances floues, leurs primvars par instance, et les primvars constants scalaires |
+| `0083` | hydra: les surfaces implicites USD rendues, en maillages fins |
+| `0084` | hydra: un maillage Catmull-Clark subdivise sans attendre l'indice d'affichage |
+| `0085` | hydra: huit cles par segment de courbe cubique, pour suivre la forme |
 
 ---
 

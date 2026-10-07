@@ -133,12 +133,18 @@ This is the phase the author's own yarn work needs.
 | ✅ Bézier and B-spline → Catmull-Rom keys; periodic closed; `curveIndices` expanded (0081) | K-20 |
 | ✅ `cycles:curve_shape` (per `Hair` in this Cycles, so live; 0081). `hair_subdivisions` still to do | K-22 |
 | ✅ Instance primvars sampled across the shutter; per-instance `displayColor` and `instance`-interpolated primvars as object attributes (0082) | K-23 |
-| Implicit surfaces: declare `sphere`/`cube`/... and tessellate, or confirm Houdini's scene index already meshes them | A1 |
+| ✅ Implicit surfaces: tessellated by our own scene index (Hydra's is too coarse) (0083) | A1 |
 
 Done when: a `md_seams` yarn scene renders with round, thick curves and
 matches Karma's silhouette; a Bézier curve from a hand-written USD passes
 through its on-curve points; a PointInstancer with animated positions blurs
 by the same length as its prototype.
+
+**Status 2026-10-07: done** (patches 0081-0085), but for the `md_seams` yarn
+scene, not rendered yet. Hand-written curves match Karma's silhouette
+(`bench_curves.py --karma`: IoU 0.89-1.00); instances blur by their
+prototype's length (`bench_motion.py`); K-30 was brought forward from phase 6
+because round implicit surfaces needed it looked at.
 
 ## Phase 6 — Production output (4-5 days)
 
@@ -149,7 +155,7 @@ by the same length as its prototype.
 | `primvars:cycles:object:*`: ray visibility, holdout, shadow catcher, light group, caustics, dicing rate, adaptive subdivision; read in `geometry.inl` | K-27 |
 | Light linking and shadow linking from Hydra categories | K-24 |
 | Render tags honoured; proxy/render purposes measured | K-28 |
-| Subdivision independent of `refineLevel`; `cycles:max_subdivisions` setting | K-30 |
+| ✅ Subdivision independent of `refineLevel`; `cycles:max_subdivisions` setting (0084, done early with A1) | K-30 |
 | `background = true` under husk, measured against Karma on three scenes | K-29 |
 | Motion blur toggle symmetric; `shadow:color`, light multipliers | K-34 |
 | Volume field aliases (`vel`, `Cd`) | K-33 |

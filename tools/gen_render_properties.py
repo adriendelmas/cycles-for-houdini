@@ -131,6 +131,9 @@ def main():
         # micropolygone. Blender en expose deux, 1 px au rendu et 8 px dans la
         # vue ; ici un seul, mais qui se change sans recompiler.
         ("cycles:dicing_rate", "Dicing Rate", "float", "float", "1"),
+        # The deepest a Catmull-Clark mesh is split, whatever the dicing rate
+        # asks; Blender's default.
+        ("cycles:max_subdivisions", "Max Subdivisions", "integer", "int", "12"),
         # How curves are drawn. "auto" renders USD linear curves as exact thick
         # polylines and cubic ones as round tubes; ribbons are flat strips
         # facing the camera, the cheapest and what upstream always used.

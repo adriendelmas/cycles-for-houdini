@@ -48,9 +48,10 @@ after a Cycles standard attribute (`heat`, `density`, `color`, `temperature`,
 | `hython tools/mtlx_coverage.py [--list]` | MaterialX library vs the table | Which nodedefs route to *some* mapping (652/823) | Which translate correctly |
 | `hython tools/mtlx_inputs.py [--list] [pattern]` | Every routed nodedef, all inputs authored, one husk run | Which nodedefs keep every input, output and node (543/652 on 2026-10-07); `--list` names what each one loses | Values |
 | `hython tools/mtlx_defaults.py [pattern]` | standard_surface, OpenPBR, glTF, Disney, UsdPreviewSurface | A lit sphere renders the same with no input authored and with every input authored at its model's default (8x8 block means, so noise cannot pass for a difference); the sphere must be lit | Values of authored inputs |
-| `hython tools/bench_curves.py [name]` | 5 hand-written BasisCurves | Each curve covers the plane where USD puts it and nowhere a misread curve would: Bézier, B-spline, periodic, pinned, `varying` widths | Shading; indexed curves (no USD attribute) |
+| `hython tools/bench_curves.py [--karma] [name]` | 5 hand-written BasisCurves | Each curve covers the plane where USD puts it and nowhere a misread curve would: Bézier, B-spline, periodic, pinned, `varying` widths; with `--karma`, its silhouette overlaps Karma's (IoU ≥ 0.85) | Shading; indexed curves (no USD attribute) |
 | `hython tools/bench_motion.py [name]` | 6 ways to move a square | The blur trail is as long as the shutter says: own transform, points, PointInstancer positions, instancer transform; still ones stay sharp | Deformation by velocity |
 | `hython tools/bench_instances.py [name]` | 3 instanced squares, flat and nested | Each instance's `displayColor` and float primvar reach an attribute node and Object Info; an outer instancer's primvar reaches nested instances | - |
+| `hython tools/bench_implicit.py` | Sphere, Cube, Cylinder, Cone, Capsule, Plane | Each renders with the silhouette its attributes give, along its axis (6 % tolerance; 0.4 % measured) | Shading |
 | `hython tools/count_nodes.py` | Sdr registry | The node counts the docs quote: 163 published, 64 hidden, 99 VOPs, 97 probed | - |
 | `scratchpad/audit_surface.py` (local) | 39 `standard_surface` inputs | Each input changes the image, references local and gitignored | Agreement with Karma beyond the four measured cases |
 

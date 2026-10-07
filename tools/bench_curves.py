@@ -8,7 +8,11 @@ segment ends. Each case draws white emissive curves seen from above by an
 orthographic camera, then checks a few points of the plane: covered where the
 USD curve goes, empty where only a misread one would.
 
-    hython tools/bench_curves.py [pattern]
+    hython tools/bench_curves.py [--karma] [pattern]
+
+With --karma the curves emit through a UsdPreviewSurface both renderers read,
+Karma renders each scene too, and the two silhouettes must overlap (IoU of
+the covered pixels at least 0.85: a 4-pixel stroke one pixel off loses 0.1).
 
 Scenes and images go to tests/curves/output/.
 """
@@ -64,18 +68,33 @@ def Xform "world"
     {
         def Material "glow"
         {
-            token outputs:cycles:surface.connect = </world/Materials/glow/e.outputs:emission>
+%(material)s
+        }
+    }
+}
+"""
+
+
+CYCLES_MATERIAL = """            token outputs:cycles:surface.connect = </world/Materials/glow/e.outputs:emission>
             def Shader "e"
             {
                 uniform token info:id = "cycles_emission"
                 color3f inputs:color = (1, 1, 1)
                 float inputs:strength = 1
                 token outputs:emission
-            }
-        }
-    }
-}
-"""
+            }"""
+
+PREVIEW_MATERIAL = """            token outputs:surface.connect = </world/Materials/glow/p.outputs:surface>
+            def Shader "p"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0, 0, 0)
+                color3f inputs:emissiveColor = (1, 1, 1)
+                float inputs:specular = 0
+                int inputs:useSpecularWorkflow = 1
+                color3f inputs:specularColor = (0, 0, 0)
+                token outputs:surface
+            }"""
 
 
 def pts(*points):
@@ -139,8 +158,21 @@ def covered(img, x, y):
     return float(window.max()) > 0.5
 
 
+def render(renderer, scene, exr, env):
+    if os.path.exists(exr):
+        os.remove(exr)
+    subprocess.run([os.path.join(HFS, "husk.exe"), "--renderer", renderer,
+                    "--frame", "1", "--frame-count", "1", "--camera", "/world/camera",
+                    "--res", str(RES), str(RES), "--output", exr, scene],
+                   capture_output=True, text=True, env=env, cwd=OUT)
+    buf = oiio.ImageBuf(exr)
+    return None if buf.has_error else buf.get_pixels(oiio.FLOAT)
+
+
 def main():
-    pattern = sys.argv[1] if len(sys.argv) > 1 else ""
+    args = [a for a in sys.argv[1:] if a != "--karma"]
+    karma = "--karma" in sys.argv
+    pattern = args[0] if args else ""
     env = dict(os.environ)
     env["PATH"] = HFS + ";" + env["PATH"]
     problems = []
@@ -149,25 +181,29 @@ def main():
             continue
         scene = os.path.join(OUT, name + ".usda")
         open(scene, "w", encoding="utf-8").write(
-            SCENE % {"cx": CENTER[0], "cy": CENTER[1], "curve": curve})
-        exr = os.path.join(OUT, name + ".exr")
-        if os.path.exists(exr):
-            os.remove(exr)
-        subprocess.run([os.path.join(HFS, "husk.exe"), "--renderer", "HdCyclesPlugin",
-                        "--frame", "1", "--frame-count", "1", "--camera", "/world/camera",
-                        "--res", str(RES), str(RES), "--output", exr, scene],
-                       capture_output=True, text=True, env=env, cwd=OUT)
-        buf = oiio.ImageBuf(exr)
-        if buf.has_error:
+            SCENE % {"cx": CENTER[0], "cy": CENTER[1], "curve": curve,
+                     "material": PREVIEW_MATERIAL if karma else CYCLES_MATERIAL})
+        img = render("HdCyclesPlugin", scene, os.path.join(OUT, name + ".exr"), env)
+        if img is None:
             problems.append((name, "NO IMAGE"))
             print("%-16s NO IMAGE" % name)
             continue
-        img = buf.get_pixels(oiio.FLOAT)
         wrong = [(x, y, want) for x, y, want in probes if covered(img, x, y) != want]
-        state = "ok" if not wrong else "WRONG"
         detail = "; ".join("(%g, %g) %s" % (x, y, "should be covered" if want else "should be empty")
                            for x, y, want in wrong)
-        print("%-16s %-6s %s" % (name, state, detail))
+        if karma:
+            ref = render("BRAY_HdKarma", scene, os.path.join(OUT, name + "_karma.exr"), env)
+            if ref is None:
+                wrong.append(None)
+                detail += " no Karma image"
+            else:
+                c = img[..., :3].max(axis=2) > 0.5
+                k = ref[..., :3].max(axis=2) > 0.5
+                iou = float((c & k).sum()) / max(float((c | k).sum()), 1.0)
+                detail += " Karma IoU %.3f" % iou
+                if iou < 0.85:
+                    wrong.append(None)
+        print("%-16s %-6s %s" % (name, "ok" if not wrong else "WRONG", detail))
         if wrong:
             problems.append((name, detail))
     print("\n%d cases, %d problems" % (len([c for c in CASES if pattern in c[0]]), len(problems)))

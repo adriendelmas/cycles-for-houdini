@@ -14,7 +14,7 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | Per-vertex colours and vector primvars | ✅ | `geomcolor` bench case exact | Garbage until 2026-10-07 (K-19, patch 0075) |
 | Face-varying (corner) normals | ✅ | bit-identical vs per-point normals | |
 | Smooth/flat from authored normals | ✅ | measured | |
-| Catmull-Clark subdivision, creases, corners | 🟡 | measured | Only when Hydra's `refineLevel > 0`; the max dicing level *is* that display hint (K-30) |
+| Catmull-Clark subdivision, creases, corners | ✅ | measured | Always for `catmullClark`, capped by `cycles:max_subdivisions` (K-30, 0084) |
 | Adaptive dicing rate, dicing camera | ✅ | 10.3 M → expected triangle counts | Setting `cycles:dicing_rate`, clamped ≥ 0.1 |
 | Holes, left-handed subdivided meshes | ❌ | code read | `// TODO: Handle hole indices` |
 | Geom subsets (per-face materials) | ✅ | upstream | Face sets only |
@@ -30,7 +30,7 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | Instance motion blur | ✅ | `bench_motion.py` 6/6 | Positions and instancer transform sampled over the shutter (K-23, 0082) |
 | Per-instance primvars | ✅ | `bench_instances.py` 5/5 | `instance` primvars as object attributes, nested instancers, `displayColor` → Object Info colour (0082) |
 | Constant scalar primvars (`float x = 0.5`) | ✅ | rendered | Read uninitialised memory before 0082; doubles and ints now converted |
-| Implicit surfaces (Sphere, Cube...) | ❌ | A1 | Not declared as supported rprims |
+| Implicit surfaces (Sphere, Cube...) | ✅ | `bench_implicit.py` 6/6 | Our scene index meshes them, 64 segments, smooth normals (A1, 0083) |
 | OpenVDB volumes | ✅ | phase 5 | `openvdbAsset` only; `vel` not recognised as velocity (K-33) |
 | Volume step size, clipping per prim | ❌ | code read | |
 
