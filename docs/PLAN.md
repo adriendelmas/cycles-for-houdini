@@ -129,9 +129,9 @@ This is the phase the author's own yarn work needs.
 
 | Task | Closes |
 |---|---|
-| `widths` `varying` resampled to keys, for curves and points | K-21 |
-| Bézier and B-spline → Catmull-Rom keys; periodic closed; `curveIndices` expanded | K-20 |
-| `cycles:hair_shape`, `cycles:hair_subdivisions` as session-creation settings with the late warning; GPU variant defaults to `thick` | K-22 |
+| ✅ `widths` `varying` resampled to keys, for curves and points (0081) | K-21 |
+| ✅ Bézier and B-spline → Catmull-Rom keys; periodic closed; `curveIndices` expanded (0081) | K-20 |
+| ✅ `cycles:curve_shape` (per `Hair` in this Cycles, so live; 0081). `hair_subdivisions` still to do | K-22 |
 | Instance primvars sampled across the shutter; per-instance `displayColor` and `instance`-interpolated primvars as object attributes | K-23 |
 | Implicit surfaces: declare `sphere`/`cube`/... and tessellate, or confirm Houdini's scene index already meshes them | A1 |
 

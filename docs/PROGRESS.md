@@ -22,10 +22,10 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | Deformation blur (sampled points) | ✅ | measured, mesh/curves/points | |
 | Velocity / acceleration blur | ✅ | 242 px measured | fps from scene globals, fallback 24 |
 | Corner normals under motion blur | 🟡 | upstream behaviour | Cycles drops them; smooth flag takes over |
-| Curves: Catmull-Rom through all keys | 🟡 | rendered | USD `type`/`basis`/`wrap` read and ignored (K-20); Bézier, periodic, indexed curves wrong |
-| Curves: `widths` `varying` | ❌ | code read | Only `constant` and `vertex` (K-21) |
-| Thick 3D curves (`hair_shape`) | ❌ | code read | `SceneParams` never set, ribbons only (K-22) |
-| Points | ✅ | phase 5 | Same `widths` limit as curves |
+| Curves: every USD basis and wrap | ✅ | `bench_curves.py` 5/5 | Bézier, B-spline, Catmull-Rom, periodic, pinned resampled to keys (K-20, 0081); indexed handled, untestable from a file |
+| Curves: `widths` `varying` | ✅ | `bench_curves.py` | Blended per key (K-21, 0081) |
+| Thick 3D curves | ✅ | rendered, end-on test | `cycles:curve_shape` auto/thick/ribbon, live; default auto = thick (K-22, 0081) |
+| Points | ✅ | phase 5 | `varying` widths read as per-point (0081) |
 | Point instancer, nested instancers | ✅ | phase 3 | |
 | Instance motion blur | ❌ | code read | Instance primvars read at time 0 (K-23) |
 | Per-instance primvars | ❌ | code read | Only constant `displayColor` reaches instances |

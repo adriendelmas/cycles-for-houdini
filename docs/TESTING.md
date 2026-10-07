@@ -25,6 +25,15 @@ To test a freshly built DLL while Houdini holds the installed one: set
 tree, and put the Houdini and install `bin` directories on `PATH` in POSIX
 form (`/e/...`).
 
+Writing a scene by hand: a `DistantLight` needs `inputs:normalize = 1` to
+light anything. Unnormalized, USD reads its intensity as the radiance of the
+sun disk, so the illuminance is intensity × the disk's solid angle - about
+7e-5 at the default 0.53°. Karma and the delegate agree on both (measured
+2026-10-07, white plane: 0.318 vs 0.317 normalized, 0.0019 vs 0.0019 at 5°);
+Houdini's Distant Light LOP turns it on. `tests/scenes/smoke.usda` predates
+this and its sun contributes nothing. Also give the stage `metersPerUnit = 1`:
+without it a camera aperture is read in centimetres.
+
 ## The benches, and what each proves
 
 | Command | Scope | Proves | Does **not** prove |
@@ -37,6 +46,7 @@ form (`/e/...`).
 | `hython tools/mtlx_coverage.py [--list]` | MaterialX library vs the table | Which nodedefs route to *some* mapping (652/823) | Which translate correctly |
 | `hython tools/mtlx_inputs.py [--list] [pattern]` | Every routed nodedef, all inputs authored, one husk run | Which nodedefs keep every input, output and node (543/652 on 2026-10-07); `--list` names what each one loses | Values |
 | `hython tools/mtlx_defaults.py [pattern]` | standard_surface, OpenPBR, glTF, Disney, UsdPreviewSurface | A lit sphere renders the same with no input authored and with every input authored at its model's default (8x8 block means, so noise cannot pass for a difference); the sphere must be lit | Values of authored inputs |
+| `hython tools/bench_curves.py [name]` | 5 hand-written BasisCurves | Each curve covers the plane where USD puts it and nowhere a misread curve would: Bézier, B-spline, periodic, pinned, `varying` widths | Shading; indexed curves (no USD attribute) |
 | `hython tools/count_nodes.py` | Sdr registry | The node counts the docs quote: 163 published, 64 hidden, 99 VOPs, 97 probed | - |
 | `scratchpad/audit_surface.py` (local) | 39 `standard_surface` inputs | Each input changes the image, references local and gitignored | Agreement with Karma beyond the four measured cases |
 

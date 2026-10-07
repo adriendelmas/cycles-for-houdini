@@ -218,7 +218,7 @@ Upstream bug; a `GfVec3f` is exactly a `packed_float3`, so the array is now
 copied as is. The 97-node references rendered before this fix are wrong for
 every node that reads a vector primvar.
 
-### K-20 Curve type, basis and wrap are ignored — confirmed
+### K-20 Curve type, basis and wrap are ignored — confirmed — **fixed** (0081)
 `curves.cpp:221-233` read `type`, `basis`, `wrap`, use them only to size the
 topology, then hand every key to Cycles, which evaluates a Catmull-Rom through
 all keys. Bézier control points are treated as on-curve points, `periodic`
@@ -227,19 +227,38 @@ hair (linear or `catmullRom`, non-indexed) is fine; other DCCs' curves are not.
 Fix: convert Bézier/B-spline to Catmull-Rom keys, close periodic curves,
 expand indices.
 
-### K-21 `widths` with `varying` interpolation are ignored — confirmed
+Fixed 2026-10-07: every curve that is not an open, non-indexed polyline is
+resampled into keys, each a weighted sum of up to four USD points (Bézier and
+B-spline evaluated, open Catmull-Rom without its tangent points, periodic
+closed, pinned reaching its ends), applied to points, motion samples, widths
+and primvars. `tools/bench_curves.py` holds five cases. Indexed curves are
+handled but untested: UsdGeomBasisCurves has no index attribute, only Hydra
+producers hand topology indices over.
+
+### K-21 `widths` with `varying` interpolation are ignored — confirmed — **fixed** (0081)
 `curves.cpp:139` and `pointcloud.cpp:135` handle `constant` and `vertex` only.
 USD cubic curves commonly author `varying` widths; the radius stays
 uninitialised. `varying` on a cubic curve has one value per segment end:
 resample to keys.
 
-### K-22 Hair shape is fixed to ribbons — confirmed
+Fixed 2026-10-07: varying values are blended per key between the two nearest
+segment ends; points read varying widths as per-point widths.
+
+### K-22 Hair shape is fixed to ribbons — confirmed — **mostly fixed** (0081)
 `session.cpp:62` passes a default-constructed `SceneParams`: `hair_shape = CURVE_RIBBON`,
 `hair_subdivisions = 3`, `shadingsystem = SVM`, `texture_limit = 0`. None is
 exposed. Thick 3D curves (`CURVE_THICK`) matter for yarns and for OptiX's
 hardware curve intersection. Expose `cycles:hair_shape` and
 `cycles:hair_subdivisions`; they are session-creation parameters like `device`,
 so they need the same late-setting warning.
+
+Fixed 2026-10-07 for the shape: in this Cycles the shape is per `Hair`
+(`Hair::curve_shape`), not a session parameter, so `cycles:curve_shape`
+(auto, thick, ribbon) changes live and reshapes the curves already synced.
+`auto`, the default, renders linear curves as exact thick polylines and cubic
+ones as round tubes; upstream rendered ribbons. Thick curves are open tubes:
+seen exactly along their axis they show nothing. Still open:
+`hair_subdivisions` and the other `SceneParams`.
 
 ### K-23 Instances never blur — confirmed
 `instancer.cpp:58-60` read instance primvars at time 0. A PointInstancer with

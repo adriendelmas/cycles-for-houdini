@@ -1,7 +1,7 @@
 From 67770647b724eb25b908fdf75daa26c7f3bd4d84 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 9 Sep 2026 22:24:20 +0200
-Subject: [PATCH 69/80] hydra: ne plus retourner l'image d'un COP, les deux
+Subject: [PATCH 69/81] hydra: ne plus retourner l'image d'un COP, les deux
  bouts la rangent deja pareil
 
 Le correctif precedent ajoutait un retournement a la lecture. Il etait de trop,

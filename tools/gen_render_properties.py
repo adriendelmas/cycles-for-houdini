@@ -84,12 +84,16 @@ def parse_sockets():
     return out
 
 
-def emit_parm(usd_name, label, parm_type, usd_type, default):
+def emit_parm(usd_name, label, parm_type, usd_type, default, menu=None):
     """One property: a control parm driving whether it is authored, then the
-    value parm itself. Mirrors how Houdini writes Karma's own definitions."""
+    value parm itself. Mirrors how Houdini writes Karma's own definitions.
+    `menu` lists (token, label) pairs for a string with fixed choices."""
     encoded = hou.text.encode(usd_name)
     control = hou.text.encode(usd_name + "_control")
     default_block = ("        default { %s }\n" % default) if default is not None else ""
+    if menu:
+        items = "".join('            "%s" "%s"\n' % item for item in menu)
+        default_block += "        menu {\n%s        }\n" % items
     return f'''    parm {{
         name    "{control}"
         label   "{label}"
@@ -127,6 +131,13 @@ def main():
         # micropolygone. Blender en expose deux, 1 px au rendu et 8 px dans la
         # vue ; ici un seul, mais qui se change sans recompiler.
         ("cycles:dicing_rate", "Dicing Rate", "float", "float", "1"),
+        # How curves are drawn. "auto" renders USD linear curves as exact thick
+        # polylines and cubic ones as round tubes; ribbons are flat strips
+        # facing the camera, the cheapest and what upstream always used.
+        ("cycles:curve_shape", "Curve Shape", "string", "string", '"auto"',
+         [("auto", "Auto (linear as polylines, cubic as tubes)"),
+          ("thick", "Thick (round tubes)"),
+          ("ribbon", "Ribbon (flat, camera facing)")]),
     ]
 
     grouped = {"Session": [emit_parm(*s) for s in session]}
