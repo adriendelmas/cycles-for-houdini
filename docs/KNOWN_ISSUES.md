@@ -260,11 +260,17 @@ ones as round tubes; upstream rendered ribbons. Thick curves are open tubes:
 seen exactly along their axis they show nothing. Still open:
 `hair_subdivisions` and the other `SceneParams`.
 
-### K-23 Instances never blur — confirmed
+### K-23 Instances never blur — confirmed — **fixed** (0082)
 `instancer.cpp:58-60` read instance primvars at time 0. A PointInstancer with
 animated positions renders sharp while its prototype blurs. Sample the
 instance primvars at the three shutter times like `geometry.inl` does for the
 prim transform.
+
+Fixed 2026-10-07: the instancer reads its arrays and its own transform at any
+shutter offset, parents included; each instance gets three motion steps.
+Instances born or dying inside the shutter stay sharp. `tools/bench_motion.py`
+measures the trail of a transform, deforming points, instance positions and
+an instancer transform (6 cases).
 
 ### K-24 No light linking or shadow linking — confirmed
 No code reads Hydra categories (`HdCategoriesSchema`, `lightLink`/`shadowLink`

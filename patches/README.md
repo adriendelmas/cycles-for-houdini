@@ -111,6 +111,7 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0079` | hydra: les variantes couleur et vecteur des operateurs MaterialX, et trois operateurs scalaires faux |
 | `0080` | hydra: OpenPBR, glTF et Disney traduits, les defauts de chaque surface, UsdUVTexture par canal, kma |
 | `0081` | hydra: les courbes USD rendues ou USD les place, en tubes, et le reglage Curve Shape |
+| `0082` | hydra: les instances floues, leurs primvars par instance, et les primvars constants scalaires |
 
 ---
 

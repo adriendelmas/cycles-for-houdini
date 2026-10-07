@@ -1,0 +1,624 @@
+From 72799555dac46721c24cea7360c0b823e80e879e Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Wed, 7 Oct 2026 22:24:33 +0200
+Subject: [PATCH 82/82] hydra: les instances floues, leurs primvars par
+ instance, et les primvars constants scalaires
+
+Le flou des instances : l'instancer lisait ses positions, rotations,
+echelles et sa propre transformation a l'instant 0, si bien qu'un
+PointInstancer anime rendait des instances nettes quand son prototype
+deplace par sa transformation floutait. Il sait maintenant les lire a
+n'importe quel instant de l'obturateur, parents compris ; la geometrie les
+echantillonne aux trois memes instants que sa propre transformation et
+donne a chaque instance son mouvement. Des instances qui naissent ou
+meurent pendant l'obturateur restent nettes plutot que d'etre appariees au
+hasard.
+
+Les primvars par instance : seule une couleur constante du prototype
+atteignait les instances. Les primvars `instance` de l'instancer - couleur,
+poids, tout ce qui tient en un a quatre flottants - deviennent des
+attributs d'objet que le noeud attribut lit quand la geometrie n'en a pas
+du meme nom, et displayColor donne aussi la couleur que lit Object Info.
+Un instancer imbrique ajoute les siens ; ceux de l'instancer le plus proche
+l'emportent.
+
+Les primvars constants scalaires : `float primvars:poids = 0.5`, ecrit sans
+crochets, n'a pas de taille de tableau ; la copie ne deplacait rien et
+l'attribut lisait de la memoire non initialisee (inf mesure). Les doubles
+et les entiers etaient refuses. Tout est ramene a un tableau de flottants.
+
+tools/bench_motion.py et tools/bench_instances.py, cote depot, gardent les
+deux premiers (6 et 5 cas, tous en echec sur l'ancienne DLL pour les
+instances).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/geometry.inl  |  84 +++++++++++++-
+ src/hydra/instancer.cpp | 236 +++++++++++++++++++++++++++++++++-------
+ src/hydra/instancer.h   |  35 +++++-
+ src/hydra/util.cpp      |  54 +++++++++
+ 4 files changed, 360 insertions(+), 49 deletions(-)
+
+diff --git a/src/hydra/geometry.inl b/src/hydra/geometry.inl
+index b24b3684..334756d4 100644
+--- a/src/hydra/geometry.inl
++++ b/src/hydra/geometry.inl
+@@ -182,9 +182,35 @@ void HdCyclesGeometry<Base, CyclesBase>::Sync(HdSceneDelegate *sceneDelegate,
+            _instances[0]->attributes.front().name() == HdAovTokens->instanceId.GetString());
+ 
+     VtMatrix4dArray transforms;
++    /* Instance transforms at the same evenly spaced shutter times as the
++     * prim's own. Empty unless some instance moves during the shutter. */
++    VtMatrix4dArray stepTransforms[kMotionSteps];
++    bool instancesAnimated = false;
+     if (instancer) {
+       transforms = instancer->ComputeInstanceTransforms(id);
+       _instances[0]->attributes.front() = ParamValue(HdAovTokens->instanceId.GetString(), +0.0f);
++
++      if (_motionBlur) {
++        for (int step = 0; step < kMotionSteps; ++step) {
++          const float t = _shutterOpen +
++                          (_shutterClose - _shutterOpen) * step / float(kMotionSteps - 1);
++          stepTransforms[step] = instancer->ComputeInstanceTransforms(id, t);
++          /* Instances born or dying inside the shutter have no path to blur
++           * along; leave every instance sharp rather than pair them wrongly. */
++          if (stepTransforms[step].size() != transforms.size()) {
++            instancesAnimated = false;
++            break;
++          }
++          if (stepTransforms[step] != stepTransforms[0]) {
++            instancesAnimated = true;
++          }
++        }
++        if (instancesAnimated) {
++          /* Like the prim's own transform: the static one is the middle of
++           * the shutter, where the blur is centred. */
++          transforms = stepTransforms[kMotionSteps / 2];
++        }
++      }
+     }
+     else {
+       // Default to a single instance with an identity transform
+@@ -215,17 +241,69 @@ void HdCyclesGeometry<Base, CyclesBase>::Sync(HdSceneDelegate *sceneDelegate,
+       _instances[i]->set_tfm(tfm);
+ 
+       array<Transform> motion;
+-      if (_geomTransformAnimated) {
++      if (_geomTransformAnimated || instancesAnimated) {
+         motion.resize(kMotionSteps);
+         for (int step = 0; step < kMotionSteps; ++step) {
+-          motion[step] = unitScale *
+-                         convert_transform(_geomTransformSamples[step] * transforms[i]);
++          const GfMatrix4d &geomStep = _geomTransformAnimated ? _geomTransformSamples[step] :
++                                                                _geomTransform;
++          const GfMatrix4d &instanceStep = instancesAnimated ? stepTransforms[step][i] :
++                                                               transforms[i];
++          motion[step] = unitScale * convert_transform(geomStep * instanceStep);
+         }
+       }
+       _instances[i]->set_motion(motion);
+     }
+   }
+ 
++  if (HdChangeTracker::IsTransformDirty(*dirtyBits, id) ||
++      HdChangeTracker::IsInstancerDirty(*dirtyBits, id))
++  {
++    /* Per-instance primvars become object attributes, which an attribute
++     * node reads when the geometry has none of that name; `displayColor`
++     * also sets the object colour the Object Info node returns. Everything
++     * past the leading instanceId is rebuilt. */
++    auto *const instancer = static_cast<HdCyclesInstancer *>(
++        sceneDelegate->GetRenderIndex().GetInstancer(Base::GetInstancerId()));
++    const std::vector<HdCyclesInstancer::InstancePrimvar> instancePrimvars =
++        instancer ? instancer->ComputeInstancePrimvars(id) :
++                    std::vector<HdCyclesInstancer::InstancePrimvar>();
++    bool attributesChanged = false;
++    for (size_t i = 0; i < _instances.size(); ++i) {
++      Object *const instance = _instances[i];
++      if (instance->attributes.size() > 1) {
++        instance->attributes.resize(1);
++        attributesChanged = true;
++      }
++      for (const HdCyclesInstancer::InstancePrimvar &pv : instancePrimvars) {
++        if (pv.values.size() < (i + 1) * size_t(pv.components)) {
++          continue;
++        }
++        const float *v = pv.values.data() + i * pv.components;
++        TypeDesc type = TypeFloat;
++        if (pv.components == 2) {
++          type = TypeFloat2;
++        }
++        else if (pv.components == 3) {
++          type = (pv.name == HdTokens->displayColor || pv.role == HdPrimvarRoleTokens->color) ?
++                     TypeColor :
++                     TypeVector;
++        }
++        else if (pv.components == 4) {
++          type = TypeRGBA;
++        }
++        instance->attributes.emplace_back(pv.name.GetString(), type, 1, v);
++        attributesChanged = true;
++        if (pv.name == HdTokens->displayColor && pv.components == 3) {
++          instance->set_color(make_float3(v[0], v[1], v[2]));
++        }
++      }
++    }
++    if (attributesChanged) {
++      /* Object attributes are packed with the geometry's. */
++      _geom->tag_update(lock.scene, false);
++    }
++  }
++
+   if (HdChangeTracker::IsVisibilityDirty(*dirtyBits, id)) {
+     for (Object *instance : _instances) {
+       instance->set_visibility(Base::IsVisible() ? PATH_RAY_VISIBILITY_ALL : 0);
+diff --git a/src/hydra/instancer.cpp b/src/hydra/instancer.cpp
+index ad0772ed..389e2920 100644
+--- a/src/hydra/instancer.cpp
++++ b/src/hydra/instancer.cpp
+@@ -9,6 +9,7 @@
+ #include <pxr/base/gf/quatd.h>
+ #include <pxr/base/gf/quatf.h>
+ #include <pxr/base/gf/quath.h>
++#include <pxr/base/tf/stringUtils.h>
+ #include <pxr/imaging/hd/instancedBySchema.h>
+ #include <pxr/imaging/hd/instancerTopologySchema.h>
+ #include <pxr/imaging/hd/primvarSchema.h>
+@@ -37,60 +38,64 @@ void HdCyclesInstancer::Sync(HdSceneDelegate *sceneDelegate,
+ }
+ 
+ void HdCyclesInstancer::SyncPrimvars()
++{
++  ReadArrays(0.0f, _arrays);
++  GetDelegate()->GetRenderIndex().GetChangeTracker().MarkInstancerClean(GetId());
++}
++
++void HdCyclesInstancer::ReadArrays(const float time, InstanceArrays &out) const
+ {
+   HdSceneDelegate *const sceneDelegate = GetDelegate();
+-  const SdfPath &id = GetId();
+-  const HdSceneIndexPrim prim = GetPrim(sceneDelegate, id);
++  const HdSceneIndexPrim prim = GetPrim(sceneDelegate, GetId());
+   HdPrimvarsSchema primvars = HdPrimvarsSchema::GetFromParent(prim.dataSource);
+ 
+-  auto read_array_primvar = [&](const TfToken &name, auto &out) {
+-    using T = std::remove_reference_t<decltype(out)>;
++  auto read_array_primvar = [&](const TfToken &name, auto &value) {
++    using T = std::remove_reference_t<decltype(value)>;
+     if (HdPrimvarSchema pv = primvars.GetPrimvar(name)) {
+       if (auto valueDs = pv.GetPrimvarValue()) {
+-        const VtValue v = valueDs->GetValue(0.0f);
++        const VtValue v = valueDs->GetValue(time);
+         if (v.IsHolding<T>()) {
+-          out = v.UncheckedGet<T>();
++          value = v.UncheckedGet<T>();
+         }
+       }
+     }
+   };
+ 
+-  read_array_primvar(HdInstancerTokens->instanceTranslations, _translate);
+-  read_array_primvar(HdInstancerTokens->instanceScales, _scale);
+-  read_array_primvar(HdInstancerTokens->instanceTransforms, _instanceTransform);
++  read_array_primvar(HdInstancerTokens->instanceTranslations, out.translate);
++  read_array_primvar(HdInstancerTokens->instanceScales, out.scale);
++  read_array_primvar(HdInstancerTokens->instanceTransforms, out.instanceTransform);
+ 
+   /* Accept different array types for quaternions. */
+   if (HdPrimvarSchema pv = primvars.GetPrimvar(HdInstancerTokens->instanceRotations)) {
+     if (auto valueDs = pv.GetPrimvarValue()) {
+-      const VtValue v = valueDs->GetValue(0.0f);
++      const VtValue v = valueDs->GetValue(time);
+       if (v.IsHolding<VtVec4fArray>()) {
+-        _rotate = v.UncheckedGet<VtVec4fArray>();
++        out.rotate = v.UncheckedGet<VtVec4fArray>();
+       }
+       else if (v.IsHolding<VtQuatfArray>()) {
+         const VtQuatfArray &src = v.UncheckedGet<VtQuatfArray>();
+-        _rotate.clear();
+-        _rotate.reserve(src.size());
++        out.rotate.clear();
++        out.rotate.reserve(src.size());
+         for (const GfQuatf &q : src) {
+           const GfVec3f &im = q.GetImaginary();
+-          _rotate.push_back(GfVec4f(q.GetReal(), im[0], im[1], im[2]));
++          out.rotate.push_back(GfVec4f(q.GetReal(), im[0], im[1], im[2]));
+         }
+       }
+       else if (v.IsHolding<VtQuathArray>()) {
+         const VtQuathArray &src = v.UncheckedGet<VtQuathArray>();
+-        _rotate.clear();
+-        _rotate.reserve(src.size());
++        out.rotate.clear();
++        out.rotate.reserve(src.size());
+         for (const GfQuath &q : src) {
+           const GfVec3h &im = q.GetImaginary();
+-          _rotate.push_back(GfVec4f(q.GetReal(), im[0], im[1], im[2]));
++          out.rotate.push_back(GfVec4f(q.GetReal(), im[0], im[1], im[2]));
+         }
+       }
+     }
+   }
+-
+-  sceneDelegate->GetRenderIndex().GetChangeTracker().MarkInstancerClean(id);
+ }
+ 
+-VtMatrix4dArray HdCyclesInstancer::ComputeInstanceTransforms(const SdfPath &prototypeId)
++VtMatrix4dArray HdCyclesInstancer::ComputeInstanceTransforms(const SdfPath &prototypeId,
++                                                              const float time)
+ {
+   HdSceneDelegate *const sceneDelegate = GetDelegate();
+   const SdfPath &id = GetId();
+@@ -103,8 +108,14 @@ VtMatrix4dArray HdCyclesInstancer::ComputeInstanceTransforms(const SdfPath &prot
+ 
+   GfMatrix4d instanceTransform(1.0);
+   if (auto matrixDs = HdXformSchema::GetFromParent(prim.dataSource).GetMatrix()) {
+-    instanceTransform = matrixDs->GetTypedValue(0.0f);
++    instanceTransform = matrixDs->GetTypedValue(time);
++  }
++
++  InstanceArrays sampled;
++  if (time != 0.0f) {
++    ReadArrays(time, sampled);
+   }
++  const InstanceArrays &arrays = (time != 0.0f) ? sampled : _arrays;
+ 
+   VtMatrix4dArray transforms;
+   transforms.reserve(instanceIndices.size());
+@@ -112,27 +123,27 @@ VtMatrix4dArray HdCyclesInstancer::ComputeInstanceTransforms(const SdfPath &prot
+   for (const int index : instanceIndices) {
+     GfMatrix4d transform = instanceTransform;
+ 
+-    if (index < _translate.size()) {
++    if (index < arrays.translate.size()) {
+       GfMatrix4d translateMat(1);
+-      translateMat.SetTranslate(_translate[index]);
++      translateMat.SetTranslate(arrays.translate[index]);
+       transform *= translateMat;
+     }
+ 
+-    if (index < _rotate.size()) {
++    if (index < arrays.rotate.size()) {
+       GfMatrix4d rotateMat(1);
+-      const GfVec4f &quat = _rotate[index];
++      const GfVec4f &quat = arrays.rotate[index];
+       rotateMat.SetRotate(GfQuatd(quat[0], quat[1], quat[2], quat[3]));
+       transform *= rotateMat;
+     }
+ 
+-    if (index < _scale.size()) {
++    if (index < arrays.scale.size()) {
+       GfMatrix4d scaleMat(1);
+-      scaleMat.SetScale(_scale[index]);
++      scaleMat.SetScale(arrays.scale[index]);
+       transform *= scaleMat;
+     }
+ 
+-    if (index < _instanceTransform.size()) {
+-      transform *= _instanceTransform[index];
++    if (index < arrays.instanceTransform.size()) {
++      transform *= arrays.instanceTransform[index];
+     }
+ 
+     transforms.push_back(transform);
+@@ -141,23 +152,15 @@ VtMatrix4dArray HdCyclesInstancer::ComputeInstanceTransforms(const SdfPath &prot
+   /* Recurse into the parent instancer. */
+   VtMatrix4dArray resultTransforms;
+ 
+-  HdInstancedBySchema instancedBy = HdInstancedBySchema::GetFromParent(prim.dataSource);
+-  SdfPath parentId;
+-  if (auto pathsDs = instancedBy.GetPaths()) {
+-    const VtArray<SdfPath> parentPaths = pathsDs->GetTypedValue(0.0f);
+-    if (!parentPaths.empty()) {
+-      parentId = parentPaths.front();
+-    }
+-  }
+-  if (parentId.IsEmpty()) {
+-    parentId = GetParentId();
+-  }
++  const SdfPath parentId = GetParentInstancerId();
+ 
+   if (!parentId.IsEmpty()) {
+     auto *const parentInstancer = static_cast<HdCyclesInstancer *>(
+         sceneDelegate->GetRenderIndex().GetInstancer(parentId));
+     if (parentInstancer) {
+-      for (const GfMatrix4d &parentTransform : parentInstancer->ComputeInstanceTransforms(id)) {
++      for (const GfMatrix4d &parentTransform :
++           parentInstancer->ComputeInstanceTransforms(id, time))
++      {
+         for (const GfMatrix4d &localTransform : transforms) {
+           resultTransforms.push_back(parentTransform * localTransform);
+         }
+@@ -169,4 +172,155 @@ VtMatrix4dArray HdCyclesInstancer::ComputeInstanceTransforms(const SdfPath &prot
+   return transforms;
+ }
+ 
++SdfPath HdCyclesInstancer::GetParentInstancerId() const
++{
++  const HdSceneIndexPrim prim = GetPrim(GetDelegate(), GetId());
++  HdInstancedBySchema instancedBy = HdInstancedBySchema::GetFromParent(prim.dataSource);
++  if (auto pathsDs = instancedBy.GetPaths()) {
++    const VtArray<SdfPath> parentPaths = pathsDs->GetTypedValue(0.0f);
++    if (!parentPaths.empty()) {
++      return parentPaths.front();
++    }
++  }
++  return GetParentId();
++}
++
++namespace {
++
++/* One element of a numeric array as floats, or 0 components when the type
++ * is not one a Cycles object attribute can hold. */
++int ArrayElement(const VtValue &value, const size_t index, float out[4])
++{
++  if (value.IsHolding<VtFloatArray>()) {
++    const VtFloatArray &a = value.UncheckedGet<VtFloatArray>();
++    out[0] = index < a.size() ? a[index] : 0.0f;
++    return 1;
++  }
++  if (value.IsHolding<VtDoubleArray>()) {
++    const VtDoubleArray &a = value.UncheckedGet<VtDoubleArray>();
++    out[0] = index < a.size() ? float(a[index]) : 0.0f;
++    return 1;
++  }
++  if (value.IsHolding<VtIntArray>()) {
++    const VtIntArray &a = value.UncheckedGet<VtIntArray>();
++    out[0] = index < a.size() ? float(a[index]) : 0.0f;
++    return 1;
++  }
++  if (value.IsHolding<VtVec2fArray>()) {
++    const VtVec2fArray &a = value.UncheckedGet<VtVec2fArray>();
++    const GfVec2f v = index < a.size() ? a[index] : GfVec2f(0.0f);
++    out[0] = v[0];
++    out[1] = v[1];
++    return 2;
++  }
++  if (value.IsHolding<VtVec3fArray>()) {
++    const VtVec3fArray &a = value.UncheckedGet<VtVec3fArray>();
++    const GfVec3f v = index < a.size() ? a[index] : GfVec3f(0.0f);
++    out[0] = v[0];
++    out[1] = v[1];
++    out[2] = v[2];
++    return 3;
++  }
++  if (value.IsHolding<VtVec4fArray>()) {
++    const VtVec4fArray &a = value.UncheckedGet<VtVec4fArray>();
++    const GfVec4f v = index < a.size() ? a[index] : GfVec4f(0.0f);
++    for (int i = 0; i < 4; ++i) {
++      out[i] = v[i];
++    }
++    return 4;
++  }
++  return 0;
++}
++
++}  // namespace
++
++std::vector<HdCyclesInstancer::InstancePrimvar> HdCyclesInstancer::ComputeInstancePrimvars(
++    const SdfPath &prototypeId)
++{
++  HdSceneDelegate *const sceneDelegate = GetDelegate();
++  const SdfPath &id = GetId();
++  const HdSceneIndexPrim prim = GetPrim(sceneDelegate, id);
++
++  HdInstancerTopologySchema topology = HdInstancerTopologySchema::GetFromParent(prim.dataSource);
++  const VtIntArray instanceIndices = topology ?
++                                         topology.ComputeInstanceIndicesForProto(prototypeId) :
++                                         VtIntArray();
++  const size_t numLocal = instanceIndices.size();
++
++  std::vector<InstancePrimvar> local;
++  const HdPrimvarsSchema primvars = HdPrimvarsSchema::GetFromParent(prim.dataSource);
++  for (const TfToken &name : PrimvarNamesAtInterpolation(primvars, HdInterpolationInstance)) {
++    /* The transform arrays are instance primvars too. */
++    if (name == HdInstancerTokens->instanceTranslations ||
++        name == HdInstancerTokens->instanceRotations ||
++        name == HdInstancerTokens->instanceScales ||
++        name == HdInstancerTokens->instanceTransforms ||
++        TfStringStartsWith(name.GetString(), "hydra:") ||
++        TfStringStartsWith(name.GetString(), "__"))
++    {
++      continue;
++    }
++    const VtValue value = ReadPrimvar(primvars, name);
++    float element[4];
++    const int components = ArrayElement(value, 0, element);
++    if (components == 0) {
++      continue;
++    }
++    InstancePrimvar pv;
++    pv.name = name;
++    pv.role = ReadPrimvarRole(primvars, name);
++    pv.components = components;
++    pv.values.resize(size_t(components) * numLocal);
++    for (size_t i = 0; i < numLocal; ++i) {
++      ArrayElement(value, size_t(instanceIndices[i]), element);
++      std::copy(element, element + components, pv.values.begin() + i * components);
++    }
++    local.push_back(std::move(pv));
++  }
++
++  const SdfPath parentId = GetParentInstancerId();
++  auto *const parentInstancer = parentId.IsEmpty() ?
++                                    nullptr :
++                                    static_cast<HdCyclesInstancer *>(
++                                        sceneDelegate->GetRenderIndex().GetInstancer(parentId));
++  if (!parentInstancer) {
++    return local;
++  }
++
++  /* Nested: the instances are ordered parent-major, as the transforms are. */
++  const size_t numParent = parentInstancer->ComputeInstanceTransforms(id).size();
++  std::vector<InstancePrimvar> parent = parentInstancer->ComputeInstancePrimvars(id);
++  std::vector<InstancePrimvar> result;
++  for (const InstancePrimvar &pv : local) {
++    InstancePrimvar expanded = pv;
++    expanded.values.resize(size_t(pv.components) * numLocal * numParent);
++    for (size_t p = 0; p < numParent; ++p) {
++      std::copy(pv.values.begin(),
++                pv.values.end(),
++                expanded.values.begin() + p * numLocal * pv.components);
++    }
++    result.push_back(std::move(expanded));
++  }
++  for (const InstancePrimvar &pv : parent) {
++    bool shadowed = false;
++    for (const InstancePrimvar &own : local) {
++      shadowed |= own.name == pv.name;
++    }
++    if (shadowed || pv.values.size() != size_t(pv.components) * numParent) {
++      continue;
++    }
++    InstancePrimvar expanded = pv;
++    expanded.values.resize(size_t(pv.components) * numLocal * numParent);
++    for (size_t p = 0; p < numParent; ++p) {
++      for (size_t l = 0; l < numLocal; ++l) {
++        std::copy(pv.values.begin() + p * pv.components,
++                  pv.values.begin() + (p + 1) * pv.components,
++                  expanded.values.begin() + (p * numLocal + l) * pv.components);
++      }
++    }
++    result.push_back(std::move(expanded));
++  }
++  return result;
++}
++
+ HDCYCLES_NAMESPACE_CLOSE_SCOPE
+diff --git a/src/hydra/instancer.h b/src/hydra/instancer.h
+index 844ca77f..9dc005fe 100644
+--- a/src/hydra/instancer.h
++++ b/src/hydra/instancer.h
+@@ -13,6 +13,8 @@
+ #include <pxr/base/vt/array.h>
+ #include <pxr/imaging/hd/instancer.h>
+ 
++#include <vector>
++
+ HDCYCLES_NAMESPACE_OPEN_SCOPE
+ 
+ class HdCyclesInstancer final : public PXR_NS::HdInstancer {
+@@ -24,15 +26,38 @@ class HdCyclesInstancer final : public PXR_NS::HdInstancer {
+             PXR_NS::HdRenderParam *renderParam,
+             PXR_NS::HdDirtyBits *dirtyBits) override;
+ 
+-  PXR_NS::VtMatrix4dArray ComputeInstanceTransforms(const PXR_NS::SdfPath &prototypeId);
++  /* The world transform of every instance of a prototype at a shutter
++   * offset, parents included. Time 0 reads the arrays cached at sync; any
++   * other time reads the instancer's primvars and transform at that time, so
++   * moving instances can blur. */
++  PXR_NS::VtMatrix4dArray ComputeInstanceTransforms(const PXR_NS::SdfPath &prototypeId,
++                                                    float time = 0.0f);
++
++  /* The instancer's `instance` primvars - per-instance colours and the
++   * like - resolved for each instance of a prototype, in the order of
++   * ComputeInstanceTransforms(), parents included; an instancer's own value
++   * wins over its parent's. Numeric types only, as 1 to 4 floats. */
++  struct InstancePrimvar {
++    PXR_NS::TfToken name;
++    PXR_NS::TfToken role;
++    int components = 0;
++    std::vector<float> values; /* components * instance count */
++  };
++  std::vector<InstancePrimvar> ComputeInstancePrimvars(const PXR_NS::SdfPath &prototypeId);
+ 
+  private:
++  struct InstanceArrays {
++    PXR_NS::VtVec3fArray translate;
++    PXR_NS::VtVec4fArray rotate;
++    PXR_NS::VtVec3fArray scale;
++    PXR_NS::VtMatrix4dArray instanceTransform;
++  };
++
+   void SyncPrimvars();
++  void ReadArrays(float time, InstanceArrays &out) const;
++  PXR_NS::SdfPath GetParentInstancerId() const;
+ 
+-  PXR_NS::VtVec3fArray _translate;
+-  PXR_NS::VtVec4fArray _rotate;
+-  PXR_NS::VtVec3fArray _scale;
+-  PXR_NS::VtMatrix4dArray _instanceTransform;
++  InstanceArrays _arrays;
+ };
+ 
+ HDCYCLES_NAMESPACE_CLOSE_SCOPE
+diff --git a/src/hydra/util.cpp b/src/hydra/util.cpp
+index 8db6e004..9578b5be 100644
+--- a/src/hydra/util.cpp
++++ b/src/hydra/util.cpp
+@@ -8,8 +8,11 @@
+ #include "hydra/util.h"
+ #include "scene/attribute.h"
+ 
++#include <pxr/base/gf/vec2d.h>
+ #include <pxr/base/gf/vec2f.h>
++#include <pxr/base/gf/vec3d.h>
+ #include <pxr/base/gf/vec3f.h>
++#include <pxr/base/gf/vec4d.h>
+ #include <pxr/base/gf/vec4f.h>
+ #include <pxr/base/vt/array.h>
+ #include <pxr/imaging/hd/primvarSchema.h>
+@@ -226,12 +229,63 @@ TfTokenVector PrimvarNamesAtInterpolation(const HdPrimvarsSchema &primvars,
+   return result;
+ }
+ 
++namespace {
++
++/* Cycles attributes hold arrays of floats. A constant primvar authored as a
++ * scalar - `float primvars:heat = 0.5`, not `float[]` - has no array size, so
++ * the copy below moved nothing and the attribute read back as zero; doubles
++ * and integers were refused outright. Bring all of them to a float array. */
++template<typename From, typename To> bool ConvertArray(const VtValue &in, VtValue &out)
++{
++  if (in.IsHolding<From>()) {
++    out = VtValue(VtArray<To>(1, To(in.UncheckedGet<From>())));
++    return true;
++  }
++  if (in.IsHolding<VtArray<From>>()) {
++    const VtArray<From> &src = in.UncheckedGet<VtArray<From>>();
++    VtArray<To> dst(src.size());
++    for (size_t i = 0; i < src.size(); ++i) {
++      dst[i] = To(src[i]);
++    }
++    out = VtValue(dst);
++    return true;
++  }
++  return false;
++}
++
++VtValue AsFloatArray(const VtValue &value)
++{
++  VtValue out;
++  if (value.IsHolding<float>()) {
++    return VtValue(VtFloatArray(1, value.UncheckedGet<float>()));
++  }
++  if (value.IsHolding<GfVec2f>()) {
++    return VtValue(VtVec2fArray(1, value.UncheckedGet<GfVec2f>()));
++  }
++  if (value.IsHolding<GfVec3f>()) {
++    return VtValue(VtVec3fArray(1, value.UncheckedGet<GfVec3f>()));
++  }
++  if (value.IsHolding<GfVec4f>()) {
++    return VtValue(VtVec4fArray(1, value.UncheckedGet<GfVec4f>()));
++  }
++  if (ConvertArray<double, float>(value, out) || ConvertArray<int, float>(value, out) ||
++      ConvertArray<GfVec2d, GfVec2f>(value, out) || ConvertArray<GfVec3d, GfVec3f>(value, out) ||
++      ConvertArray<GfVec4d, GfVec4f>(value, out))
++  {
++    return out;
++  }
++  return value;
++}
++
++}  // namespace
++
+ void ApplyPrimvars(AttributeSet &attributes,
+                    const ustring &name,
+                    VtValue value,
+                    AttributeElement elem,
+                    AttributeStandard std)
+ {
++  value = AsFloatArray(value);
+   const void *data = HdGetValueData(value);
+   size_t size = value.GetArraySize();
+ 

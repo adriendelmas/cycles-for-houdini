@@ -27,8 +27,9 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | Thick 3D curves | ✅ | rendered, end-on test | `cycles:curve_shape` auto/thick/ribbon, live; default auto = thick (K-22, 0081) |
 | Points | ✅ | phase 5 | `varying` widths read as per-point (0081) |
 | Point instancer, nested instancers | ✅ | phase 3 | |
-| Instance motion blur | ❌ | code read | Instance primvars read at time 0 (K-23) |
-| Per-instance primvars | ❌ | code read | Only constant `displayColor` reaches instances |
+| Instance motion blur | ✅ | `bench_motion.py` 6/6 | Positions and instancer transform sampled over the shutter (K-23, 0082) |
+| Per-instance primvars | ✅ | `bench_instances.py` 5/5 | `instance` primvars as object attributes, nested instancers, `displayColor` → Object Info colour (0082) |
+| Constant scalar primvars (`float x = 0.5`) | ✅ | rendered | Read uninitialised memory before 0082; doubles and ints now converted |
 | Implicit surfaces (Sphere, Cube...) | ❌ | A1 | Not declared as supported rprims |
 | OpenVDB volumes | ✅ | phase 5 | `openvdbAsset` only; `vel` not recognised as velocity (K-33) |
 | Volume step size, clipping per prim | ❌ | code read | |
