@@ -277,13 +277,27 @@ No code reads Hydra categories (`HdCategoriesSchema`, `lightLink`/`shadowLink`
 collections). Cycles supports it since 4.0 (`Object::light_set_membership`,
 `Light::light_set_membership`, `shadow_set_membership`).
 
-### K-25 Five passes only — confirmed
+### K-25 Five passes only — confirmed — **fixed** (0087), manifest left
 `session.cpp:21` maps color, depth, normal, primId, instanceId and the Houdini
 spellings `C`, `Cf`, `N`, `P`, `Pz`. No diffuse/glossy/transmission direct or
 indirect, emission, AO, shadow catcher, mist, position, UV, motion vectors,
 cryptomatte, denoising albedo/normal, light groups, or shader AOVs
 (`aov_output` nodes exist but no RenderVar can select them). A RenderVar with
 any other name logs "Unknown pass" and is dropped.
+
+Fixed 2026-10-07. A render var resolves by its name (`C`, `Pz`, Cycles names,
+Karma names), then by its `sourceName`/`sourceType` (raw names, Karma's
+`ray:hit*`, Karma's light path expressions for its components, `st`), else
+it is a shader AOV named after its source. Karma names and LPEs are
+multiplied back by the colour pass (Cycles divides light passes by the
+surface colour, Karma does not). One pass per Cycles type: two of a type
+under different names stayed apart in the film and one read black.
+`CryptoObject/Material/AssetNN` enable cryptomatte; objects and materials now
+carry names to hash. `aov_output` has a pass-through `surface` → `closure`
+so Hydra keeps it. Still missing: the cryptomatte manifest and its EXR
+metadata (husk writes the layers but Nuke needs the metadata to find them);
+arbitrary LPEs (Cycles has no LPE engine: unknown ones are reported, black);
+light groups.
 
 ### K-26 No transparent background with a dome light — confirmed — **fixed** (0086)
 `session.cpp:137-150`: `background->set_transparent(true)` only when no

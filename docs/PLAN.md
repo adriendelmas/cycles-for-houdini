@@ -150,7 +150,7 @@ because round implicit surfaces needed it looked at.
 
 | Task | Closes |
 |---|---|
-| Pass table extended to every Cycles `PassType` with Houdini spellings; shader AOVs from `aov_output` names; cryptomatte object/material/asset with the film settings it needs | K-25 |
+| ✅ Pass table extended to every Cycles `PassType` with Houdini spellings; shader AOVs from `aov_output` names; cryptomatte object/material/asset with the film settings it needs (0087; manifest left) | K-25 |
 | ✅ Film settings: transparent background, transparent glass, exposure, pixel filter (0086) | K-26 |
 | `primvars:cycles:object:*`: ray visibility, holdout, shadow catcher, light group, caustics, dicing rate, adaptive subdivision; read in `geometry.inl` | K-27 |
 | Light linking and shadow linking from Hydra categories | K-24 |
