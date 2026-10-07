@@ -59,6 +59,13 @@ Done when: the phase-0 cases pass, and a Solaris scene with a
 
 ## Phase 2 — Closures and volumes (2-3 days)
 
+> **Status 2026-10-07: done** (patch 0078), in an afternoon rather than days.
+> Closure families dispatched by suffix, `volume` added, `layer` as a
+> Fresnel-weighted mix, `conductor` on `metallic_bsdf`, output lookup by
+> socket class when the name fails. `mtlx_inputs.py`: 528 clean, 0 output
+> missing, 0 node missing. Left for later: a volume value case, a conductor
+> reference, and the one-line "approximate" log for K-14.
+
 | Task | Closes |
 |---|---|
 | Type dispatch in `FindMtlxMapping` on the nodedef suffix: `_bsdf`, `_edf`, `_vdf`, `_surfaceshader`, `_displacementshader`, `_volumeshader` route to closure mappings before the colour table | K-03 |

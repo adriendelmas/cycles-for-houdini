@@ -25,7 +25,11 @@ as K-01, for `plus`, `minus`, `difference`, `burn`, `dodge`, `screen`, `overlay`
 Bench case `plus` passes; the other six share the code and are not yet
 value-tested.
 
-### K-03 Closure mix/add/multiply go to colour and scalar nodes — confirmed
+### K-03 Closure mix/add/multiply go to colour and scalar nodes — confirmed — **fixed** (0078)
+Routed by the nodedef's type suffix before the prefix table: `mix_closure`,
+`add_closure`, a mix against nothing for `multiply`; vector nodes for the
+displacementshader family. Bench cases `closure_mix`, `closure_add`,
+`closure_scale`, `surface_mix` exact. Original note:
 `material.cpp:1833` `{"ND_mix_", &MtlxMix}` also catches `ND_mix_bsdf`,
 `ND_mix_edf`, `ND_mix_vdf`, `ND_mix_surfaceshader`, `ND_mix_displacementshader`
 and sends them to `mix_color`. `ND_add_bsdf`/`ND_add_edf` take the `ND_add_`
@@ -35,7 +39,9 @@ dropped with a warning. Needed: `mix_closure` (with the K-01 orientation:
 `fg → Closure2`), `add_closure`, and for multiply a `mix_closure` against
 `transparent_bsdf` or a `surface_mix_weight` write.
 
-### K-04 `ND_volume` is missing — confirmed
+### K-04 `ND_volume` is missing — confirmed — **fixed** (0078)
+`volume(vdf, edf)` → `add_closure`; `mtlx_inputs.py` reports no missing node
+any more. No value case yet: that needs a volume scene. Original note:
 Not in `MtlxTable()`, and `tools/mtlx_coverage.py` excludes `volume$` from
 the denominator. `absorption_vdf` and `anisotropic_vdf` are mapped but no
 MaterialX volume network can reach the volume terminal. Same shape as the
@@ -77,7 +83,11 @@ bench's expected value had been derived from the implementation. Fixed with a
 `vector_math` dot product (which also honours a connected `lumacoeffs`)
 feeding `mix_color.a`; bench case `saturate` passes exactly.
 
-### K-09 `layer` is a 50/50 mix — probable
+### K-09 `layer` is a 50/50 mix — probable — **replaced by a documented approximation** (0078)
+Now a `mix_closure` weighted by `layer_weight.Fresnel` (blend 0.333, IOR
+1.5): right for a dielectric top over a base, approximate for any other top.
+Renders a dielectric over red as (0.87, 0.20, 0.10). `layer_vdf` passes the
+surface only. Original note:
 `material.cpp:1197` maps `top`/`base` to `mix_closure` and never sets `fac`
 (Cycles default 0.5). MaterialX vertical layering is `top + (1 − albedo(top))·base`.
 A coat over a base loses half the base. Cycles has no exact node; the nearest
@@ -105,7 +115,10 @@ meant for a following `normalmap`. The chain `heighttonormal → normalmap`
 therefore breaks. Either detect the chain and collapse it, or build the
 tangent map from `bump` − N through a `vector_transform` to tangent space.
 
-### K-13 `conductor_bsdf` loses its colour — confirmed
+### K-13 `conductor_bsdf` loses its colour — confirmed — **fixed** (0078)
+Now `metallic_bsdf` in `physical_conductor` mode with `ior` and `extinction`
+carried, MaterialX's gold as default. Not yet value-tested against a
+reference. Original note:
 `material.cpp:1250` maps to `glossy_bsdf` and leaves `ior`/`extinction`
 unmapped: every conductor is white. Cycles 4.3+ `metallic_bsdf` with
 `fresnel_type = physical_conductor` takes exactly `ior` and `extinction`.
@@ -291,13 +304,13 @@ warnings per nodedef. First measurement, after 0076:
 | | |
 |---|---|
 | routed | 652 |
-| clean - every input, output and node found | **511** |
-| inputs dropped | 120 (many are inputs with no Cycles counterpart: image `default`, `framerange`, `layer`; others are real, see K-05, K-13, K-14) |
-| output not found | 15 - the closure `mix_*`/`multiply_*`/`dot_*` families (K-03) and `flake2d/3d`, `gltf_colorimage` |
-| node missing | 6 - every VDF, through the missing `ND_volume` (K-04) |
+| clean - every input, output and node found | **511** after 0076, **528** after 0078 |
+| inputs dropped | 124 (many are inputs with no Cycles counterpart: image `default`, `framerange`, `layer`; others are real, see K-05, K-14) |
+| output not found | 15 after 0076 (the closure families, K-03), **0** after 0078 |
+| node missing | 6 after 0076 (every VDF, through the missing `volume`, K-04), **0** after 0078 |
 
 A third number, value-verified by rendering against the MaterialX
-definition, is `bench_mtlx.py`'s case count: 11.
+definition, is `bench_mtlx.py`'s case count: 16.
 
 ### K-52 Bench expected values derived from the code — confirmed — **fixed**
 `tools/bench_mtlx.py` now computes every expected colour from the MaterialX

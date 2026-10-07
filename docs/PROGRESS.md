@@ -97,9 +97,9 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 ## Materials - MaterialX
 
 Three numbers, measured 2026-10-07 (commands in [TESTING.md](TESTING.md)):
-**652** of 823 nodedefs route to a mapping (`mtlx_coverage.py`), **511** of
+**652** of 823 nodedefs route to a mapping (`mtlx_coverage.py`), **528** of
 those keep every input, output and node when rendered with all inputs authored
-(`mtlx_inputs.py`), and **11** are verified against a value computed from the
+(`mtlx_inputs.py`), and **16** are verified against a value computed from the
 MaterialX definition (`bench_mtlx.py`). This table says what renders right.
 
 | Family | State | Notes |
@@ -116,10 +116,11 @@ MaterialX definition (`bench_mtlx.py`). This table says what renders right.
 | `checkerboard`, `randomcolor`, `ramplr` | ✅ / 🟡 | `ramptb` is the diagonal gradient |
 | `mix` | ✅ | Exact since 2026-10-07 (K-01) |
 | `plus`, `minus`, `difference`, `burn`, `dodge`, `screen`, `overlay` | ✅ | Orientation fixed (K-02); `plus` value-tested, the others not yet |
-| `mix`/`add`/`multiply` of BSDF, EDF, VDF, surfaceshader | 🐞 | Sent to colour/scalar nodes (K-03) |
+| `mix`/`add`/`multiply` of BSDF, EDF, VDF, surfaceshader | ✅ | Exact since 2026-10-07 (K-03); four bench cases |
+| `mix`/`add`/`multiply`/`dot` of displacementshader | ✅ | Vector nodes; untested |
 | `surface` | ✅ | Added 2026-09-10 |
-| `volume` | ❌ | Missing; MaterialX volumes cannot reach the terminal (K-04) |
-| `layer` | 🐞 | 50/50 mix (K-09) |
+| `volume` | ✅ | Added 2026-10-07 (K-04); no value case yet |
+| `layer` | 🟡 | Fresnel-weighted mix, IOR 1.5: right for a dielectric top, approximate otherwise (K-09) |
 | add/sub/mul/div, scalar and vector | ✅ | Split by type suffix |
 | Other math on colour/vector (`absval`, `floor`, `min`, `max`, `power`, `clamp`, `remap`, `smoothstep`...) | 🐞 | Scalar node, colour averaged to grey (K-07) |
 | `contrast` scalar and vector | ✅ | |
@@ -130,10 +131,10 @@ MaterialX definition (`bench_mtlx.py`). This table says what renders right.
 | `dot`, `convert` pass-through, `constant` | ✅ | |
 | `rotate2d/3d`, `place2d`, `transform*` | 🟡 | `place2d` pivot/order unverified |
 | `facingratio`, `viewdirection` | ✅ / 🟡 | `facingratio` exact for its defaults (K-10); `viewdirection` negated, untested (K-11) |
-| `conductor_bsdf` | 🐞 | `ior`/`extinction` unmapped: white glossy (K-13) |
-| `dielectric_bsdf`, diffuse, sheen, translucent, subsurface | 🟡 | Approximate: `tint`, `scatter_mode`, anisotropy unmapped |
+| `conductor_bsdf` | ✅ | `metallic_bsdf` physical conductor with `ior`/`extinction` (K-13); not value-tested |
+| `dielectric_bsdf`, diffuse, sheen, translucent, subsurface | 🟡 | `tint` and thin film carried; `scatter_mode`, `weight`, anisotropy not |
+| `absorption_vdf`, `anisotropic_vdf` | 🟡 | Reachable through `volume` since 2026-10-07; coefficient vs colour approximation |
 | `uniform_edf` and the other EDFs | 🟡 | All become `emission` |
-| `absorption_vdf`, `anisotropic_vdf` | 🟡 | Unreachable without `volume` (K-04) |
 | Chiang hair BSDF, roughness, absorption nodes | ✅ | Exact vs native principled hair, 4 pairs < 1e-3 |
 | `switch`, `swizzle`, `extract`, `ramp4`, `splitlr/tb` | ❌ | Need a mechanism the mapping lacks |
 | Matrices, alpha compositing, `time`/`frame` | ❌ | No Cycles equivalent |
