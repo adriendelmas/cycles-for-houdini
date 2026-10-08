@@ -165,9 +165,11 @@ warnings, for a non-black image, and for a difference against a baseline:
 hython tools/bench_export.py && python tools/bench_render.py && hython tools/bench_diff.py
 ```
 
-97 nodes pass that check on both engines, and the full MaterialX scene renders
-bit-identical between 5.2 and 5.3. What this does and does not prove — it does
-not compare against committed reference images — is set out in
+97 nodes pass that check against their committed reference images, and the
+full MaterialX scene renders bit-identical between 5.2 and 5.3. A second
+command renders seven materials with Cycles and with Karma from the same USD
+and compares them region by region (`hython tools/bench_agree.py`, 21 checks,
+floor within 1 %). What each bench does and does not prove is set out in
 [docs/TESTING.md](docs/TESTING.md).
 
 ## Known gaps
@@ -190,8 +192,10 @@ The ones a user meets first:
 - `shadow:color` and fractional diffuse/specular light multipliers are not
   supported by Cycles.
 - Implicit surfaces carry no UVs.
-- The interactive-viewport timings (a pass once measured four unexplained
-  seconds) still need a reading in a live session.
+- The interactive-viewport timings: a pass once measured four unexplained
+  seconds; a live session driven through houdini-mcp on 2026-10-08 found no
+  pass over 50 ms in some forty restarts (`docs/KNOWN_ISSUES.md`, K-31). The
+  log is timestamped since, for a reading with the mouse in hand.
 - An intermittent CUDA "illegal address" on some scene edits, under investigation.
 
 ## Credits
