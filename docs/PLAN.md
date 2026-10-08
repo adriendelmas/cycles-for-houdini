@@ -154,9 +154,9 @@ because round implicit surfaces needed it looked at.
 | ✅ Film settings: transparent background, transparent glass, exposure, pixel filter (0086) | K-26 |
 | ✅ `primvars:cycles:object:*`: ray visibility, holdout, shadow catcher, light group, caustics, dicing rate; Karma's visibility and holdout read too (0088) | K-27 |
 | ✅ Light linking and shadow linking from Hydra categories (0089) | K-24 |
-| Render tags honoured; proxy/render purposes measured | K-28 |
+| ✅ Render tags honoured live; proxy/render purposes checked in Houdini (0090) | K-28 |
 | ✅ Subdivision independent of `refineLevel`; `cycles:max_subdivisions` setting (0084, done early with A1) | K-30 |
-| `background = true` under husk, measured against Karma on three scenes | K-29 |
+| ✅ `background = true` under husk measured: no gain (13.2 s vs 13.6 s, noise 1.5 s) | K-29 |
 | ✅ Motion blur toggle symmetric (0086); `shadow:color`, light multipliers still to do | K-34 |
 | ✅ Volume field aliases (`vel`, `Cd`) (0086) | K-33 |
 

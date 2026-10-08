@@ -120,6 +120,7 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0088` | hydra: les proprietes par objet - visibilite par rayon, holdout, shadow catcher |
 | `0089` | hydra: le light linking et le shadow linking |
 | `0090` | hydra: un prim dont le render tag n'est plus dessine disparait du rendu |
+| `0091` | hydra: couper le flou de mouvement ne fait plus disparaitre les objets |
 
 ---
 

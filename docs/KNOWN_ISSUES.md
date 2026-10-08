@@ -333,16 +333,27 @@ its light under a dome. Left: changing the render settings' dicing rate
 overwrites per-prim rates until those prims sync again; light groups have no
 pass yet.
 
-### K-28 Render tags and purposes are not honoured — probable
+### K-28 Render tags and purposes are not honoured — **fixed** (0090)
 `render_pass.cpp:99` ignores `renderTags`; rprims never check their tag. A
 prim with `purpose = proxy` and its `render` sibling both render. To be
 confirmed in Solaris with a proxy/render pair.
 
-### K-29 `background = false` under husk — confirmed
+
+Checked 2026-10-08: under husk the proxy and guide prims were never rendered
+(Hydra does not sync them). In the viewport an already built prim stayed when
+its purpose was turned off; 0090 hides and shows prims as the render tags
+change. Confirmed by the user in Houdini (`tests/houdini/purpose_toggle.hip`):
+each purpose toggle shows and hides its object.
+
+### K-29 `background = false` under husk — confirmed — **measured, not a cause**
 `render_delegate.cpp:90` builds every session in interactive mode, batch
 included: no tiling, progressive buffer updates, `use_auto_tile` inert.
 Upstream does the same, but it is a candidate for the batch-speed gap against
 Karma and must be measured (same scene, `background` true vs false).
+
+Measured 2026-10-08, `smoke.usda` at 1920x1080, five alternating pairs:
+13.6 s interactive, 13.2 s background, a spread of 1.5 s between runs, images
+bit-identical. Not the batch-speed gap; the session stays interactive.
 
 ### K-30 Subdivision depends on a display hint — confirmed — **fixed** (0084)
 `mesh.cpp:478-485` only subdivide when `refineLevel > 0`, and `mesh.cpp:704`
@@ -390,7 +401,10 @@ until the delegate is recreated.
 
 Fixed 2026-10-07: both flags tracked; blur is on when neither is set, and
 prims synced without it or over another shutter are synced again. Batch
-behaviour measured (`bench_settings.py`); the live toggle needs Houdini.
+behaviour measured (`bench_settings.py`). In Houdini (2026-10-08, user,
+`tests/houdini/motion_toggle.hip`) the blur came back, but turning it off made
+the moving object vanish until the render was restarted: prims kept their
+motion samples. Patch 0091 resyncs them on the way off too - to recheck.
 
 ## C. Houdini side
 
