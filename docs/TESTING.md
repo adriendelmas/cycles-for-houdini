@@ -144,9 +144,12 @@ distant light and the ×π dome; it should be a command, not a one-off.
 Two differences to look at first when it exists, seen on 2026-10-08 on
 `tests/materialx/scenes/phase4b_mtlx.usda` at 480×360 (`husk --renderer
 BRAY_HdKarma` against the delegate, same camera): the dome light's sky is
-blue-grey in Cycles and black in Karma, and the glass cube is milky in Cycles
-where Karma's is clear with a dark top face - the two may be one thing, the
-sky showing through the glass. The gold sphere agrees.
+blue-grey in Cycles (alpha 1) and black with alpha 0 in Karma - husk's Karma
+leaves a bare `DomeLight` out of the camera's view, Cycles shows it - and the
+glass cube is milky in Cycles where Karma's is clear with a dark top face,
+which may be the same thing seen through the glass. The gold sphere agrees.
+An agreement bench should pin the dome's camera visibility explicitly on
+both sides before comparing anything.
 
 ## Measuring interactivity
 
