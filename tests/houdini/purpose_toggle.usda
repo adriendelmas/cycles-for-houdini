@@ -1,0 +1,62 @@
+#usda 1.0
+(
+    defaultPrim = "world"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "world"
+{
+    def Camera "camera"
+    {
+        float focalLength = 35
+        float horizontalAperture = 36
+        float verticalAperture = 24
+        matrix4d xformOp:transform = ( (1,0,0,0), (0,1,0,0), (0,0,1,0), (0, 0.5, 8, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+
+    def DomeLight "sky"
+    {
+        float inputs:intensity = 1
+    }
+
+    # Left: a red sphere, purpose proxy.
+    def Sphere "proxy_sphere"
+    {
+        uniform token purpose = "proxy"
+        double radius = 0.8
+        double3 xformOp:translate = (-2, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+        color3f[] primvars:displayColor = [(0.9, 0.1, 0.1)]
+    }
+
+    # Middle: a grey cube, purpose render - always drawn by a final render.
+    def Cube "render_cube"
+    {
+        uniform token purpose = "render"
+        double size = 1.4
+        uniform token[] xformOpOrder = []
+    }
+
+    # Right: a green cone, purpose guide.
+    def Cone "guide_cone"
+    {
+        uniform token purpose = "guide"
+        double radius = 0.7
+        double height = 1.6
+        uniform token axis = "Y"
+        double3 xformOp:translate = (2, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+        color3f[] primvars:displayColor = [(0.1, 0.8, 0.2)]
+    }
+
+    # Top: a blue sphere with no purpose (default) - always drawn.
+    def Sphere "default_sphere"
+    {
+        double radius = 0.4
+        double3 xformOp:translate = (0, 1.8, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+        color3f[] primvars:displayColor = [(0.1, 0.3, 0.9)]
+    }
+}

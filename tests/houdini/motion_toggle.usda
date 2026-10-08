@@ -1,0 +1,48 @@
+#usda 1.0
+(
+    defaultPrim = "world"
+    metersPerUnit = 1
+    upAxis = "Y"
+    startTimeCode = 1
+    endTimeCode = 5
+    timeCodesPerSecond = 24
+)
+
+def Xform "world"
+{
+    def Camera "camera"
+    {
+        float focalLength = 35
+        float horizontalAperture = 36
+        float verticalAperture = 24
+        float2 clippingRange = (0.1, 1000)
+        double shutter:open = -0.25
+        double shutter:close = 0.25
+        matrix4d xformOp:transform = ( (1,0,0,0), (0,1,0,0), (0,0,1,0), (0, 0, 10, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+
+    def DomeLight "sky"
+    {
+        float inputs:intensity = 1
+    }
+
+    # Travels 2.5 units a frame: over a half-frame shutter, a 1.25 unit trail.
+    def Sphere "ball" (prepend apiSchemas = ["MaterialBindingAPI"])
+    {
+        double radius = 0.6
+        double3 xformOp:translate.timeSamples = {
+            1: (-5, 0, 0),
+            5: (5, 0, 0),
+        }
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+        color3f[] primvars:displayColor = [(0.9, 0.3, 0.1)]
+    }
+
+    def Cube "still"
+    {
+        double size = 1
+        double3 xformOp:translate = (0, -1.5, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+}

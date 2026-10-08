@@ -13,6 +13,8 @@ into is listed in `.gitignore` and named `output/`, `scratch/` or `hair/`.
 | `materialx/hair/` (ignored) | The four pairs of the hair bench | `tools/bench_hair.py` |
 | `scenes/` | Feature and regression scenes: the phase scenes of the journal (`phase3.usda`, `phase6_aov.usda`, `phase12_velocity.usda`...), crash reproductions (`repro_mtlx_crash.usda`), lights, AOVs, settings, normals, COP textures | By hand with husk; the commands are in `docs/STATUS.md` next to each phase |
 | `scenes/displacement/` | The dispersion and displacement comparison, with its images | - |
+| `houdini/` | Scenes to check by hand in a live Houdini, what husk cannot show: `motion_toggle.hip` (motion blur turned off and back on, K-34), `purpose_toggle.hip` (display purposes toggled in the viewport, K-28). Each `.hip` sublayers its `.usda` and carries a sticky note with the steps | Open in Houdini, viewport on Cycles |
+| `curves/output/`, `motion/output/`, `instances/output/`, `implicit/output/`, `settings/output/`, `aovs/output/` (ignored) | What the phase 5 and 6 benches write | `tools/bench_curves.py`, `bench_motion.py`, `bench_instances.py`, `bench_implicit.py`, `bench_settings.py`, `bench_aovs.py` |
 | `notes/` | Text dumps kept from the early inventories (node and socket lists, case lists) | - |
 | `scratch/` (ignored) | Anything rendered by hand while investigating | - |
 
