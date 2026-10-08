@@ -31,7 +31,7 @@ node = hou.pwd()
 directory = node.evalParm("outputdir") or None
 count = flatten_op_textures.run(node, directory)
 if count:
-    node.setComment("%d texture(s) aplatie(s)" % count)
+    node.setComment("%d texture(s) flattened" % count)
     node.setGenericFlag(hou.nodeFlag.DisplayComment, True)
 '''
 
@@ -73,7 +73,7 @@ def main():
 
     definition.save(HDA, asset, hou.HDAOptions())
 
-    print("HDA ecrit :", HDA)
+    print("HDA written:", HDA)
     print("Type      :", TYPE_NAME)
 
 

@@ -469,12 +469,18 @@ source expression or nodegraph, with the file named next to the formula, and
 carries `mix`, `plus`, `saturate`, `geomcolor` and `facingratio` cases. Five of
 them failed on the old DLL and pass on the new one.
 
-### K-53 Code and log messages in French — confirmed
+### K-53 Code and log messages in French — confirmed — **fixed** (0097)
 `material.cpp` (180 lines), `houdini_cop.cpp` (62), `render_pass.cpp` (47),
 `mesh.cpp` (24) and others carry French comments; four `LOG_INFO` lines are
 French (`Affichage :`, `Rendu relance :`, `Passe de rendu :`, in
 `render_pass.cpp:64,241,283`). The project rule is English in code; the repo
 is public and the patches are meant for upstream.
+
+Fixed 2026-10-08: every comment and log line of `src/hydra` and every comment,
+docstring and message of `tools/*.py` is English (`Display:`, `Render
+restarted:`, `Render pass:`). A comment-stripping comparison against the
+previous revision showed no code change. The journal (`docs/STATUS.md`) stays
+French by design.
 
 ### K-54 README numbers disagree — confirmed — **fixed**
 `hython tools/count_nodes.py` derives them all from the Sdr registry: 163

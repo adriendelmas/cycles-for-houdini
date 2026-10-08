@@ -1,7 +1,7 @@
 From 6eebb4e1fe1a32dc01ced67a14e31248d654a685 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 00:50:49 +0200
-Subject: [PATCH 89/96] hydra: le light linking et le shadow linking
+Subject: [PATCH 89/97] hydra: le light linking et le shadow linking
 
 Rien ne lisait les collections lightLink et shadowLink des lumieres :
 toute lumiere eclairait tout, toute ombre tombait. La scene index de

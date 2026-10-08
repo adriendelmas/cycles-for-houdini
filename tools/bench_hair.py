@@ -1,20 +1,20 @@
-"""Banc des cheveux MaterialX : chaque traduction contre un resultat connu.
+"""MaterialX hair bench: each translation against a known result.
 
     python tools/bench_hair.py [renderer]
 
-Le renderer vaut `HdCyclesPlugin` (processeur) par defaut, pour des images
-deterministes.
+The renderer defaults to `HdCyclesPlugin` (CPU), for deterministic images.
 
-Chaque paire doit rendre la meme image si la traduction est exacte :
+Each pair must render the same image if the translation is exact:
 
-  mx_abs   / cy_native : le BSDF de Chiang MaterialX contre le principled hair
-                         natif de Cycles, a absorption et rugosite egales ;
-  mx_mel   / mx_abs    : la melanine de d'Eon contre l'absorption qu'elle doit
-                         produire, calculee a la main ;
-  mx_color / cy_direct : l'absorption depuis une couleur contre la
-                         parametrisation par couleur native de Cycles ;
-  mx_rval  / mx_abs    : une rugosite ecrite en valeur (variance) contre la
-                         meme passee par chiang_hair_roughness (beta).
+  mx_abs   / cy_native : the MaterialX Chiang BSDF against Cycles' native
+                         principled hair, at equal absorption and roughness;
+  mx_mel   / mx_abs    : d'Eon's melanin against the absorption it should
+                         produce, computed by hand;
+  mx_color / cy_direct : absorption from a color against Cycles' native
+                         color parametrization;
+  mx_rval  / mx_abs    : a roughness written as a value (variance) against
+                         the same one passed through chiang_hair_roughness
+                         (beta).
 """
 
 import math
@@ -27,15 +27,15 @@ OUT = os.path.join(ROOT, "tests", "materialx", "hair")
 os.makedirs(OUT, exist_ok=True)
 HFS = os.path.join(os.environ.get("HFS", "E:/Side Effects Software/Houdini22.0.368"), "bin")
 
-# Absorption attendue pour melanine 0,5 / rougeur 0,5 et les couleurs par defaut.
+# Expected absorption for melanin 0.5 / redness 0.5 and the default colors.
 m = -math.log(max(1.0 - 0.5, 1e-4))
 eu = [-math.log(c) for c in (0.657704, 0.498077, 0.254107)]
 ph = [-math.log(c) for c in (0.829444, 0.67032, 0.349938)]
 ABS = [m * 0.5 * a + m * 0.5 * b for a, b in zip(eu, ph)]
 ABS_TXT = "(%.6f, %.6f, %.6f)" % tuple(ABS)
 
-# La meme rugosite beta = 0,3, exprimee en variance/echelle comme MaterialX la
-# transmet au BSDF.
+# The same roughness beta = 0.3, expressed as variance/scale the way MaterialX
+# hands it to the BSDF.
 b = 0.3
 V = (0.726 * b + 0.812 * b * b + 3.7 * b ** 20) ** 2
 S = 0.265 * b + 1.194 * b * b + 5.372 * b ** 22
@@ -202,8 +202,8 @@ def main():
     counts, points = strands()
     env = dict(os.environ)
     env["PATH"] = HFS + ";" + env["PATH"]
-    print("absorption attendue (melanine) :", ABS_TXT)
-    print("rugosite en variance :", "(%.6f, %.6f)" % (V, S))
+    print("expected absorption (melanin) :", ABS_TXT)
+    print("roughness as variance :","(%.6f, %.6f)" % (V, S))
     renderer = sys.argv[1] if len(sys.argv) > 1 else "HdCyclesPlugin"
     for name, material in VARIANTS.items():
         scene = os.path.join(OUT, name + ".usda")
@@ -221,12 +221,12 @@ def main():
         stats = subprocess.run([os.path.join(HFS, "hoiiotool.exe"), "--stats", exr],
                                capture_output=True, text=True, env=env).stdout or ""
         avg = [l for l in stats.splitlines() if "Stats Avg" in l]
-        print("%-10s %s" % (name, avg[0].split(":")[1].strip()[:44] if avg else "PAS D'IMAGE"))
+        print("%-10s %s" % (name, avg[0].split(":")[1].strip()[:44] if avg else "NO IMAGE"))
         for w in warns[:3]:
             print("           ! " + w[:110])
     print()
-    # Une image noire contre une image noire passe `--diff` aussi bien que deux
-    # images justes : chaque rendu doit d'abord contenir quelque chose.
+    # A black image against a black image passes `--diff` just as well as two
+    # correct images: each render must first contain something.
     problems = 0
     for a, bname in PAIRS:
         r = subprocess.run([os.path.join(HFS, "hoiiotool.exe"), "--diff",
@@ -237,9 +237,9 @@ def main():
         lit = all(peak(os.path.join(OUT, n + ".exr"), env) > 1e-3 for n in (a, bname))
         ok = lit and error < 1e-3
         problems += 0 if ok else 1
-        print("%-9s vs %-10s : %-6s ecart moyen %.2e%s" % (
-            a, bname, "ok" if ok else "FAUX", error, "" if lit else "  (image noire)"))
-    print("\n%d paires, %d problemes" % (len(PAIRS), problems))
+        print("%-9s vs %-10s : %-6s mean error %.2e%s" % (
+            a, bname, "ok" if ok else "WRONG", error, "" if lit else "  (black image)"))
+    print("\n%d pairs, %d problems" % (len(PAIRS), problems))
 
 
 def peak(exr, env):

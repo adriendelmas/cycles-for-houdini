@@ -121,18 +121,17 @@ distant light and the ×π dome; it should be a command, not a one-off.
 `CYCLES_LOGGING=1 CYCLES_LOGGING_LEVEL=info CYCLES_LOG_FILE=<path>` before
 starting Houdini. The log carries:
 
-- `Affichage : ...` once per render pass creation - which driver and which Hgi;
-- `Rendu relance : ...` at each session reset, with its cause;
-- `Passe de rendu : N ms (verrou, veille COP, camera et AOV, relance, demarrage)`
-  whenever the host thread spent more than 50 ms in `_Execute`;
+- `Display: ...` once per render pass creation - which driver and which Hgi;
+- `Render restarted: ...` at each session reset, with its cause (scene,
+  camera, settings, camera-switch);
+- `Render pass: N ms on the host thread (lock, COP poll, AOV bindings, camera,
+  dicing camera, reset, start)` whenever the host thread spent more than 50 ms
+  in `_Execute`;
 - Cycles' own `Rendered N samples in T seconds` and memory lines.
 
-(These lines are French today and will be renamed under K-53; grep for `ms`
-and `Hgi` until then.)
-
 A viewport that "feels slow" is one of three things, told apart by these
-lines: the host thread blocked (`Passe de rendu` large), the session resetting
-every frame (`Rendu relance` every frame with the same cause), or the sample
+lines: the host thread blocked (`Render pass` large), the session resetting
+every frame (`Render restarted` every frame with the same cause), or the sample
 itself slow (`Rendered 1 samples in` large). Only the first two are the
 delegate's.
 

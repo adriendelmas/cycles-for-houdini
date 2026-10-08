@@ -188,7 +188,7 @@ stopwatch log.
 
 | Task | Closes |
 |---|---|
-| Translate comments and log messages to English, file by file as each is touched; no new French in code from today | K-53 |
+| ✅ Translate comments and log messages to English (0097, tools too) | K-53 |
 | `bootstrap.py` re-run on a clean clone in a temporary directory; record the time and the result in ENVIRONMENT.md | - |
 | ✅ Document the farm workflow in one place (README, COP feature; not automated) | K-40 |
 | ✅ `preview translator` scope stated in the README | K-42 |

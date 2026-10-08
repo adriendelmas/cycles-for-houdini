@@ -126,6 +126,7 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0094` | hydra: le manifeste de la cryptomatte dans les metadonnees de l'image |
 | `0095` | hydra: l'emission combinee et les vecteurs de mouvement de Karma |
 | `0096` | hydra: la passe ne bloque plus l'interface, et le cache des COP se vide |
+| `0097` | hydra: commentaires et messages de journal en anglais |
 
 ---
 

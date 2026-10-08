@@ -18,14 +18,14 @@ import sys
 import hou
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# Quelle arborescence viser, suivant la meme convention que les autres outils :
-# `install` pour la 5.2, `install-53` pour la 5.3.
+# Which tree to target, following the same convention as the other tools:
+# `install` for 5.2, `install-53` for 5.3.
 INSTALL = os.environ.get("CYCLES_INSTALL_DIR", "install")
 CYCLES = os.path.join(ROOT, "external", "cycles-53" if INSTALL.endswith("-53") else "cycles")
 INTEGRATOR = os.path.join(CYCLES, "src", "scene", "integrator.cpp")
 RESOURCES = os.path.join(CYCLES, "src", "hydra", "resources")
-# Houdini cherche le fichier par nom de moteur : les deux entrees du menu, CPU
-# et GPU, ont donc chacune le leur, au contenu identique.
+# Houdini looks the file up by engine name: the two menu entries, CPU and GPU,
+# therefore each have their own, with identical contents.
 OUTPUTS = [os.path.join(RESOURCES, "HdCyclesPlugin_Global.ds"),
            os.path.join(RESOURCES, "HdCyclesPluginGPU_Global.ds")]
 
@@ -127,9 +127,9 @@ def main():
         ("cycles:sample_offset", "Sample Offset", "integer", "int", "0"),
         ("cycles:time_limit", "Time Limit", "float", "float", "0"),
         ("cycles:threads", "Threads", "integer", "int", "0"),
-        # Le pas du decoupage adaptatif des subdivisions, en pixels par
-        # micropolygone. Blender en expose deux, 1 px au rendu et 8 px dans la
-        # vue ; ici un seul, mais qui se change sans recompiler.
+        # The step of the adaptive subdivision dicing, in pixels per
+        # micropolygon. Blender exposes two, 1 px for the render and 8 px in the
+        # viewport; here just one, but it can be changed without recompiling.
         ("cycles:dicing_rate", "Dicing Rate", "float", "float", "1"),
         # The deepest a Catmull-Clark mesh is split, whatever the dicing rate
         # asks; Blender's default.
@@ -204,7 +204,7 @@ def main():
         open(out, "w", encoding="utf-8").write(text)
         print(out)
     total = sum(len(v) for v in grouped.values())
-    print(f"{total} proprietes dans {len(grouped)} onglets")
+    print(f"{total} properties in {len(grouped)} tabs")
 
     write_geometry()
 

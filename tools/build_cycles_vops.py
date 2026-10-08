@@ -1,21 +1,21 @@
-"""Construit la bibliothèque de nœuds VOP Cycles pour Houdini.
+"""Builds the Cycles VOP node library for Houdini.
 
-Le delegate publie déjà les nœuds Cycles au registre Sdr, ce qui les rend
-lisibles par USD — mais pas posables dans un Material Builder. Houdini attend
-pour cela de vrais types de nœuds VOP.
+The delegate already publishes the Cycles nodes to the Sdr registry, which
+makes them readable by USD - but not placeable in a Material Builder. For
+that, Houdini expects real VOP node types.
 
-Aucun traducteur Python n'est nécessaire. Un VOP de nuanceur se décrit
-entièrement par son DialogScript : `rendermask` dit à quel moteur il
-appartient, `externalshader` qu'il ne se compile pas, et trois paramètres
-réservés disent au traducteur par défaut de Solaris quel prim USD écrire. C'est
-la forme des nœuds MaterialX livrés par Houdini, relevée dans `MaterialX.hda`.
+No Python translator is needed. A shader VOP is described entirely by its
+DialogScript: `rendermask` says which engine it belongs to, `externalshader`
+that it is not compiled, and three reserved parameters tell Solaris' default
+translator which USD prim to write. This is the shape of the MaterialX nodes
+shipped with Houdini, taken from `MaterialX.hda`.
 
-À lancer avec hython — aucune licence requise, contrairement à husk :
+Run with hython - no license required, unlike husk:
 
     hython tools/build_cycles_vops.py [--sample]
 
-La bibliothèque est écrite dans l'arborescence **installée**, la seule que
-Houdini charge via le package `cycles.json`.
+The library is written into the **installed** tree, the only one that Houdini
+loads through the `cycles.json` package.
 """
 
 import os
@@ -26,10 +26,10 @@ from pxr import Sdr
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-# Quelle installation viser. Les deux moteurs cohabitent — `install` pour la
-# 5.2, `install-53` pour la 5.3 — et la bibliotheque doit etre regeneree pour
-# chacune : le registre Sdr dont elle derive est publie par le delegate
-# construit, dont les noeuds changent d'une version a l'autre.
+# Which installation to target. The two engines coexist - `install` for 5.2,
+# `install-53` for 5.3 - and the library must be regenerated for each one: the
+# Sdr registry it derives from is published by the built delegate, whose nodes
+# change from one version to the next.
 INSTALL = os.environ.get("CYCLES_INSTALL_DIR", "install")
 OTLS = os.path.join(ROOT, INSTALL, "houdini", "otls")
 LIBRARY = os.path.join(OTLS, "cycles_vops.hda")
@@ -40,7 +40,7 @@ PREFIX = "cycles_"
 SAMPLE = ["cycles_principled_bsdf", "cycles_image_texture", "cycles_noise_texture",
           "cycles_math", "cycles_mix_color"]
 
-# Type Sdr -> (connecteur DialogScript, type de paramètre, nb de composantes)
+# Sdr type -> (DialogScript connector, parameter type, number of components)
 TYPES = {
     "float": ("float", "float", 1),
     "int": ("int", "int", 1),
@@ -53,15 +53,14 @@ TYPES = {
     "terminal": ("surface", None, 0),
 }
 
-# Un paramètre ne peut pas porter le nom d'un type : le contexte VOP les
-# réserve et l'actif refuse alors de s'instancier. Mesuré sur `vector`.
+# A parameter cannot carry the name of a type: the VOP context reserves them
+# and the asset then refuses to instantiate. Measured on `vector`.
 RESERVED = {"vector", "float", "color", "normal", "point", "matrix", "string",
             "int", "bsdf", "struct", "surface", "displacement", "light"}
 
 
-# Catégories du menu, calquées sur celles de Blender pour que les nœuds se
-# retrouvent là où on les cherche. L'ordre compte : la première règle qui
-# correspond gagne.
+# Menu categories, modeled on Blender's so that the nodes are found where one
+# looks for them. Order matters: the first rule that matches wins.
 CATEGORY_RULES = [
     ("Output", ("output", "aov_output", "displacement", "vector_displacement")),
     ("Shader", ("_bsdf", "emission", "background_shader", "holdout", "mix_closure",
@@ -84,15 +83,15 @@ CATEGORY_RULES = [
 ]
 
 
-# Les `convert_*` sont insérés d'office par le compilateur de graphe de Cycles
-# pour raccorder deux types ; Blender ne les montre pas et poser l'un d'eux à la
-# main n'a pas de sens. Ils encombreraient le menu de soixante entrées.
+# The `convert_*` nodes are inserted automatically by Cycles' graph compiler to
+# join two types; Blender does not show them and placing one by hand makes no
+# sense. They would clutter the menu with sixty entries.
 def exposed(node_id):
     return not node_id.startswith(PREFIX + "convert_")
 
 
 def category(node_id):
-    """La sous-catégorie du menu tab pour un nœud."""
+    """The tab menu subcategory for a node."""
     name = node_id[len(PREFIX):]
     for label, patterns in CATEGORY_RULES:
         for pattern in patterns:
@@ -118,9 +117,9 @@ voptoolutils.genericTool(kwargs, '$HDA_NAME')]]></script>
 """
 
 
-# Les noms internes de Cycles ne sont pas ceux que Blender affiche : un artiste
-# cherche « Color Ramp », pas « Rgb Ramp ». Ces libellés suivent l'interface de
-# Blender pour que les nœuds se retrouvent sous le nom qu'on leur connaît.
+# Cycles' internal names are not the ones Blender displays: an artist looks for
+# "Color Ramp", not "Rgb Ramp". These labels follow Blender's interface so that
+# the nodes are found under the name people know them by.
 LABEL_OVERRIDES = {
     "rgb_ramp": "Color Ramp",
     "rgb_curves": "RGB Curves",
@@ -145,14 +144,14 @@ LABEL_OVERRIDES = {
     "point_info": "Point Info",
 }
 
-# Mots que le passage en capitales initiales abîmerait.
+# Words that title-casing would damage.
 LABEL_WORDS = {"bsdf": "BSDF", "rgb": "RGB", "hsv": "HSV", "ies": "IES",
                "uv": "UV", "aov": "AOV", "id": "ID", "xyz": "XYZ",
                "bw": "BW", "ao": "AO"}
 
 
 def node_label(name):
-    """Le libellé affiche, aligne sur les noms de Blender."""
+    """The displayed label, aligned with Blender's names."""
     if name in LABEL_OVERRIDES:
         return "Cycles " + LABEL_OVERRIDES[name]
     words = [LABEL_WORDS.get(w, w.title()) for w in name.split("_")]
@@ -184,30 +183,30 @@ def default_literal(prop, components):
     return "%g" % float(value)
 
 
-# Cycles n'a qu'un seul type de fermeture : le même `SocketType::CLOSURE` sert
-# aussi bien à un BSDF de surface qu'à un volume, et Sdr les publie tous deux
-# comme `terminal`. Houdini, lui, distingue par contre les connecteurs de
-# nuanceur - `surface`, `displacement`, `atmosphere` - et un `subnetconnector`
-# refuse un fil dont le connecteur ne porte pas exactement le nom attendu
-# (vérifié : brancher une sortie `vector` ou `surface` sur un connecteur
-# `parmtype` Displacement ou Atmosphere lève "Input data type does not match
-# output"). Il faut donc mentir sciemment sur ces quelques nœuds qui ne
-# terminent jamais qu'un seul type de réseau - les mélangeurs génériques
-# (`add_closure`, `mix_closure`, `subsurface_scattering`...) restent eux
-# `surface`, car un réseau de volume peut légitimement s'en servir aussi et
-# rien ne dit dans le registre lequel des deux emplois est visé.
+# Cycles has only one closure type: the same `SocketType::CLOSURE` serves a
+# surface BSDF and a volume alike, and Sdr publishes both as `terminal`.
+# Houdini, on the other hand, does distinguish the shader connectors -
+# `surface`, `displacement`, `atmosphere` - and a `subnetconnector` refuses a
+# wire whose connector does not carry exactly the expected name (verified:
+# wiring a `vector` or `surface` output to a Displacement or Atmosphere
+# `parmtype` connector raises "Input data type does not match output"). So we
+# have to lie deliberately about those few nodes that only ever terminate a
+# single kind of network - the generic mixers (`add_closure`, `mix_closure`,
+# `subsurface_scattering`...) stay `surface`, because a volume network can
+# legitimately use them too and nothing in the registry says which of the two
+# uses is meant.
 VOLUME_TERMINAL_NODES = {"absorption_volume", "scatter_volume", "volume_coefficients",
                          "principled_volume"}
 DISPLACEMENT_TERMINAL_NODES = {"displacement", "vector_displacement"}
 
-# Connecteur -> ce que le `subnetconnector` du builder attend en face (voir
-# resources/cycles_builder.py, PARMTYPE_DISPLACEMENT et PARMTYPE_ATMOSPHERE).
+# Connector -> what the builder's `subnetconnector` expects opposite it (see
+# resources/cycles_builder.py, PARMTYPE_DISPLACEMENT and PARMTYPE_ATMOSPHERE).
 OUTPUT_KIND_OVERRIDES = {name: "displacement" for name in DISPLACEMENT_TERMINAL_NODES}
 OUTPUT_KIND_OVERRIDES.update({name: "atmosphere" for name in VOLUME_TERMINAL_NODES})
 
 
 def shader_type(node_id, sdr_node):
-    """Ce que le nœud produit, ce qui décide de sa place dans le menu."""
+    """What the node produces, which decides its place in the menu."""
     name = node_id[len(PREFIX):]
     if name in DISPLACEMENT_TERMINAL_NODES:
         return "displacement"
@@ -219,34 +218,34 @@ def shader_type(node_id, sdr_node):
     return "generic"
 
 
-# Cycles porte sur chaque fermeture un poids de mélange interne. Blender ne
-# l'expose jamais : c'est le nœud Mix Shader qui le pose. L'offrir ici ne ferait
-# qu'égarer, et un graphe qui s'en servirait ne se rejouerait pas ailleurs.
+# Cycles carries an internal mix weight on each closure. Blender never exposes
+# it: it is the Mix Shader node that sets it. Offering it here would only
+# mislead, and a graph that used it could not be replayed elsewhere.
 INTERNAL_SOCKETS = {"surface_mix_weight"}
 
-# Le canal alpha d'une rampe se déduit, il ne se règle pas : la rampe d'Houdini
-# n'en porte pas, et le delegate le remplit d'opaque pour que les deux tableaux
-# aient la même taille — sans quoi Cycles refuse de compiler le nœud.
+# A ramp's alpha channel is derived, not set: Houdini's ramp does not carry
+# one, and the delegate fills it with opaque so that the two arrays have the
+# same size - otherwise Cycles refuses to compile the node.
 DERIVED_SOCKETS = {"ramp_alpha"}
 
-# Les types de tableau qu'une rampe d'Houdini sait remplir. `tiles`, un tableau
-# d'entiers, n'en est pas : c'est une liste de dalles UDIM, pas une courbe.
+# The array types that a Houdini ramp can fill. `tiles`, an integer array, is
+# not one of them: it is a list of UDIM tiles, not a curve.
 RAMP_TYPES = {"color": "ramp_rgb", "vector": "ramp_rgb", "point": "ramp_rgb",
               "normal": "ramp_rgb", "float": "ramp_flt"}
 
 
 def ramp_type_of(prop):
-    """Le widget de rampe qui convient à ce socket tableau, si tant est."""
+    """The ramp widget that suits this array socket, if any."""
     if prop.GetArraySize() == 0:
         return None
     return RAMP_TYPES.get(str(prop.GetType()))
 
 
 def usable(prop):
-    """Cycles publie son bloc de placement en sockets pointés
-    (`tex_mapping.translation`) : un point est illégal dans un nom de
-    paramètre. Les sockets internes et dérivés sont écartés, et un tableau ne
-    passe que si une rampe peut le remplir."""
+    """Cycles publishes its placement block as dotted sockets
+    (`tex_mapping.translation`): a dot is illegal in a parameter name.
+    Internal and derived sockets are dropped, and an array only passes if a
+    ramp can fill it."""
     if "." in prop.GetName():
         return False
     if prop.GetName() in INTERNAL_SOCKETS or prop.GetName() in DERIVED_SOCKETS:
@@ -257,27 +256,27 @@ def usable(prop):
 
 
 def parm_type_of(prop, fallback):
-    """Le widget que Houdini doit offrir pour cette entrée.
+    """The widget that Houdini should offer for this input.
 
-    Un nom de fichier mérite un sélecteur, sans quoi il faut coller un chemin à
-    la main ; un booléen mérite une case à cocher, sans quoi rien ne dit que
-    seuls zéro et un ont un sens. Les deux se lisent dans les métadonnées que
-    le registre publie."""
+    A file name deserves a chooser, otherwise a path has to be pasted by hand;
+    a boolean deserves a checkbox, otherwise nothing says that only zero and
+    one make sense. Both are read from the metadata that the registry
+    publishes."""
     if prop.IsAssetIdentifier():
-        # `image` plutôt que `file` : c'est le sélecteur d'image de Houdini,
-        # celui qu'il emploie pour ses propres nœuds de texture.
+        # `image` rather than `file`: it is Houdini's image chooser, the one it
+        # uses for its own texture nodes.
         return "image"
     if str(prop.GetWidget()) == "checkBox":
         return "toggle"
     return fallback
 
 
-# Les sections, relevees sur l'interface de Blender noeud par noeud. Deviner par
-# prefixe ne suffit pas : Blender range `tangent` et `anisotropic` dans
-# Specular, dont leurs noms ne portent aucune trace, et il laisse plats des
-# noeuds dont les entrees partagent pourtant un prefixe - le sky, le bump, le
-# principled volume. Une regle automatique se trompait donc des deux cotes.
-# Un motif termine par `*` prend tout ce qui commence ainsi.
+# The sections, taken from Blender's interface node by node. Guessing by
+# prefix is not enough: Blender files `tangent` and `anisotropic` under
+# Specular, of which their names carry no trace, and it leaves flat some nodes
+# whose inputs nevertheless share a prefix - the sky, the bump, the principled
+# volume. An automatic rule was therefore wrong on both sides.
+# A pattern ending in `*` takes everything that starts that way.
 NODE_FOLDERS = {
     "principled_bsdf": [
         ("Diffuse", ["diffuse_roughness"]),
@@ -299,7 +298,7 @@ def folders_for(node_id):
 
 
 def folder_of(socket, folders):
-    """La section d'un socket, ou None s'il reste en tete du noeud."""
+    """A socket's section, or None if it stays at the top of the node."""
     for label, patterns in folders:
         for pattern in patterns:
             if pattern.endswith("*"):
@@ -311,10 +310,10 @@ def folder_of(socket, folders):
 
 
 def menu_block(prop, indent):
-    """Une enumeration devient un menu deroulant.
+    """An enumeration becomes a drop-down menu.
 
-    Sans ca l'operation d'un noeud math n'est qu'un entier a deviner, et le
-    noeud parait inutilisable alors qu'il porte trente operations."""
+    Without it, a math node's operation is just an integer to guess, and the
+    node looks unusable although it carries thirty operations."""
     options = list(prop.GetOptions() or [])
     if not options:
         return []
@@ -326,14 +325,14 @@ def menu_block(prop, indent):
 
 
 def colorspace_menu(socket, indent):
-    """Le menu des espaces colorimétriques, pour un socket `colorspace`.
+    """The color space menu, for a `colorspace` socket.
 
-    Le nom se résout dans la configuration OCIO active, celle d'Houdini : la
-    liste ne peut donc pas être figée ici, elle se construit à l'ouverture du
-    menu. `menureplace` la rend **modifiable à la main**, comme le File Color
-    Space de MaterialX — un alias que la configuration connaît sans qu'il
-    apparaisse doit rester saisissable, et une valeur écrite à la main ne doit
-    pas être effacée par le menu.
+    The name is resolved in the active OCIO configuration, Houdini's: the list
+    therefore cannot be frozen here, it is built when the menu is opened.
+    `menureplace` makes it **editable by hand**, like MaterialX's File Color
+    Space - an alias that the configuration knows without it being listed must
+    remain enterable, and a value typed by hand must not be erased by the
+    menu.
     """
     if socket != "colorspace":
         return []
@@ -355,12 +354,11 @@ def dialog_script(node_id, sdr_node):
            "    shadertype\t%s" % shader_type(node_id, sdr_node),
            "    externalshader\t1", ""]
 
-    # Un connecteur seulement pour ce que Cycles accepte de lier. Le reste - un
-    # nom de fichier, un espace colorimétrique, un mode de projection - doit
-    # être connu quand la scène est construite : une texture se charge en
-    # mémoire, elle ne s'évalue pas par échantillon, et Blender ne dessine pas
-    # de socket dessus non plus. Offrir l'entrée quand même laisserait tirer un
-    # fil qui ne fait rien, ce qui trompe plus que ça ne sert.
+    # A connector only for what Cycles accepts to link. The rest - a file name,
+    # a color space, a projection mode - must be known when the scene is built:
+    # a texture is loaded into memory, it is not evaluated per sample, and
+    # Blender draws no socket on it either. Offering the input anyway would let
+    # people pull a wire that does nothing, which misleads more than it helps.
     for name in inputs:
         prop = sdr_node.GetShaderInput(name)
         if not prop.IsConnectable() or ramp_type_of(prop):
@@ -372,9 +370,9 @@ def dialog_script(node_id, sdr_node):
     for name in outputs:
         prop = sdr_node.GetShaderOutput(name)
         conn = kind_override or TYPES.get(str(prop.GetType()), ("float", "float", 1))[0]
-        # Une sortie garde son nom tel quel : c'est celui que le delegate
-        # cherche côté Cycles, et l'étiquette qui rétablit le nom réel ne vaut
-        # que pour les paramètres, qu'une sortie n'est pas.
+        # An output keeps its name as is: it is the one the delegate looks for
+        # on the Cycles side, and the tag that restores the real name only
+        # applies to parameters, which an output is not.
         out.append('    output\t%s\t%s\t"%s"' % (conn, name,
                                                  escape(prop.GetLabel() or name)))
     out.append("")
@@ -383,9 +381,9 @@ def dialog_script(node_id, sdr_node):
         prop = sdr_node.GetShaderInput(name)
         ramp = ramp_type_of(prop)
         if ramp:
-            # Houdini découpe la rampe en un compte de clés, des positions, des
-            # valeurs et une base ; le delegate les rassemble en la table plate
-            # qu'attend Cycles.
+            # Houdini splits the ramp into a key count, positions, values and a
+            # basis; the delegate gathers them into the flat table that Cycles
+            # expects.
             return [indent + "parm {",
                     '%s    name    "%s"' % (indent, name),
                     '%s    label   "%s"' % (indent, escape(prop.GetLabel() or name)),
@@ -409,7 +407,8 @@ def dialog_script(node_id, sdr_node):
         block.append("%s    default { %s }" % (indent, default_literal(prop, comps)))
         block += menu_block(prop, indent + "    ")
         block += colorspace_menu(name, indent + "    ")
-        # Le nom réel du socket Cycles, que le traducteur écrira en USD.
+        # The real name of the Cycles socket, which the translator will write
+        # to USD.
         if parm_name(name) != name:
             block.append('%s    parmtag { "sidefx::shader_parmname" "%s" }' % (indent, name))
         block.append(indent + "}")
@@ -420,9 +419,9 @@ def dialog_script(node_id, sdr_node):
     for name in inputs:
         grouped.setdefault(folder_of(name, folders), []).append(name)
 
-    # Houdini range dans un groupe « Other » toute entrée hors section dès qu'il
-    # en existe une. Les principales vont donc dans une section « Base » placée
-    # en tête, ce que fait aussi Houdini pour ses propres nœuds MaterialX.
+    # Houdini puts every input outside a section into an "Other" group as soon
+    # as one section exists. The main ones therefore go into a "Base" section
+    # placed first, which Houdini also does for its own MaterialX nodes.
     loose = grouped.pop(None, [])
     if loose and grouped:
         out.append("    groupcollapsible {")
@@ -451,7 +450,7 @@ def dialog_script(node_id, sdr_node):
         for name in names:
             out += emit_parm(name, "    ")
 
-    # Les trois paramètres que lit le traducteur par défaut de Solaris.
+    # The three parameters read by Solaris' default translator.
     for pname, value in (("shader_rendercontextname", RENDER_CONTEXT),
                          ("shader_name", node_id),
                          ("shader_namekind", "id")):
@@ -468,17 +467,17 @@ def dialog_script(node_id, sdr_node):
 
 
 def template_definition():
-    """La définition dont on hérite l'opérateur de base.
+    """The definition from which the base operator is inherited.
 
-    Un nuanceur externe est une feuille, pas un réseau : bâti sur un `subnet`,
-    l'actif s'exporte en NodeGraph et non en Shader, et `genericshader` refuse
-    d'être converti en actif. On copie donc un nœud de nuanceur externe déjà
-    livré par Houdini, dont on ne garde que la nature — tout le reste, interface
-    comprise, est remplacé par le DialogScript généré.
+    An external shader is a leaf, not a network: built on a `subnet`, the
+    asset exports as a NodeGraph and not as a Shader, and `genericshader`
+    refuses to be converted into an asset. So we copy an external shader node
+    already shipped with Houdini, keeping only its nature - everything else,
+    interface included, is replaced by the generated DialogScript.
     """
     node_type = hou.nodeType(hou.vopNodeTypeCategory(), "mtlximage")
     if node_type is None or node_type.definition() is None:
-        raise RuntimeError("nœud modèle mtlximage introuvable")
+        raise RuntimeError("template node mtlximage not found")
     return node_type.definition()
 
 
@@ -489,8 +488,8 @@ def build_one(node_id, sdr_node, template):
     node_type = hou.nodeType(hou.vopNodeTypeCategory(), node_id)
     definition = node_type.definition()
     definition.addSection("DialogScript", dialog_script(node_id, sdr_node))
-    # Sans ça le nœud hérite du menu du modèle et atterrit dans les catégories
-    # MaterialX, mêlé aux nœuds d'un autre moteur.
+    # Without this the node inherits the template's menu and lands in the
+    # MaterialX categories, mixed in with another engine's nodes.
     definition.addSection("Tools.shelf", TOOLS_SHELF % category(node_id))
     definition.save(LIBRARY)
 
@@ -523,11 +522,11 @@ MATERIAL_DIALOG = """{
 
 
 def build_material_node(template):
-    """Le nœud qui termine un réseau Cycles en matériau.
+    """The node that ends a Cycles network as a material.
 
-    C'est `shadertype material` qui le distingue : sans lui, une bibliothèque de
-    matériaux ne reconnaît rien à exporter. C'est le rôle que joue
-    `mtlxsurfacematerial` du côté MaterialX."""
+    It is `shadertype material` that sets it apart: without it, a material
+    library recognizes nothing to export. It plays the role that
+    `mtlxsurfacematerial` plays on the MaterialX side."""
     template.copyToHDAFile(LIBRARY, new_name=MATERIAL_NAME, new_menu_name=MATERIAL_NAME)
     hou.hda.installFile(LIBRARY)
     definition = hou.nodeType(hou.vopNodeTypeCategory(), MATERIAL_NAME).definition()
@@ -538,10 +537,11 @@ def build_material_node(template):
 
 PROPERTIES_NAME = "cycles_material_properties"
 
-# Les réglages que porte le `Shader` de Cycles lui-même, et non un de ses nœuds
-# — le panneau Settings d'un matériau Blender. Les noms sont ceux des sockets de
-# `Shader` (`src/scene/shader.cpp`) : le delegate les cherche dans son NodeType,
-# donc un nom juste ici suffit, sans table de correspondance à tenir à jour.
+# The settings carried by Cycles' `Shader` itself, and not by one of its nodes
+# - the Settings panel of a Blender material. The names are those of the
+# `Shader` sockets (`src/scene/shader.cpp`): the delegate looks them up in its
+# NodeType, so a correct name here is enough, with no mapping table to keep up
+# to date.
 PROPERTIES = [
     ("displacement_method", "string", '"both"', "Displacement Method",
      [("bump", "Bump Only"), ("true", "Displacement Only"), ("both", "Displacement and Bump")]),
@@ -561,18 +561,18 @@ PROPERTIES = [
 
 
 def properties_parm(name, ptype, default, label, menu):
-    """Un réglage, et la case qui décide s'il est exporté.
+    """A setting, and the checkbox that decides whether it is exported.
 
-    La convention est celle d'Houdini pour les propriétés de rendu, relevée sur
-    `kma_material_properties` : un paramètre `__activate__<nom>` commande
-    l'export de `<nom>`, et seul ce qui est activé atterrit dans l'USD. Sans
-    cela chaque matériau porterait les huit réglages, et le défaut du delegate —
-    bump, ou both dès qu'un displacement est branché — ne pourrait plus
-    s'exprimer.
+    The convention is Houdini's for render properties, taken from
+    `kma_material_properties`: a `__activate__<name>` parameter controls the
+    export of `<name>`, and only what is activated lands in the USD. Without
+    it every material would carry all eight settings, and the delegate's
+    default - bump, or both as soon as a displacement is wired - could no
+    longer be expressed.
 
-    Les noms portent un deux-points, illégal dans un nom de paramètre Houdini :
-    `hou.text.encode` produit la forme `xn__…` qu'Houdini attend, et le
-    traducteur USD redonne le nom réel, `cycles:<socket>`.
+    The names carry a colon, which is illegal in a Houdini parameter name:
+    `hou.text.encode` produces the `xn__...` form that Houdini expects, and the
+    USD translator gives back the real name, `cycles:<socket>`.
     """
     activate = hou.text.encode("__activate__cycles:" + name)
     value = hou.text.encode("cycles:" + name)
@@ -624,12 +624,12 @@ def properties_dialog():
             "        invisible",
             '        default { "0" }',
             "    }",
-            # Sans ce paramètre, `_propertiesShaderNodeSibling` (dans
-            # `husd/mtlxshadertranslator.py`) suppose Karma — il écrit
-            # littéralement `render_context = 'kma'` par défaut — et écarte le
-            # nœud de propriétés parce que le contexte visé, `cycles`, n'est
-            # pas dans la liste. Le nœud était alors posé, branché, activé, et
-            # n'atteignait jamais l'USD.
+            # Without this parameter, `_propertiesShaderNodeSibling` (in
+            # `husd/mtlxshadertranslator.py`) assumes Karma - it literally
+            # writes `render_context = 'kma'` by default - and discards the
+            # properties node because the targeted context, `cycles`, is not
+            # in the list. The node was then placed, wired, activated, and
+            # never reached the USD.
             "    parm {",
             '        name    "shader_propertiescontextname"',
             '        label   "shader_propertiescontextname"',
@@ -644,13 +644,14 @@ def properties_dialog():
 
 
 def build_properties_node(template):
-    """Le nœud qui porte les réglages du matériau.
+    """The node that carries the material's settings.
 
-    Displacement method, échantillonnage des volumes, ombres transparentes : ces
-    réglages ne sont pas des sockets de nœud, ils décrivent le `Shader`. Houdini
-    replie les paramètres d'un nœud de propriétés dans le prim Shader du
-    terminal, préfixés du moteur — `inputs:cycles:displacement_method` — et le
-    delegate les y relit. C'est ainsi que Karma procède avec ses `karma:*`."""
+    Displacement method, volume sampling, transparent shadows: these settings
+    are not node sockets, they describe the `Shader`. Houdini folds the
+    parameters of a properties node into the terminal's Shader prim, prefixed
+    with the engine - `inputs:cycles:displacement_method` - and the delegate
+    reads them back from there. This is how Karma proceeds with its
+    `karma:*`."""
     template.copyToHDAFile(LIBRARY, new_name=PROPERTIES_NAME,
                            new_menu_name="Cycles Material Properties")
     hou.hda.installFile(LIBRARY)
@@ -660,12 +661,12 @@ def build_properties_node(template):
     definition.save(LIBRARY)
 
 
-# Le builder n'est PAS un type de nœud : c'est un `subnet` configuré, monté par
-# un outil du menu tab — voir `install/houdini/scripts/python/cycles_builder.py`
-# et `install/houdini/toolbar/CyclesTools.shelf`. C'est ainsi que Houdini
-# fabrique le Karma Material Builder, et une première tentative sous forme
-# d'actif ne produisait rien : la Material Library n'exporte un matériau que si
-# le drapeau `setMaterialFlag` est posé sur l'instance.
+# The builder is NOT a node type: it is a configured `subnet`, assembled by a
+# tab menu tool - see `install/houdini/scripts/python/cycles_builder.py` and
+# `install/houdini/toolbar/CyclesTools.shelf`. This is how Houdini makes the
+# Karma Material Builder, and a first attempt as an asset produced nothing:
+# the Material Library only exports a material if the `setMaterialFlag` flag
+# is set on the instance.
 
 
 def main():
@@ -681,8 +682,8 @@ def main():
         os.makedirs(OTLS)
     if os.path.exists(LIBRARY):
         os.remove(LIBRARY)
-    print("bibliotheque : %s" % LIBRARY)
-    print("noeuds a generer : %d" % len(ids))
+    print("library: %s" % LIBRARY)
+    print("nodes to generate: %d" % len(ids))
 
     template = template_definition()
 
@@ -690,7 +691,7 @@ def main():
     for node_id in ids:
         sdr_node = registry.GetShaderNodeByIdentifier(node_id)
         if sdr_node is None:
-            failed.append((node_id, "absent du registre"))
+            failed.append((node_id, "not in registry"))
             continue
         try:
             build_one(node_id, sdr_node, template)
@@ -703,13 +704,13 @@ def main():
         for child in stage.children():
             child.destroy()
         build_material_node(template)
-        print("Cycles Material ecrit")
+        print("Cycles Material written")
         build_properties_node(template)
-        print("Cycles Material Properties ecrit")
+        print("Cycles Material Properties written")
     except hou.Error as exc:
-        print("builder: ECHEC %s" % str(exc).replace(chr(10), " ")[:70])
+        print("builder: FAILED %s" % str(exc).replace(chr(10), " ")[:70])
 
-    print("%d noeuds ecrits, %d echecs" % (built, len(failed)))
+    print("%d nodes written, %d failures" % (built, len(failed)))
     for node_id, why in failed[:10]:
         print("   %-34s %s" % (node_id, why))
 

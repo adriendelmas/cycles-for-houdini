@@ -1,13 +1,13 @@
-"""Clone Cycles au commit epingle, applique nos correctifs, compile, installe.
+"""Clones Cycles at the pinned commit, applies our patches, builds, installs.
 
-Cycles n'est pas recopie dans ce depot : nos modifications y vivent sous forme
-de serie de correctifs, dans patches/. Cet outil refait le chemin complet, du
-clone a l'installation Houdini prete a poser dans un package.
+Cycles is not copied into this repository: our changes live there as a patch
+series, in patches/. This tool redoes the whole path, from the clone to the
+Houdini install ready to be dropped into a package.
 
     python tools/bootstrap.py --version 5.3
 
-Le clone est un depot git a part entiere, sur une branche a nous : une fois
-pose, on y travaille normalement, et `git format-patch` regenere la serie.
+The clone is a full git repository, on a branch of our own: once in place, you
+work in it normally, and `git format-patch` regenerates the series.
 """
 
 import argparse
@@ -19,8 +19,8 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 
-# Chaque version vise un commit precis de l'amont. Une serie de correctifs ne
-# s'applique proprement que sur la base pour laquelle elle a ete exportee.
+# Each version targets a specific upstream commit. A patch series only applies
+# cleanly on the base it was exported against.
 VERSIONS = {
     "5.2": {
         "dir": "cycles",
@@ -45,14 +45,14 @@ def run(cmd, cwd=None, env=None):
 
 
 def clone(src, cfg):
-    """Clone treeless puis detache sur le commit epingle.
+    """Treeless clone, then checkout of the pinned commit.
 
-    Treeless plutot que shallow : l'historique reste navigable et `git am` a de
-    quoi travailler, sans rapatrier chaque revision de chaque fichier.
+    Treeless rather than shallow: the history stays browsable and `git am` has
+    enough to work with, without fetching every revision of every file.
     """
     run(["git", "clone", "--filter=tree:0", UPSTREAM, src])
     run(["git", "checkout", "-b", cfg["branch"], cfg["commit"]], cwd=src)
-    # Bibliotheques precompilees de Blender, en submodule + git-lfs.
+    # Blender's precompiled libraries, as a submodule + git-lfs.
     run(["git", "submodule", "update", "--init", "lib/windows_x64"], cwd=src)
 
 
@@ -62,8 +62,8 @@ def apply_patches(src, version):
         os.path.join(series, f) for f in os.listdir(series) if f.endswith(".patch")
     )
     if not patches:
-        sys.exit("aucun correctif dans " + series)
-    print("%d correctifs a appliquer" % len(patches))
+        sys.exit("no patch in " + series)
+    print("%d patches to apply" % len(patches))
     run(["git", "am"] + patches, cwd=src)
 
 
@@ -94,33 +94,33 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--version", choices=sorted(VERSIONS), default="5.3")
     p.add_argument("--houdini", default=os.environ.get("HFS", ""),
-                   help="racine d'installation Houdini (defaut : $HFS)")
+                   help="Houdini install root (default: $HFS)")
     p.add_argument("--optix", default=os.environ.get("OPTIX_ROOT_DIR", ""),
-                   help="racine du SDK OptiX ; vide pour compiler sans OptiX")
+                   help="OptiX SDK root; empty to build without OptiX")
     p.add_argument("--cuda-arch", default="sm_86",
-                   help="architecture des noyaux CUDA, p.ex. sm_86 ; vide pour ne pas en compiler")
-    p.add_argument("--no-osl", action="store_true", help="compiler sans OSL")
-    p.add_argument("--jobs", type=int, default=0, help="taches paralleles (defaut : auto)")
-    p.add_argument("--skip-build", action="store_true", help="s'arreter apres la configuration")
+                   help="CUDA kernel architecture, e.g. sm_86; empty to build none")
+    p.add_argument("--no-osl", action="store_true", help="build without OSL")
+    p.add_argument("--jobs", type=int, default=0, help="parallel jobs (default: auto)")
+    p.add_argument("--skip-build", action="store_true", help="stop after configuration")
     args = p.parse_args()
 
     if not args.houdini:
-        sys.exit("indiquez --houdini, ou definissez HFS. Cette version vise Houdini 22.0.368.")
+        sys.exit("pass --houdini, or set HFS. This version targets Houdini 22.0.368.")
     if not os.path.isdir(args.houdini):
-        sys.exit("introuvable : " + args.houdini)
+        sys.exit("not found: " + args.houdini)
     for tool in ("git", "cmake"):
         if shutil.which(tool) is None:
-            sys.exit(tool + " est absent du PATH")
+            sys.exit(tool + " is missing from PATH")
 
     cfg = VERSIONS[args.version]
     src = os.path.join(ROOT, "external", cfg["dir"])
 
     if os.path.exists(src):
-        print("%s existe deja : ni clone ni correctifs, on passe a la compilation." % src)
+        print("%s already exists: no clone, no patches, going straight to the build." % src)
     else:
-        print("== clone de Cycles au commit %s ==" % cfg["commit"][:8])
+        print("== cloning Cycles at commit %s ==" % cfg["commit"][:8])
         clone(src, cfg)
-        print("== application de la serie %s ==" % args.version)
+        print("== applying series %s ==" % args.version)
         apply_patches(src, args.version)
 
     print("== configuration ==")
@@ -128,14 +128,14 @@ def main():
     if args.skip_build:
         return
 
-    print("== compilation et installation ==")
+    print("== build and install ==")
     cmd = ["cmake", "--build", build, "--config", "Release", "--target", "install"]
     if args.jobs:
         cmd += ["--parallel", str(args.jobs)]
     run(cmd)
 
     pkg = os.path.join(ROOT, cfg["install"], "houdini", "packages", "cycles.json")
-    print("\nTermine. Copiez le package dans vos paquets Houdini :\n    %s" % pkg)
+    print("\nDone. Copy the package into your Houdini packages:\n    %s" % pkg)
 
 
 if __name__ == "__main__":

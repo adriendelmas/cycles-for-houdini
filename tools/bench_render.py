@@ -1,11 +1,11 @@
-"""Rend un materiau par noeud Cycles et rapporte ce qui cloche.
+"""Renders one material per Cycles node and reports what is wrong.
 
-Trois choses sont surveillees, par ordre d'importance :
+Three things are watched, in order of importance:
 
-* un avertissement du delegate, qui trahit un socket que le VOP genere nomme
-  autrement que Cycles - c'est le defaut que ce banc doit attraper ;
-* une image absente, donc un rendu qui a echoue ;
-* une image entierement noire, qui signale un materiau mort.
+* a delegate warning, which betrays a socket that the generated VOP names
+  differently from Cycles - this is the defect this bench has to catch;
+* a missing image, hence a render that failed;
+* an entirely black image, which signals a dead material.
 """
 
 import os
@@ -14,7 +14,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HFS = os.path.join(os.environ.get("HFS", "E:/Side Effects Software/Houdini22.0.368"), "bin")
-# Quelle installation viser : `install` pour la 5.2, `install-53` pour la 5.3.
+# Which installation to target: `install` for 5.2, `install-53` for 5.3.
 INSTALL = os.environ.get("CYCLES_INSTALL_DIR", "install")
 VERSION = "5.2" if INSTALL == "install" else "5.3"
 BENCH = os.path.join(ROOT, "tests", "nodes", VERSION)
@@ -37,7 +37,7 @@ env["PATH"] = HFS + ";" + env["PATH"]
 
 
 def scene_for(name):
-    """La scene de test, avec le materiau du noeud empile en sous-couche."""
+    """The test scene, with the node's material stacked as a sublayer."""
     text = BASE.replace("rel material:binding = </world/Materials/mxMetal>",
                         "rel material:binding = </world/Materials/cyclesmat>")
     lines = text.splitlines()
@@ -62,7 +62,7 @@ only = sys.argv[1] if len(sys.argv) > 1 else None
 if only:
     names = [n for n in names if only in n]
 
-print("%-34s %-10s %s" % ("noeud", "etat", "detail"))
+print("%-34s %-10s %s" % ("node", "state", "detail"))
 problems = []
 for name in names:
     usd = scene_for(name)
@@ -78,21 +78,21 @@ for name in names:
              if "WARNING" in l and ("Cycles node" in l or "MaterialX" in l)]
 
     if not os.path.exists(exr):
-        state, detail = "PAS D'IMAGE", (log.strip().splitlines() or [""])[-1][:60]
+        state, detail = "NO IMAGE", (log.strip().splitlines() or [""])[-1][:60]
     elif warns:
-        state, detail = "AVERTI", warns[0][:70]
+        state, detail = "WARNED", warns[0][:70]
     else:
         peak = stats(exr)
         if peak is None:
-            state, detail = "ILLISIBLE", ""
+            state, detail = "UNREADABLE", ""
         elif peak <= 1e-6:
-            state, detail = "NOIRE", ""
+            state, detail = "BLACK", ""
         else:
             state, detail = "ok", ""
     if state != "ok":
         problems.append((name, state, detail))
     print("%-34s %-10s %s" % (name, state, detail))
 
-print("\n%d noeuds rendus, %d problemes" % (len(names), len(problems)))
+print("\n%d nodes rendered, %d problems" % (len(names), len(problems)))
 for name, state, detail in problems:
     print("   %-32s %-12s %s" % (name, state, detail))
