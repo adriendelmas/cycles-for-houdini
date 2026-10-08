@@ -166,10 +166,12 @@ hython tools/bench_export.py && python tools/bench_render.py && hython tools/ben
 ```
 
 97 nodes pass that check against their committed reference images, and the
-full MaterialX scene renders bit-identical between 5.2 and 5.3. A second
-command renders seven materials with Cycles and with Karma from the same USD
-and compares them region by region (`hython tools/bench_agree.py`, 21 checks,
-floor within 1 %). What each bench does and does not prove is set out in
+full MaterialX scene renders bit-identical between 5.2 and 5.3. Two more
+compare with Karma, rendering the same USD with both: seventeen materials
+region by region (`hython tools/bench_agree.py`, 61 checks, floor within
+1 %), and every MaterialX node one quad each (`hython tools/mtlx_karma.py`:
+599 of 695 value nodes and 38 of 45 closures the same, the rest explained in
+docs/KNOWN_ISSUES.md, K-61). What each bench does and does not prove is set out in
 [docs/TESTING.md](docs/TESTING.md).
 
 ## Known gaps
@@ -177,12 +179,12 @@ floor within 1 %). What each bench does and does not prove is set out in
 The complete list, with line numbers, is [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md).
 The ones a user meets first:
 
-- MaterialX: 796 of the library's 822 shading nodedefs are rendered - 666
-  by the mapping table, 80 by expanding a nodegraph (the library's own, or
-  one the delegate ships for nodes the library writes in GLSL only), 50 by
+- MaterialX: 796 of the library's 822 shading nodedefs are rendered - 664
+  by the mapping table, 88 by expanding a nodegraph (the library's own, or
+  one the delegate ships for nodes the library writes in GLSL only), 44 by
   rewriting (`extract`, `swizzle`, `transformmatrix`, a 1.38 thin film); of
-  the 789 that route, 641 keep every input when rendered
-  (`tools/mtlx_inputs.py`), and 67 are
+  the 797 that route, 664 keep every input when rendered
+  (`tools/mtlx_inputs.py`), and 80 are
   value-checked against the MaterialX definition (`tools/bench_mtlx.py`).
   Out: the matrix nodes other than a constant `transformmatrix`, the colour4
   compositing nodes (an image's own alpha does pass), `time`/`frame`,
