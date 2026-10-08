@@ -369,7 +369,7 @@ Fixed 2026-10-07: `catmullClark` always subdivides, capped by
 default complexity already set a refine level, so batch renders looked right
 before; the viewport at low complexity rendered the cage.
 
-### K-31 Four seconds unexplained in the render pass — not reproduced since (2026-10-08)
+### K-31 Four seconds unexplained in the render pass — **closed** (2026-10-08, confirmed by the user)
 The stopwatch reported `camera et AOV 4033.6 ms, verrou 0, relance 0.005`.
 That bucket (`render_pass.cpp`, between `tPolled` and `tCamera`) holds only
 AOV binding comparison, `set_full_width/height`, `ApplyCameraSettings`, the
@@ -393,6 +393,12 @@ slow start reads as the gap between `Render restarted` and `Rendered 1
 samples`, with no stopwatch. Note for the next driver: a camera set from
 Python (`setDefaultCamera`) reaches Hydra only when the viewport actually
 repaints, one move in six here; the mouse does not have that problem.
+
+Confirmed by the user the same morning, mouse in hand, on his scene through
+`launch_cycles_log.cmd` ("it feels fast"): 871 session restarts in 22 minutes,
+first sample a median 19 ms after the restart line (184 ms at worst, on a
+camera switch), and still not one `Render pass` line. Closed; the timestamped
+log stays, so a regression would read at once.
 
 ### K-32 The pass takes the scene lock unconditionally — by design, with a cost — **fixed** (0096), unmeasured live
 `render_pass.cpp:125` (`scene->mutex.lock()`, patch 0014). While the render

@@ -2165,3 +2165,10 @@ Au passage, K-57 : un attribut `normals` dont la valeur n'a pas été parsée
 (type `normal[]` invalide, `Sdf.UnregisteredValue`) fait planter le délégué
 sous husk, DLL 0097 comme 0101 ; Karma l'ignore. Repro dans
 `tests/scenes/bad_normals_type.usda`.
+
+**K-31 fermé (2026-10-08).** Validé par l'utilisateur à la souris sur sa
+scène (« ça paraît rapide ») ; son journal horodaté le chiffre : 871 relances
+en 22 minutes, premier échantillon à 19 ms en médiane après la relance
+(184 ms au pire, sur une bascule de caméra), toujours aucune passe au-dessus
+de 50 ms sur le fil de l'hôte. Les quatre secondes de la mesure d'origine
+appartenaient à des coûts que 0076-0099 ont retirés.

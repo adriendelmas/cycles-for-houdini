@@ -28,7 +28,7 @@ trusted.
 | Separate bench output from references: `tests/usd/bench-53/images/` becomes `tests/nodes/5.3/references/` (tracked) and `output/` (ignored); `bench_diff.py` compares output to reference per node with a tolerance | K-50 | `git status` clean after a bench run; a deliberate one-line regression in `material.cpp` is caught |
 | Expected values in `bench_mtlx.py` computed from the MaterialX source expressions, not from the renderer; add `mix`, `plus`, `layer`, `saturate`, `facingratio`, `geomcolor` cases | K-52 | `saturate` case **fails** before phase 1 and passes after |
 | `mtlx_coverage.py` reports three numbers: routed, input-complete (every nodedef input has a mapping or a documented omission), render-verified | K-51 | README quotes the third number |
-| ✅ Re-measure the render pass in a live Houdini (2026-10-08, driven through `hou_remote.py`): no pass over 50 ms in ~45 restarts; log lines timestamped since (0100) | K-31 | Awaits the user's hand-on-mouse confirmation |
+| ✅ Re-measure the render pass in a live Houdini (2026-10-08): no pass over 50 ms in ~45 driven restarts, then 871 by the user's hand (first sample 19 ms median); log timestamped (0100) | K-31 | Closed |
 | One number for the node count, produced by a command | K-54 | README, STATUS, CYCLES_VOPS agree |
 | Restate README claims (viewport refresh conditional on OpenGL Hgi, coverage, testing) | - | Every claim links to the command that reproduces it |
 
@@ -174,7 +174,7 @@ Settings LOP renders all its AOVs through Cycles (`bench_karma_settings.py`,
 
 | Task | Closes |
 |---|---|
-| Act on the phase-0 attribution of the 4 s - nothing to act on so far: the live reading of 2026-10-08 found no pass over 50 ms; the user's timestamped log will say if it comes back | K-31 |
+| ✅ Act on the phase-0 attribution of the 4 s - nothing left to act on: gone by 0076-0099, confirmed live by the user (2026-10-08) | K-31 |
 | ✅ Try-lock with a deferred re-execute instead of a blocking lock (0096) | K-32 |
 | Vulkan Hgi: either a Vulkan interop display driver or a cheaper readback path; at least log which path is active at startup (already done) | - |
 | ✅ COP cache eviction on material finalize; cap by bytes (0096) | K-41 |

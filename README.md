@@ -192,10 +192,6 @@ The ones a user meets first:
 - `shadow:color` and fractional diffuse/specular light multipliers are not
   supported by Cycles.
 - Implicit surfaces carry no UVs.
-- The interactive-viewport timings: a pass once measured four unexplained
-  seconds; a live session driven through houdini-mcp on 2026-10-08 found no
-  pass over 50 ms in some forty restarts (`docs/KNOWN_ISSUES.md`, K-31). The
-  log is timestamped since, for a reading with the mouse in hand.
 - An intermittent CUDA "illegal address" on some scene edits, under investigation.
 
 ## Credits
