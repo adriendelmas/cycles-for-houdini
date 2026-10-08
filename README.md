@@ -24,11 +24,35 @@ where the work went.
   procedural noise implemented exactly, as native SVM and OSL kernel nodes.
   Both follow Ben Houston's work — see [Credits](#credits).
 - **Copernicus COP textures read live**, without a round trip through disk.
+  This needs a live Houdini: under husk (a USD Render ROP, a farm) there is no
+  node graph to cook, so put the **Cycles Flatten op: Textures** LOP
+  (`hdcycles_flatten_op_textures`) before the render node - it cooks every
+  referenced COP to an image file and rewrites the paths on its own layer.
 - Motion blur on animated transforms **and on deforming geometry** — meshes,
   curves and point clouds alike, from time-sampled points or from a
-  `velocities` field, so a simulation whose point count changes still blurs.
+  `velocities` field, so a simulation whose point count changes still blurs;
+  **PointInstancer instances blur** too, and carry their per-instance primvars.
+- **USD curves where USD puts them** — Bézier, B-spline, Catmull-Rom,
+  periodic, pinned, `varying` widths — rendered as round tubes by default.
+- **USD implicit surfaces** (Sphere, Cube, Cylinder, Cone, Capsule, Plane).
+- **Render outputs the way a Karma Render Settings node writes them**: every
+  Cycles pass by name, Karma's light-component names and light path
+  expressions in Karma's convention, cryptomatte with its manifest, light
+  groups, shader AOVs. Film transparency, exposure and pixel filter as render
+  settings.
+- **Per-object properties** from the Render Geometry Settings node: ray
+  visibility, holdout, shadow catcher, caustics, light group, dicing rate -
+  and Karma's own visibility and holdout properties read as well.
+- **Light linking and shadow linking**, the diffuse/specular light
+  multipliers (as on/off: Cycles cannot scale a lobe).
 - Displacement, render settings surfaced in Solaris, and a long list of crash
-  and correctness fixes to the delegate.
+  and correctness fixes to the delegate. Every claim here comes from a bench:
+  see [docs/TESTING.md](docs/TESTING.md).
+
+The viewport preview of a Cycles material (the GL shader Houdini draws before
+a render) follows one texture per input: a mix of two textures, a procedural
+or a ramp shows as the input's default value. It is a preview, not a link to
+the Cycles nodes.
 
 Rendering is CPU and CUDA/OptiX, chosen from **Render › Cycles Render Device**.
 The device is fixed when the render session is built, so it cannot come from a
@@ -147,18 +171,19 @@ not compare against committed reference images — is set out in
 The complete list, with line numbers, is [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md).
 The ones a user meets first:
 
-- MaterialX mixes of BSDFs go to a colour node and `volume` is missing, so a
-  network that mixes two closures or describes a volume loses them. Of the
-  652 nodedefs that route to a mapping, 511 keep every input when rendered
-  (`tools/mtlx_inputs.py`); 11 are value-checked against the MaterialX
-  definition (`tools/bench_mtlx.py`).
-- OpenPBR, glTF and Disney surfaces are aliased to the `standard_surface`
-  table and lose most of their inputs.
-- No light linking, per-object visibility flags, extra AOVs or cryptomatte;
-  no transparent background once a dome light is present.
-- Curves: USD basis and wrap are ignored, `varying` widths are not read, and
-  hair is always rendered as ribbons.
-- Karma's own material context (`kma:`) is declared but not read.
+- MaterialX: of the 652 nodedefs that route to a mapping, 543 keep every input
+  when rendered (`tools/mtlx_inputs.py`); 36 are value-checked against the
+  MaterialX definition (`tools/bench_mtlx.py`). Matrices, `switch`,
+  `swizzle`-style nodes and the other nodes a Cycles graph cannot express are
+  not translated.
+- Cycles has no light path expressions: Karma's usual LPEs are mapped to the
+  Cycles pass holding the same light, any other one renders black and says so
+  in the log.
+- `shadow:color` and fractional diffuse/specular light multipliers are not
+  supported by Cycles.
+- Implicit surfaces carry no UVs.
+- The interactive-viewport timings (a pass once measured four unexplained
+  seconds) still need a reading in a live session.
 - An intermittent CUDA "illegal address" on some scene edits, under investigation.
 
 ## Credits
