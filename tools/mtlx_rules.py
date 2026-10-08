@@ -40,6 +40,12 @@ def load_library():
     delegate reads them."""
     doc = mx.createDocument()
     mx.loadLibraries(["libraries"], mx.getDefaultDataSearchPath(), doc)
+    add_own_nodegraphs(doc)
+    return doc
+
+
+def add_own_nodegraphs(doc):
+    """The delegate's own nodegraphs (mtlx_nodegraphs.h), into `doc`."""
     if os.path.exists(OWN_NODEGRAPHS):
         text = open(OWN_NODEGRAPHS, encoding="utf-8").read()
         match = re.search(r'R"MTLX\((.*)\)MTLX"', text, re.S)
@@ -47,7 +53,6 @@ def load_library():
             own = mx.createDocument()
             mx.readFromXmlString(own, match.group(1))
             doc.importLibrary(own)
-    return doc
 
 
 class Resolver:

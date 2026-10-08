@@ -25,7 +25,7 @@ import sys
 
 import MaterialX as mx
 
-from mtlx_rules import Resolver
+from mtlx_rules import Resolver, add_own_nodegraphs
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HFS = os.path.join(os.environ.get("HFS", "E:/Side Effects Software/Houdini22.0.368"), "bin")
@@ -113,6 +113,7 @@ DOC = mx.createDocument()
 def routed_nodedefs():
     doc = DOC
     mx.loadLibraries(["libraries"], mx.getDefaultDataSearchPath(), doc)
+    add_own_nodegraphs(doc)
     resolver = Resolver(doc)
     out = []
     for nd in doc.getNodeDefs():
