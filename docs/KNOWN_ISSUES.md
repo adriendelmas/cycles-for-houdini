@@ -379,11 +379,16 @@ dicing camera, reset, start)`) splits that stretch three ways; the next
 reading in a live Houdini session will name the call. Needs the user's
 viewport scene; cannot be reproduced under husk.
 
-### K-32 The pass takes the scene lock unconditionally — by design, with a cost
+### K-32 The pass takes the scene lock unconditionally — by design, with a cost — **fixed** (0096), unmeasured live
 `render_pass.cpp:125` (`scene->mutex.lock()`, patch 0014). While the render
 thread holds the lock in `device_update`, Houdini's UI thread waits. The
 try-lock it replaced dropped edits. A middle path: try-lock, and when it fails
 mark the pass dirty so Hydra calls `_Execute` again next frame.
+
+
+Fixed 2026-10-08: try-lock; a busy scene marks the pass unconverged so Hydra
+executes it again next redraw (everything is recomputed from the pass state);
+after 10 deferrals in a row it waits. To be felt in Houdini.
 
 ### K-33 Houdini volume field names — confirmed — **fixed** (0086)
 `volume.cpp:55-70` recognise `density`, `color`, `flame`, `heat`,
@@ -414,9 +419,13 @@ motion samples. Patch 0091 resyncs them on the way off too - to recheck.
 graph, so the capture warns and the texture is missing. `flatten_op_textures`
 exists; nothing runs it automatically when a USD Render ROP is used.
 
-### K-41 COP pixel cache never evicts — confirmed
+### K-41 COP pixel cache never evicts — confirmed — **fixed** (0096), unmeasured live
 `houdini_cop.cpp` `Cache()` keeps every captured layer for the session: an 8K
 RGBA half layer is 536 MB of host memory per COP, on top of Cycles' own copy.
+
+
+Fixed 2026-10-08: entries no material uses leave the cache when their last
+user is forgotten, and over a budget (`HDCYCLES_COP_CACHE_MB`, 4096 MB).
 
 ### K-42 The preview translator stops at one image — by design
 `cycles.py` follows one relay chain per input. A `mix_color` of two textures,

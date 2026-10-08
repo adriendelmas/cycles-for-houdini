@@ -175,9 +175,9 @@ Settings LOP renders all its AOVs through Cycles (`bench_karma_settings.py`,
 | Task | Closes |
 |---|---|
 | Act on the phase-0 attribution of the 4 s | K-31 |
-| Try-lock with a deferred re-execute instead of a blocking lock | K-32 |
+| ✅ Try-lock with a deferred re-execute instead of a blocking lock (0096) | K-32 |
 | Vulkan Hgi: either a Vulkan interop display driver or a cheaper readback path; at least log which path is active at startup (already done) | - |
-| COP cache eviction on material finalize; cap by bytes | K-41 |
+| ✅ COP cache eviction on material finalize; cap by bytes (0096) | K-41 |
 | MaterialX-to-OSL for the nodes a node graph cannot express (`switch`, `swizzle`, `extract`, matrices), CPU and OptiX only, behind a setting | - |
 
 Done when: a material edit on the user's reference scene shows in under one
