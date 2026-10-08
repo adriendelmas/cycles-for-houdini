@@ -267,6 +267,16 @@ CASES = [
      lambda img: None if img[45, RES // 2, 0] > 0.9 * img[60, RES // 2, 0] else
      "ground %.3f under the sphere, %.3f away: the sphere is out of the shadow link"
      % (img[45, RES // 2, 0], img[60, RES // 2, 0])),
+    # A sun with no diffuse contribution leaves a diffuse sphere to the dome.
+    ("light_no_diffuse", SPHERE + """
+    def DistantLight "sun"
+    {
+        float inputs:intensity = 3
+        bool inputs:normalize = 1
+        float inputs:diffuse = 0
+    }""", "", [],
+     lambda img: None if abs(centre(img)[0] - 0.8) < 0.05 else
+     "sphere %.3f, expected the dome alone (0.8): the sun's diffuse is 0" % centre(img)[0]),
     ("volume_cd", VOLUME, "", [],
      lambda img: None if centre(img)[0] > 2.0 * centre(img)[1] else
      "volume %s, expected red from the Cd field" % centre(img).round(3)),

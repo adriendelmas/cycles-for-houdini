@@ -157,7 +157,7 @@ because round implicit surfaces needed it looked at.
 | ✅ Render tags honoured live; proxy/render purposes checked in Houdini (0090) | K-28 |
 | ✅ Subdivision independent of `refineLevel`; `cycles:max_subdivisions` setting (0084, done early with A1) | K-30 |
 | ✅ `background = true` under husk measured: no gain (13.2 s vs 13.6 s, noise 1.5 s) | K-29 |
-| ✅ Motion blur toggle symmetric (0086); `shadow:color`, light multipliers still to do | K-34 |
+| ✅ Motion blur toggle symmetric (0086, 0091); diffuse/specular multipliers as lobe on/off, `shadow:color` reported unsupported (0093) | K-34 |
 | ✅ Volume field aliases (`vel`, `Cd`) (0086) | K-33 |
 
 Done when: a Karma ROP-style render settings node produces beauty, depth,

@@ -122,6 +122,7 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0090` | hydra: un prim dont le render tag n'est plus dessine disparait du rendu |
 | `0091` | hydra: couper le flou de mouvement ne fait plus disparaitre les objets |
 | `0092` | hydra: les light groups et leurs passes |
+| `0093` | hydra: les multiplicateurs diffuse et specular des lumieres USD |
 
 ---
 
