@@ -1,0 +1,37 @@
+From 455d6653b2c31c4f9225db486e0534531b9ecb4b Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 8 Oct 2026 03:41:04 +0200
+Subject: [PATCH 95/95] hydra: l'emission combinee et les vecteurs de mouvement
+ de Karma
+
+Le noeud Karma Render Settings ecrit son emission combinee `C.*O` et ses
+vecteurs de mouvement `ray:motionvector` : la premiere tombait noire, les
+seconds devenaient une AOV de shader vide. Les deux vont a leur passe
+Cycles. tools/bench_karma_settings.py rend un stage construit avec ce
+noeud et verifie chacune de ses variables.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/session.cpp | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/hydra/session.cpp b/src/hydra/session.cpp
+index 79ae0f1b..254071a3 100644
+--- a/src/hydra/session.cpp
++++ b/src/hydra/session.cpp
+@@ -95,6 +95,7 @@ const std::unordered_map<std::string, PassType> kRawSourceToPass = {
+     {"ray:hitN", PASS_NORMAL},
+     {"ray:hitNg", PASS_NORMAL},
+     {"ray:hituv", PASS_UV},
++    {"ray:motionvector", PASS_MOTION},
+ };
+ 
+ /* The light path expressions Karma's render settings write for its light
+@@ -119,6 +120,7 @@ const std::unordered_map<std::string, LightPass> kLpeToPass = {
+     {"CVL", {PASS_VOLUME_DIRECT, PASS_NONE}},
+     {"CV.+L", {PASS_VOLUME_INDIRECT, PASS_NONE}},
+     {"CO", {PASS_EMISSION, PASS_NONE}},
++    {"C.*O", {PASS_EMISSION, PASS_NONE}},
+     {"C[LO]", {PASS_EMISSION, PASS_NONE}},
+ };
+ 

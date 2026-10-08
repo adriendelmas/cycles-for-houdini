@@ -20,6 +20,7 @@ tests/instances/output/
 tests/implicit/output/
 tests/settings/output/
 tests/aovs/output/
+tests/karma_settings/output/
 tests/materialx/hair/
 tests/materialx/standard_surface/*.exr
 tests/scratch/

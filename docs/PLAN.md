@@ -165,6 +165,11 @@ normal, diffuse/glossy/transmission, cryptomatte and two shader AOVs through
 husk, with a transparent background under a dome light, with one object
 hidden from camera rays and one light linked to one object.
 
+**Status 2026-10-08: done** (patches 0086-0095). Houdini's own Karma Render
+Settings LOP renders all its AOVs through Cycles (`bench_karma_settings.py`,
+11/11); the rest is covered by `bench_aovs.py` (9) and `bench_settings.py`
+(13). Left: implicit surfaces carry no UVs, so a `UV` var reads 0 on them.
+
 ## Phase 7 — Interactivity (open-ended, after phase 0's measurement)
 
 | Task | Closes |
