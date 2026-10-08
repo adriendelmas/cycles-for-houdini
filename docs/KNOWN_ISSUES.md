@@ -759,6 +759,22 @@ cube agreed:
 Also in Cycles itself: `Mesh::clear` kept the vertex creases, which piled up
 on every topology rebuild. All seven cases within 0.2 % of Karma's pixels.
 
+### K-73 Per-vertex UVs broke the tangent space — confirmed — **fixed** (0116)
+`tools/bench_normalmap.py`, a quad with a constant tangent-space normal map
+tilted along +u, -u, +v or -v, lit from +X then +Y, against Karma: tilts
+along u were right, tilts along v did next to nothing, and a quad whose UVs
+run backwards along X kept its tilt. The normal the map produced was right
+at the quad's centre and mirrored in a corner: Cycles' tangent space
+(mikktspace) reads a UV map by corner whatever its element, and the
+delegate stored a per-vertex (`vertex`/`varying`) texture coordinate per
+vertex, so every triangle but the first read its neighbours' coordinates and
+the bitangent's sign flipped from triangle to triangle. Texture lookups were
+unaffected (they read the element right), which is why it went unseen.
+Per-vertex texture coordinates now go to Cycles per corner. Twelve cases
+within 10 % of Karma; the rest is Cycles' own bump terminator term (Conty
+Estevez et al., `kernel/closure/bsdf.h`), which darkens a tilted normal
+towards its terminator where Karma does not - up to 8 % here.
+
 ## C. Houdini side
 
 ### K-40 `op:` textures fail under husk — confirmed

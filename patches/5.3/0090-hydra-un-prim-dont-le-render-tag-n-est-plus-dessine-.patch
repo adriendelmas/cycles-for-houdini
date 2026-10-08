@@ -1,7 +1,7 @@
 From 202c01c0f9f763a24978ba2920a527ee0a1868c2 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 01:01:33 +0200
-Subject: [PATCH 090/115] hydra: un prim dont le render tag n'est plus dessine
+Subject: [PATCH 090/116] hydra: un prim dont le render tag n'est plus dessine
  disparait du rendu
 
 Les render tags (les purposes affichees dans Solaris) decident des prims

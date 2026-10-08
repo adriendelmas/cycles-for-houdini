@@ -1,7 +1,7 @@
 From 0426155a498208a9ed40ce910818b336fd97e122 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 21:18:01 +0200
-Subject: [PATCH 109/115] hydra: couleur de base des surfaces avant traduction,
+Subject: [PATCH 109/116] hydra: couleur de base des surfaces avant traduction,
  alpha glTF, images par nodegraph
 
 Audit entree par entree contre Karma (tools/surface_audit.py, K-63) :

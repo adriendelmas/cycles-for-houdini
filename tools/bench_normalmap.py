@@ -25,7 +25,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HFS = os.path.join(os.environ.get("HFS", "E:/Side Effects Software/Houdini22.0.368"), "bin")
 OUT = os.path.join(ROOT, "tests", "normalmap", "output")
 RES = 48
-TOL_REL = 0.06
+# Cycles darkens a bumped or normal-mapped surface towards its terminator on
+# purpose (Conty Estevez et al.'s shadowing term, kernel/closure/bsdf.h),
+# Karma does not: up to 8 % on these tilts. A wrong tilt is 2x or more.
+TOL_REL = 0.10
 TOL_ABS = 0.01
 
 SCENE = """#usda 1.0

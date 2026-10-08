@@ -2374,3 +2374,12 @@ coins n'étaient lus qu'avec des plis ; règles de bord et face-varying
 jamais transmises ; trous ignorés en subdivision. Tout corrigé (trous : la
 face n'est plus découpée, OpenSubdiv s'en sert encore pour ses voisines) ;
 plus un bug de Cycles : `Mesh::clear` gardait les coins. 7 cas sur 7.
+
+**Normal maps (0116, K-73).** Nouveau banc `bench_normalmap.py` : une normal
+map inclinée le long de v ne faisait presque rien, et des UV en miroir ne
+retournaient pas l'inclinaison. L'espace tangent de Cycles (mikktspace) lit
+les UV par coin, le délégué les stockait par sommet quand USD les donne par
+sommet : chaque triangle après le premier lisait les UV de ses voisins, le
+bitangent changeait de signe d'un triangle à l'autre. Les UV par sommet
+passent maintenant par coin. 12 cas sur 12 (le reste, jusqu'à 8 %, est le
+terme d'ombrage de bump propre à Cycles).

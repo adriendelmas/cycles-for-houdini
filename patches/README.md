@@ -145,6 +145,7 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0113` | hydra: profils IES lus selon la direction d'emission dans le repere de la lumiere, en candelas comme USD, `normalize` (moyenne du profil, `IESFile::mean_intensity`) et `angleScale` (K-70) |
 | `0114` | hydra: exposition de la camera (echelle lineaire de Hydra) multipliee a celle des render settings sur le film (K-71) |
 | `0115` | hydra + scene: tags de subdivision lus dans le conteneur du mesh (plis, coins), acuite USD / 10, coins sans plis, regles de bord et face-varying, trous non decoupes (`Mesh::subd_hole`), coins effaces par `Mesh::clear` (K-72) |
+| `0116` | hydra: coordonnees de texture par sommet passees par coin (l'espace tangent mikktspace les lit par coin) - normal maps justes le long de v et sur des UV en miroir (K-73) |
 
 ---
 

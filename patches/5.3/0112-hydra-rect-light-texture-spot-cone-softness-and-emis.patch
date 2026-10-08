@@ -1,7 +1,7 @@
 From 6649da27e1032a6748cbb8df06d5a261cdde126d Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 23:29:29 +0200
-Subject: [PATCH 112/115] hydra: rect light texture, spot cone softness and
+Subject: [PATCH 112/116] hydra: rect light texture, spot cone softness and
  emission focus as USD says
 
 Rect light texture: USD puts the image's min corner at the light's

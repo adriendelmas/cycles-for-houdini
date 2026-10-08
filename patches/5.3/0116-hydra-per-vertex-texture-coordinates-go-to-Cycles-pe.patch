@@ -1,0 +1,79 @@
+From a941de1588291cff5669564b1c932fa6aba2b3d0 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Fri, 9 Oct 2026 01:27:15 +0200
+Subject: [PATCH 116/116] hydra: per-vertex texture coordinates go to Cycles
+ per corner
+
+Cycles' tangent space (mikktspace) reads a UV map by corner whatever its
+element; a per-vertex (vertex or varying) texture coordinate was stored per
+vertex, so every triangle but the first read its neighbours' coordinates
+and the bitangent's sign flipped from triangle to triangle: a normal map's
+tilt along v averaged out and mirrored UVs kept their tilt. Texture lookups
+read the element right, which is why it went unseen. Per-vertex texture
+coordinates are now expanded to corners (K-73, tools/bench_normalmap.py:
+12 cases against Karma).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/mesh.cpp | 32 +++++++++++++++++++++++++++++---
+ 1 file changed, 29 insertions(+), 3 deletions(-)
+
+diff --git a/src/hydra/mesh.cpp b/src/hydra/mesh.cpp
+index 9b34b2c3..dfbdfe47 100644
+--- a/src/hydra/mesh.cpp
++++ b/src/hydra/mesh.cpp
+@@ -408,17 +408,43 @@ void HdCyclesMesh::PopulatePrimvars(HdSceneDelegate *sceneDelegate)
+       if ((std != ATTR_STD_NONE && _geom->need_attribute(scene, std)) ||
+           _geom->need_attribute(scene, name))
+       {
++        HdInterpolation interp = interpolation.first;
++        AttributeElement element = interpolation.second;
++
++        /* Texture coordinates go to Cycles per corner: its tangent space
++         * (mikktspace) reads a UV map by corner whatever its element, so a
++         * per-vertex map gave every triangle but the first its neighbours'
++         * coordinates - the bitangent's sign flipped from one triangle to the
++         * next and a normal map's tilt along v averaged out
++         * (tools/bench_normalmap.py). */
++        if (role == HdPrimvarRoleTokens->textureCoordinate &&
++            (interp == HdInterpolationVertex || interp == HdInterpolationVarying) &&
++            value.IsHolding<VtVec2fArray>())
++        {
++          const VtVec2fArray &perVertex = value.UncheckedGet<VtVec2fArray>();
++          const VtIntArray &indices = _topology.GetFaceVertexIndices();
++          VtVec2fArray perCorner(indices.size());
++          for (size_t i = 0; i < indices.size(); ++i) {
++            const int index = indices[i];
++            perCorner[i] = (index >= 0 && size_t(index) < perVertex.size()) ? perVertex[index] :
++                                                                               GfVec2f(0.0f);
++          }
++          value = VtValue(perCorner);
++          interp = HdInterpolationFaceVarying;
++          element = ATTR_ELEMENT_CORNER;
++        }
++
+         const HdType valueType = HdGetValueTupleType(value).type;
+ 
+         if (!subdivision) {
+           // Adjust attributes for polygons that were triangulated
+-          if (interpolation.first == HdInterpolationUniform) {
++          if (interp == HdInterpolationUniform) {
+             value = ComputeTriangulatedUniformPrimvar(value, valueType, _primitiveParams);
+             if (value.IsEmpty()) {
+               continue;
+             }
+           }
+-          else if (interpolation.first == HdInterpolationFaceVarying) {
++          else if (interp == HdInterpolationFaceVarying) {
+             value = ComputeTriangulatedFaceVaryingPrimvar(value, valueType, _util);
+             if (value.IsEmpty()) {
+               continue;
+@@ -426,7 +452,7 @@ void HdCyclesMesh::PopulatePrimvars(HdSceneDelegate *sceneDelegate)
+           }
+         }
+ 
+-        ApplyPrimvars(attributes, name, value, interpolation.second, std);
++        ApplyPrimvars(attributes, name, value, element, std);
+       }
+     }
+   }

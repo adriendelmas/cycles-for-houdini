@@ -1,7 +1,7 @@
 From 31e205e3c168995db09d321bc21a7298b56a2581 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 9 Sep 2026 22:24:33 +0200
-Subject: [PATCH 070/115] hydra: le taux de decoupage des subdivisions, dans
+Subject: [PATCH 070/116] hydra: le taux de decoupage des subdivisions, dans
  les reglages de rendu
 
 La camera de decoupage donnee, il restait a en donner le pas.

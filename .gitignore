@@ -29,6 +29,7 @@ tests/rect/output/
 tests/lights/output/
 tests/camera/output/
 tests/subdiv/output/
+tests/normalmap/output/
 tests/materialx/hair/
 tests/materialx/standard_surface/*.exr
 tests/scratch/
