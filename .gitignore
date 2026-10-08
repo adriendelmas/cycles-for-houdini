@@ -27,6 +27,7 @@ tests/usdtex/output/
 tests/dome/output/
 tests/rect/output/
 tests/lights/output/
+tests/camera/output/
 tests/materialx/hair/
 tests/materialx/standard_surface/*.exr
 tests/scratch/

@@ -729,6 +729,17 @@ solid angle covered, as Karma does - `IESFile::mean_intensity`). Four cases
 Cycles interpolates the profile cubically, Karma linearly - visible only on
 coarse profiles (a 30 degree step: 20 % off the lobe), not on 5 degree ones.
 
+### K-71 Camera exposure ignored — confirmed — **fixed** (0114)
+`tools/bench_camera.py`, small white unlit squares seen by one camera per
+case, their centroids, spread and total light against Karma: framing,
+aperture offsets, depth of field, orthographic projection and images whose
+aspect differs from the aperture's all agreed within a pixel. The camera's
+`exposure` (USD's log2 scale, with ISO, time and f-stop folded by Hydra into
+a linear exposure scale) did not reach the image: `exposure = 1` left it as
+it was where Karma doubles it. The film's exposure is now the render
+settings' (`cycles:film:exposure`) times the camera's scale, each side
+keeping its own so neither overwrites the other; the free view counts 1.
+
 ## C. Houdini side
 
 ### K-40 `op:` textures fail under husk — confirmed

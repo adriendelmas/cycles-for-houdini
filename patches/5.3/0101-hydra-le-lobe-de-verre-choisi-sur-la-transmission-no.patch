@@ -1,7 +1,7 @@
 From 172e2a6a6277e2c96f46e572dc8a53dc1726488f Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 08:30:42 +0200
-Subject: [PATCH 101/113] hydra: le lobe de verre choisi sur la transmission,
+Subject: [PATCH 101/114] hydra: le lobe de verre choisi sur la transmission,
  non sur transmission_color
 
 Depuis que CompleteMaterialXDefaults (0099) ecrit chaque entree non ecrite,

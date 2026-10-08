@@ -2359,3 +2359,9 @@ converti en unités radiométriques (30 fois sous Karma), `normalize` et
 Lu maintenant selon la direction d'émission dans le repère de la lumière,
 en candelas, normalisé par la moyenne du profil comme Karma : quatre cas
 IES à 5 % près.
+
+**Caméra contre Karma (0114, K-71).** Nouveau banc `bench_camera.py` :
+cadrage, décentrement, profondeur de champ, orthographique, formats d'image
+différents de l'ouverture, tous au pixel près. Seule l'exposition de la
+caméra était ignorée ; elle multiplie maintenant celle des render settings
+sur le film.

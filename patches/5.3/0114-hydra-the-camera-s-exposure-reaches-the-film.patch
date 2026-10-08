@@ -1,0 +1,123 @@
+From d235be08606cab2daef982221f5dbef645303e09 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Fri, 9 Oct 2026 00:23:00 +0200
+Subject: [PATCH 114/114] hydra: the camera's exposure reaches the film
+
+USD's camera exposure (log2, with ISO, time and f-stop folded by Hydra into
+a linear exposure scale) did not reach the image. The film's exposure is
+now the render settings' (cycles:film:exposure) times the camera's scale,
+each side keeping its own value so neither overwrites the other; the free
+view counts 1 (K-71, tools/bench_camera.py: 7 cases against Karma).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/camera.cpp          | 12 ++++++++++++
+ src/hydra/render_delegate.cpp |  3 +++
+ src/hydra/render_pass.cpp     |  2 ++
+ src/hydra/session.cpp         | 11 +++++++++++
+ src/hydra/session.h           |  8 ++++++++
+ 5 files changed, 36 insertions(+)
+
+diff --git a/src/hydra/camera.cpp b/src/hydra/camera.cpp
+index 58ccd249..31e55311 100644
+--- a/src/hydra/camera.cpp
++++ b/src/hydra/camera.cpp
+@@ -155,6 +155,16 @@ void HdCyclesCamera::Sync(HdSceneDelegate *sceneDelegate,
+       _data.SetClippingRange(clippingRange);
+     }
+ 
++    /* Hydra's camera computes it from exposure, ISO, time, f-stop and
++     * responsivity; a delegate that does not call HdCamera::Sync reads it
++     * itself. */
++    if (auto ds = cameraSchema.GetLinearExposureScale()) {
++      _linearExposureScale = ds->GetTypedValue(0.0f);
++    }
++    else if (auto ds = cameraSchema.GetExposure()) {
++      _linearExposureScale = exp2f(ds->GetTypedValue(0.0f));
++    }
++
+     if (auto ds = cameraSchema.GetFStop()) {
+       const float fStop = ds->GetTypedValue(0.0f);
+       _fStop = fStop;
+@@ -179,6 +189,8 @@ void HdCyclesCamera::Finalize(HdRenderParam *renderParam)
+ void HdCyclesCamera::ApplyCameraSettings(HdRenderParam *renderParam, Camera *cam) const
+ {
+   ApplyCameraSettings(renderParam, _data, _windowPolicy, cam);
++  HdCyclesSession *const session = static_cast<HdCyclesSession *>(renderParam);
++  session->SetFilmExposure(-1.0f, GetLinearExposureScale());
+ 
+   const float metersPerUnit = static_cast<HdCyclesSession *>(renderParam)->GetStageMetersPerUnit();
+ 
+diff --git a/src/hydra/render_delegate.cpp b/src/hydra/render_delegate.cpp
+index 567a9fda..d0ef9caa 100644
+--- a/src/hydra/render_delegate.cpp
++++ b/src/hydra/render_delegate.cpp
+@@ -748,6 +748,9 @@ void HdCyclesDelegate::SetRenderSetting(const PXR_NS::TfToken &key, const PXR_NS
+       const ustring socketName(keyString.substr(prefix.size()));
+       if (const SocketType *socket = node->type->find_input(socketName)) {
+         SetNodeValue(node, *socket, value);
++        if (node == scene->film && socketName == "exposure") {
++          _renderParam->SetFilmExposure(scene->film->get_exposure(), -1.0f);
++        }
+         if (node == scene->background && socketName == "transparent") {
+           /* Remembered: the session otherwise decides it from the lights. */
+           _renderParam->SetTransparentOverride(VtValue::Cast<bool>(value).GetWithDefault(false));
+diff --git a/src/hydra/render_pass.cpp b/src/hydra/render_pass.cpp
+index acc2e43e..7e41b77e 100644
+--- a/src/hydra/render_pass.cpp
++++ b/src/hydra/render_pass.cpp
+@@ -239,6 +239,8 @@ void HdCyclesRenderPass::_Execute(const HdRenderPassStateSharedPtr &renderPassSt
+                                           renderPassState->GetProjectionMatrix(),
+                                           renderPassState->GetClipPlanes(),
+                                           scene->camera);
++      /* The free view has no exposure of its own. */
++      _renderParam->SetFilmExposure(-1.0f, 1.0f);
+     }
+     const clock::time_point tCameraApplied = clock::now();
+ 
+diff --git a/src/hydra/session.cpp b/src/hydra/session.cpp
+index 254071a3..802e5698 100644
+--- a/src/hydra/session.cpp
++++ b/src/hydra/session.cpp
+@@ -629,4 +629,15 @@ void HdCyclesSession::RemoveAovBinding(HdRenderBuffer *renderBuffer)
+   }
+ }
+ 
++void HdCyclesSession::SetFilmExposure(const float settings, const float camera)
++{
++  if (settings >= 0.0f) {
++    _settingsExposure = settings;
++  }
++  if (camera >= 0.0f) {
++    _cameraExposure = camera;
++  }
++  session->scene->film->set_exposure(_settingsExposure * _cameraExposure);
++}
++
+ HDCYCLES_NAMESPACE_CLOSE_SCOPE
+diff --git a/src/hydra/session.h b/src/hydra/session.h
+index e002efe5..106f3709 100644
+--- a/src/hydra/session.h
++++ b/src/hydra/session.h
+@@ -210,6 +210,12 @@ class HdCyclesSession final : public PXR_NS::HdRenderParam {
+     _backgroundDirty = true;
+   }
+ 
++  /* The film's exposure is the render settings' (`cycles:film:exposure`)
++   * times the camera's (its linear exposure scale, from `exposure`, ISO,
++   * time and f-stop): each side sets its own and the product goes to the
++   * film, so neither overwrites the other. */
++  void SetFilmExposure(float settings, float camera);
++
+   /* Prims synced without blur, or over another shutter, than the settings
+    * now ask for get synced again. */
+   void CheckMotionResync()
+@@ -257,6 +263,8 @@ class HdCyclesSession final : public PXR_NS::HdRenderParam {
+   bool _lightLinkingDirty = false;
+   void UpdateLightLinking(CCL_NS::Scene *scene);
+   int _transparentOverride = -1; /* -1: not set, 0 or 1 */
++  float _settingsExposure = 1.0f;
++  float _cameraExposure = 1.0f;
+   bool _backgroundDirty = false;
+   bool _disableMotionBlur = false;
+   bool _instantaneousShutter = false;

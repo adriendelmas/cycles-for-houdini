@@ -1,7 +1,7 @@
 From 86e2eddc214248eb8507ec4c8d431f1dd8e975a6 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 17:45:07 +0200
-Subject: [PATCH 104/113] hydra: nodegraphs livres par le delegue,
+Subject: [PATCH 104/114] hydra: nodegraphs livres par le delegue,
  transformmatrix constant, F82, Disney legacy
 
 Les noeuds que la bibliotheque MaterialX n'ecrit qu'en GLSL/OSL n'avaient ni

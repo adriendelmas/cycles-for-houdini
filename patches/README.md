@@ -143,6 +143,7 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0111` | hydra: texture du dome orientee selon la convention lat-long d'OpenEXR (pole +Y, longitude 0 vers +Z) et `poleAxis` de DomeLight_1 via `domeOffset` (K-67) |
 | `0112` | hydra: texture des rect lights lue en (1 - u, v), coin min en (+X, +Y) comme le veut USD (K-68) ; douceur du cone des spots convertie de l'angle (USD) au cosinus (Cycles), cone de 90 degres par defaut, `shaping:focus` et `focusTint` dans le shader de la lumiere (K-69) |
 | `0113` | hydra: profils IES lus selon la direction d'emission dans le repere de la lumiere, en candelas comme USD, `normalize` (moyenne du profil, `IESFile::mean_intensity`) et `angleScale` (K-70) |
+| `0114` | hydra: exposition de la camera (echelle lineaire de Hydra) multipliee a celle des render settings sur le film (K-71) |
 
 ---
 
