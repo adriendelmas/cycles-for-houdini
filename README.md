@@ -25,8 +25,8 @@ where the work went.
   Both follow Ben Houston's work — see [Credits](#credits).
 - **Copernicus COP textures read live**, without a round trip through disk.
   This needs a live Houdini: under husk (a USD Render ROP, a farm) there is no
-  node graph to cook, so put the **Cycles Flatten op: Textures** LOP
-  (`hdcycles_flatten_op_textures`) before the render node - it cooks every
+  node graph to cook, so put the **Flatten COP Textures** LOP
+  (`hdcycles::flatten_op_textures`) before the render node - it cooks every
   referenced COP to an image file and rewrites the paths on its own layer.
 - Motion blur on animated transforms **and on deforming geometry** — meshes,
   curves and point clouds alike, from time-sampled points or from a

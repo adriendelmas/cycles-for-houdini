@@ -420,7 +420,7 @@ graph, so the capture warns and the texture is missing. `flatten_op_textures`
 exists; nothing runs it automatically when a USD Render ROP is used.
 
 Documented 2026-10-08 in the README, under the COP feature: under husk, put
-the Cycles Flatten op: Textures LOP before the render node. Not automated.
+the Flatten COP Textures LOP (`hdcycles::flatten_op_textures`) before the render node. Not automated.
 
 ### K-41 COP pixel cache never evicts — confirmed — **fixed** (0096), unmeasured live
 `houdini_cop.cpp` `Cache()` keeps every captured layer for the session: an 8K
