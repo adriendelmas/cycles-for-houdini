@@ -220,6 +220,19 @@ highlight 0.96 of Karma's, dielectric 1.00, mean 0.89. Materials built from
 standard_surface, OpenPBR or the other surface tables were never affected:
 they map to the principled directly.
 
+### K-59 Three table translations wrong, found by value cases — confirmed — **fixed** (0104)
+Writing the value cases of the nodes added in 0104 turned up three defects of
+the existing table, none caught before because no case exercised them:
+- `mix` with a factor of its operands' type (`ND_mix_color3_color3` and the
+  vector ones) landed on Cycles' mix_color, whose factor is a scalar: the
+  colour factor was averaged. Now mix_vector_non_uniform, unclamped.
+- `magnitude`, `distance`, `dotproduct` were read on vector_math's `vector`
+  output, which is zero for those three - their result is on `value`. All
+  three rendered black.
+- `generalized_schlick_bsdf`, new in 0104, first wrote its colour to
+  `base_color`; metallic_bsdf calls it `color`. Caught by the Karma bench.
+`bench_mtlx.py` cases `mix_color_factor`, `scalar_*` failed on 0103 and pass.
+
 ## B. Geometry and scene
 
 ### K-19 float3 primvars copied at the wrong stride — confirmed — **fixed** (0075)
@@ -523,6 +536,21 @@ matrices (`transformmatrix`, `creatematrix`, `invertmatrix`, `transpose`,
 `splitlr`/`splittb` of colour4 and vector4, `blur`, and the BSDF helpers
 (`artistic_ior`, `roughness_*`, `thin_film_bsdf`, `generalized_schlick_bsdf`,
 the Disney BSDFs, `thin_surface`).
+
+2026-10-08 evening, after 0104: **789** of 822 rendered (80 expanded, 43
+rewritten, 666 table), routed 782, clean **641**, `bench_mtlx.py` **64**
+cases. Brought in: `artistic_ior`, `roughness_anisotropy`, `roughness_dual`
+and through it `glossiness_anisotropy`, `inside`/`outside` of float and
+colour3 - nodegraphs the delegate ships itself (`mtlx_nodegraphs.h`), each
+transcribing the library's GLSL; `transformmatrix` of vector2/vector3 with a
+constant matrix (dot products) and through it `hmtlxcomplementcolor`;
+`generalized_schlick_bsdf` (Cycles' F82 metal); the legacy Disney surfaces
+(on `disney_principled`). The 18 families still out: the other matrix nodes
+(`creatematrix`, `invertmatrix`, `transpose`, `determinant`) and a connected
+matrix, the colour4 compositing nodes (`over`, `in`, `out`, `mask`, `matte`,
+`premult`, `unpremult`, `disjointover`, and the colour4 `inside`/`outside` -
+they need the alpha K-17 drops), `time`, `frame`, `curveadjust`,
+`thin_film_bsdf`, `thin_surface`, `hextilednormalmap`.
 
 ### K-52 Bench expected values derived from the code — confirmed — **fixed**
 `tools/bench_mtlx.py` now computes every expected colour from the MaterialX

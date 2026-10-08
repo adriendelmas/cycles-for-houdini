@@ -538,6 +538,167 @@ env.setdefault("CYCLES_LOGGING", "1")
 env.setdefault("CYCLES_LOGGING_LEVEL", "warning")
 
 
+# The delegate's own nodegraphs (mtlx_nodegraphs.h), for nodedefs the library
+# implements in GLSL/OSL only. Expected values transcribe the library's GLSL,
+# file named on each function.
+
+
+def mx_roughness_anisotropy(roughness, anisotropy):
+    # pbrlib/genglsl/mx_roughness_anisotropy.glsl
+    rsq = min(max(roughness * roughness, 1e-8), 1.0)
+    if anisotropy > 0.0:
+        aspect = math.sqrt(1.0 - min(max(anisotropy, 0.0), 0.98))
+        return (min(rsq / aspect, 1.0), rsq * aspect)
+    return (rsq, rsq)
+
+
+def mx_roughness_dual(x, y):
+    # pbrlib/genglsl/mx_roughness_dual.glsl
+    if y < 0.0:
+        y = x
+    return (min(max(x * x, 1e-8), 1.0), min(max(y * y, 1e-8), 1.0))
+
+
+def mx_artistic_ior(reflectivity, edge_color):
+    # pbrlib/genglsl/mx_artistic_ior.glsl
+    ior, ext = [], []
+    for r, e in zip(reflectivity, edge_color):
+        r = min(max(r, 0.0), 0.99)
+        rs = math.sqrt(r)
+        n_min = (1.0 - r) / (1.0 + r)
+        n_max = (1.0 + rs) / (1.0 - rs)
+        n = n_max * (1.0 - e) + n_min * e
+        k2 = max(((n + 1.0) ** 2 * r - (n - 1.0) ** 2) / (1.0 - r), 0.0)
+        ior.append(n)
+        ext.append(math.sqrt(k2))
+    return tuple(ior), tuple(ext)
+
+
+
+def mx_complement(rgb):
+    # houdini/hmtlxcomplementcolor.mtlx: rec709 to XYZ, to xyY, mirrored
+    # through the D65 white point (x, y) -> (2wx - x, 2wy - y), back.
+    to_xyz = ((0.412391, 0.212639, 0.0193308), (0.357584, 0.715169, 0.119195),
+              (0.180481, 0.0721923, 0.950532))
+    to_rgb = ((3.24097, -0.969244, 0.0556301), (-1.53738, 1.87597, -0.203977),
+              (-0.498611, 0.0415551, 1.05697))
+    X, Y, Z = (sum(rgb[j] * to_xyz[j][i] for j in range(3)) for i in range(3))
+    s = X + Y + Z
+    x, y = X / s, Y / s
+    x2, y2 = 2 * 0.3127 - x, 2 * 0.329 - y
+    X2, Z2 = x2 * Y / y2, (1 - x2 - y2) * Y / y2
+    xyz = (X2, Y, Z2)
+    return tuple(sum(xyz[j] * to_rgb[j][i] for j in range(3)) for i in range(3))
+
+def read_component(node, index):
+    """A probe reading one component of a vector2 output of `node`."""
+    return [
+        'uniform token info:id = "ND_extract_vector2"',
+        "float2 inputs:in.connect = </world/Materials/M/%s.outputs:out>" % node,
+        "int inputs:index = %d" % index,
+        "float outputs:out",
+    ]
+
+
+ANISO = shader("ra", ['uniform token info:id = "ND_roughness_anisotropy"',
+                      "float inputs:roughness = 0.6", "float inputs:anisotropy = 0.5",
+                      "float2 outputs:out"])
+DUAL = shader("rd", ['uniform token info:id = "ND_roughness_dual"',
+                     "float2 inputs:roughness = (0.7, -1)", "float2 outputs:out"])
+GLOSS = shader("ga", ['uniform token info:id = "ND_glossiness_anisotropy"',
+                      "float inputs:glossiness = 0.4", "float inputs:anisotropy = 0.3",
+                      "float2 outputs:out"])
+ARTISTIC = shader("ai", ['uniform token info:id = "ND_artistic_ior"',
+                         "color3f inputs:reflectivity = (0.3, 0.5, 0.2)",
+                         "color3f inputs:edge_color = (0.5, 0.8, 0.2)",
+                         "color3f outputs:ior", "color3f outputs:extinction"])
+_ior, _ext = mx_artistic_ior((0.3, 0.5, 0.2), (0.5, 0.8, 0.2))
+
+CASES += [
+    ("own_roughness_anisotropy_x", read_component("ra", 0),
+     (mx_roughness_anisotropy(0.6, 0.5)[0],) * 3, {"extra": [ANISO]}),
+    ("own_roughness_anisotropy_y", read_component("ra", 1),
+     (mx_roughness_anisotropy(0.6, 0.5)[1],) * 3, {"extra": [ANISO]}),
+    ("own_roughness_dual_y", read_component("rd", 1),
+     (mx_roughness_dual(0.7, -1.0)[1],) * 3, {"extra": [DUAL]}),
+    # glossiness_anisotropy is the library's own nodegraph, 1 - glossiness
+    # into roughness_anisotropy: it expands once the latter does.
+    ("own_glossiness_anisotropy_x", read_component("ga", 0),
+     (mx_roughness_anisotropy(0.6, 0.3)[0],) * 3, {"extra": [GLOSS]}),
+    # ior runs past 1: scaled by a quarter to stay in base-colour range.
+    ("own_artistic_ior", [
+        'uniform token info:id = "ND_multiply_color3FA"',
+        "color3f inputs:in1.connect = </world/Materials/M/ai.outputs:ior>",
+        "float inputs:in2 = 0.25",
+        "color3f outputs:out",
+    ], tuple(0.25 * v for v in _ior), {"extra": [ARTISTIC]}),
+    ("own_artistic_extinction", [
+        'uniform token info:id = "ND_multiply_color3FA"',
+        "color3f inputs:in1.connect = </world/Materials/M/ai.outputs:extinction>",
+        "float inputs:in2 = 0.25",
+        "color3f outputs:out",
+    ], tuple(0.25 * v for v in _ext), {"extra": [ARTISTIC]}),
+    # inside / outside: in * mask, in * (1 - mask) (stdlib_genglsl_impl.mtlx).
+    # A colour-valued mix factor mixes per channel (mix(bg, fg, mix)); it was
+    # averaged onto a scalar factor before 0104.
+    ("mix_color_factor", [
+        'uniform token info:id = "ND_mix_color3_color3"',
+        "color3f inputs:fg = (0.9, 0.2, 0.1)",
+        "color3f inputs:bg = (0.1, 0.2, 0.9)",
+        "color3f inputs:mix = (0.25, 0.5, 1.0)",
+        "color3f outputs:out",
+    ], (0.3, 0.2, 0.1), {}),
+    # Scalar results of vector maths: |v|, |a - b|, a . b.
+    ("scalar_magnitude", [
+        'uniform token info:id = "ND_magnitude_vector3"',
+        "float3 inputs:in = (0.3, 0.4, 0)",
+        "float outputs:out",
+    ], (0.5, 0.5, 0.5), {}),
+    ("scalar_distance", [
+        'uniform token info:id = "ND_distance_vector3"',
+        "float3 inputs:in1 = (0.1, 0.2, 0.3)",
+        "float3 inputs:in2 = (0.1, 0.5, 0.7)",
+        "float outputs:out",
+    ], (0.5, 0.5, 0.5), {}),
+    ("scalar_dotproduct", [
+        'uniform token info:id = "ND_dotproduct_vector3"',
+        "float3 inputs:in1 = (0.2, 0.5, 0.1)",
+        "float3 inputs:in2 = (1, 0.5, 2)",
+        "float outputs:out",
+    ], (0.65, 0.65, 0.65), {}),
+    # transformmatrix with a constant matrix: out[i] = sum_j in[j] * M[j][i]
+    # (row vector on the left; stdlib/genglsl/lib/mx_math.glsl).
+    ("rw_transformmatrix_vector3", [
+        'uniform token info:id = "ND_transformmatrix_vector3"',
+        "float3 inputs:in = (0.2, 0.5, 0.1)",
+        "matrix3d inputs:mat = ( (1, 0, 0.5), (0, 0.5, 0), (0.5, 0, 1) )",
+        "float3 outputs:out",
+    ], (0.2 + 0.05, 0.25, 0.1 + 0.1), {}),
+    ("rw_transformmatrix_vector3M4", [
+        'uniform token info:id = "ND_transformmatrix_vector3M4"',
+        "float3 inputs:in = (0.2, 0.5, 0.1)",
+        "matrix4d inputs:mat = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0.3, 0.1, 0.4, 1) )",
+        "float3 outputs:out",
+    ], (0.5, 0.6, 0.5), {}),
+    # hmtlxcomplementcolor: the colour opposite through the D65 white point in
+    # xyY, through two transformmatrix (houdini/hmtlxcomplementcolor.mtlx).
+    ("own_complementcolor", [
+        'uniform token info:id = "ND_hmtlxcomplementcolor_vector3"',
+        "float3 inputs:in = (0.6, 0.3, 0.2)",
+        "float3 outputs:out",
+    ], mx_complement((0.6, 0.3, 0.2)), {}),
+    ("own_inside_color3", [
+        'uniform token info:id = "ND_inside_color3"',
+        "color3f inputs:in = (0.9, 0.5, 0.2)", "float inputs:mask = 0.4",
+        "color3f outputs:out",
+    ], (0.36, 0.2, 0.08), {}),
+    ("own_outside_float", [
+        'uniform token info:id = "ND_outside_float"',
+        "float inputs:in = 0.8", "float inputs:mask = 0.25",
+        "float outputs:out",
+    ], (0.6, 0.6, 0.6), {}),
+]
+
 def render(name, body, options):
     terminal = TERMINALS[options.get("terminal", "color")].replace(
         "probe.outputs:out", "probe.outputs:" + options.get("probe_out", "out")).replace(

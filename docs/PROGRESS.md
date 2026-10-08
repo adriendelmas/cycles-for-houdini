@@ -101,15 +101,16 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 
 ## Materials - MaterialX
 
-Three numbers, measured 2026-10-08 (commands in [TESTING.md](TESTING.md)):
-**762** of 822 nodedefs are rendered - 651 through the mapping table, 71 by
-expanding the nodegraph the library defines them with, 40 by rewriting
-(`mtlx_coverage.py`); **636** of the 775 that route keep every input, output
-and node when rendered with all inputs authored (`mtlx_inputs.py`); **49** are
-verified against a value computed from the MaterialX definition
-(`bench_mtlx.py`), and the five surface models keep their own defaults for
-unauthored inputs (`mtlx_defaults.py`). On 2026-10-07 the numbers were 652,
-543 and 36. This table says what renders right.
+Three numbers, measured 2026-10-08 evening (commands in [TESTING.md](TESTING.md)):
+**789** of 822 nodedefs are rendered - 666 through the mapping table, 80 by
+expanding a nodegraph (the library's, or one the delegate ships for nodes the
+library writes in GLSL only), 43 by rewriting (`mtlx_coverage.py`); **641** of
+the 782 that route keep every input, output and node when rendered with all
+inputs authored (`mtlx_inputs.py`); **64** are verified against a value
+computed from the MaterialX definition (`bench_mtlx.py`), and the five surface
+models keep their own defaults for unauthored inputs (`mtlx_defaults.py`).
+Hand-built BSDF networks are compared with Karma (`bench_agree.py`). On
+2026-10-07 the numbers were 652, 543 and 36. This table says what renders right.
 
 | Family | State | Notes |
 |---|---|---|

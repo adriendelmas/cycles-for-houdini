@@ -84,6 +84,12 @@ CASES = [
     ("conductor_bsdf", "ND_conductor_bsdf", {"float2 inputs:roughness": "(0.25, 0.25)"}),
     ("dielectric_bsdf", "ND_dielectric_bsdf", {"float2 inputs:roughness": "(0.1, 0.1)",
                                                "color3f inputs:tint": "(1, 1, 1)"}),
+    # Hoffman's F82-tint metal, Cycles' metallic_bsdf in f82 mode (0104).
+    ("schlick_bsdf", "ND_generalized_schlick_bsdf", {
+        "color3f inputs:color0": "(0.95, 0.64, 0.54)", "color3f inputs:color82": "(1, 0.9, 0.85)",
+        "float2 inputs:roughness": "(0.25, 0.25)"}),
+    # Not the legacy Disney surfaces: Karma renders them a neutral grey
+    # whatever the base colour - it does not implement them.
     # The same dielectric, transmitting: scatter_mode "RT" (the default "R"
     # reflects only - it rendered as glass before 0103).
     ("dielectric_rt", "ND_dielectric_bsdf", {"float2 inputs:roughness": "(0.01, 0.01)",
@@ -92,7 +98,7 @@ CASES = [
 
 # Cases whose sphere is also compared on its highlight: the 99th percentile
 # of the whole sphere's luminance.
-PEAK_CASES = {"metal", "conductor_bsdf", "dielectric_bsdf"}
+PEAK_CASES = {"metal", "conductor_bsdf", "dielectric_bsdf", "schlick_bsdf"}
 PEAK_BOX = (92, 148, 62, 118)
 PEAK_TOL = 1.35
 

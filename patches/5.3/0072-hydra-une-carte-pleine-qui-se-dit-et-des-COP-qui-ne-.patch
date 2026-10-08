@@ -1,7 +1,7 @@
 From ec2c8d139095bc8baa5ad2116a9f21305293db09 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 10 Sep 2026 14:40:15 +0200
-Subject: [PATCH 072/103] hydra: une carte pleine qui se dit, et des COP qui ne
+Subject: [PATCH 072/104] hydra: une carte pleine qui se dit, et des COP qui ne
  pesent que leurs canaux
 
 Signale : Cycles GPU plus lent que Cycles CPU, sur une RTX 3090. Le journal de

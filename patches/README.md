@@ -133,6 +133,7 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0101` | hydra: le lobe de verre de standard_surface choisi sur la transmission (cablee ou > 0), plus sur la presence de `transmission_color`, que 0099 ecrit partout |
 | `0102` | hydra: les tailles des normales, des points et des largeurs verifiees avant lecture (K-57, plus de segfault sur un attribut illisible) |
 | `0103` | hydra: rugosite des BSDF elementaires prise comme alpha (racine carree), dielectric_bsdf selon scatter_mode - R principled, T refraction, RT verre (K-58) |
+| `0104` | hydra: nodegraphs livres par le delegue (artistic_ior, roughness_*, inside/outside), transformmatrix a matrice constante, generalized_schlick en F82, Disney legacy ; mix a facteur couleur, magnitude/distance/dotproduct corriges (K-59) |
 
 ---
 

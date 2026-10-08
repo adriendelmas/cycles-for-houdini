@@ -2193,3 +2193,21 @@ sphère 12× trop claire. Après : racine carrée sur la rugosité, et un nœud 
 mode (R principled sans diffus ni transmission, T refraction_bsdf, RT verre) ;
 pics à 0,96 et 1,00 de Karma. Les surfaces (standard_surface, OpenPBR…)
 n'étaient pas touchées. Banc d'accord : 33 contrôles, 0 écart ; suite verte.
+
+**MaterialX à 789/822 (0104, 2026-10-08 soir).** Les nœuds que la
+bibliothèque n'écrit qu'en GLSL/OSL n'avaient ni nodegraph ni entrée de
+table. Le délégué livre maintenant ses propres nodegraphs
+(`mtlx_nodegraphs.h`, XML lu aussi par `tools/mtlx_rules.py`), chacun
+transcrit ligne à ligne du GLSL de la bibliothèque : `artistic_ior`,
+`roughness_anisotropy`, `roughness_dual` (et par lui `glossiness_anisotropy`),
+`inside`/`outside` float et color3. `transformmatrix` à matrice constante
+devient des produits scalaires (convention lue dans `mx_math.glsl` : vecteur
+ligne à gauche, comme USD), ce qui fait passer `hmtlxcomplementcolor`.
+`generalized_schlick_bsdf` va sur le metallic F82 de Cycles (le même modèle
+de Hoffman ; à 3-5 % de Karma), les surfaces Disney legacy sur
+`disney_principled` (Karma ne les rend pas : gris neutre). En écrivant les
+cas de valeur, trois défauts de la table existante (K-59) : le `mix` à
+facteur couleur moyennait son facteur, et `magnitude`, `distance`,
+`dotproduct` sortaient noirs (lus sur la sortie `vector` au lieu de
+`value`). 774 → 789 nodedefs, 49 → 64 cas de valeur, 641 nœuds à entrées
+complètes ; suite verte, banc d'accord 37 contrôles.

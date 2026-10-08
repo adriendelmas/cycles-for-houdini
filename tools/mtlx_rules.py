@@ -6,9 +6,11 @@ same thing. A nodedef is translated when:
 - its name starts with a prefix of the mapping table in `material.cpp` (the
   longest prefix wins there; here any match counts), or is one of the four
   arithmetic families the lookup picks apart by type suffix;
-- or the delegate expands it (`mtlx_expand.cpp`): `extract` and `swizzle` are
-  rewritten by hand, and any nodedef the library implements as a nodegraph is
-  replaced by that nodegraph's nodes - translated if every one of them is.
+- or the delegate expands it (`mtlx_expand.cpp`): `extract`, `swizzle` and
+  `transformmatrix` (constant matrix) are rewritten by hand, and any nodedef
+  the library - or the delegate's own `mtlx_nodegraphs.h` - implements as a
+  nodegraph is replaced by that nodegraph's nodes, translated if every one of
+  them is.
 """
 
 import os
@@ -29,10 +31,22 @@ def prefixes():
     return sorted(set(PREFIX_RE.findall(text)), key=len, reverse=True)
 
 
+OWN_NODEGRAPHS = os.path.join(ROOT, "external", "cycles-53", "src", "hydra", "mtlx_nodegraphs.h")
+
+
 def load_library():
-    """The library Houdini ships, as the delegate reads it."""
+    """The library Houdini ships, plus the delegate's own nodegraphs
+    (mtlx_nodegraphs.h, the XML between its raw-string markers), as the
+    delegate reads them."""
     doc = mx.createDocument()
     mx.loadLibraries(["libraries"], mx.getDefaultDataSearchPath(), doc)
+    if os.path.exists(OWN_NODEGRAPHS):
+        text = open(OWN_NODEGRAPHS, encoding="utf-8").read()
+        match = re.search(r'R"MTLX\((.*)\)MTLX"', text, re.S)
+        if match:
+            own = mx.createDocument()
+            mx.readFromXmlString(own, match.group(1))
+            doc.importLibrary(own)
     return doc
 
 
@@ -64,6 +78,11 @@ class Resolver:
                     result = "rewritten" if in_ is not None and in_.getType() in SEPARABLE else ""
                 elif category == "swizzle":
                     result = "rewritten"
+                elif category == "transformmatrix":
+                    # A constant matrix becomes dot products (mtlx_expand.cpp);
+                    # vector4 keeps out, its fourth channel being dropped.
+                    in_ = nd.getActiveInput("in")
+                    result = "rewritten" if in_ is not None and in_.getType() in ("vector2", "vector3") else ""
                 else:
                     for impl in self.doc.getMatchingImplementations(name):
                         if not impl.isA(mx.NodeGraph):

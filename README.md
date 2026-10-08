@@ -177,13 +177,15 @@ floor within 1 %). What each bench does and does not prove is set out in
 The complete list, with line numbers, is [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md).
 The ones a user meets first:
 
-- MaterialX: 762 of the library's 822 shading nodedefs are rendered - 651
-  by the mapping table, 71 by expanding the nodegraph the library defines
-  them with, 40 by rewriting (`extract`, `swizzle`); of the 775 that route,
-  636 keep every input when rendered (`tools/mtlx_inputs.py`), and 49 are
+- MaterialX: 789 of the library's 822 shading nodedefs are rendered - 666
+  by the mapping table, 80 by expanding a nodegraph (the library's own, or
+  one the delegate ships for nodes the library writes in GLSL only), 43 by
+  rewriting (`extract`, `swizzle`, `transformmatrix`); of the 782 that route,
+  641 keep every input when rendered (`tools/mtlx_inputs.py`), and 64 are
   value-checked against the MaterialX definition (`tools/bench_mtlx.py`).
-  Out: matrices, the colour4 compositing nodes, `time`/`frame`, `blur`,
-  `curveadjust`, and a few BSDF helpers - Cycles' node graph has no
+  Out: the matrix nodes other than a constant `transformmatrix`, the colour4
+  compositing nodes, `time`/`frame`, `curveadjust`, `thin_film_bsdf`,
+  `thin_surface` - Cycles' node graph has no
   equivalent, and OSL is not an option against Houdini (its OpenImageIO is
   2.5, Cycles' OSL is built on 3.1; Houdini ships no usable OSL).
 - Cycles has no light path expressions: Karma's usual LPEs are mapped to the
