@@ -2018,3 +2018,56 @@ Couverture MaterialX : 647 → **652 nodedefs**, 131 → **136 catégories**.
 Chiang de Cycles n'a pas de teinte par lobe. Laissées à blanc, elles ne changent
 rien ; modifiées, elles s'annoncent par un avertissement. `curve_direction` de
 même.
+
+## Plan, phases 3 à 8 (2026-10-07 → 08) — ce qui a été mesuré et décidé
+
+Le plan de `PLAN.md` remplace la numérotation de phases de ce journal ; les
+patches 0079 à 0096 en sont la trace. Ce qui suit garde ce qu'aucun autre
+document ne dit : les mesures, et les fausses pistes.
+
+**Courbes (0081, 0085).** Les courbes USD sont rééchantillonnées en clés que
+Cycles lit en Catmull-Rom. Trois clés par segment de Bézier donnaient une arche
+en trois traits presque droits : 28 % de recouvrement avec la silhouette de
+Karma, 89 % à huit clés, le reste étant l'anticrénelage d'un trait de 4 px.
+Le banc B-spline avait une sonde fausse (la courbe commence à x = −0,5, pas
+avant) ; `curveIndices` n'existe pas en USD, le cas indexé ne se teste pas
+depuis un fichier.
+
+**Fausse alerte : la lumière distante.** Une `DistantLight` sans
+`inputs:normalize = 1` n'éclaire presque rien — dans Karma aussi : intensité
+× angle solide du disque (0,0019 contre 0,0019 à 5°). Un « correctif » qui
+forçait la normalisation a été écrit puis retiré après la comparaison à Karma.
+
+**Instances (0082).** Le flou des instances et leurs primvars par instance.
+En chemin : un primvar constant écrit sans crochets lisait de la mémoire non
+initialisée (inf). Fausse piste : `heat` est un attribut standard de Cycles
+(chaleur des volumes), le shader le demandait sous ce nom-là.
+
+**Surfaces implicites (0083) et K-30 (0084).** La scene index d'Hydra les
+découpe en dix segments : sphère 16 % trop petite en surface. Subdiviser
+n'aide pas — la limite de Catmull-Clark reste dans sa cage. D'où notre propre
+découpage, 64 segments.
+
+**Passes (0087, 0092, 0094, 0095).** Deux passes Cycles du même type sous
+deux noms restent séparées dans le film : le noyau en écrit une, l'autre lit
+noir — une passe par type. Cycles divise ses passes de lumière par la couleur
+(0,94 sur une sphère diffuse), Karma non (0,752) : les noms et LPE de Karma
+sont remultipliés. husk recopie les statistiques du délégué dans l'en-tête
+EXR : c'est par là que passe le manifeste cryptomatte.
+
+**Réglages (0086, 0088, 0089, 0093).** Le shadow catcher approché donne
+~0,2 d'alpha là où le plan perd la moitié de sa lumière sous un dôme. Le
+premier essai de light linking semblait sans effet : la DLL de test n'avait
+pas été recopiée (un banc la tenait).
+
+**K-29.** Le mode batch de Cycles sous husk : 13,2 s contre 13,6 s sur cinq
+paires, dans le bruit, images identiques au bit près. Écarté.
+
+**Vérifié par Adrien dans Houdini (`tests/houdini/`)** : les purposes
+s'affichent et disparaissent ; le flou revenait mais l'objet disparaissait
+à la coupure → 0091, à revérifier.
+
+**Outillage.** houdini-mcp installé le 2026-10-08 avec son accord (étagère
+MCP, démarrage manuel). Bancs ajoutés : `bench_curves` (`--karma`),
+`bench_motion`, `bench_instances`, `bench_implicit`, `bench_settings`,
+`bench_aovs`, `bench_karma_settings`.
