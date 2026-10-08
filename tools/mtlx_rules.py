@@ -48,10 +48,10 @@ def add_own_nodegraphs(doc):
     """The delegate's own nodegraphs (mtlx_nodegraphs.h), into `doc`."""
     if os.path.exists(OWN_NODEGRAPHS):
         text = open(OWN_NODEGRAPHS, encoding="utf-8").read()
-        match = re.search(r'R"MTLX\((.*)\)MTLX"', text, re.S)
-        if match:
+        pieces = re.findall(r'R"MTLX\((.*?)\)MTLX"', text, re.S)
+        if pieces:
             own = mx.createDocument()
-            mx.readFromXmlString(own, match.group(1))
+            mx.readFromXmlString(own, "".join(pieces))
             doc.importLibrary(own)
 
 

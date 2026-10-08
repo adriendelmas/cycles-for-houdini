@@ -2250,3 +2250,28 @@ Cycles son échelle par défaut de 0,005 (habitude millimétrique de Blender),
 la lumière diffusait 200 fois trop court — sphère 10 % trop rouge contre
 Karma, à 4 % après ; et l'occlusion ambiante prenait l'angle du cône pour
 distance, c'est `maxdistance` qui l'est. K-14 fermé.
+
+**Toute la bibliothèque contre Karma (0108).** Nouvel outil
+`tools/mtlx_karma.py` : un quad par nodedef à valeur (695), sa valeur
+affichée sans éclairage (`surface_unlit`), rendu par Cycles et par Karma
+depuis le même fichier, comparé case à case. Premier passage : 563
+identiques, 96 écarts. Douze défauts de traduction en sont sortis et sont
+corrigés (K-61) : rotations en degrés et dans l'autre sens, tangente et
+bitangente d'après les UV, troisième composante libre des vector2 (dans les
+conversions et dans les produits scalaires, distances, longueurs — d'où
+`tiledcircles` tout noir), `combine2` vers color4, comparaisons à sortie
+booléenne, `burn`/`dodge` sans bornes, `ramp_gradient` pris pour une autre
+rampe. Après : 599 identiques ; les 63 écarts restants sont expliqués un par
+un (image absente, Karma qui s'écarte du GLSL de référence, vector4, bruits
+propres à chaque moteur) sauf `heighttonormal` (K-12, ouvert).
+Dans le même patch, K-12 : `heighttonormal` rend désormais une normale
+encodée en espace tangent (bosse de Cycles, ramenée sur T, B, N, puis
+·0,5 + 0,5) ; plat = (0,5 ; 0,5 ; 1) comme Karma, et la chaîne
+`heighttonormal → normalmap` reproduit `bump` au pixel près. Reste
+l'approximation d'échelle : pente en unités monde contre unités d'UV chez
+MaterialX.
+Avec `--closures` (45 BSDF, EDF et surfaces sous un dôme blanc), un dernier
+défaut : toute EDF MaterialX émettait 10 fois trop, le nœud d'émission de
+Cycles ayant une intensité par défaut de 10 ; et `generalized_schlick_edf`
+émettait seul alors qu'il ne fait que teinter l'EDF de sa base. 38 sur 45
+identiques ensuite.

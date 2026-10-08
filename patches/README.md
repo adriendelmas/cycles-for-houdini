@@ -137,6 +137,7 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0105` | hydra: thin_film_bsdf replie sur le BSDF de son layer, curveadjust en passe-plat, l'alpha d'une image lue par separate4/extract/swizzle (K-17) |
 | `0106` | hydra: position, normale et tangente selon leur `space` - normale objet par defaut, position monde sur demande (K-18) |
 | `0107` | hydra: absorption_vdf en coefficient (couleur = 1 - absorption), subsurface a l'echelle 1 et avec son anisotropie, AO par maxdistance (K-14) ; surface_unlit traduit (K-60) |
+| `0108` | hydra: douze traductions corrigees par comparaison a Karma - rotate en degres, tangente UV, vector2 sans 3e composante, combine2 color4, comparaisons booleennes, burn/dodge sans bornes, ramp_gradient deplie (K-61) ; heighttonormal encode en espace tangent (K-12) ; emission a l'intensite 1, generalized_schlick_edf transmet sa base |
 
 ---
 

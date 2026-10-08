@@ -125,12 +125,21 @@ carried and are reported.
 MaterialX HwViewDirection node emits `normalize(P − viewPosition)`, camera →
 surface. Negated. No bench case: the plane's mean cannot see a direction.
 
-### K-12 `heighttonormal` outputs a world normal — probable
+### K-12 `heighttonormal` outputs a world normal — confirmed — **fixed** (0108)
 `material.cpp:1149` maps it to `bump`, whose output is a shading normal.
 MaterialX outputs a tangent-space normal *map* (`(0.5, 0.5, 1)` when flat)
 meant for a following `normalmap`. The chain `heighttonormal → normalmap`
 therefore breaks. Either detect the chain and collapse it, or build the
 tangent map from `bump` − N through a `vector_transform` to tangent space.
+
+Fixed 2026-10-08 by the second route, without a transform: heighttonormal is
+a nodegraph the delegate ships - Cycles' bump of the height, its normal's dot
+products with the UV tangent, the bitangent and the normal, encoded * 0.5 +
+0.5. Flat gives (0.5, 0.5, 1), as Karma; `heighttonormal` into `normalmap`
+renders identical to `bump` on a sine ripple, pixel for pixel - MaterialX
+defines `bump` as exactly that chain. Approximation kept: the slope is the
+bump's, in world units, where MaterialX's is in UV units (scale / 16 *
+dh/du); the two agree only for one UV unit per world unit.
 
 ### K-13 `conductor_bsdf` loses its colour — confirmed — **fixed** (0078)
 Now `metallic_bsdf` in `physical_conductor` mode with `ior` and `extinction`
@@ -275,6 +284,40 @@ the existing table, none caught before because no case exercised them:
 - `generalized_schlick_bsdf`, new in 0104, first wrote its colour to
   `base_color`; metallic_bsdf calls it `color`. Caught by the Karma bench.
 `bench_mtlx.py` cases `mix_color_factor`, `scalar_*` failed on 0103 and pass.
+
+### K-61 Twelve translations wrong, found by rendering the whole library against Karma — confirmed — **fixed** (0108)
+`tools/mtlx_karma.py` renders one quad per value nodedef (695) with Cycles and
+with Karma from the same file, the value shown unlit, and compares the quads.
+First run: 563 the same, 36 apart by each engine's own noise, 96 apart. Fixed:
+- `rotate2d` / `rotate3d`: `amount` is in degrees and MaterialX turns the
+  other way (v' = v * M); read as radians, 0.37 degree turned 21;
+- `tangent`: MaterialX's is dP/du of the first UV set, Cycles' geometry
+  tangent is radial; now the tangent node in uv_map mode. `bitangent` was
+  that same tangent; now N x T;
+- a `convert` into or out of a vector2 left its free third component in the
+  result (cos(0) = 1 showed in blue); now zeroed;
+- `dotproduct`, `distance`, `magnitude`, `normalize` of vector2 counted that
+  component: `tiledcircles` rendered black;
+- `combine2` into colour4/vector4 from a colour and an alpha went through a
+  channel combine: (r, alpha, 0); `combine2_vector4VV` likewise;
+- `ifgreater`/`ifgreatereq`/`ifequal` with a boolean output gave nothing;
+- `burn` and `dodge` went through Blender's blend modes, which clamp;
+  MaterialX does not (nodegraphs the delegate ships, from the GLSL);
+- `ramp_gradient` was routed to Cycles' gradient texture, another node; its
+  library nodegraph now expands, and `ramp`, built on it, with it;
+- with `--closures` (45 BSDF, EDF and surface nodedefs, lit by a white dome):
+  every EDF shone ten times too bright - Cycles' emission node defaults its
+  strength to 10 - and `generalized_schlick_edf` emitted on its own where it
+  only tints the EDF on its `base`. 35 then 38 of 45 the same; `sheen_bsdf`
+  remains apart (see K-62), the others are Karma's grey fallback for nodes it
+  does not render (`layer` with nothing layered, `measured_edf`, the legacy
+  Disney surfaces).
+After: 599 the same. The 63 apart are explained: images pointing at a file
+that does not exist (Cycles shows magenta, Karma the `default`), a
+`geompropvalue` with no primvar, vector4 (K-17), Karma departing from the
+library's GLSL (`dodge` gives 1 minus it, `blackbody` 11 times it, vector
+`atan2` one channel, emission capped at 20), Houdini and Karma nodes Karma
+alone implements. `heighttonormal` (K-12) is fixed in the same patch.
 
 ## B. Geometry and scene
 

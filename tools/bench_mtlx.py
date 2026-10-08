@@ -594,6 +594,24 @@ def mx_complement(rgb):
 IMAGE4 = shader("img", ['uniform token info:id = "ND_image_color4"',
                         "asset inputs:file = @flat.exr@", "color4f outputs:out"])
 
+
+def mx_rotate2d(v, degrees):
+    # stdlib/genglsl/mx_rotate_vector2.glsl
+    a = math.radians(degrees)
+    s, c = math.sin(a), math.cos(a)
+    return (c * v[0] + s * v[1], -s * v[0] + c * v[1])
+
+
+def mx_rotate3d(v, degrees, axis):
+    # stdlib/genglsl/mx_rotate_vector3.glsl: v c + cross(v, axis) s + axis (axis . v)(1 - c)
+    n = math.sqrt(sum(x * x for x in axis))
+    k = [x / n for x in axis]
+    a = math.radians(degrees)
+    s, c = math.sin(a), math.cos(a)
+    cross = (v[1] * k[2] - v[2] * k[1], v[2] * k[0] - v[0] * k[2], v[0] * k[1] - v[1] * k[0])
+    d = sum(v[i] * k[i] for i in range(3))
+    return tuple(v[i] * c + cross[i] * s + k[i] * d * (1 - c) for i in range(3))
+
 def read_component(node, index):
     """A probe reading one component of a vector2 output of `node`."""
     return [
@@ -716,6 +734,83 @@ CASES += [
         'uniform token info:id = "ND_separate4_color4"',
         "color4f inputs:in.connect = </world/Materials/M/img.outputs:out>",
         "float outputs:outr", "float outputs:outg", "float outputs:outb", "float outputs:outa"])]}),
+    # rotate2d / rotate3d: degrees, and v' = v * M (mx_rotate_vector2/3.glsl).
+    ("rotate2d_x", [
+        'uniform token info:id = "ND_extract_vector2"',
+        "float2 inputs:in.connect = </world/Materials/M/rot.outputs:out>",
+        "int inputs:index = 0",
+        "float outputs:out",
+    ], (mx_rotate2d((0.5, 0.2), 30)[0],) * 3, {"extra": [shader("rot", [
+        'uniform token info:id = "ND_rotate2d_vector2"',
+        "float2 inputs:in = (0.5, 0.2)", "float inputs:amount = 30", "float2 outputs:out"])]}),
+    ("rotate2d_y", [
+        'uniform token info:id = "ND_extract_vector2"',
+        "float2 inputs:in.connect = </world/Materials/M/rot.outputs:out>",
+        "int inputs:index = 1",
+        "float outputs:out",
+    ], (mx_rotate2d((0.2, 0.5), 30)[1],) * 3, {"extra": [shader("rot", [
+        'uniform token info:id = "ND_rotate2d_vector2"',
+        "float2 inputs:in = (0.2, 0.5)", "float inputs:amount = 30", "float2 outputs:out"])]}),
+    ("rotate3d", [
+        'uniform token info:id = "ND_rotate3d_vector3"',
+        "float3 inputs:in = (0.2, 0.5, 0.1)", "float inputs:amount = 30",
+        "float3 inputs:axis = (0, 1, 0)",
+        "float3 outputs:out",
+    ], mx_rotate3d((0.2, 0.5, 0.1), 30, (0, 1, 0)), {}),
+    # Found by tools/mtlx_karma.py (2026-10-08), expected values from the
+    # library's GLSL. dodge is not clamped: 0.6 / (1 - 0.6) = 1.5.
+    ("ka_dodge_color3", [
+        'uniform token info:id = "ND_dodge_color3"',
+        "color3f inputs:fg = (0.6, 0.3, 0.15)", "color3f inputs:bg = (0.6, 0.3, 0.15)",
+        "float inputs:mix = 1",
+        "color3f outputs:out",
+    ], (1.5, 0.3 / 0.7, 0.15 / 0.85), {}),
+    ("ka_burn_float", [
+        'uniform token info:id = "ND_burn_float"',
+        "float inputs:fg = 0.8", "float inputs:bg = 0.6", "float inputs:mix = 1",
+        "float outputs:out",
+    ], (0.5, 0.5, 0.5), {}),
+    ("ka_ifgreater_boolean", ['uniform token info:id = "ND_convert_boolean_color3"', 'bool inputs:in.connect = </world/Materials/M/cmp.outputs:out>', 'color3f outputs:out'], (1.0, 1.0, 1.0), {"extra": [shader("cmp", [
+        'uniform token info:id = "ND_ifgreater_boolean"',
+        "float inputs:value1 = 0.7", "float inputs:value2 = 0.3", "bool outputs:out"])]}),
+    ("ka_ifgreatereq_boolean_false", ['uniform token info:id = "ND_convert_boolean_color3"', 'bool inputs:in.connect = </world/Materials/M/cmp.outputs:out>', 'color3f outputs:out'], (0.0, 0.0, 0.0), {"extra": [shader("cmp", [
+        'uniform token info:id = "ND_ifgreatereq_boolean"',
+        "float inputs:value1 = 0.2", "float inputs:value2 = 0.3", "bool outputs:out"])]}),
+    ("ka_combine2_color4CF", ['uniform token info:id = "ND_convert_color4_color3"', 'color4f inputs:in.connect = </world/Materials/M/cmb.outputs:out>', 'color3f outputs:out'], (0.6, 0.3, 0.15), {"extra": [shader("cmb", [
+        'uniform token info:id = "ND_combine2_color4CF"',
+        "color3f inputs:in1 = (0.6, 0.3, 0.15)", "float inputs:in2 = 0.8", "color4f outputs:out"])]}),
+    ("ka_convert_vector2", ['uniform token info:id = "ND_convert_vector2_color3"', 'float2 inputs:in.connect = </world/Materials/M/cs.outputs:out>', 'color3f outputs:out'], (math.cos(0.5), math.cos(0.2), 0.0), {"extra": [shader("cs", [
+        'uniform token info:id = "ND_cos_vector2"',
+        "float2 inputs:in = (0.5, 0.2)", "float2 outputs:out"])]}),
+    # A vector2 reduced: subtract(v, 0.3) leaves the free third component at
+    # -0.3, which the dot product must not count: 0.2^2 + 0.5^2 = 0.29.
+    ("ka_dotproduct_vector2", [
+        'uniform token info:id = "ND_dotproduct_vector2"',
+        "float2 inputs:in1.connect = </world/Materials/M/sub.outputs:out>",
+        "float2 inputs:in2.connect = </world/Materials/M/sub.outputs:out>",
+        "float outputs:out",
+    ], (0.29, 0.29, 0.29), {"extra": [shader("sub", [
+        'uniform token info:id = "ND_subtract_vector2FA"',
+        "float2 inputs:in1 = (0.5, 0.8)", "float inputs:in2 = 0.3", "float2 outputs:out"])]}),
+    # heighttonormal returns an encoded tangent-space normal: flat is
+    # (0.5, 0.5, 1) (K-12; it returned the world normal, (0, 0, 1)).
+    ("ka_heighttonormal_flat", [
+        'uniform token info:id = "ND_heighttonormal_vector3"',
+        "float inputs:in = 0.4",
+        "float3 outputs:out",
+    ], (0.5, 0.5, 1.0), {}),
+    # The plane's U runs along +X, its V along +Y: tangent (1, 0, 0),
+    # bitangent (0, 1, 0) - the radial tangent pointed elsewhere.
+    ("ka_tangent", [
+        'uniform token info:id = "ND_tangent_vector3"',
+        'uniform string inputs:space = "world"',
+        "float3 outputs:out",
+    ], (1.0, 0.0, 0.0), {}),
+    ("ka_bitangent", [
+        'uniform token info:id = "ND_bitangent_vector3"',
+        'uniform string inputs:space = "world"',
+        "float3 outputs:out",
+    ], (0.0, 1.0, 0.0), {}),
     ("own_inside_color3", [
         'uniform token info:id = "ND_inside_color3"',
         "color3f inputs:in = (0.9, 0.5, 0.2)", "float inputs:mask = 0.4",

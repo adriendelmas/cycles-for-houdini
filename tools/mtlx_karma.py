@@ -9,11 +9,15 @@ zero, so that a node does something (a `multiply` by its zero default shows
 nothing). Inputs read from the geometry (texcoord, position...) are left to
 it, so textures vary over the quad and are compared on their mean.
 
+With --closures, the BSDF, EDF and surface nodedefs instead: each quad a
+`surface` over the BSDF or EDF (a surface shader is the terminal itself), lit
+by the uniform white dome both engines agree on, and compared within 10 %.
+
 A quad whose mean differs beyond TOL is listed. Not every difference is the
 delegate's: noise and cellular functions are each engine's own, and are
 reported apart. Everything else is a translation to look at.
 
-    hython tools/mtlx_karma.py [--list] [pattern]
+    hython tools/mtlx_karma.py [--list] [--closures] [pattern]
 
 Scenes and images go to tests/materialx/output/karma/.
 """
@@ -100,6 +104,42 @@ def block(nd, library):
     return "\n".join("            " + l for l in lines)
 
 
+CLOSURE_TYPES = {"BSDF", "EDF", "surfaceshader"}
+CLOSURE_TOL_REL = 0.10
+
+
+def closure_block(nd):
+    """The material for one closure nodedef: under a `surface`, or the terminal."""
+    name = nd.getName()
+    out = nd.getActiveOutputs()[0]
+    probe = ['uniform token info:id = "%s"' % name]
+    for inp in nd.getActiveInputs():
+        t = inp.getType()
+        if t in mtlx_inputs.CLOSURES or inp.getName() == "note":
+            continue
+        if inp.getDefaultGeomPropString() or not inp.getValueString():
+            continue
+        usd_t, literal = mtlx_inputs.usd_value(t, inp.getValueString())
+        if usd_t is None:
+            continue
+        uniform = "uniform " if inp.getIsUniform() else ""
+        probe.append("%s%s inputs:%s = %s" % (uniform, usd_t, inp.getName(), literal))
+    probe.append("token outputs:%s" % out.getName())
+    base = "/world/Materials/%s" % name
+    if out.getType() == "surfaceshader":
+        lines = ["token outputs:mtlx:surface.connect = <%s/probe.outputs:%s>" % (base, out.getName())]
+    else:
+        socket = "bsdf" if out.getType() == "BSDF" else "edf"
+        lines = ["token outputs:mtlx:surface.connect = <%s/surf.outputs:out>" % base,
+                 'def Shader "surf" {',
+                 '    uniform token info:id = "ND_surface"',
+                 "    token inputs:%s.connect = <%s/probe.outputs:%s>" % (socket, base, out.getName()),
+                 "    token outputs:out",
+                 "}"]
+    lines += ['def Shader "probe" {'] + ["    " + p for p in probe] + ["}"]
+    return "\n".join("            " + l for l in lines)
+
+
 def render(renderer, scene_path, exr):
     if os.path.exists(exr):
         os.remove(exr)
@@ -128,16 +168,17 @@ def main():
     if not os.path.isdir(OUT):
         os.makedirs(OUT)
     want_list = "--list" in sys.argv
+    closures = "--closures" in sys.argv
     pattern = next((a for a in sys.argv[1:] if not a.startswith("--")), None)
     library = mtlx_inputs.DOC
     blocks = []
     for nd in mtlx_inputs.routed_nodedefs():
         outs = nd.getActiveOutputs()
-        if not outs or outs[0].getType() not in VALUE_TYPES:
+        if not outs or outs[0].getType() not in (CLOSURE_TYPES if closures else VALUE_TYPES):
             continue
         if pattern and pattern not in nd.getName():
             continue
-        b = block(nd, library)
+        b = closure_block(nd) if closures else block(nd, library)
         if b is not None:
             blocks.append((nd, b))
     cols = max(1, int(math.ceil(math.sqrt(len(blocks)))))
@@ -150,7 +191,11 @@ def main():
                           for nd, b in blocks)
     scene = mtlx_inputs.HEAD % {"res": cols * QUAD_PX, "aperture": cols * 10, "center": cols / 2.0,
                                 "quads": "".join(quads), "materials": materials}
-    scene_path = os.path.join(OUT, "grid.usda")
+    if closures:
+        # A lit BSDF needs samples; the dome is the light both agree on.
+        scene = scene.replace("int cycles:samples = 1",
+                              "int cycles:samples = 64\n        int karma:global:pixelsamples = 64")
+    scene_path = os.path.join(OUT, "closures.usda" if closures else "grid.usda")
     open(scene_path, "w", encoding="utf-8").write(scene)
 
     cyc = render("HdCyclesPlugin", scene_path, os.path.join(OUT, "cycles.exr"))
@@ -162,7 +207,8 @@ def main():
     same, own, differ = [], [], []
     for i, (nd, _) in enumerate(blocks):
         a, b = cell_mean(cyc, i, cols), cell_mean(kar, i, cols)
-        bad = np.abs(a - b) > np.maximum(TOL_ABS, TOL_REL * np.abs(b))
+        rel = CLOSURE_TOL_REL if closures else TOL_REL
+        bad = np.abs(a - b) > np.maximum(TOL_ABS, rel * np.abs(b))
         if not bad.any():
             same.append(nd.getName())
         elif nd.getNodeString().startswith(ENGINE_OWN) or any(k in nd.getNodeString()
@@ -170,7 +216,7 @@ def main():
             own.append((nd.getName(), a, b))
         else:
             differ.append((nd.getName(), a, b))
-    print("value nodedefs compared : %d" % len(blocks))
+    print("%s nodedefs compared : %d" % ("closure" if closures else "value", len(blocks)))
     print("same as Karma           : %d" % len(same))
     print("differ, engine's own    : %d (noise, cellular, random)" % len(own))
     print("differ                  : %d" % len(differ))
