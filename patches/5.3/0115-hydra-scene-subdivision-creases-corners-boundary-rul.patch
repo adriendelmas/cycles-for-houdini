@@ -1,0 +1,215 @@
+From 3b896fdcc32f42a072fe09831b15ac88a4ecb4a8 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Fri, 9 Oct 2026 00:55:55 +0200
+Subject: [PATCH 115/115] hydra, scene: subdivision creases, corners, boundary
+ rules and holes
+
+The subdivision tags were read from the prim's root, where Hydra does not
+put them (they live in the mesh's container): every crease and corner was
+lost. Read from the mesh schema now, with USD's sharpness (to 10) divided
+by 10 for Cycles' weight (which it multiplies by 10 for OpenSubdiv);
+corners are read without creases too; interpolateBoundary and
+faceVaryingLinearInterpolation reach the mesh's boundary and face-varying
+rules.
+
+Holes on subdivided meshes: Cycles' mesh gets a per-face hole flag
+(subd_hole); the dicing skips those faces while OpenSubdiv still shapes the
+neighbours with them, as USD's holes mean.
+
+Mesh::clear now also clears the vertex creases, which piled up on every
+topology rebuild (K-72, tools/bench_subdiv.py: 7 cases against Karma).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/mesh.cpp | 69 ++++++++++++++++++++++++++++++++++++----------
+ src/scene/mesh.cpp |  5 ++++
+ src/scene/mesh.h   |  3 ++
+ src/subd/split.cpp |  3 ++
+ 4 files changed, 65 insertions(+), 15 deletions(-)
+
+diff --git a/src/hydra/mesh.cpp b/src/hydra/mesh.cpp
+index 1cce1fdd..9b34b2c3 100644
+--- a/src/hydra/mesh.cpp
++++ b/src/hydra/mesh.cpp
+@@ -161,7 +161,9 @@ void HdCyclesMesh::Populate(HdSceneDelegate *sceneDelegate, HdDirtyBits dirtyBit
+   rebuild = (_geom->triangles_is_modified()) || (_geom->subd_start_corner_is_modified()) ||
+             (_geom->subd_num_corners_is_modified()) || (_geom->subd_shader_is_modified()) ||
+             (_geom->subd_smooth_is_modified()) || (_geom->subd_ptex_offset_is_modified()) ||
+-            (_geom->subd_face_corners_is_modified());
++            (_geom->subd_face_corners_is_modified()) || (_geom->subd_hole_is_modified()) ||
++            (_geom->subd_creases_weight_is_modified()) ||
++            (_geom->subd_vert_creases_weight_is_modified());
+ }
+ 
+ void HdCyclesMesh::PopulatePoints(HdSceneDelegate *sceneDelegate)
+@@ -623,8 +625,10 @@ void HdCyclesMesh::PopulateTopology(HdSceneDelegate *sceneDelegate)
+     _geom->tag_smooth_modified();
+   }
+   else {
+-    const HdSubdivisionTagsSchema subdivSchema = HdSubdivisionTagsSchema::GetFromParent(
+-        prim.dataSource);
++    /* The tags live in the mesh's container, not at the prim's root: read
++     * from there, every crease and corner was lost (tools/bench_subdiv.py). */
++    const HdSubdivisionTagsSchema subdivSchema =
++        HdMeshSchema::GetFromParent(prim.dataSource).GetSubdivisionTags();
+     PxOsdSubdivTags subdivTags;
+     if (auto ds = subdivSchema.GetInterpolateBoundary()) {
+       subdivTags.SetVertexInterpolationRule(ds->GetTypedValue(0.0f));
+@@ -652,6 +656,23 @@ void HdCyclesMesh::PopulateTopology(HdSceneDelegate *sceneDelegate)
+     }
+     _topology.SetSubdivTags(subdivTags);
+ 
++    /* USD's boundary and face-varying rules, which Cycles hands to
++     * OpenSubdiv; left unset, Cycles kept its own defaults whatever the
++     * file said. The fallbacks are USD's: edgeAndCorner, cornersPlus1. */
++    const TfToken boundary = subdivTags.GetVertexInterpolationRule();
++    _geom->set_subdivision_boundary_interpolation(
++        boundary == PxOsdOpenSubdivTokens->none     ? Mesh::SUBDIVISION_BOUNDARY_NONE :
++        boundary == PxOsdOpenSubdivTokens->edgeOnly ? Mesh::SUBDIVISION_BOUNDARY_EDGE_ONLY :
++                                                      Mesh::SUBDIVISION_BOUNDARY_EDGE_AND_CORNER);
++    const TfToken fvar = subdivTags.GetFaceVaryingInterpolationRule();
++    _geom->set_subdivision_fvar_interpolation(
++        fvar == PxOsdOpenSubdivTokens->none         ? Mesh::SUBDIVISION_FVAR_LINEAR_NONE :
++        fvar == PxOsdOpenSubdivTokens->cornersOnly  ? Mesh::SUBDIVISION_FVAR_LINEAR_CORNERS_ONLY :
++        fvar == PxOsdOpenSubdivTokens->cornersPlus2 ? Mesh::SUBDIVISION_FVAR_LINEAR_CORNERS_PLUS2 :
++        fvar == PxOsdOpenSubdivTokens->boundaries   ? Mesh::SUBDIVISION_FVAR_LINEAR_BOUNDARIES :
++        fvar == PxOsdOpenSubdivTokens->all          ? Mesh::SUBDIVISION_FVAR_LINEAR_ALL :
++                                                      Mesh::SUBDIVISION_FVAR_LINEAR_CORNERS_PLUS1);
++
+     size_t numCorners = 0;
+     for (const int vertCount : vertCounts) {
+       numCorners += vertCount;
+@@ -668,7 +689,17 @@ void HdCyclesMesh::PopulateTopology(HdSceneDelegate *sceneDelegate)
+     int *subd_num_corners = _geom->get_subd_num_corners().data();
+     int *subd_ptex_offset = _geom->get_subd_ptex_offset().data();
+ 
+-    // TODO: Handle hole indices
++    /* Holes are not diced; OpenSubdiv still shapes their neighbours with
++     * them, as USD's holes mean. */
++    array<bool> holes(_topology.GetNumFaces());
++    std::fill(holes.begin(), holes.end(), false);
++    for (const int hole : _topology.GetHoleIndices()) {
++      if (hole >= 0 && hole < _topology.GetNumFaces()) {
++        holes[hole] = true;
++      }
++    }
++    _geom->set_subd_hole(holes);
++
+     int ptex_offset = 0;
+     size_t faceIndex = 0;
+     size_t indexOffset = 0;
+@@ -710,26 +741,34 @@ void HdCyclesMesh::PopulateTopology(HdSceneDelegate *sceneDelegate)
+       size_t createWeightOffset = 0;
+       for (const int creaseLength : creaseLengths) {
+         for (int j = 0; j < creaseLength - 1; ++j, ++createWeightOffset) {
++          /* One sharpness per crease, or one per edge; anything else is
++           * malformed and the edge is left smooth. */
++          const size_t weightIndex = creaseWeights.size() == creaseLengths.size() ?
++                                         creaseLengthOffset :
++                                         createWeightOffset;
++          if (weightIndex >= creaseWeights.size() || indexOffset + j + 1 >= creaseIndices.size()) {
++            continue;
++          }
++          const float weight = creaseWeights[weightIndex];
+           const int v0 = creaseIndices[indexOffset + j];
+           const int v1 = creaseIndices[indexOffset + j + 1];
+ 
+-          const float weight = creaseWeights.size() == creaseLengths.size() ?
+-                                   creaseWeights[creaseLengthOffset] :
+-                                   creaseWeights[createWeightOffset];
+-
+-          _geom->add_edge_crease(v0, v1, weight);
++          /* USD's sharpness runs to 10, Cycles' weight to 1 (it multiplies
++           * by 10 for OpenSubdiv). */
++          _geom->add_edge_crease(v0, v1, weight / 10.0f);
+         }
+ 
+         indexOffset += creaseLength;
+         creaseLengthOffset++;
+       }
++    }
+ 
+-      const VtIntArray cornerIndices = subdivTags.GetCornerIndices();
+-      const VtFloatArray cornerWeights = subdivTags.GetCornerWeights();
+-
+-      for (size_t i = 0; i < cornerIndices.size(); ++i) {
+-        _geom->add_vertex_crease(cornerIndices[i], cornerWeights[i]);
+-      }
++    /* Corners stand on their own: they were read only when the mesh also
++     * had creases. */
++    const VtIntArray cornerIndices = subdivTags.GetCornerIndices();
++    const VtFloatArray cornerWeights = subdivTags.GetCornerWeights();
++    for (size_t i = 0; i < cornerIndices.size() && i < cornerWeights.size(); ++i) {
++      _geom->add_vertex_crease(cornerIndices[i], cornerWeights[i] / 10.0f);
+     }
+ 
+     /* The dicing step comes from the render settings; without a dicing
+diff --git a/src/scene/mesh.cpp b/src/scene/mesh.cpp
+index edd02fa1..bcd67359 100644
+--- a/src/scene/mesh.cpp
++++ b/src/scene/mesh.cpp
+@@ -306,6 +306,7 @@ NODE_DEFINE(Mesh)
+   SOCKET_INT_ARRAY(subd_shader, "Subdivision Face Shader", array<int>());
+   SOCKET_BOOLEAN_ARRAY(subd_smooth, "Subdivision Face Smooth", array<bool>());
+   SOCKET_INT_ARRAY(subd_ptex_offset, "Subdivision Face PTex Offset", array<int>());
++  SOCKET_BOOLEAN_ARRAY(subd_hole, "Subdivision Face Hole", array<bool>());
+ 
+   /* Subdivisions parameters */
+   static NodeEnum subd_adaptive_space_enum;
+@@ -404,10 +405,13 @@ void Mesh::clear(bool preserve_shaders, bool preserve_voxel_data)
+   subd_shader.clear();
+   subd_smooth.clear();
+   subd_ptex_offset.clear();
++  subd_hole.clear();
+   subd_face_corners.clear();
+ 
+   subd_creases_edge.clear();
+   subd_creases_weight.clear();
++  subd_vert_creases.clear();
++  subd_vert_creases_weight.clear();
+ 
+   subd_attributes.clear();
+   attributes.clear(preserve_voxel_data);
+@@ -431,6 +435,7 @@ Mesh::SubdFace Mesh::get_subd_face(const size_t index) const
+   s.smooth = subd_smooth[index];
+   s.ptex_offset = subd_ptex_offset[index];
+   s.start_corner = subd_start_corner[index];
++  s.hole = index < subd_hole.size() && subd_hole[index];
+   return s;
+ }
+ 
+diff --git a/src/scene/mesh.h b/src/scene/mesh.h
+index 256f4233..91e6aa9d 100644
+--- a/src/scene/mesh.h
++++ b/src/scene/mesh.h
+@@ -82,6 +82,8 @@ class Mesh : public Geometry {
+     int shader;
+     bool smooth;
+     int ptex_offset;
++    /* A hole is not diced; it still shapes its neighbours, as in OpenSubdiv. */
++    bool hole;
+ 
+     bool is_quad()
+     {
+@@ -151,6 +153,7 @@ class Mesh : public Geometry {
+   NODE_SOCKET_API_ARRAY(array<int>, subd_shader)
+   NODE_SOCKET_API_ARRAY(array<bool>, subd_smooth)
+   NODE_SOCKET_API_ARRAY(array<int>, subd_ptex_offset)
++  NODE_SOCKET_API_ARRAY(array<bool>, subd_hole)
+ 
+   NODE_SOCKET_API_ARRAY(array<int>, subd_face_corners)
+ 
+diff --git a/src/subd/split.cpp b/src/subd/split.cpp
+index 421f7230..2698399e 100644
+--- a/src/subd/split.cpp
++++ b/src/subd/split.cpp
+@@ -768,6 +768,9 @@ void DiagSplit::split_patches(const Patch *patches, const size_t patches_byte_st
+   /* Split all faces in the mesh. */
+   for (int f = 0; f < params.mesh->get_num_subd_faces(); f++) {
+     Mesh::SubdFace face = params.mesh->get_subd_face(f);
++    if (face.hole) {
++      continue;
++    }
+     const Patch *patch = (const Patch *)(((char *)patches) +
+                                          (face.ptex_offset * patches_byte_stride));
+     if (face.is_quad()) {

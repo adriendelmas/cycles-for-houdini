@@ -740,6 +740,25 @@ it was where Karma doubles it. The film's exposure is now the render
 settings' (`cycles:film:exposure`) times the camera's scale, each side
 keeping its own so neither overwrites the other; the free view counts 1.
 
+### K-72 Subdivision tags lost: creases, corners, boundaries, holes — confirmed — **fixed** (0115)
+`tools/bench_subdiv.py`, a Catmull-Clark cube and an open grid, white and
+unlit, silhouettes compared pixel by pixel with Karma. Only the untagged
+cube agreed:
+- the subdivision tags were read from the prim's root, where Hydra does not
+  put them (they live in the mesh's container): every crease and corner was
+  lost, an all-creased cube came out as the rounded blob;
+- read from the right place, the sharpness would have gone to Cycles as is,
+  where Cycles multiplies its 0-1 weight by 10 for OpenSubdiv: now divided
+  by 10;
+- corners were only read when the mesh also had creases;
+- `interpolateBoundary` and `faceVaryingLinearInterpolation` never reached
+  Cycles' mesh, which has both;
+- `holeIndices` were ignored on subdivided meshes (a TODO). Cycles' mesh now
+  carries a hole per face, which the dicing skips while OpenSubdiv still
+  shapes the neighbours with it, as USD's holes mean.
+Also in Cycles itself: `Mesh::clear` kept the vertex creases, which piled up
+on every topology rebuild. All seven cases within 0.2 % of Karma's pixels.
+
 ## C. Houdini side
 
 ### K-40 `op:` textures fail under husk — confirmed

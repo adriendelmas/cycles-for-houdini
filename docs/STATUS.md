@@ -2365,3 +2365,12 @@ cadrage, décentrement, profondeur de champ, orthographique, formats d'image
 différents de l'ouverture, tous au pixel près. Seule l'exposition de la
 caméra était ignorée ; elle multiplie maintenant celle des render settings
 sur le film.
+
+**Subdivision contre Karma (0115, K-72).** Nouveau banc `bench_subdiv.py` :
+un cube Catmull-Clark plissé restait un galet. Les tags étaient lus à la
+racine du prim alors que Hydra les range dans le conteneur `mesh` ; une fois
+lus, l'acuité USD (0-10) aurait été multipliée par 10 une seconde fois ; les
+coins n'étaient lus qu'avec des plis ; règles de bord et face-varying
+jamais transmises ; trous ignorés en subdivision. Tout corrigé (trous : la
+face n'est plus découpée, OpenSubdiv s'en sert encore pour ses voisines) ;
+plus un bug de Cycles : `Mesh::clear` gardait les coins. 7 cas sur 7.
