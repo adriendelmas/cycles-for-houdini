@@ -134,6 +134,7 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0102` | hydra: les tailles des normales, des points et des largeurs verifiees avant lecture (K-57, plus de segfault sur un attribut illisible) |
 | `0103` | hydra: rugosite des BSDF elementaires prise comme alpha (racine carree), dielectric_bsdf selon scatter_mode - R principled, T refraction, RT verre (K-58) |
 | `0104` | hydra: nodegraphs livres par le delegue (artistic_ior, roughness_*, inside/outside), transformmatrix a matrice constante, generalized_schlick en F82, Disney legacy ; mix a facteur couleur, magnitude/distance/dotproduct corriges (K-59) |
+| `0105` | hydra: thin_film_bsdf replie sur le BSDF de son layer, curveadjust en passe-plat, l'alpha d'une image lue par separate4/extract/swizzle (K-17) |
 
 ---
 

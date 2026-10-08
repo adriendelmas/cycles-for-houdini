@@ -177,14 +177,15 @@ floor within 1 %). What each bench does and does not prove is set out in
 The complete list, with line numbers, is [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md).
 The ones a user meets first:
 
-- MaterialX: 789 of the library's 822 shading nodedefs are rendered - 666
+- MaterialX: 796 of the library's 822 shading nodedefs are rendered - 666
   by the mapping table, 80 by expanding a nodegraph (the library's own, or
-  one the delegate ships for nodes the library writes in GLSL only), 43 by
-  rewriting (`extract`, `swizzle`, `transformmatrix`); of the 782 that route,
-  641 keep every input when rendered (`tools/mtlx_inputs.py`), and 64 are
+  one the delegate ships for nodes the library writes in GLSL only), 50 by
+  rewriting (`extract`, `swizzle`, `transformmatrix`, a 1.38 thin film); of
+  the 789 that route, 641 keep every input when rendered
+  (`tools/mtlx_inputs.py`), and 67 are
   value-checked against the MaterialX definition (`tools/bench_mtlx.py`).
   Out: the matrix nodes other than a constant `transformmatrix`, the colour4
-  compositing nodes, `time`/`frame`, `curveadjust`, `thin_film_bsdf`,
+  compositing nodes (an image's own alpha does pass), `time`/`frame`,
   `thin_surface` - Cycles' node graph has no
   equivalent, and OSL is not an option against Houdini (its OpenImageIO is
   2.5, Cycles' OSL is built on 3.1; Houdini ships no usable OSL).

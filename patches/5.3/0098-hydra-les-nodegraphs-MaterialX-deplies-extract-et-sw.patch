@@ -1,7 +1,7 @@
 From 7d0925ea72d9eedb44e8e731d012ccd4bf136802 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 05:31:56 +0200
-Subject: [PATCH 098/104] hydra: les nodegraphs MaterialX deplies, extract et
+Subject: [PATCH 098/105] hydra: les nodegraphs MaterialX deplies, extract et
  swizzle reecrits, vector2 converti
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8

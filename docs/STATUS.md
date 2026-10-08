@@ -2211,3 +2211,16 @@ facteur couleur moyennait son facteur, et `magnitude`, `distance`,
 `dotproduct` sortaient noirs (lus sur la sortie `vector` au lieu de
 `value`). 774 → 789 nodedefs, 49 → 64 cas de valeur, 641 nœuds à entrées
 complètes ; suite verte, banc d'accord 37 contrôles.
+
+**0105 : film mince, curveadjust, alpha d'image (796/822).**
+`thin_film_bsdf` (MaterialX 1.38) s'empile par `layer` sur un BSDF ; en 1.39
+le film est une entrée des BSDF eux-mêmes. Le délégué replie donc le film sur
+le BSDF de base et retire le `layer` : rendu identique au pixel près à la
+forme 1.39 (comme chez Karma ; l'écart des deux moteurs sur la teinte du film
+lui-même atteint 30 % sur une sphère sombre, tolérance documentée).
+`curveadjust`, retiré du standard en 1.39.2, n'est implémenté nulle part
+sauf en MDL, où il renvoie son entrée : idem ici. Et le cas courant de K-17 :
+l'alpha d'une image lu par `separate4.outa`, `extract` 3 ou un swizzle `a`
+est rebranché sur la sortie alpha du nœud image de Cycles (détourage vers
+l'opacité). `time`/`frame` restent dehors : rien ne donne l'image courante au
+délégué, et un matériau n'est pas resynchronisé à chaque image.

@@ -78,6 +78,9 @@ class Resolver:
                     result = "rewritten" if in_ is not None and in_.getType() in SEPARABLE else ""
                 elif category == "swizzle":
                     result = "rewritten"
+                elif category == "thin_film_bsdf":
+                    # Folded onto the base BSDF of its layer (mtlx_expand.cpp).
+                    result = "rewritten"
                 elif category == "transformmatrix":
                     # A constant matrix becomes dot products (mtlx_expand.cpp);
                     # vector4 keeps out, its fourth channel being dropped.

@@ -590,6 +590,10 @@ def mx_complement(rgb):
     xyz = (X2, Y, Z2)
     return tuple(sum(xyz[j] * to_rgb[j][i] for j in range(3)) for i in range(3))
 
+
+IMAGE4 = shader("img", ['uniform token info:id = "ND_image_color4"',
+                        "asset inputs:file = @flat.exr@", "color4f outputs:out"])
+
 def read_component(node, index):
     """A probe reading one component of a vector2 output of `node`."""
     return [
@@ -687,6 +691,31 @@ CASES += [
         "float3 inputs:in = (0.6, 0.3, 0.2)",
         "float3 outputs:out",
     ], mx_complement((0.6, 0.3, 0.2)), {}),
+    # curveadjust: rolled back in 1.39.2, implemented nowhere but in MDL,
+    # which returns the input unchanged (mdl/materialx/stdlib_1_6.mdl).
+    ("legacy_curveadjust", [
+        'uniform token info:id = "ND_curveadjust_color3"',
+        "color3f inputs:in = (0.3, 0.6, 0.2)",
+        "color3f outputs:out",
+    ], (0.3, 0.6, 0.2), {}),
+    # The alpha of a colour4 image reaches a scalar input: through extract
+    # (rewritten into a separate) and through separate4.outa, both routed to
+    # the image node's alpha (K-17, 0105). flat.exr's texel alpha is 0.6.
+    ("alpha_extract", [
+        'uniform token info:id = "ND_extract_color4"',
+        "color4f inputs:in.connect = </world/Materials/M/img.outputs:out>",
+        "int inputs:index = 3",
+        "float outputs:out",
+    ], (0.6, 0.6, 0.6), {"extra": [IMAGE4]}),
+    ("alpha_separate4", [
+        'uniform token info:id = "ND_multiply_float"',
+        "float inputs:in1.connect = </world/Materials/M/sep.outputs:outa>",
+        "float inputs:in2 = 1",
+        "float outputs:out",
+    ], (0.6, 0.6, 0.6), {"extra": [IMAGE4, shader("sep", [
+        'uniform token info:id = "ND_separate4_color4"',
+        "color4f inputs:in.connect = </world/Materials/M/img.outputs:out>",
+        "float outputs:outr", "float outputs:outg", "float outputs:outb", "float outputs:outa"])]}),
     ("own_inside_color3", [
         'uniform token info:id = "ND_inside_color3"',
         "color3f inputs:in = (0.9, 0.5, 0.2)", "float inputs:mask = 0.4",

@@ -47,6 +47,11 @@ EMISSIVE_TOL = 1.10  # Karma's standard_surface emits ~5 % under the nominal val
 # dielectric differ, not the translation. The case guards the order of
 # magnitude - a black or a white sphere - and nothing finer.
 GLASS_TOL = 4.0
+# A thin film over a reflection-only dielectric leaves a dark sphere whose
+# iridescent tint differs between the engines by up to 30 % (2026-10-08) -
+# Cycles' film model against Karma's, on the 1.39 inputs as on a folded 1.38
+# layer, which render identical to each other on each side.
+THINFILM_TOL = 1.5
 
 # Regions in pixels at RES, y downward: the sphere's centre (its lit upper
 # half, the key light being up-left), and two floor patches away from the
@@ -88,6 +93,13 @@ CASES = [
     ("schlick_bsdf", "ND_generalized_schlick_bsdf", {
         "color3f inputs:color0": "(0.95, 0.64, 0.54)", "color3f inputs:color82": "(1, 0.9, 0.85)",
         "float2 inputs:roughness": "(0.25, 0.25)"}),
+    # A MaterialX 1.38 thin film layered over a dielectric (reflection only):
+    # folded onto the dielectric's thinfilm inputs (0105). Compared with the
+    # same dielectric carrying its film itself, the 1.39 way, on both sides.
+    ("thinfilm_layer", "LAYERED_THIN_FILM", {}),
+    ("thinfilm_direct", "ND_dielectric_bsdf", {
+        "float2 inputs:roughness": "(0.05, 0.05)", "float inputs:thinfilm_thickness": "400",
+        "float inputs:thinfilm_ior": "1.4"}),
     # Not the legacy Disney surfaces: Karma renders them a neutral grey
     # whatever the base colour - it does not implement them.
     # The same dielectric, transmitting: scatter_mode "RT" (the default "R"
@@ -98,7 +110,8 @@ CASES = [
 
 # Cases whose sphere is also compared on its highlight: the 99th percentile
 # of the whole sphere's luminance.
-PEAK_CASES = {"metal", "conductor_bsdf", "dielectric_bsdf", "schlick_bsdf"}
+PEAK_CASES = {"metal", "conductor_bsdf", "dielectric_bsdf", "schlick_bsdf",
+              "thinfilm_layer", "thinfilm_direct"}
 PEAK_BOX = (92, 148, 62, 118)
 PEAK_TOL = 1.35
 
@@ -201,9 +214,39 @@ def Xform "world"
 """
 
 
+# The film and its base for the "thinfilm_layer" case: MaterialX 1.38's way.
+LAYERED_THIN_FILM = """            def Shader "layer"
+            {
+                uniform token info:id = "ND_layer_bsdf"
+                token inputs:top.connect = </world/Materials/mat/film.outputs:out>
+                token inputs:base.connect = </world/Materials/mat/b.outputs:out>
+                token outputs:out
+            }
+            def Shader "film"
+            {
+                uniform token info:id = "ND_thin_film_bsdf"
+                float inputs:thickness = 400
+                float inputs:ior = 1.4
+                token outputs:out
+            }
+            def Shader "b"
+            {
+                uniform token info:id = "ND_dielectric_bsdf"
+                float2 inputs:roughness = (0.05, 0.05)
+                token outputs:out
+            }
+"""
+
+
 def scene_text(shader, inputs):
     mtlx = shader.startswith("ND_")
     lines = "\n".join("                %s = %s" % kv for kv in inputs.items())
+    if shader == "LAYERED_THIN_FILM":
+        text = SCENE % {"terminal": "mtlx:surface", "output": "out", "shader": "ND_surface",
+                        "inputs": "                token inputs:bsdf.connect = "
+                                  "</world/Materials/mat/layer.outputs:out>"}
+        anchor = "</world/Materials/mat/surf.outputs:out>" + chr(10)
+        return text.replace(anchor, anchor + LAYERED_THIN_FILM, 1)
     if shader.endswith("_bsdf"):
         # An elementary BSDF goes under a `surface` node, as in a network
         # built by hand.
@@ -265,7 +308,8 @@ def main():
             continue
         side_by_side(cyc, kar, os.path.join(OUT, name + "_cmp.png"))
         tol = {"emission": EMISSIVE_TOL, "glass": GLASS_TOL,
-               "dielectric_rt": GLASS_TOL}.get(name, TOL)
+               "dielectric_rt": GLASS_TOL, "thinfilm_layer": THINFILM_TOL,
+               "thinfilm_direct": THINFILM_TOL}.get(name, TOL)
         for region, box in REGIONS.items():
             a, b = region_mean(cyc, box), region_mean(kar, box)
             if a.max() < DARK and b.max() < DARK:

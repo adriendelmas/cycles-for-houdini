@@ -194,10 +194,17 @@ had put it on Houdini's side. Original note:
 network. A Karma Material Builder's `kma` network is never consulted. Add it
 after `mtlx` (the nodes are the same MaterialX nodedefs).
 
-### K-17 Colour4 and alpha are dropped throughout — probable
+### K-17 Colour4 and alpha are dropped throughout — confirmed — partly fixed (0105)
 `image_color4.out` becomes `color` (alpha lost), `separate4_color.outa` has
 no socket, `combine4_*` drop the fourth input, `constant_vector4` averages.
 Acceptable for most networks; should be logged once per material.
+
+0105 fixes the common case: an image's alpha read through `separate4.outa`,
+`extract` index 3 or a swizzle `a` - a cut-out driving opacity. When the
+separated colour comes straight from an `image_color4`/`tiledimage_color4`,
+the reader is wired to the image node's own alpha output
+(`bench_mtlx.py` `alpha_*`). Alpha that has gone through any other colour4
+node first is still lost, and with it the colour4 compositing nodes.
 
 ### K-18 `texcoord.index`, `normal.space`, `tangent.space` ignored — probable
 Only the first UV set; `normal`/`tangent` are world space while the nodedef
@@ -551,6 +558,15 @@ matrix, the colour4 compositing nodes (`over`, `in`, `out`, `mask`, `matte`,
 `premult`, `unpremult`, `disjointover`, and the colour4 `inside`/`outside` -
 they need the alpha K-17 drops), `time`, `frame`, `curveadjust`,
 `thin_film_bsdf`, `thin_surface`, `hextilednormalmap`.
+
+Later the same evening, after 0105: **796** of 822. `thin_film_bsdf` (1.38)
+is folded onto the base BSDF of its `layer` - the 1.39 `thinfilm_*` inputs,
+which render identical to it; `curveadjust` passes its input through, as its
+only implementation in the library (MDL) does - no renderer implements the
+knots. Still out: `time` and `frame` (nothing gives the delegate the current
+frame, and a material is not re-synced per frame), the matrix nodes other
+than a constant `transformmatrix`, the colour4 compositing nodes,
+`thin_surface`, `hextilednormalmap`.
 
 ### K-52 Bench expected values derived from the code — confirmed — **fixed**
 `tools/bench_mtlx.py` now computes every expected colour from the MaterialX
