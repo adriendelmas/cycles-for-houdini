@@ -136,6 +136,7 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0104` | hydra: nodegraphs livres par le delegue (artistic_ior, roughness_*, inside/outside), transformmatrix a matrice constante, generalized_schlick en F82, Disney legacy ; mix a facteur couleur, magnitude/distance/dotproduct corriges (K-59) |
 | `0105` | hydra: thin_film_bsdf replie sur le BSDF de son layer, curveadjust en passe-plat, l'alpha d'une image lue par separate4/extract/swizzle (K-17) |
 | `0106` | hydra: position, normale et tangente selon leur `space` - normale objet par defaut, position monde sur demande (K-18) |
+| `0107` | hydra: absorption_vdf en coefficient (couleur = 1 - absorption), subsurface a l'echelle 1 et avec son anisotropie, AO par maxdistance (K-14) ; surface_unlit traduit (K-60) |
 
 ---
 

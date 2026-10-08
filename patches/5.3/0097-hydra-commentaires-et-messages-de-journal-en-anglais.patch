@@ -1,7 +1,7 @@
 From e03be8c5087ddd09223fc2fddde6820516d4d2dc Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 04:22:23 +0200
-Subject: [PATCH 097/106] hydra: commentaires et messages de journal en anglais
+Subject: [PATCH 097/107] hydra: commentaires et messages de journal en anglais
 
 Les commentaires francais de src/hydra et les quatre lignes de journal
 francaises (Affichage, Rendu relance, Passe de rendu) passent en anglais :

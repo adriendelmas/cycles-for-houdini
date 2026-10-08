@@ -1,7 +1,7 @@
 From a0aab6bda0a20f85678039bffa3d8284e5b3ce6d Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 03:59:54 +0200
-Subject: [PATCH 096/106] hydra: la passe ne bloque plus l'interface, et le
+Subject: [PATCH 096/107] hydra: la passe ne bloque plus l'interface, et le
  cache des COP se vide
 
 La passe de rendu prenait le verrou de la scene en attendant : pendant

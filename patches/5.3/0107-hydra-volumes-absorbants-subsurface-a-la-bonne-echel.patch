@@ -1,0 +1,158 @@
+From fac59ec9128ce8fa537266f0cf9042df95cd500f Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 8 Oct 2026 19:09:57 +0200
+Subject: [PATCH 107/107] hydra: volumes absorbants, subsurface a la bonne
+ echelle, surface unlit
+
+Le coefficient d'absorption de MaterialX etait passe tel quel comme couleur
+a Cycles, qui absorbe (1 - couleur) * densite : inverse, 0,2 absorbait comme
+0,8. Couleur = 1 - absorption a densite 1 ; la lumiere qui traverse un cube
+de 2 unites vaut exp(-2 sigma) au millieme (tools/bench_volume.py). Le
+subsurface_bsdf laissait l'echelle de Cycles a 0,005 : diffusion 200 fois
+trop courte, sphere 10 % trop rouge contre Karma, a 4 % apres ; il porte
+aussi son anisotropie. L'occlusion ambiante prend maxdistance pour distance,
+plus l'angle du cone (K-14). Et surface_unlit, qui tombait sur le prefixe
+ND_surface sans emission_color et sortait noir, a sa traduction (K-60).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp | 95 +++++++++++++++++++++++++++++++++++-------
+ 1 file changed, 80 insertions(+), 15 deletions(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index 249cf577..ea352980 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -1514,6 +1514,44 @@ const UsdToCyclesMapping &MtlxSurface()
+   return mapping;
+ }
+ 
++/* `surface_unlit`: emission plus transmission, cut out by opacity
++ * (stdlib_defs.mtlx). It used to fall on the `ND_surface` prefix, whose
++ * mapping has no `emission_color`: Houdini's MtlX Surface Unlit rendered
++ * black. Built like `surface`: a mix by the opacity between a transparent and
++ * the sum of an emission (colour times amount) and a transparent tinted by
++ * transmission_color * transmission. Helpers that receive another's wire come
++ * first, as the assembly wires in order. */
++const UsdToCyclesMapping &MtlxSurfaceUnlit()
++{
++  static const UsdToCyclesMapping mapping = [] {
++    UsdToCyclesMapping m{"mix_closure",
++                         {
++                             {TfToken("emission"), ustring("em:strength")},
++                             {TfToken("emission_color"), ustring("em:color")},
++                             {TfToken("transmission"), ustring("tw:scale")},
++                             {TfToken("transmission_color"), ustring("tw:vector1")},
++                             {TfToken("opacity"), ustring("fac")},
++                             {CyclesMaterialTokens->out, ustring("closure")},
++                         }};
++    m.setFixedValues({{ustring("fac"), "1"}});
++    m.addHelper({"add", "add_closure", {{"Closure", "Closure2"}}, {}});
++    m.addHelper({"tr", "transparent_bsdf", {{"BSDF", "Closure1"}}, {}});
++    m.addHelper({"tt", "transparent_bsdf", {{"BSDF", "add:Closure2"}}, {}});
++    m.addHelper({"em",
++                 "emission",
++                 {{"Emission", "add:Closure1"}},
++                 {{ustring("color"), "1,1,1"}, {ustring("strength"), "1"}}});
++    m.addHelper({"tw",
++                 "vector_math",
++                 {{"Vector", "tt:Color"}},
++                 {{ustring("math_type"), "scale"},
++                  {ustring("vector1"), "1,1,1"},
++                  {ustring("scale"), "0"}}});
++    return m;
++  }();
++  return mapping;
++}
++
+ /* `volume`: the VDF and the EDF of a medium, summed into one volume closure.
+  * The counterpart of `surface` for the volume terminal; without it no
+  * MaterialX volume could reach Cycles at all, whatever its VDF. */
+@@ -1827,14 +1865,22 @@ const std::vector<MtlxEntry> &MtlxTable()
+           {TfToken("normal"), ustring("normal")},
+           {CyclesMaterialTokens->out, ustring("BSDF")},
+       }};
+-  static const UsdToCyclesMapping kSubsurface = {
+-      "subsurface_scattering",
+-      {
+-          {TfToken("color"), ustring("color")},
+-          {TfToken("radius"), ustring("radius")},
+-          {TfToken("normal"), ustring("normal")},
+-          {CyclesMaterialTokens->out, ustring("BSSRDF")},
+-      }};
++  /* `radius` is MaterialX's mean free path in scene units; Cycles scatters
++   * over radius * scale, and its scale defaults to 0.005 - Blender's
++   * millimetre habit - so the light spread two hundred times too short. The
++   * scale is pinned to 1. */
++  static const UsdToCyclesMapping kSubsurface = [] {
++    UsdToCyclesMapping m{"subsurface_scattering",
++                         {
++                             {TfToken("color"), ustring("color")},
++                             {TfToken("radius"), ustring("radius")},
++                             {TfToken("anisotropy"), ustring("subsurface_anisotropy")},
++                             {TfToken("normal"), ustring("normal")},
++                             {CyclesMaterialTokens->out, ustring("BSSRDF")},
++                         }};
++    m.setFixedValues({{ustring("scale"), "1"}});
++    return m;
++  }();
+   static const UsdToCyclesMapping kSheen = {
+       "sheen_bsdf",
+       {
+@@ -1850,12 +1896,27 @@ const std::vector<MtlxEntry> &MtlxTable()
+           {TfToken("normal"), ustring("normal")},
+           {CyclesMaterialTokens->out, ustring("BSDF")},
+       }};
+-  static const UsdToCyclesMapping kAbsorptionVdf = {
+-      "absorption_volume",
+-      {
+-          {TfToken("absorption"), ustring("color")},
+-          {CyclesMaterialTokens->out, ustring("volume")},
+-      }};
++  /* MaterialX's `absorption` is the coefficient sigma_a; Cycles' absorption
++   * volume takes a colour and absorbs (1 - colour) * density
++   * (svm/closure.h). Passed straight as the colour, the absorption came out
++   * inverted - 0.2 absorbed as 0.8, exact only at 0.5. The colour is
++   * 1 - absorption at density 1, below zero for a coefficient over 1, which
++   * Cycles takes as it is. */
++  static const UsdToCyclesMapping kAbsorptionVdf = [] {
++    UsdToCyclesMapping m{"absorption_volume",
++                         {
++                             {TfToken("absorption"), ustring("inv:vector2")},
++                             {CyclesMaterialTokens->out, ustring("volume")},
++                         }};
++    m.setFixedValues({{ustring("density"), "1"}});
++    m.addHelper({"inv",
++                 "vector_math",
++                 {{"Vector", "Color"}},
++                 {{ustring("math_type"), "subtract"},
++                  {ustring("vector1"), "1,1,1"},
++                  {ustring("vector2"), "0,0,0"}}});
++    return m;
++  }();
+   static const UsdToCyclesMapping kScatterVdf = {
+       "scatter_volume",
+       {
+@@ -1869,10 +1930,13 @@ const std::vector<MtlxEntry> &MtlxTable()
+           {TfToken("temperature"), ustring("temperature")},
+           {CyclesMaterialTokens->out, ustring("color")},
+       }};
++  /* `maxdistance` is the distance Cycles' AO looks to; `coneangle` has no
++   * counterpart (Cycles samples the hemisphere) and is dropped. It used to be
++   * the cone angle - ninety by default - that was read as the distance. */
+   static const UsdToCyclesMapping kAmbientOcclusion = {
+       "ambient_occlusion",
+       {
+-          {TfToken("coneangle"), ustring("distance")},
++          {TfToken("maxdistance"), ustring("distance")},
+           {CyclesMaterialTokens->out, ustring("ao")},
+       }};
+ 
+@@ -2439,6 +2503,7 @@ const std::vector<MtlxEntry> &MtlxTable()
+       {"ND_chiang_hair_absorption_from_color", &MtlxChiangHairAbsorptionFromColor()},
+       {"ND_deon_hair_absorption_from_melanin", &MtlxDeonHairAbsorptionFromMelanin()},
+       {"ND_surface", &MtlxSurface()},
++      {"ND_surface_unlit", &MtlxSurfaceUnlit()},
+       {"ND_volume", &MtlxVolume()},
+ 
+       /* Images: the hexagonal variant, and the glTF family that names its

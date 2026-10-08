@@ -140,12 +140,34 @@ reference. Original note:
 unmapped: every conductor is white. Cycles 4.3+ `metallic_bsdf` with
 `fresnel_type = physical_conductor` takes exactly `ior` and `extinction`.
 
-### K-14 Approximate closures without a note in the log — probable
+### K-14 Approximate closures without a note in the log — confirmed — **fixed** (0103, 0107)
 `dielectric_bsdf`: `tint` and `scatter_mode` (R-only coats become glass with
 transmission) unmapped. `subsurface_bsdf`: `anisotropy` unmapped.
 `absorption_vdf.absorption` is a coefficient, Cycles `absorption_volume.color`
 is a transmittance. `ambientocclusion.coneangle → distance` is not the same
 quantity. All render *something*; none say they are approximate.
+
+`dielectric_bsdf` follows its scatter mode since 0103 (K-58). The absorption
+since 0107: Cycles absorbs (1 - colour) * density, so the colour is now
+1 - absorption at density 1 - it was the coefficient itself, which inverted
+it (0.2 absorbed as 0.8). `tools/bench_volume.py` measures the light through
+a 2-unit cube against exp(-2 sigma): 0.670 / 0.368 / 0.135 for sigma 0.2 /
+0.5 / 1, exact; also on a `leftHanded` cube, as Houdini writes meshes. Also
+in 0107: `subsurface_bsdf` carries its `anisotropy`, and its scattering
+length is right - Cycles scatters over radius * scale and its scale defaults
+to 0.005, which the mapping left: the light spread 200 times too short (the
+whole sphere 10 % too red against Karma, within 4 % after; `bench_agree.py`
+checks the whole sphere for that case). The AO node takes `maxdistance` as
+its distance, where it took the cone angle; the angle itself has no Cycles
+counterpart and is dropped. K-14 is closed.
+
+### K-60 `surface_unlit` rendered black — confirmed — **fixed** (0107)
+Houdini's MtlX Surface Unlit (`ND_surface_unlit`) fell on the `ND_surface`
+prefix, whose mapping has no `emission_color`: the colour was dropped with a
+warning and the surface came out black. 0107 gives it its own mapping: a mix
+by `opacity` between a transparent and the sum of an emission (colour times
+`emission`) and a transparent tinted by `transmission_color * transmission`.
+Found as the white wall of the volume bench, which checks it since.
 
 ### K-55 Unauthored surface inputs took Cycles' defaults — confirmed — **fixed** (0080)
 Hydra forwards only authored inputs, and Houdini authors only what the user

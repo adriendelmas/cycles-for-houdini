@@ -111,6 +111,10 @@ CASES = [
     ("normal_world", "GEOM", {"id": "ND_normal_vector3", "space": "world"}),
     ("position_world", "GEOM", {"id": "ND_position_vector3", "space": "world"}),
     ("tangent_object", "GEOM", {"id": "ND_tangent_vector3", "space": "object"}),
+    # subsurface_bsdf: radius is a mean free path in scene units (Cycles'
+    # scale was left at its 0.005 before 0107).
+    ("subsurface_bsdf", "ND_subsurface_bsdf", {
+        "color3f inputs:color": "(0.8, 0.5, 0.4)", "color3f inputs:radius": "(0.5, 0.25, 0.1)"}),
     # Not the legacy Disney surfaces: Karma renders them a neutral grey
     # whatever the base colour - it does not implement them.
     # The same dielectric, transmitting: scatter_mode "RT" (the default "R"
@@ -125,6 +129,11 @@ PEAK_CASES = {"metal", "conductor_bsdf", "dielectric_bsdf", "schlick_bsdf",
               "thinfilm_layer", "thinfilm_direct"}
 PEAK_BOX = (92, 148, 62, 118)
 PEAK_TOL = 1.35
+# Cases whose whole sphere is compared on its mean colour, tightly: the
+# subsurface scattering length shifts the colour balance by ~10 % (0.005 vs
+# 1 for Cycles' scale before 0107), which the centre's 25 % lets through.
+WHOLE_CASES = {"subsurface_bsdf"}
+WHOLE_TOL = 1.06
 
 SCENE = """#usda 1.0
 (
@@ -369,6 +378,18 @@ def main():
                      "ok" if ok else "DIFFERS"))
             if not ok:
                 problems.append((name, "%s ratio %s" % (region, np.round(ratio, 2))))
+        if name in WHOLE_CASES:
+            x0, x1, y0, y1 = PEAK_BOX
+            a = cyc[y0:y1, x0:x1].reshape(-1, 3).mean(axis=0)
+            b = kar[y0:y1, x0:x1].reshape(-1, 3).mean(axis=0)
+            checks += 1
+            ratio = (a + 1e-4) / (b + 1e-4)
+            ok = bool(np.all(ratio < WHOLE_TOL) and np.all(ratio > 1 / WHOLE_TOL))
+            print("%-15s %-8s cycles %s  karma %s  ratio %s  %s"
+                  % (name, "whole", np.round(a, 3), np.round(b, 3), np.round(ratio, 2),
+                     "ok" if ok else "DIFFERS"))
+            if not ok:
+                problems.append((name, "whole sphere ratio %s" % np.round(ratio, 2)))
         if name in PEAK_CASES:
             x0, x1, y0, y1 = PEAK_BOX
             a = np.percentile(cyc[y0:y1, x0:x1].mean(axis=2), 99)

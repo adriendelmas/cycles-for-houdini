@@ -1,7 +1,7 @@
 From df0965d90e44c9c0c96bb77165b64efddebdd7fa Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 03:16:40 +0200
-Subject: [PATCH 092/106] hydra: les light groups et leurs passes
+Subject: [PATCH 092/107] hydra: les light groups et leurs passes
 
 Les lumieres n'avaient pas de groupe, et aucune variable de rendu ne
 pouvait en isoler un. Une lumiere prend maintenant son groupe de

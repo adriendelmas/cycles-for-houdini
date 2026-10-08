@@ -2234,3 +2234,19 @@ tangente objet par un vector_transform ; écarts de 5 à 9 % avec Karma. Pour
 `texcoord.index`, mesuré : Karma lit `st` pour l'index 1 comme pour 0 ; le
 délégué fait déjà pareil, et un second jeu d'UV passe dans Houdini par
 `geompropvalue`.
+
+**0107 : volumes absorbants et surface unlit.** Le coefficient
+d'absorption de MaterialX était passé tel quel comme couleur à Cycles, qui
+absorbe (1 − couleur) × densité : l'absorption était inversée (0,2 absorbait
+comme 0,8). Couleur = 1 − absorption désormais, et la lumière qui traverse
+un cube de 2 unités vaut exactement exp(−2σ) (`tools/bench_volume.py` ; Karma
+ne rend pas un volume sur un maillage sans surface, la référence est la loi
+de Beer-Lambert). En montant ce banc, deux constats : la `MtlX Surface
+Unlit` d'Houdini sortait noire (K-60, corrigée), et un cube aux faces
+rentrantes double l'absorption chez Cycles — c'était le cube de la scène de
+test ; les maillages `leftHanded` qu'écrit Houdini sont bien lus.
+Dans le même patch, deux restes de K-14 : le `subsurface_bsdf` laissait à
+Cycles son échelle par défaut de 0,005 (habitude millimétrique de Blender),
+la lumière diffusait 200 fois trop court — sphère 10 % trop rouge contre
+Karma, à 4 % après ; et l'occlusion ambiante prenait l'angle du cône pour
+distance, c'est `maxdistance` qui l'est. K-14 fermé.
