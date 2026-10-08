@@ -59,6 +59,7 @@ after a Cycles standard attribute (`heat`, `density`, `color`, `temperature`,
 | `hython tools/bench_diff.py [--accept node\|all]` | `output/` vs `references/` | Each node matches its committed reference (off by less than `1e-3` absolute or 1 % relative on 99.5 % of pixels); lists nodes inert against `_baseline.exr`; `cycles_set_normal` is reported, not counted (A19) | - |
 | `hython tools/bench_mtlx.py [name]` | 49 MaterialX nodes (+3 textured with `CYCLES_BENCH_TEXTURE`), colours, closures, and the nodes expanded from their nodegraph (`exp_*`) | Rendered colour within 2 % of a value **computed from the MaterialX definition**, file named next to each formula | Anything the plane's mean cannot see: directions, volumes |
 | `hython tools/bench_hair.py` | 4 pairs | MaterialX Chiang hair equals native principled hair, error < 1e-3 | - |
+| `hython tools/bench_agree.py [pattern]` | 7 materials × 3 regions, Cycles against Karma on the same USD | Floor within 1 %, spheres within 25 % (glass: order of magnitude) of Karma | Fine shading differences: the tolerance admits the engines' own |
 | `hython tools/mtlx_coverage.py [--list]` | MaterialX library vs the table | Which nodedefs the delegate renders - by the table, by nodegraph expansion or by rewriting (762/822, `tools/mtlx_rules.py` holds the rule) | Which translate correctly |
 | `hython tools/mtlx_inputs.py [--list] [pattern]` | Every routed nodedef, all inputs authored, one husk run | Which nodedefs keep every input, output and node (543/652 on 2026-10-07); `--list` names what each one loses | Values |
 | `hython tools/mtlx_defaults.py [pattern]` | standard_surface, OpenPBR, glTF, Disney, UsdPreviewSurface | A lit sphere renders the same with no input authored and with every input authored at its model's default (8x8 block means, so noise cannot pass for a difference); the sphere must be lit | Values of authored inputs |
@@ -136,20 +137,34 @@ benches and for the `standard_surface` audit, whose references are local.
 
 ### 4. Agreement: Cycles against Karma
 
-A handful of scenes rendered by both renderers from the same USD - lights,
-`standard_surface`, OpenPBR, hair, a VDB - compared on mean luminance per
-region with a tolerance that admits the two engines' real differences (a few
-percent) and rejects a factor of two. This is the test that caught the ×4
-distant light and the ×π dome; it should be a command, not a one-off.
-Two differences to look at first when it exists, seen on 2026-10-08 on
-`tests/materialx/scenes/phase4b_mtlx.usda` at 480×360 (`husk --renderer
-BRAY_HdKarma` against the delegate, same camera): the dome light's sky is
-blue-grey in Cycles (alpha 1) and black with alpha 0 in Karma - husk's Karma
-leaves a bare `DomeLight` out of the camera's view, Cycles shows it - and the
-glass cube is milky in Cycles where Karma's is clear with a dark top face,
-which may be the same thing seen through the glass. The gold sphere agrees.
-An agreement bench should pin the dome's camera visibility explicitly on
-both sides before comparing anything.
+`hython tools/bench_agree.py [pattern]`: a sphere on a grey standard_surface
+floor, a rect light and a distant light, one material per case on the sphere
+- diffuse, glossy dielectric, metal, glass, coat, emission, UsdPreviewSurface -
+rendered by both renderers from the same file through husk at 240×180. The
+sphere's centre and two floor patches are compared on their mean RGB; the
+ratio Cycles/Karma must stay within 1.25 (1.10 for emission, 4 for glass).
+21 checks, 0 problems on 2026-10-08; the floor agrees to the third decimal,
+the sphere within 5-20 % (Cycles bounces more indirect light), emission 5 %
+over Karma. A side-by-side PNG per case lands in `tests/agreement/output/`.
+
+What writing it taught, each worth knowing before trusting a comparison:
+
+- an **unbound prim** is not shaded alike: Cycles' fallback is a diffuse with
+  the displayColor as albedo, Karma's comes out 2.4 times darker on the same
+  displayColor - bind a material before comparing;
+- a **distant light without `normalize = 1`** gives next to nothing in both
+  renderers; Houdini's LOP writes it, a hand-written file must too;
+- a ground wound clockwise with an authored upward normal is **black in
+  Cycles** (a backfacing hit flips both normals) and lit in Karma, which faces
+  the normal forward; Houdini writes consistent windings;
+- **through a glass sphere** Karma CPU shows the refracted floor 2.7 times
+  darker than Cycles; the two engines' paths through a dielectric differ,
+  hence the loose tolerance on that one case;
+- a bare **dome light** is left out of the camera's view by husk's Karma
+  (alpha 0) and shown by Cycles (alpha 1); the bench has no dome for that
+  reason. Seen on `tests/materialx/scenes/phase4b_mtlx.usda`, where the glass
+  cube is milky in Cycles and clear with a dark top in Karma - the sky through
+  the glass.
 
 ## Measuring interactivity
 

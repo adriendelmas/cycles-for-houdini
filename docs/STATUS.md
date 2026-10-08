@@ -2147,3 +2147,21 @@ de zéro ; une dispersion écrite garde le principled entier. Vérifié : les 5
 surfaces aux défauts identiques, 49 cas MaterialX, 97 nœuds contre leurs
 références sans écart, le cube de verre inchangé (transmission 1 → lobe de
 verre, r/b 0,89 comme Karma).
+
+**Banc d'accord Cycles/Karma (2026-10-08).** `tools/bench_agree.py` : une
+sphère sur un sol gris, lumière rectangle et lumière distante, sept matériaux
+(diffus, diélectrique, métal, verre, vernis, émission, UsdPreviewSurface),
+rendus par les deux moteurs depuis le même fichier, comparés sur la sphère et
+deux zones de sol : 21 contrôles, 0 écart — le sol au millième près, les
+sphères à 5-20 % (Cycles renvoie plus d'indirect), l'émission à 5 %. Trois
+pièges trouvés en l'écrivant, tous documentés dans TESTING : un prim sans
+matériau n'est pas ombré pareil (Cycles : diffus au displayColor ; Karma :
+2,4 fois plus sombre), une lumière distante sans `normalize = 1` n'éclaire
+quasiment rien dans les deux moteurs, et un sol enroulé à l'envers avec une
+normale écrite vers le haut est noir chez Cycles (un impact dos retourne les
+deux normales) et éclairé chez Karma. Le verre reste à 2,7× : Karma CPU
+assombrit le sol vu à travers une sphère, tolérance large sur ce seul cas.
+Au passage, K-57 : un attribut `normals` dont la valeur n'a pas été parsée
+(type `normal[]` invalide, `Sdf.UnregisteredValue`) fait planter le délégué
+sous husk, DLL 0097 comme 0101 ; Karma l'ignore. Repro dans
+`tests/scenes/bad_normals_type.usda`.

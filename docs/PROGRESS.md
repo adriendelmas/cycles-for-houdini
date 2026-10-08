@@ -39,6 +39,7 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | Feature | State | Verified by | Notes |
 |---|---|---|---|
 | Rect, disk, sphere, spot, distant, dome | ✅ | within 1 % of Karma | Units measured per type |
+| Agreement with Karma on materials | ✅ | `bench_agree.py` 21/21 | Diffuse, dielectric, metal, glass, coat, emission, preview surface: floor to 1 %, spheres to 25 %, glass loose (2026-10-08) |
 | Cylinder light | 🟡 | 0.95 of Karma | Rectangle approximation, one-sided |
 | IES, colour temperature, textures | ✅ | upstream | |
 | `visibleInPrimaryRay`, `shadowEnable` | ✅ | upstream | |
