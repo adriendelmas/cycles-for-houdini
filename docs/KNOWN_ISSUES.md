@@ -203,6 +203,19 @@ Acceptable for most networks; should be logged once per material.
 Only the first UV set; `normal`/`tangent` are world space while the nodedef
 default is object space (differs once the object rotates). Noted in STATUS A11.
 
+### K-57 The metal sphere of the shared bench stage is dark in Cycles, bright gold in Karma — seen, unverified
+`tests/materialx/scenes/phase4b_mtlx.usda`, material `mxMetal`
+(`standard_surface`, base_color (0.95, 0.72, 0.3), metalness 1,
+specular_roughness 0.14): rendered side by side on 2026-10-08 (120×90,
+`husk --renderer BRAY_HdKarma` against the delegate), Karma shows a gold
+sphere reflecting the 6×6 area light over most of its upper half; Cycles a
+near-black sphere with a small highlight, in the references since the first
+bench. Candidates: the area light's size or its visibility to glossy rays
+(a point-like reflection of a 6×6 light), or the metal's base colour lost on
+the way (black metal = black F0). Not a 0098/0099 regression: identical with
+the 0097 DLL. To measure with the Karma-agreement bench (TESTING §4) once it
+exists; until then a one-off at higher resolution.
+
 ## B. Geometry and scene
 
 ### K-19 float3 primvars copied at the wrong stride — confirmed — **fixed** (0075)
@@ -369,15 +382,30 @@ Fixed 2026-10-07: `catmullClark` always subdivides, capped by
 default complexity already set a refine level, so batch renders looked right
 before; the viewport at low complexity rendered the cage.
 
-### K-31 Four seconds unexplained in the render pass — measured, unresolved
+### K-31 Four seconds unexplained in the render pass — not reproduced since (2026-10-08)
 The stopwatch reported `camera et AOV 4033.6 ms, verrou 0, relance 0.005`.
 That bucket (`render_pass.cpp`, between `tPolled` and `tCamera`) holds only
 AOV binding comparison, `set_full_width/height`, `ApplyCameraSettings`, the
 dicing-camera copy and a pointer compare. None of it should take 4 s. Since
 0076 the log line (`Render pass: ... (lock, COP poll, AOV bindings, camera,
-dicing camera, reset, start)`) splits that stretch three ways; the next
-reading in a live Houdini session will name the call. Needs the user's
-viewport scene; cannot be reproduced under husk.
+dicing camera, reset, start)`) splits that stretch three ways.
+
+Live reading, 2026-10-08, with 0099 in a Houdini driven through
+`tools/hou_remote.py` on `test_hydra_solaris.hipnc` (Cycles GPU, 856×752 and
+1590×752): scene edits, free-camera moves, a switch to the USD camera and
+back, `Houdini GL` → `Cycles GPU`, six `Restart Render` (each rebuilds the
+delegate: new `Display:` line, full resync), pause/unpause, a window resize,
+a flipbook - about 45 session restarts in all. **Not one `Render pass` line**:
+the host thread never spent 50 ms in `_Execute`. After a camera change the
+restart line came 0.17 s later and the first sample 0.05 s after that. The
+reading predates 0076-0099, which removed several per-edit costs (dicing
+camera at identity, COP read twice, unconditional scene lock); whichever held
+the 4 s, it is not there now. Open only until the user confirms by hand: with
+`launch_cycles_log.cmd` the log lines carry seconds since start (0100), so a
+slow start reads as the gap between `Render restarted` and `Rendered 1
+samples`, with no stopwatch. Note for the next driver: a camera set from
+Python (`setDefaultCamera`) reaches Hydra only when the viewport actually
+repaints, one move in six here; the mouse does not have that problem.
 
 ### K-32 The pass takes the scene lock unconditionally — by design, with a cost — **fixed** (0096), unmeasured live
 `render_pass.cpp:125` (`scene->mutex.lock()`, patch 0014). While the render

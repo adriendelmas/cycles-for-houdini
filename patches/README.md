@@ -129,6 +129,7 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0097` | hydra: commentaires et messages de journal en anglais |
 | `0098` | hydra: les nodegraphs MaterialX deplies, extract et swizzle reecrits, vector2 converti |
 | `0099` | hydra: les defauts MaterialX ecrits sur toute entree non ecrite |
+| `0100` | hydra: le journal `CYCLES_LOG_FILE` horodate chaque ligne (secondes depuis la premiere) |
 
 ---
 

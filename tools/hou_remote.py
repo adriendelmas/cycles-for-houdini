@@ -2,7 +2,9 @@
 
 The houdini-mcp plugin (Documents/houdini22.0/scripts/python/houdinimcp)
 listens on 127.0.0.1:9876 once its shelf tool "MCP Start/Stop" has been
-clicked. Its protocol is a 4-byte big-endian length followed by UTF-8 JSON;
+clicked - or at once in a Houdini started by tests/houdini/launch_cycles_log.cmd,
+which runs the server on scene load. Its protocol is a 4-byte big-endian
+length followed by UTF-8 JSON;
 `execute_code` runs a string on Houdini's main thread and returns what it
 printed. This is the piece that lets a bench drive the real viewport - the
 Hydra render pass, the display driver, Solaris' scene index - which husk

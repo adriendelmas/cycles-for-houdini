@@ -1,0 +1,47 @@
+From 005ed5370c29b927cad4c5de916eae64d36a9645 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 8 Oct 2026 08:17:13 +0200
+Subject: [PATCH 100/100] hydra: le journal CYCLES_LOG_FILE horodate chaque
+ ligne
+
+Un viewport qui "met quatre secondes a demarrer" est une question de quand :
+la ligne de relance, le premier echantillon, la mise a jour de l'affichage,
+lus les uns contre les autres. Chaque ligne du fichier commence par les
+secondes ecoulees depuis la premiere, au millieme. Lecture en direct du
+2026-10-08 (K-31) : relance a 0,17 s apres un changement de camera, premier
+echantillon 0,05 s plus tard, aucune passe au-dessus de 50 ms sur le fil de
+l'hote en une quarantaine de relances.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ src/hydra/plugin.cpp | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/src/hydra/plugin.cpp b/src/hydra/plugin.cpp
+index 9bf096cc..2de581eb 100644
+--- a/src/hydra/plugin.cpp
++++ b/src/hydra/plugin.cpp
+@@ -10,6 +10,7 @@
+ #include "util/log.h"
+ #include "util/path.h"
+ 
++#include <chrono>
+ #include <cstdio>
+ 
+ #include <pxr/base/arch/fileSystem.h>
+@@ -66,7 +67,14 @@ void LogToFile(const CCL_NS::LogLevel level,
+   if (file == nullptr) {
+     return;
+   }
+-  fprintf(file, "%s: %s\n", CCL_NS::log_level_to_string(level), msg);
++  /* Seconds since the first line. A viewport that "takes four seconds to
++   * start" is a question of when: the restart line, the first sample, the
++   * display update - read against each other, not against a stopwatch. */
++  using clock = std::chrono::steady_clock;
++  static const clock::time_point first = clock::now();
++  const double seconds =
++      std::chrono::duration_cast<std::chrono::milliseconds>(clock::now() - first).count() / 1000.0;
++  fprintf(file, "[%9.3f] %s: %s\n", seconds, CCL_NS::log_level_to_string(level), msg);
+   /* Flushed on every line: a log read while Houdini is running, or after it
+    * has crashed, is only worth what has already reached the disk. */
+   fflush(file);

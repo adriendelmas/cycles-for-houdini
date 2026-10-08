@@ -22,10 +22,17 @@ it with `hserver -S https://www.sidefx.com/license/sesinetd`.
 
 To read the delegate's log from a live Houdini, start it with
 `tests/houdini/launch_cycles_log.cmd [scene.hip]`: the log lands in
-`tests/scratch/cycles_viewport.log`. With the houdini-mcp shelf tool on,
-`python tools/hou_remote.py -c "<python>"` (or a script file) runs code in
-that session and prints what it printed - the way to drive the viewport, the
-display driver and Solaris' scene index from a bench.
+`tests/scratch/cycles_viewport.log`, each line stamped with the seconds since
+the first one. The launcher also starts the houdini-mcp server on scene load
+(`tests/houdini/autostart/scripts/456.py`, put first on `HOUDINI_SCRIPT_PATH`),
+so `python tools/hou_remote.py -c "<python>"` (or a script file) runs code in
+that session at once and prints what it printed - the way to drive the
+viewport, the display driver and Solaris' scene index from a bench. Two
+things learnt driving it (2026-10-08): `hou.ui.waitUntil` is the pause that
+lets the viewport redraw between steps, and a camera set from Python
+(`setDefaultCamera` + `triggerUpdate`) reaches Hydra only when the viewport
+repaints, which it did one move in six; `frameAll`, `home`, `setCamera` and
+scene edits went through every time.
 
 To test a freshly built DLL while Houdini holds the installed one: set
 `HOUDINI_PACKAGE_SKIP=1`, point `PXR_PLUGINPATH_NAME` at a temporary plugin
@@ -112,6 +119,15 @@ tests/nodes/5.3/
     output/        ignored - what the last run produced
 ```
 
+The 97 node references were re-accepted on 2026-10-08 after patch 0099: the
+shared stage's glass cube (`mxGlass`, `standard_surface` with `transmission
+1` and no `transmission_color` authored) had been rendered teal, Cycles
+tinting the transmission with `base_color` where MaterialX says the default
+`transmission_color` - white - applies. With the default now written the cube
+is clear, as Karma renders it (cube region r/b ratio 0.89 against Karma's
+0.90, 0.51 before). Every node image changed by that cube alone; `--accept
+all` after the side-by-side check against Karma, not before.
+
 `bench_diff.py` compares `output/<name>.exr` to `references/<name>.exr` with
 OpenImageIO in Python - a pixel fails beyond `1e-3` absolute *and* 1 % relative, 0.5 % of pixels may fail - and exits non-zero on a
 regression. A reference moves only by `--accept <name>` (or `all`), which is a
@@ -138,6 +154,12 @@ starting Houdini. The log carries:
   dicing camera, reset, start)` whenever the host thread spent more than 50 ms
   in `_Execute`;
 - Cycles' own `Rendered N samples in T seconds` and memory lines.
+
+Every line starts with `[seconds]` since the first one, so a viewport that
+"takes long to start" reads as the gap between `Render restarted` and the
+first `Rendered 1 samples`, and a frozen UI as a `Render pass` line - no
+stopwatch needed. The live reading of 2026-10-08 (K-31) saw 0.17 s to the
+restart, 0.05 s more to the first sample, and no `Render pass` line at all.
 
 A viewport that "feels slow" is one of three things, told apart by these
 lines: the host thread blocked (`Render pass` large), the session resetting

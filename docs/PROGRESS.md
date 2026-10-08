@@ -67,7 +67,7 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | Render tags / purposes | ❌ | code read | `proxy` and `render` both render (K-28) |
 | Batch mode under husk | 🟡 | code read | `background = false` always (K-29) |
 | GL display driver | 🟡 | user's viewport | Correct on OpenGL Hgi; falls back under Vulkan and husk |
-| Viewport interactivity | 🟡 | stopwatch | 4 s unexplained in the camera/AOV bucket (K-31) |
+| Viewport interactivity | 🟡 | stopwatch, live log | K-31 not reproduced live on 2026-10-08 (no pass over 50 ms in ~45 restarts); awaits the user's confirmation with the timestamped log |
 
 ## Materials - native Cycles
 

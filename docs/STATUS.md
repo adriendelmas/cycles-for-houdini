@@ -2098,3 +2098,39 @@ bibliothèques. Deux défauts de l'outil que la copie de travail ne montrait
 jamais : le sous-module `lib/windows_x64` déclaré `update = none` par
 Blender (sauté sans un mot), et `git am` sans identité de commit. La DLL
 diffère de 1,2 % de celle de production : HIP activé par défaut.
+
+**K-31 relu en direct (2026-10-08).** Houdini lancé par
+`tests/houdini/launch_cycles_log.cmd` sur `test_hydra_solaris.hipnc`, le
+serveur MCP démarré au chargement de la scène (un `456.py` placé en tête de
+`HOUDINI_SCRIPT_PATH`, qui enchaîne ensuite ceux de Labs), le viewport piloté
+par `tools/hou_remote.py` : éditions de scène, déplacements de la caméra
+libre, bascule vers la caméra USD et retour, `Houdini GL` → `Cycles GPU`,
+six `Restart Render` (chacun reconstruit le délégué entier), pause/reprise,
+redimensionnement, flipbook, en 856×752 et 1590×752 — une quarantaine de
+relances de session. **Pas une seule ligne `Render pass`** : le fil de
+l'hôte n'a jamais passé 50 ms dans `_Execute`. Après un changement de
+caméra, la relance arrive à 0,17 s et le premier échantillon 0,05 s plus
+tard. Les 4 s datent d'avant 0076-0099, qui ont retiré plusieurs coûts par
+édition (caméra de dicing à l'identité, COP relu deux fois, verrou de scène
+inconditionnel) ; ce qui les portait n'y est plus. Reste la confirmation à la
+souris : le journal horodate désormais chaque ligne (0100), un démarrage
+lent se lit comme l'écart entre `Render restarted` et `Rendered 1 samples`.
+Appris en pilotant : une caméra posée depuis Python n'atteint Hydra qu'au
+vrai redessin du viewport (une fois sur six ici) ; `frameAll`, `home`,
+`setCamera` et les éditions passent à chaque fois.
+
+**Suite complète après 0099, références refaites (2026-10-08).** Tout passe
+(hair 4, MaterialX 49, défauts, 677 épinglés, 636 entrées, settings 13,
+AOV 9, Karma 11, courbes 5, motion 6, instances 5, implicites 6) sauf
+`bench_diff` : 96 nœuds sur 97 à ~10 % de pixels hors tolérance, un biais
+infime et uniforme. Bissection par la DLL 0097 du clone propre : identique
+aux références, donc 0098 ou 0099. La cause, lue sur l'image : le cube de
+verre du décor commun (`mxGlass`, `standard_surface`, transmission 1, sans
+`transmission_color` écrit) était turquoise — Cycles teintait la
+transmission avec `base_color` — et 0099 écrit maintenant le défaut blanc de
+`transmission_color`, qui est ce que dit MaterialX. Karma rendu côte à côte
+sur le même décor : cube neutre (rapport r/b 0,90 ; Cycles 0100 : 0,89 ;
+ancienne référence : 0,51). Les 97 références acceptées après cette
+vérification, pas avant. Vu au passage sur la même image, noté K-57 : la
+sphère de métal doré est presque noire chez Cycles, dorée chez Karma, et ce
+depuis les premières références — à mesurer.
