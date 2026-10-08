@@ -135,6 +135,28 @@ VAR = """        def RenderVar "%s" (
 """
 
 
+def crypto_manifest(path):
+    """The CryptoObject manifest husk wrote from the delegate's render stats,
+    as {name: hash}, or None."""
+    import json
+    spec = oiio.ImageInput.open(path)
+    if spec is None:
+        return None
+    try:
+        attrs = {a.name: a.value for a in spec.spec().extra_attribs}
+    finally:
+        spec.close()
+    for key, value in attrs.items():
+        if key.startswith("cryptomatte/") and key.endswith("/name") and value == "CryptoObject":
+            return json.loads(attrs.get(key[:-len("name")] + "manifest", "{}"))
+    return None
+
+
+def id_of(hex_hash):
+    import struct
+    return struct.unpack("<f", struct.pack("<I", int(hex_hash, 16)))[0]
+
+
 def read_layers(path):
     layers = {}
     inp = oiio.ImageInput.open(path)
@@ -173,6 +195,7 @@ def main():
         return float(layers[layer][at[0], at[1], c]) if layer in layers else float("nan")
 
     beauty = px("C", a)
+    manifest = crypto_manifest(exr)
     checks = [
         ("beauty lit", beauty > 0.3, "C %.3f" % beauty),
         ("Cycles convention", abs(px("dd", a) - beauty / 0.8) < 0.01,
@@ -189,6 +212,9 @@ def main():
          "myaov %.3f %.3f %.3f" % tuple(px("myaov", a, c) for c in range(3))),
         ("light groups", abs(px("key", a) + px("fill", a) - beauty) < 0.005 and px("fill", a) > 0.05,
          "key %.4f + fill %.4f, expected the beauty %.4f" % (px("key", a), px("fill", a), beauty)),
+        ("crypto manifest", manifest is not None and "/world/a" in manifest
+         and abs(id_of(manifest["/world/a"]) - px("CryptoObject00", a)) <= abs(px("CryptoObject00", a)) * 1e-6,
+         "manifest %s" % (("/world/a -> %s" % manifest.get("/world/a")) if manifest else "missing")),
         ("depth", 4.5 < px("Pz", a) < 6.0 and px("Pz", bg) > 1e6,
          "Pz %.3f on the sphere, %g behind" % (px("Pz", a), px("Pz", bg))),
     ]

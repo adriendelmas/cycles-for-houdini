@@ -1,7 +1,7 @@
 From 87ced1009dbec8a1b2387bf76540c9d421d3834e Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 9 Sep 2026 23:49:11 +0200
-Subject: [PATCH 71/93] hydra: de quoi mesurer un viewport qui traine, et un
+Subject: [PATCH 71/94] hydra: de quoi mesurer un viewport qui traine, et un
  journal qui arrive quelque part
 
 Signale : Karma rend a l'instant quand la vue bouge, Cycles met quatre a cinq

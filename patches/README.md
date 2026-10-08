@@ -123,6 +123,7 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0091` | hydra: couper le flou de mouvement ne fait plus disparaitre les objets |
 | `0092` | hydra: les light groups et leurs passes |
 | `0093` | hydra: les multiplicateurs diffuse et specular des lumieres USD |
+| `0094` | hydra: le manifeste de la cryptomatte dans les metadonnees de l'image |
 
 ---
 

@@ -283,7 +283,7 @@ distinct combination of linked categories, at most 63). Measured in
 `bench_settings.py` (`light_link`, `shadow_link`). Light filters and
 per-instance categories are not handled.
 
-### K-25 Five passes only — confirmed — **fixed** (0087), manifest left
+### K-25 Five passes only — confirmed — **fixed** (0087, 0092, 0094)
 `session.cpp:21` maps color, depth, normal, primId, instanceId and the Houdini
 spellings `C`, `Cf`, `N`, `P`, `Pz`. No diffuse/glossy/transmission direct or
 indirect, emission, AO, shadow catcher, mist, position, UV, motion vectors,
@@ -300,9 +300,9 @@ surface colour, Karma does not). One pass per Cycles type: two of a type
 under different names stayed apart in the film and one read black.
 `CryptoObject/Material/AssetNN` enable cryptomatte; objects and materials now
 carry names to hash. `aov_output` has a pass-through `surface` → `closure`
-so Hydra keeps it. Still missing: the cryptomatte manifest and its EXR
-metadata (husk writes the layers but Nuke needs the metadata to find them);
-arbitrary LPEs (Cycles has no LPE engine: unknown ones are reported, black).
+so Hydra keeps it. The cryptomatte name, hash, conversion and manifest reach
+the EXR header through the render stats husk copies there (0094). Still
+missing: arbitrary LPEs (Cycles has no LPE engine: unknown ones are reported, black).
 Light groups since 0092: `lightgroup:<name>` or Karma's `C.*<L.'tag'>`, lights
 grouped by `cycles:lightgroup` or Karma's LPE tag.
 
