@@ -2172,3 +2172,12 @@ en 22 minutes, premier échantillon à 19 ms en médiane après la relance
 (184 ms au pire, sur une bascule de caméra), toujours aucune passe au-dessus
 de 50 ms sur le fil de l'hôte. Les quatre secondes de la mesure d'origine
 appartenaient à des coûts que 0076-0099 ont retirés.
+
+**K-57 corrigé (0102, 2026-10-08).** Un attribut dont USD n'a pas pu lire la
+valeur arrive au délégué comme un tableau **vide** du bon type : le test de
+type passait, le contrôle de taille était un `TF_VERIFY` — qui signale et
+continue — et la boucle lisait hors du tableau. Même motif sur les normales,
+les points du maillage et les largeurs des nuages de points ; chacun vérifie
+maintenant le compte exigé par son interpolation avant de lire, prévient et
+ignore l'attribut. Nouveau banc `tools/bench_robust.py`, trois fichiers
+abîmés : 3 plantages avec 0101, 3 rendus avec 0102. Suite complète verte.

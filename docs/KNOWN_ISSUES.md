@@ -433,18 +433,18 @@ behaviour measured (`bench_settings.py`). In Houdini (2026-10-08, user,
 the moving object vanish until the render was restarted: prims kept their
 motion samples. Patch 0091 resyncs them on the way off too - to recheck.
 
-### K-57 A `normals` attribute whose value failed to parse segfaults the delegate — confirmed, open
+### K-57 An attribute whose value failed to parse segfaulted the delegate — confirmed — **fixed** (0102)
 `tests/scenes/bad_normals_type.usda`: a mesh whose `normals` is declared
 `normal[]` - not a USD type name - keeps its literal as an
-`Sdf.UnregisteredValue` under the schema's `normal3f[]`, interpolation
-`vertex` by default. Karma renders the file and ignores the attribute;
-`husk --renderer HdCyclesPlugin` dies with a segmentation fault during prim
-sync (top frames in hdCycles.dll, unsymbolised), with the 0097 and 0101
-DLLs alike, so not a recent regression. `PopulateNormals` checks
-`IsHolding<VtVec3fArray>` and warns, but the warning never prints: the crash
-comes before, or elsewhere. Found writing the agreement bench with that
-typo; a well-typed `normal3f[]` renders. A hand-written file is the only
-known way in - Houdini always writes the type - hence open, not urgent.
+`Sdf.UnregisteredValue`, and Hydra hands the delegate an **empty**
+`VtVec3fArray`: the type test passed, the size check was a `TF_VERIFY`, which
+reports and carries on, and the loop read `normals[i]` past the end. husk
+died with a segmentation fault; Karma renders the file and ignores the
+attribute. The same pattern stood on the mesh's points and on a point cloud's
+widths. Each now checks the count its interpolation needs before reading,
+warns and skips the attribute (the points: the mesh). `tools/bench_robust.py`
+renders three such files (`tests/scenes/bad_*.usda`): all three crashed with
+0101, all three render with 0102. Curves were already guarded.
 
 ## C. Houdini side
 
