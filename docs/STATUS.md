@@ -2281,3 +2281,27 @@ modes : `zeltner` correspond au sheen de Cycles (« microfiber », celui
 qu'emploie la traduction, à 7 % de Karma) ; `conty_kulla`, le mode par
 défaut, renvoie beaucoup plus de lumière vers l'observateur (0,10 au centre
 de la sphère contre 0,002) et n'a pas d'équivalent dans Cycles.
+
+**Audit des surfaces contre Karma (0109).** Nouvel outil
+`tools/surface_audit.py` : chaque entrée d'un modèle de surface est poussée
+seule hors de son défaut sur la sphère du banc d'accord, et son effet est
+comparé à celui qu'elle a chez Karma (en allumant d'abord le lobe dont elle
+dépend). OpenPBR : `subsurface_color` sans aucun effet, et le vernis qui
+n'assombrit pas la base (effet de `coat_weight`, `coat_ior`,
+`coat_darkening` cinq fois trop faible). standard_surface :
+`coat_affect_color` sans effet. glTF : l'alpha appliqué même en mode OPAQUE
+(le défaut). Corrigé en calculant avant traduction la couleur de base que
+le principled doit recevoir, comme le nodegraph du modèle la calcule (un
+nœud auxiliaire inséré devant `base_color`), et en choisissant l'alpha glTF
+selon `alpha_mode`. Les écarts restants relèvent des modèles des moteurs
+(verre, sheen, diffusion sous-surfacique, Oren-Nayar, film mince),
+consignés dans K-63. La condition de fin de la phase 4 du PLAN (audit
+OpenPBR) est remplie.
+Dans le même patch, les images (K-64) : la grille Karma reçoit maintenant
+une vraie texture (une couleur par coin) et compare chaque case par quarts.
+`tiledimage`, les images glTF et `latlongimage` — des nodegraphs de la
+bibliothèque autour d'une `image` — étaient routés tout droit vers un nœud
+image et perdaient répétition, décalage, transformation glTF ; `place2d`
+allait sur le nœud mapping de Cycles, sans pivot, sans ordre SRT/TRS, angle
+pris en radians ; `image_float` rendait la couleur au lieu du premier canal.
+19 nœuds image sur 21 identiques à Karma ensuite.

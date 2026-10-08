@@ -29,7 +29,7 @@ INLINE = ("ND_add_", "ND_subtract_", "ND_multiply_", "ND_divide_")
 # What does not need translating: materials, lights, organizational nodes, and
 # the color space conversions that OpenColorIO does upstream of the graph.
 NOT_SHADING = re.compile(
-    r"^(Lama|Usd|surfacematerial|volumematerial|displacementmaterial|surface$|"
+    r"^(cycles_|Lama|Usd|surfacematerial|volumematerial|displacementmaterial|surface$|"
     r"volume$|light$|point_light|spot_light|directional_light|"
     r"arrayappend|osl_set_ci|.*_to_lin_rec709$|standard_surface_to_|open_pbr_surface_to_)"
 )

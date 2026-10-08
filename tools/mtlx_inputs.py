@@ -37,7 +37,7 @@ if not os.path.isdir(OUT):
 # Same routing rules as mtlx_coverage.py and the delegate.
 INLINE = ("ND_add_", "ND_subtract_", "ND_multiply_", "ND_divide_")
 NOT_SHADING = re.compile(
-    r"^(Lama|Usd|surfacematerial|volumematerial|displacementmaterial|"
+    r"^(cycles_|Lama|Usd|surfacematerial|volumematerial|displacementmaterial|"
     r"light$|point_light|spot_light|directional_light|"
     r"arrayappend|osl_set_ci|.*_to_lin_rec709$|standard_surface_to_|open_pbr_surface_to_)"
 )

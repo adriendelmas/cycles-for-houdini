@@ -118,7 +118,7 @@ and on a coloured input (must *not* be grey).
 | Read the `kma` network after `mtlx` | K-16 |
 | `standard_surface`: `coat_affect_color/roughness`, `specular_rotation` investigation (STANDARD_SURFACE_AUDIT) | - |
 
-Done when: an OpenPBR audit like STANDARD_SURFACE_AUDIT.md shows every input
+Done when (✅ 2026-10-08, `tools/surface_audit.py`, K-63): an OpenPBR audit like STANDARD_SURFACE_AUDIT.md shows every input
 measured; a `UsdPreviewSurface` with a normal map matches Karma's; a Karma
 Material Builder material renders its MaterialX network, not the preview
 fallback.

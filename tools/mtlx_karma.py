@@ -71,6 +71,10 @@ def block(nd, library):
         t = inp.getType()
         if t in mtlx_inputs.CLOSURES or inp.getName() == "note":
             continue
+        if t == "filename":
+            uniform = "uniform " if inp.getIsUniform() else ""
+            probe.append("%sasset inputs:%s = @corners.exr@" % (uniform, inp.getName()))
+            continue
         if inp.getDefaultGeomPropString() or not inp.getValueString():
             continue
         text = inp.getValueString()
@@ -157,16 +161,36 @@ def render(renderer, scene_path, exr):
 
 
 def cell_mean(img, i, cols):
+    """The quad's four quarters' mean colours, side by side: a texture read
+    upside down or mirrored has the same mean, not the same quarters."""
     c, r = i % cols, i // cols
     rows = img.shape[0]
-    x0, x1 = int((c + 0.15) * QUAD_PX), int((c + 0.75) * QUAD_PX)
-    y1, y0 = rows - int((r + 0.15) * QUAD_PX), rows - int((r + 0.75) * QUAD_PX)
-    return img[y0:y1, x0:x1, :3].reshape(-1, 3).mean(axis=0)
+    x0, x1 = int((c + 0.1) * QUAD_PX), int((c + 0.8) * QUAD_PX)
+    y1, y0 = rows - int((r + 0.1) * QUAD_PX), rows - int((r + 0.8) * QUAD_PX)
+    xm, ym = (x0 + x1) // 2, (y0 + y1) // 2
+    quarters = [img[ya:yb, xa:xb, :3].reshape(-1, 3).mean(axis=0)
+                for ya, yb in ((y0, ym), (ym, y1)) for xa, xb in ((x0, xm), (xm, x1))]
+    return np.concatenate(quarters)
+
+
+def write_corners():
+    """A texture with a colour per corner, row 0 at the top: blue top-left,
+    white top-right, red bottom-left, green bottom-right."""
+    spec = oiio.ImageSpec(8, 8, 3, oiio.FLOAT)
+    px = np.zeros((8, 8, 3), dtype=np.float32)
+    px[:4, :4] = (0.1, 0.2, 0.9)
+    px[:4, 4:] = (0.9, 0.9, 0.9)
+    px[4:, :4] = (0.9, 0.1, 0.1)
+    px[4:, 4:] = (0.1, 0.8, 0.2)
+    buf = oiio.ImageBuf(spec)
+    buf.set_pixels(oiio.ROI(0, 8, 0, 8), px)
+    buf.write(os.path.join(OUT, "corners.exr"))
 
 
 def main():
     if not os.path.isdir(OUT):
         os.makedirs(OUT)
+    write_corners()
     want_list = "--list" in sys.argv
     closures = "--closures" in sys.argv
     pattern = next((a for a in sys.argv[1:] if not a.startswith("--")), None)
@@ -222,8 +246,11 @@ def main():
     print("differ                  : %d" % len(differ))
     if want_list:
         for name, a, b in sorted(differ):
-            print("   %-40s cycles %7.3f %7.3f %7.3f  karma %7.3f %7.3f %7.3f"
-                  % ((name,) + tuple(a) + tuple(b)))
+            # The first quarter, and the quarter that differs most.
+            worst = int(np.argmax(np.abs(a - b).reshape(4, 3).max(axis=1)))
+            print("   %-40s cycles %7.3f %7.3f %7.3f  karma %7.3f %7.3f %7.3f  (quarter %d)"
+                  % ((name,) + tuple(a[3 * worst:3 * worst + 3]) + tuple(b[3 * worst:3 * worst + 3])
+                     + (worst,)))
     sys.exit(1 if differ else 0)
 
 

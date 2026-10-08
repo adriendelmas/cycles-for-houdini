@@ -330,6 +330,53 @@ back towards the viewer: 0.103 at the sphere's centre in Karma, against
 darker facing the camera, right at grazing angles. Measured 2026-10-08; the
 `mode` input is reported unmapped when authored.
 
+### K-63 Surface inputs that did nothing, measured input by input against Karma — confirmed — **fixed** (0109)
+`tools/surface_audit.py` moves each input of a surface model off its default,
+alone, on the agreement sphere, and compares its effect - the change in the
+sphere's mean colour - between Cycles and Karma, the input's lobe switched on
+where it needs it. First pass, 2026-10-08:
+- OpenPBR, 37 inputs: `subsurface_color` had no effect at all (Cycles colours
+  diffuse and subsurface with one base colour), and the coat did not darken
+  the base: `coat_weight`, `coat_ior` and `coat_darkening` showed a fifth of
+  Karma's effect, or none;
+- standard_surface, 39 inputs: `coat_affect_color` had no effect;
+- glTF, 25 inputs: `alpha` was applied whatever `alpha_mode`, so an OPAQUE
+  material (the default) with an alpha below one rendered see-through.
+0109 computes the principled's base colour before translation, from the
+surface's own inputs, the way the model's nodegraph does (a helper node,
+`FoldSurfaceBase` in mtlx_expand.cpp): OpenPBR's subsurface mix and coat
+darkening, standard_surface's subsurface mix and coat gamma. glTF picks its
+alpha by `alpha_mode` - ignored, cut at `alpha_cutoff`, or passed. After: all
+of them within Karma's effect (OpenPBR coat_weight -0.086 against -0.070,
+coat_darkening +0.062 against +0.055, subsurface_color and coat_affect_color
+alike), and the three alpha modes render as Karma's.
+
+What the audits leave apart, each a difference between the engines' models
+rather than a translation: glass (Cycles shows the refracted floor 2.7 times
+brighter, so every transmission input's effect is larger), sheen (K-62),
+subsurface scattering (twice as marked in Cycles on a 1-unit sphere with a
+1-unit mean free path), the diffuse roughness of standard_surface (Oren-Nayar
+darkens, Cycles' principled diffuse brightens), the thin film's response, and
+`thin_walled` (no Cycles counterpart). Karma itself does not apply several
+glTF inputs (`specular`, `ior`, `sheen`, `thickness`...), so glTF is audited
+from a grey dielectric and only where Karma reacts.
+
+### K-64 Image nodes routed past their own nodegraphs — confirmed — **fixed** (0109)
+`tools/mtlx_karma.py` now gives every `filename` input a texture with one
+colour per corner and compares each quad by quarters, so that a texture read
+mirrored or shifted shows. Five of the image family went wrong:
+- `tiledimage`, the glTF images and `latlongimage` are, in the library,
+  nodegraphs around an `image` - tiling and offset, glTF's texture
+  transform, the direction to latitude-longitude. The table routed them
+  straight to an image node and lost all of it; they expand now;
+- `place2d`, which those nodegraphs and many Houdini networks use, went to
+  Cycles' mapping node: no pivot, no SRT/TRS order, and the angle read as
+  radians where MaterialX gives degrees. Its library nodegraph expands now;
+- `image_float` gave the image's colour, averaged by a float socket; it reads
+  the first channel, as MaterialX does.
+After: 19 of 21 image nodedefs as Karma; `hextiledimage`'s random tiling is
+each engine's own.
+
 ## B. Geometry and scene
 
 ### K-19 float3 primvars copied at the wrong stride — confirmed — **fixed** (0075)
