@@ -2181,3 +2181,15 @@ les points du maillage et les largeurs des nuages de points ; chacun vérifie
 maintenant le compte exigé par son interpolation avant de lire, prévient et
 ignore l'attribut. Nouveau banc `tools/bench_robust.py`, trois fichiers
 abîmés : 3 plantages avec 0101, 3 rendus avec 0102. Suite complète verte.
+
+**K-58 corrigé (0103, 2026-10-08).** Le banc d'accord étendu aux réseaux
+MaterialX faits main (un `surface` sur un BSDF élémentaire) a trouvé deux
+défauts. La rugosité des `conductor_bsdf`/`dielectric_bsdf` est déjà l'alpha
+GGX dans MaterialX, et Cycles met au carré la sienne : élevée deux fois, un
+métal à alpha 0,25 avait des reflets 2,2× plus intenses que chez Karma. Et le
+`dielectric_bsdf`, dont le `scatter_mode` vaut « R » par défaut (réflexion
+seule, le vernis d'un empilement), finissait toujours en verre transmissif :
+sphère 12× trop claire. Après : racine carrée sur la rugosité, et un nœud par
+mode (R principled sans diffus ni transmission, T refraction_bsdf, RT verre) ;
+pics à 0,96 et 1,00 de Karma. Les surfaces (standard_surface, OpenPBR…)
+n'étaient pas touchées. Banc d'accord : 33 contrôles, 0 écart ; suite verte.

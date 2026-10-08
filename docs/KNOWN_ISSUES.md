@@ -203,6 +203,23 @@ Acceptable for most networks; should be logged once per material.
 Only the first UV set; `normal`/`tangent` are world space while the nodedef
 default is object space (differs once the object rotates). Noted in STATUS A11.
 
+### K-58 Hand-built BSDFs: roughness squared twice, dielectric always transmitting — confirmed — **fixed** (0103)
+Found with `tools/bench_agree.py` on hand-built networks (`surface` over one
+elementary BSDF). The roughness of MaterialX's `conductor_bsdf` and
+`dielectric_bsdf` is already the GGX alpha (`mx_conductor_bsdf.glsl` uses it
+as such; standard_surface squares its own roughness through
+`roughness_anisotropy` before handing it over), and Cycles squares its
+`roughness` socket again: a conductor at alpha 0.25 peaked 2.2 times above
+Karma. And `dielectric_bsdf` landed on glass_bsdf whatever its
+`scatter_mode`, whose default is "R" - reflection only, the coat of a layer
+stack: a default dielectric sphere rendered 12 times brighter than Karma's,
+the floor showing through. 0103 takes the square root back (a `math` helper)
+and picks the dielectric's node by mode: "R" a principled with no diffuse and
+no transmission, "T" a refraction_bsdf, "RT" the glass. After: conductor
+highlight 0.96 of Karma's, dielectric 1.00, mean 0.89. Materials built from
+standard_surface, OpenPBR or the other surface tables were never affected:
+they map to the principled directly.
+
 ## B. Geometry and scene
 
 ### K-19 float3 primvars copied at the wrong stride — confirmed — **fixed** (0075)

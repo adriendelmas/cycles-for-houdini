@@ -78,7 +78,23 @@ CASES = [
     ("preview", "UsdPreviewSurface", {
         "color3f inputs:diffuseColor": "(0.25, 0.4, 0.7)", "float inputs:roughness": "0.4",
         "float inputs:metallic": "0"}),
+    # Hand-built networks: a `surface` node over one elementary BSDF, whose
+    # roughness is the GGX alpha (it was squared twice before patch 0103).
+    # The mean barely moves with the roughness; the highlight does.
+    ("conductor_bsdf", "ND_conductor_bsdf", {"float2 inputs:roughness": "(0.25, 0.25)"}),
+    ("dielectric_bsdf", "ND_dielectric_bsdf", {"float2 inputs:roughness": "(0.1, 0.1)",
+                                               "color3f inputs:tint": "(1, 1, 1)"}),
+    # The same dielectric, transmitting: scatter_mode "RT" (the default "R"
+    # reflects only - it rendered as glass before 0103).
+    ("dielectric_rt", "ND_dielectric_bsdf", {"float2 inputs:roughness": "(0.01, 0.01)",
+                                             "uniform string inputs:scatter_mode": '"RT"'}),
 ]
+
+# Cases whose sphere is also compared on its highlight: the 99th percentile
+# of the whole sphere's luminance.
+PEAK_CASES = {"metal", "conductor_bsdf", "dielectric_bsdf"}
+PEAK_BOX = (92, 148, 62, 118)
+PEAK_TOL = 1.35
 
 SCENE = """#usda 1.0
 (
@@ -182,6 +198,18 @@ def Xform "world"
 def scene_text(shader, inputs):
     mtlx = shader.startswith("ND_")
     lines = "\n".join("                %s = %s" % kv for kv in inputs.items())
+    if shader.endswith("_bsdf"):
+        # An elementary BSDF goes under a `surface` node, as in a network
+        # built by hand.
+        text = SCENE % {"terminal": "mtlx:surface", "output": "out", "shader": "ND_surface",
+                        "inputs": "                token inputs:bsdf.connect = "
+                                  "</world/Materials/mat/b.outputs:out>"}
+        bsdf = ('            def Shader "b"\n            {\n'
+                '                uniform token info:id = "%s"\n%s\n'
+                '                token outputs:out\n            }\n' % (shader, lines))
+        anchor = "</world/Materials/mat/surf.outputs:out>\n"
+        assert text.count(anchor) == 1
+        return text.replace(anchor, anchor + bsdf, 1)
     return SCENE % {"terminal": "mtlx:surface" if mtlx else "surface",
                     "output": "out" if mtlx else "surface",
                     "shader": shader, "inputs": lines}
@@ -230,7 +258,8 @@ def main():
             print("%-11s NO IMAGE" % name)
             continue
         side_by_side(cyc, kar, os.path.join(OUT, name + "_cmp.png"))
-        tol = {"emission": EMISSIVE_TOL, "glass": GLASS_TOL}.get(name, TOL)
+        tol = {"emission": EMISSIVE_TOL, "glass": GLASS_TOL,
+               "dielectric_rt": GLASS_TOL}.get(name, TOL)
         for region, box in REGIONS.items():
             a, b = region_mean(cyc, box), region_mean(kar, box)
             if a.max() < DARK and b.max() < DARK:
@@ -238,11 +267,22 @@ def main():
             checks += 1
             ratio = (a + 1e-4) / (b + 1e-4)
             ok = bool(np.all(ratio < tol) and np.all(ratio > 1 / tol))
-            print("%-11s %-8s cycles %s  karma %s  ratio %s  %s"
+            print("%-15s %-8s cycles %s  karma %s  ratio %s  %s"
                   % (name, region, np.round(a, 3), np.round(b, 3), np.round(ratio, 2),
                      "ok" if ok else "DIFFERS"))
             if not ok:
                 problems.append((name, "%s ratio %s" % (region, np.round(ratio, 2))))
+        if name in PEAK_CASES:
+            x0, x1, y0, y1 = PEAK_BOX
+            a = np.percentile(cyc[y0:y1, x0:x1].mean(axis=2), 99)
+            b = np.percentile(kar[y0:y1, x0:x1].mean(axis=2), 99)
+            checks += 1
+            ratio = (a + 1e-4) / (b + 1e-4)
+            ok = 1 / PEAK_TOL < ratio < PEAK_TOL
+            print("%-15s %-8s cycles %.3f  karma %.3f  ratio %.2f  %s"
+                  % (name, "peak", a, b, ratio, "ok" if ok else "DIFFERS"))
+            if not ok:
+                problems.append((name, "highlight p99 ratio %.2f" % ratio))
     print("\n%d checks, %d problems" % (checks, len(problems)))
     for name, what in problems:
         print("   %-11s %s" % (name, what))
