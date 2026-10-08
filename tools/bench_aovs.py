@@ -7,6 +7,8 @@ component name, depth, a cryptomatte layer and a shader AOV written by an
 `aov_output` node wired as a pass-through. The scene is diffuse only, so the
 diffuse components in Karma's convention must equal the beauty, and in
 Cycles' (light only, divided by the surface colour) the beauty over 0.8.
+Two lights in two light groups - one by `cycles:lightgroup`, one by Karma's
+LPE tag - must add up to the beauty.
 
     hython tools/bench_aovs.py
 
@@ -34,6 +36,8 @@ VARS = [
     ("crypto", "color4f", "raw", "CryptoObject00", "CryptoObject00"),
     ("shader_aov", "color3f", "raw", "myaov", "myaov"),
     ("depth", "float", "raw", "depth", "Pz"),
+    ("group_key", "color3f", "raw", "lightgroup:key", "key"),
+    ("group_fill", "color3f", "lpe", "C.*<L.'fill'>", "fill"),
 ]
 
 SCENE = """#usda 1.0
@@ -56,6 +60,15 @@ def Xform "world"
     {
         float inputs:intensity = 3
         bool inputs:normalize = 1
+        string cycles:lightgroup = "key"
+    }
+    def DistantLight "fill"
+    {
+        float inputs:intensity = 1
+        bool inputs:normalize = 1
+        string karma:light:lpetag = "fill"
+        float3 xformOp:rotateXYZ = (0, 40, 0)
+        uniform token[] xformOpOrder = ["xformOp:rotateXYZ"]
     }
     def Sphere "a" (prepend apiSchemas = ["MaterialBindingAPI"])
     {
@@ -174,6 +187,8 @@ def main():
                                           px("CryptoObject00", a, 1))),
         ("shader AOV", all(abs(px("myaov", a, c) - v) < 0.001 for c, v in enumerate((0.1, 0.2, 0.3))),
          "myaov %.3f %.3f %.3f" % tuple(px("myaov", a, c) for c in range(3))),
+        ("light groups", abs(px("key", a) + px("fill", a) - beauty) < 0.005 and px("fill", a) > 0.05,
+         "key %.4f + fill %.4f, expected the beauty %.4f" % (px("key", a), px("fill", a), beauty)),
         ("depth", 4.5 < px("Pz", a) < 6.0 and px("Pz", bg) > 1e6,
          "Pz %.3f on the sphere, %g behind" % (px("Pz", a), px("Pz", bg))),
     ]

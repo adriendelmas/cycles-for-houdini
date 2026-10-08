@@ -302,8 +302,9 @@ under different names stayed apart in the film and one read black.
 carry names to hash. `aov_output` has a pass-through `surface` → `closure`
 so Hydra keeps it. Still missing: the cryptomatte manifest and its EXR
 metadata (husk writes the layers but Nuke needs the metadata to find them);
-arbitrary LPEs (Cycles has no LPE engine: unknown ones are reported, black);
-light groups.
+arbitrary LPEs (Cycles has no LPE engine: unknown ones are reported, black).
+Light groups since 0092: `lightgroup:<name>` or Karma's `C.*<L.'tag'>`, lights
+grouped by `cycles:lightgroup` or Karma's LPE tag.
 
 ### K-26 No transparent background with a dome light — confirmed — **fixed** (0086)
 `session.cpp:137-150`: `background->set_transparent(true)` only when no
