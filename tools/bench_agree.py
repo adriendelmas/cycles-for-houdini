@@ -52,6 +52,10 @@ GLASS_TOL = 4.0
 # Cycles' film model against Karma's, on the 1.39 inputs as on a folded 1.38
 # layer, which render identical to each other on each side.
 THINFILM_TOL = 1.5
+# A sphere with no UVs has no authored tangent; each engine derives one its
+# own way, and the x component differs by ~30 % (2026-10-08). A space error
+# swaps the axes outright, which this still catches.
+TANGENT_TOL = 1.4
 
 # Regions in pixels at RES, y downward: the sphere's centre (its lit upper
 # half, the key light being up-left), and two floor patches away from the
@@ -100,6 +104,13 @@ CASES = [
     ("thinfilm_direct", "ND_dielectric_bsdf", {
         "float2 inputs:roughness": "(0.05, 0.05)", "float inputs:thinfilm_thickness": "400",
         "float inputs:thinfilm_ior": "1.4"}),
+    # Geometric lookups in a space (K-18, 0106), on a sphere turned a quarter
+    # turn about Y, shown as colour n * 0.5 + 0.5: object and world normals
+    # differ there by 90 degrees - blue against red at the centre.
+    ("normal_object", "GEOM", {"id": "ND_normal_vector3", "space": "object"}),
+    ("normal_world", "GEOM", {"id": "ND_normal_vector3", "space": "world"}),
+    ("position_world", "GEOM", {"id": "ND_position_vector3", "space": "world"}),
+    ("tangent_object", "GEOM", {"id": "ND_tangent_vector3", "space": "object"}),
     # Not the legacy Disney surfaces: Karma renders them a neutral grey
     # whatever the base colour - it does not implement them.
     # The same dielectric, transmitting: scatter_mode "RT" (the default "R"
@@ -214,6 +225,32 @@ def Xform "world"
 """
 
 
+# A geometric lookup shown as colour: base_color = value * 0.5 + 0.5, the
+# sphere turned a quarter turn about Y so object and world space differ.
+SPHERE_XFORM = "( (1,0,0,0), (0,1,0,0), (0,0,1,0), (0, 1, 0, 1) )"
+TURNED_XFORM = "( (0,0,1,0), (0,1,0,0), (-1,0,0,0), (0, 1, 0, 1) )"
+GEOM_PROBE = """            def Shader "geom"
+            {
+                uniform token info:id = "%(id)s"
+                uniform string inputs:space = "%(space)s"
+                float3 outputs:out
+            }
+            def Shader "half"
+            {
+                uniform token info:id = "ND_multiply_vector3FA"
+                float3 inputs:in1.connect = </world/Materials/mat/geom.outputs:out>
+                float inputs:in2 = 0.5
+                float3 outputs:out
+            }
+            def Shader "bias"
+            {
+                uniform token info:id = "ND_add_vector3FA"
+                float3 inputs:in1.connect = </world/Materials/mat/half.outputs:out>
+                float inputs:in2 = 0.5
+                color3f outputs:out
+            }
+"""
+
 # The film and its base for the "thinfilm_layer" case: MaterialX 1.38's way.
 LAYERED_THIN_FILM = """            def Shader "layer"
             {
@@ -240,6 +277,16 @@ LAYERED_THIN_FILM = """            def Shader "layer"
 
 def scene_text(shader, inputs):
     mtlx = shader.startswith("ND_")
+    if shader == "GEOM":
+        text = SCENE % {"terminal": "mtlx:surface", "output": "out",
+                        "shader": "ND_standard_surface_surfaceshader",
+                        "inputs": "                float inputs:specular = 0\n"
+                                  "                color3f inputs:base_color.connect = "
+                                  "</world/Materials/mat/bias.outputs:out>"}
+        probe = GEOM_PROBE % inputs
+        anchor = "</world/Materials/mat/surf.outputs:out>" + chr(10)
+        text = text.replace(anchor, anchor + probe, 1)
+        return text.replace(SPHERE_XFORM, TURNED_XFORM, 1)
     lines = "\n".join("                %s = %s" % kv for kv in inputs.items())
     if shader == "LAYERED_THIN_FILM":
         text = SCENE % {"terminal": "mtlx:surface", "output": "out", "shader": "ND_surface",
@@ -309,7 +356,7 @@ def main():
         side_by_side(cyc, kar, os.path.join(OUT, name + "_cmp.png"))
         tol = {"emission": EMISSIVE_TOL, "glass": GLASS_TOL,
                "dielectric_rt": GLASS_TOL, "thinfilm_layer": THINFILM_TOL,
-               "thinfilm_direct": THINFILM_TOL}.get(name, TOL)
+               "thinfilm_direct": THINFILM_TOL, "tangent_object": TANGENT_TOL}.get(name, TOL)
         for region, box in REGIONS.items():
             a, b = region_mean(cyc, box), region_mean(kar, box)
             if a.max() < DARK and b.max() < DARK:

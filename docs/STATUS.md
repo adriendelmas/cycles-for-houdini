@@ -2224,3 +2224,13 @@ l'alpha d'une image lu par `separate4.outa`, `extract` 3 ou un swizzle `a`
 est rebranché sur la sortie alpha du nœud image de Cycles (détourage vers
 l'opacité). `time`/`frame` restent dehors : rien ne donne l'image courante au
 délégué, et un matériau n'est pas resynchronisé à chaque image.
+
+**K-18 corrigé (0106).** Contre Karma, sur une sphère tournée d'un quart de
+tour : la normale en espace objet (le défaut MaterialX) sortait en espace
+monde, et la position monde sortait en espace objet — la table avait une
+seule traduction par nœud, quel que soit son `space`. Maintenant : normale
+objet par le nœud texture_coordinate, position monde par le nœud geometry,
+tangente objet par un vector_transform ; écarts de 5 à 9 % avec Karma. Pour
+`texcoord.index`, mesuré : Karma lit `st` pour l'index 1 comme pour 0 ; le
+délégué fait déjà pareil, et un second jeu d'UV passe dans Houdini par
+`geompropvalue`.

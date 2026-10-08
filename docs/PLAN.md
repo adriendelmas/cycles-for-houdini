@@ -93,7 +93,7 @@ tolerance; `bench_mtlx.py` has one case per closure family.
 | `heighttonormal`: tangent-space normal map output | K-12 |
 | `geompropvalue` colour/vector outputs | - |
 | Colour4/alpha: `image_color4` → `color` + `alpha` pair, `separate4.outa` | K-17 |
-| `texcoord.index` → `uvmap` node; `normal`/`tangent` object space via `vector_transform` | K-18 |
+| ✅ `normal`/`tangent`/`position` by `space` (0106); `texcoord.index` left as Karma reads it - `st` (measured) | K-18 |
 
 Done when: `bench_mtlx.py` runs every `_color3` and `_vector3` variant of
 every mapped math family against its scalar twin on a grey input (must match)

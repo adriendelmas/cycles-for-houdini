@@ -1,7 +1,7 @@
 From 9cd4c4aae044362d3b7590a6bc6815fd5c58136a Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 00:07:30 +0200
-Subject: [PATCH 087/105] hydra: les passes de rendu - lumieres, LPE de Karma,
+Subject: [PATCH 087/106] hydra: les passes de rendu - lumieres, LPE de Karma,
  cryptomatte, AOV de shader
 
 Le delegue ne connaissait que cinq passes et leurs orthographes Houdini ;

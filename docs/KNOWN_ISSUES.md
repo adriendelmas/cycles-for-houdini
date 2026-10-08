@@ -206,9 +206,23 @@ the reader is wired to the image node's own alpha output
 (`bench_mtlx.py` `alpha_*`). Alpha that has gone through any other colour4
 node first is still lost, and with it the colour4 compositing nodes.
 
-### K-18 `texcoord.index`, `normal.space`, `tangent.space` ignored — probable
+### K-18 `texcoord.index`, `normal.space`, `tangent.space` ignored — confirmed — **fixed** (0106), index as Karma
 Only the first UV set; `normal`/`tangent` are world space while the nodedef
 default is object space (differs once the object rotates). Noted in STATUS A11.
+
+Measured against Karma on a sphere turned a quarter turn (`bench_agree.py`
+`normal_*`, `position_world`, `tangent_object`): the default object-space
+normal came out in world space (ratio 0.57 / 1.71 on the sphere), and a
+world-space `position` came out in object space (1.93 / 0.61) - the table
+had one lookup per node whatever its `space`. 0106 picks by `space`: object
+normal from the texture coordinate node, world position from the geometry
+node, object tangent through a vector transform. After: within 5-9 % of
+Karma (the tangent within 30 % on its x: a sphere with no UVs has no
+authored tangent, and each engine derives one its own way).
+`texcoord.index`: Karma reads `st` for index 1 as for 0 - none of `st1`,
+`uv1`, `st_1`, `map1` (measured 2026-10-08) - so the delegate already does
+what Karma does; a second UV set is read in Houdini through `geompropvalue`
+and the primvar's name, which the delegate handles.
 
 ### K-58 Hand-built BSDFs: roughness squared twice, dielectric always transmitting — confirmed — **fixed** (0103)
 Found with `tools/bench_agree.py` on hand-built networks (`surface` over one
