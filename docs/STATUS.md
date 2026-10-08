@@ -2323,5 +2323,16 @@ délégué ne lisait pas ; les noms passés (`sRGB`, `raw`) sont ceux de Cycles,
 inconnus de la config OCIO de Houdini ; et sans espace indiqué, le nœud image
 de Cycles part en `scene_linear` au lieu d'`auto`. Corrigé, plus les modes
 `wrapS`/`wrapT` (passés tels quels, toujours en clamp). 13 cas sur 13 (UDIM
-compris) à
-0,011 près de Karma.
+compris) à 0,011 près de Karma. Le banc `bench_mtlx` des sorties
+`UsdUVTexture` passe en `repeat` : il supposait une texture pleine jusqu'au
+bord, que le `black` par défaut (désormais traduit) assombrit, chez Karma
+aussi.
+
+**Dôme couché (0111, K-67).** Nouveau banc `bench_dome.py` : une texture
+lat-long à quatre couleurs d'horizon et un ciel blanc, vue dans six
+directions. La carte USD a son pôle en +Y (convention OpenEXR), celle de
+Cycles en +Z : le ciel tombait sur l'horizon, et un HDRI éclairait la scène
+du mauvais côté. Une permutation d'axes fixe après la transformation du dôme ;
+le `poleAxis` de `DomeLight_1` (scène Z-up) arrive en `domeOffset`, appliqué
+aussi. 11 directions sur 11 identiques à Karma. **Les scènes déjà éclairées
+par un HDRI changent d'éclairage** : c'est le bon côté désormais.

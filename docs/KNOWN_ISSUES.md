@@ -663,6 +663,22 @@ warns and skips the attribute (the points: the mesh). `tools/bench_robust.py`
 renders three such files (`tests/scenes/bad_*.usda`): all three crashed with
 0101, all three render with 0102. Curves were already guarded.
 
+### K-67 Dome light texture lying on its side — confirmed — **fixed** (0111)
+`tools/bench_dome.py`, a lat-long texture with one colour per quarter of the
+horizon and a white top, on a dome seen by a camera in six directions,
+against Karma. USD's dome follows OpenEXR's lat-long convention: top pole
++Y, longitude 0 towards +Z, pi/2 towards +X. The delegate handed the dome's
+transform to Cycles' environment texture, whose map has its pole on +Z and
+longitude 0 on +X: the sky stood on the horizon, Houdini's -Z view showed
+the pole, and every direction differed from Karma. An HDRI lit the scene
+from the wrong side too. A fixed axis permutation now follows the dome's
+transform. `DomeLight_1`'s `poleAxis` (a Z-up stage) was ignored as well:
+UsdImaging hands its rotation over as the light's `domeOffset`, now applied
+under the transform. 11 directions, Y-up and Z-up, match Karma.
+Kept: at the exact poles Cycles' map wraps vertically, blending the first
+and last rows within half a texel - invisible on a real HDRI, visible on the
+bench's 8-row texture, so the bench checks the poles at 75 degrees.
+
 ## C. Houdini side
 
 ### K-40 `op:` textures fail under husk — confirmed

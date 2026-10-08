@@ -1,7 +1,7 @@
 From 931cc9c1dbf4b481b55343a353152f9f23e69fa9 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sat, 5 Sep 2026 00:53:45 +0200
-Subject: [PATCH 064/110] hydra: une image branchee sur une entree scalaire, et
+Subject: [PATCH 064/111] hydra: une image branchee sur une entree scalaire, et
  la couleur de sous-surface retiree
 
 **Une image sur une entree scalaire tombait.** Le repli qui choisit `fac`

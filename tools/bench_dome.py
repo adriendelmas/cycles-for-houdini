@@ -3,10 +3,11 @@
 A lat-long texture with one colour per quarter of the horizon (red, green,
 blue, yellow, each centred on an axis whatever the convention's offset), a
 white top and dark lower rows, on a USD dome light seen directly by a narrow
-camera turned to the four horizon axes, straight up and straight down. A
+camera turned to the four horizon axes, and 75 degrees up and down. A
 dome turned, mirrored or upside down shows a different colour in some
 direction; each direction's mean is compared between Cycles and Karma.
 Karma leaves a dome out of the camera's view unless told to render it.
+The same on a Z-up stage with a DomeLight_1, whose pole follows the stage.
 
     hython tools/bench_dome.py
 
@@ -34,15 +35,18 @@ DIRECTIONS = {
     "yaw_90": "(0,0,-1,0), (0,1,0,0), (1,0,0,0)",
     "yaw_180": "(-1,0,0,0), (0,1,0,0), (0,0,-1,0)",
     "yaw_270": "(0,0,1,0), (0,1,0,0), (-1,0,0,0)",
-    "up": "(1,0,0,0), (0,0,1,0), (0,-1,0,0)",
-    "down": "(1,0,0,0), (0,0,-1,0), (0,1,0,0)",
+    # 75 degrees up and down, towards -Z: at the poles themselves Cycles
+    # blends the first and last rows (its map wraps vertically too), which a
+    # real HDRI's half-texel hides and this 8-row texture does not.
+    "up_75": "(1,0,0,0), (0,0.258819,0.965926,0), (0,-0.965926,0.258819,0)",
+    "down_75": "(1,0,0,0), (0,0.258819,-0.965926,0), (0,0.965926,0.258819,0)",
 }
 
 SCENE = """#usda 1.0
 (
     defaultPrim = "world"
     metersPerUnit = 1
-    upAxis = "Y"
+    upAxis = "%(up)s"
 )
 def Xform "world"
 {
@@ -54,7 +58,7 @@ def Xform "world"
         matrix4d xformOp:transform = ( %(rows)s, (0,0,0,1) )
         uniform token[] xformOpOrder = ["xformOp:transform"]
     }
-    def DomeLight "dome"
+    def %(dome)s "dome"
     {
         asset inputs:texture:file = @dome.exr@
         token inputs:texture:format = "latlong"
@@ -99,22 +103,30 @@ def main():
         os.makedirs(OUT)
     write_texture()
     problems = []
-    for name, rows in DIRECTIONS.items():
+    cases = [(n, r, "Y", "DomeLight") for n, r in DIRECTIONS.items()]
+    # DomeLight_1 on a Z-up stage: its pole follows the stage's up axis.
+    # There the poles are on Z: yaw_0 and yaw_180 would look straight at
+    # them, so the pole is checked at 75 degrees, like the Y-up one.
+    cases += [("zup_" + n, r, "Z", "DomeLight_1") for n, r in DIRECTIONS.items()
+              if n not in ("yaw_0", "yaw_180")]
+    cases.append(("zup_towards_z_75", "(-1,0,0,0), (0,0.965926,-0.258819,0), "
+                  "(0,-0.258819,-0.965926,0)", "Z", "DomeLight_1"))
+    for name, rows, up, dome in cases:
         scene = os.path.join(OUT, name + ".usda")
-        open(scene, "w", encoding="utf-8").write(SCENE % {"rows": rows})
+        open(scene, "w", encoding="utf-8").write(SCENE % {"rows": rows, "up": up, "dome": dome})
         cyc = render("HdCyclesPlugin", scene, os.path.join(OUT, name + "_cycles.exr"))
         kar = render("BRAY_HdKarma", scene, os.path.join(OUT, name + "_karma.exr"))
         if cyc is None or kar is None:
             problems.append(name)
-            print("%-8s NO IMAGE" % name)
+            print("%-12s NO IMAGE" % name)
             continue
         worst = float(np.abs(cyc - kar).max())
         ok = worst <= TOL
-        print("%-8s %s  cycles %s  karma %s" % (name, "ok     " if ok else "DIFFERS",
+        print("%-12s %s  cycles %s  karma %s" % (name, "ok     " if ok else "DIFFERS",
                                                 np.round(cyc, 3), np.round(kar, 3)))
         if not ok:
             problems.append(name)
-    print("\n%d directions, %d problems" % (len(DIRECTIONS), len(problems)))
+    print("\n%d directions, %d problems" % (len(cases), len(problems)))
     sys.exit(1 if problems else 0)
 
 

@@ -1,0 +1,44 @@
+From 974654c221ff381dd07926003b2b5ca45508bd7d Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 8 Oct 2026 22:57:55 +0200
+Subject: [PATCH 111/111] hydra: dome light texture in USD's lat-long
+ orientation
+
+USD's dome follows OpenEXR's lat-long convention: top pole +Y, longitude 0
+towards +Z, pi/2 towards +X. Cycles' environment map has its pole on +Z
+and longitude 0 on +X, and the dome's transform went to it unchanged: the
+sky stood on the horizon and an HDRI lit the scene from the wrong side.
+A fixed axis permutation now follows the transform. DomeLight_1's
+poleAxis, handed over by UsdImaging as the light's domeOffset, is applied
+under the transform (K-67, tools/bench_dome.py: 11 directions, Y-up and
+Z-up, match Karma).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/light.cpp | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/src/hydra/light.cpp b/src/hydra/light.cpp
+index ac3709d6..503617d6 100644
+--- a/src/hydra/light.cpp
++++ b/src/hydra/light.cpp
+@@ -405,6 +405,19 @@ void HdCyclesLight::PopulateShaderGraph(const HdContainerDataSourceHandle &light
+         if (_lightType == HdPrimTypeTokens->domeLight) {
+           Transform tfm = _object->get_tfm();
+           transform_set_column(&tfm, 3, zero_float3());  // Remove translation
++          /* USD's dome follows OpenEXR's lat-long: top pole +Y, longitude 0
++           * towards +Z, pi/2 towards +X. Cycles' map has its pole on +Z and
++           * longitude 0 on +X: its lookup direction is (z, x, y) of the
++           * dome's. The coordinate node applies the inverse of ob_tfm. */
++          /* DomeLight_1's poleAxis: the rotation UsdImaging computes for the
++           * dome alone (+90 degrees about X on a Z-up stage), under its
++           * transform. */
++          if (auto offset = HdMatrixDataSource::Cast(
++                  lightContainer->Get(TfToken("domeOffset"))))
++          {
++            tfm = tfm * convert_transform(offset->GetTypedValue(0.0f));
++          }
++          tfm = tfm * make_transform(0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0);
+ 
+           TextureCoordinateNode *coordNode = graph->create_node<TextureCoordinateNode>();
+           coordNode->set_ob_tfm(tfm);

@@ -140,6 +140,7 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0108` | hydra: douze traductions corrigees par comparaison a Karma - rotate en degres, tangente UV, vector2 sans 3e composante, combine2 color4, comparaisons booleennes, burn/dodge sans bornes, ramp_gradient deplie (K-61) ; heighttonormal encode en espace tangent (K-12) ; emission a l'intensite 1, generalized_schlick_edf transmet sa base |
 | `0109` | hydra: couleur de base des surfaces calculee avant traduction - sous-surface et assombrissement du vernis d'OpenPBR, sous-surface et gamma du vernis de standard_surface ; alpha glTF selon alpha_mode (K-63) ; tiledimage, images glTF, latlongimage et place2d depuis leurs nodegraphs, image_float sur son premier canal (K-64) |
 | `0110` | hydra: UsdPreviewSurface selon useSpecularWorkflow (F0 = specularColor, ignore en workflow metallique) et opacityThreshold (detourage) (K-65) ; espace couleur des textures lu dans le champ Hydra et resolu dans la config OCIO active, images en `auto` par defaut, wrapS/wrapT traduits (K-66) |
+| `0111` | hydra: texture du dome orientee selon la convention lat-long d'OpenEXR (pole +Y, longitude 0 vers +Z) et `poleAxis` de DomeLight_1 via `domeOffset` (K-67) |
 
 ---
 
