@@ -2275,3 +2275,9 @@ défaut : toute EDF MaterialX émettait 10 fois trop, le nœud d'émission de
 Cycles ayant une intensité par défaut de 10 ; et `generalized_schlick_edf`
 émettait seul alors qu'il ne fait que teinter l'EDF de sa base. 38 sur 45
 identiques ensuite.
+
+**K-62 (mesuré, pas de correction).** Le `sheen_bsdf` de MaterialX a deux
+modes : `zeltner` correspond au sheen de Cycles (« microfiber », celui
+qu'emploie la traduction, à 7 % de Karma) ; `conty_kulla`, le mode par
+défaut, renvoie beaucoup plus de lumière vers l'observateur (0,10 au centre
+de la sphère contre 0,002) et n'a pas d'équivalent dans Cycles.

@@ -319,6 +319,17 @@ library's GLSL (`dodge` gives 1 minus it, `blackbody` 11 times it, vector
 `atan2` one channel, emission capped at 20), Houdini and Karma nodes Karma
 alone implements. `heighttonormal` (K-12) is fixed in the same patch.
 
+### K-62 `sheen_bsdf` in its default mode has no Cycles counterpart — measured — by design
+MaterialX's sheen has two modes. `zeltner` is the model of Cycles' sheen
+(`microfiber`), which the translation uses: on the agreement sphere, white,
+roughness 0.3, Karma 0.231 against Cycles 0.215 (7 %), both near zero facing
+the viewer. `conty_kulla` - the nodedef's default - sends much more light
+back towards the viewer: 0.103 at the sphere's centre in Karma, against
+0.002 for Cycles' microfiber and 0.003 for its Ashikhmin velvet; sphere mean
+0.289. Cycles has no Conty-Kulla sheen, so a default-mode sheen renders
+darker facing the camera, right at grazing angles. Measured 2026-10-08; the
+`mode` input is reported unmapped when authored.
+
 ## B. Geometry and scene
 
 ### K-19 float3 primvars copied at the wrong stride — confirmed — **fixed** (0075)
