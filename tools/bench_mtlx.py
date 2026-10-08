@@ -396,6 +396,135 @@ CASES = [
                                         "token outputs:out"])]}),
 ]
 
+# Nodes the table does not hold: the delegate expands them from their
+# MaterialX nodegraph (mtlx_expand.cpp), or rewrites them by hand (extract,
+# swizzle). Formulas read from the nodegraphs in stdlib_ng.mtlx.
+
+
+def mx_hsvadjust(c, amount):
+    import colorsys
+    h, s, v = colorsys.rgb_to_hsv(*c)
+    return colorsys.hsv_to_rgb((h + amount[0]) % 1.0, s * amount[1], v * amount[2])
+
+
+def mx_trianglewave(x):
+    m = abs(x) % 1.0
+    return 0.5 - abs(m - 0.5)
+
+
+CASES += [
+    # switch: ifgreater chain, in(which + 1).
+    ("exp_switch_color3", [
+        'uniform token info:id = "ND_switch_color3"',
+        "color3f inputs:in1 = (0.9, 0.1, 0.1)",
+        "color3f inputs:in2 = (0.1, 0.9, 0.1)",
+        "color3f inputs:in3 = (0.1, 0.2, 0.8)",
+        "color3f inputs:in4 = (0.5, 0.5, 0.5)",
+        "float inputs:which = 2",
+        "color3f outputs:out",
+    ], (0.1, 0.2, 0.8), {}),
+    ("exp_switch_float", [
+        'uniform token info:id = "ND_switch_float"',
+        "float inputs:in1 = 0.1",
+        "float inputs:in2 = 0.9",
+        "float inputs:in3 = 0.4",
+        "float inputs:which = 1",
+        "float outputs:out",
+    ], (0.9, 0.9, 0.9), {}),
+    ("exp_extract", [
+        'uniform token info:id = "ND_extract_color3"',
+        "color3f inputs:in = (0.9, 0.2, 0.1)",
+        "int inputs:index = 1",
+        "float outputs:out",
+    ], (0.2, 0.2, 0.2), {}),
+    ("exp_swizzle_bgr", [
+        'uniform token info:id = "ND_swizzle_color3_color3"',
+        "color3f inputs:in = (0.9, 0.2, 0.1)",
+        'string inputs:channels = "bgr"',
+        "color3f outputs:out",
+    ], (0.1, 0.2, 0.9), {}),
+    ("exp_swizzle_float", [
+        'uniform token info:id = "ND_swizzle_float_color3"',
+        "float inputs:in = 0.4",
+        'string inputs:channels = "rrr"',
+        "color3f outputs:out",
+    ], (0.4, 0.4, 0.4), {}),
+    ("exp_hsvadjust", [
+        'uniform token info:id = "ND_hsvadjust_color3"',
+        "color3f inputs:in = (0.9, 0.2, 0.1)",
+        "float3 inputs:amount = (0.1, 0.5, 0.8)",
+        "color3f outputs:out",
+    ], mx_hsvadjust((0.9, 0.2, 0.1), (0.1, 0.5, 0.8)), {}),
+    ("exp_trianglewave", [
+        'uniform token info:id = "ND_trianglewave_float"',
+        "float inputs:in = 0.65",
+        "float outputs:out",
+    ], (mx_trianglewave(0.65),) * 3, {}),
+    # ramp4 is bilinear in the plane's st; the plane faces the camera, so the
+    # mean over it is the mean of the four corners.
+    ("exp_ramp4", [
+        'uniform token info:id = "ND_ramp4_color3"',
+        "color3f inputs:valuetl = (1, 0, 0)",
+        "color3f inputs:valuetr = (0, 1, 0)",
+        "color3f inputs:valuebl = (0, 0, 1)",
+        "color3f inputs:valuebr = (1, 1, 0)",
+        "color3f outputs:out",
+    ], (0.5, 0.5, 0.25), {"tol": 0.03}),
+]
+
+
+def texcoord(name):
+    return shader(name, ['uniform token info:id = "ND_texcoord_vector2"', "float2 outputs:out"])
+
+
+CASES += [
+    # The plane's st runs 0..1 both ways: the mean of either component is 0.5.
+    ("dbg_texcoord_x", [
+        'uniform token info:id = "ND_extract_vector2"',
+        "float2 inputs:in.connect = </world/Materials/M/tc.outputs:out>",
+        "int inputs:index = 0",
+        "float outputs:out",
+    ], (0.5, 0.5, 0.5), {"extra": [texcoord("tc")], "tol": 0.03}),
+    ("dbg_clamp_texcoord_y", [
+        'uniform token info:id = "ND_extract_vector2"',
+        "float2 inputs:in.connect = </world/Materials/M/cl.outputs:out>",
+        "int inputs:index = 1",
+        "float outputs:out",
+    ], (0.5, 0.5, 0.5), {"extra": [texcoord("tc"), shader("cl", [
+        'uniform token info:id = "ND_clamp_vector2"',
+        "float2 inputs:in.connect = </world/Materials/M/tc.outputs:out>",
+        "float2 inputs:low = (0, 0)", "float2 inputs:high = (1, 1)", "float2 outputs:out"])],
+        "tol": 0.03}),
+    # splitlr / splittb: a sharp step at `center` along s, or along 1 - t;
+    # with center 0.25, three quarters of the plane show the second value.
+    ("exp_splitlr", [
+        'uniform token info:id = "ND_splitlr_color3"',
+        "color3f inputs:valuel = (1, 0, 0)",
+        "color3f inputs:valuer = (0, 0, 1)",
+        "float inputs:center = 0.25",
+        "color3f outputs:out",
+    ], (0.25, 0.0, 0.75), {"tol": 0.03}),
+    ("exp_splittb", [
+        'uniform token info:id = "ND_splittb_color3"',
+        "color3f inputs:valuet = (1, 0, 0)",
+        "color3f inputs:valueb = (0, 0, 1)",
+        "float inputs:center = 0.25",
+        "color3f outputs:out",
+    ], (0.25, 0.0, 0.75), {"tol": 0.03}),
+    # A connected texcoord replaces the helper's: a constant (0.9, 0.5) is past
+    # the centre, so the right value shows everywhere.
+    ("exp_splitlr_texcoord", [
+        'uniform token info:id = "ND_splitlr_color3"',
+        "color3f inputs:valuel = (1, 0, 0)",
+        "color3f inputs:valuer = (0, 0, 1)",
+        "float inputs:center = 0.25",
+        "float2 inputs:texcoord.connect = </world/Materials/M/c2.outputs:out>",
+        "color3f outputs:out",
+    ], (0.0, 0.0, 1.0), {"extra": [shader("c2", [
+        'uniform token info:id = "ND_constant_vector2"', "float2 inputs:value = (0.9, 0.5)",
+        "float2 outputs:out"])]}),
+]
+
 TEXTURED = [
     ("image", "ND_image_color3"),
     ("hextiledimage", "ND_hextiledimage_color3"),

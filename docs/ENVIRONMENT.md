@@ -58,3 +58,20 @@ Côté shading il consomme déjà les identifiants `cycles_*` / `cycles:`
 2. **`src/mtlxCycles`** — traduction MaterialX -> graphe de nœuds Cycles.
    Absent en amont. Module isolé, supprimable si Cycles absorbe MaterialX.
 3. Validation et correctifs contre Houdini 22 / USD 26.05 (l'amont vise 21).
+
+## Clean-clone check (2026-10-08)
+
+`tools/bootstrap.py --version 5.3` run on a fresh clone of this repository
+(`git clone <repo>; python tools/bootstrap.py --version 5.3 --jobs 12`,
+`HFS` and `OPTIX_ROOT_DIR` set, CUDA sm_86 + OptiX 9.1, OSL off as the
+Houdini build has it): **14 min 20 s** from the first byte of the Cycles
+clone to the installed `hdCycles.dll` - 6.6 GB of Blender's precompiled
+libraries included - on the development machine (RTX, 16 jobs). The run
+found two defects the production checkout never shows, both fixed in the
+tool: Blender declares `lib/windows_x64` with `update = none`, so a plain
+`git submodule update` skipped it and the configure step had no
+dependency at all; and `git am` needs a committer identity, which a machine
+that never committed does not have. The plugin it produces is 1.2 % larger
+than the production build of the same commit: the clean configure keeps
+Cycles' default `WITH_CYCLES_DEVICE_HIP=ON`, which the production build tree
+had turned off; every other option is the same.

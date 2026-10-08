@@ -20,6 +20,13 @@ Reference images are rendered at **120×90**; comparing at another resolution
 fails every scene at once. If `hserver -l` shows `Connection Error`, restart
 it with `hserver -S https://www.sidefx.com/license/sesinetd`.
 
+To read the delegate's log from a live Houdini, start it with
+`tests/houdini/launch_cycles_log.cmd [scene.hip]`: the log lands in
+`tests/scratch/cycles_viewport.log`. With the houdini-mcp shelf tool on,
+`python tools/hou_remote.py -c "<python>"` (or a script file) runs code in
+that session and prints what it printed - the way to drive the viewport, the
+display driver and Solaris' scene index from a bench.
+
 To test a freshly built DLL while Houdini holds the installed one: set
 `HOUDINI_PACKAGE_SKIP=1`, point `PXR_PLUGINPATH_NAME` at a temporary plugin
 tree, and put the Houdini and install `bin` directories on `PATH` in POSIX
@@ -43,9 +50,9 @@ after a Cycles standard attribute (`heat`, `density`, `color`, `temperature`,
 | `hython tools/bench_export.py` | 97 native Cycles VOPs | Each VOP exports through the real Solaris translator to USD | Values |
 | `python tools/bench_render.py` | Same 97 scenes | No delegate warning, image present, not black; renders into `tests/nodes/5.3/output/` (ignored) | That the image is right |
 | `hython tools/bench_diff.py [--accept node\|all]` | `output/` vs `references/` | Each node matches its committed reference (off by less than `1e-3` absolute or 1 % relative on 99.5 % of pixels); lists nodes inert against `_baseline.exr`; `cycles_set_normal` is reported, not counted (A19) | - |
-| `hython tools/bench_mtlx.py [name]` | 36 MaterialX nodes (+3 textured with `CYCLES_BENCH_TEXTURE`), colours and closures | Rendered colour within 2 % of a value **computed from the MaterialX definition**, file named next to each formula | Anything the plane's mean cannot see: directions, volumes |
+| `hython tools/bench_mtlx.py [name]` | 49 MaterialX nodes (+3 textured with `CYCLES_BENCH_TEXTURE`), colours, closures, and the nodes expanded from their nodegraph (`exp_*`) | Rendered colour within 2 % of a value **computed from the MaterialX definition**, file named next to each formula | Anything the plane's mean cannot see: directions, volumes |
 | `hython tools/bench_hair.py` | 4 pairs | MaterialX Chiang hair equals native principled hair, error < 1e-3 | - |
-| `hython tools/mtlx_coverage.py [--list]` | MaterialX library vs the table | Which nodedefs route to *some* mapping (652/823) | Which translate correctly |
+| `hython tools/mtlx_coverage.py [--list]` | MaterialX library vs the table | Which nodedefs the delegate renders - by the table, by nodegraph expansion or by rewriting (762/822, `tools/mtlx_rules.py` holds the rule) | Which translate correctly |
 | `hython tools/mtlx_inputs.py [--list] [pattern]` | Every routed nodedef, all inputs authored, one husk run | Which nodedefs keep every input, output and node (543/652 on 2026-10-07); `--list` names what each one loses | Values |
 | `hython tools/mtlx_defaults.py [pattern]` | standard_surface, OpenPBR, glTF, Disney, UsdPreviewSurface | A lit sphere renders the same with no input authored and with every input authored at its model's default (8x8 block means, so noise cannot pass for a difference); the sphere must be lit | Values of authored inputs |
 | `hython tools/bench_curves.py [--karma] [name]` | 5 hand-written BasisCurves | Each curve covers the plane where USD puts it and nowhere a misread curve would: Bézier, B-spline, periodic, pinned, `varying` widths; with `--karma`, its silhouette overlaps Karma's (IoU ≥ 0.85) | Shading; indexed curves (no USD attribute) |
@@ -59,9 +66,11 @@ after a Cycles standard attribute (`heat`, `density`, `color`, `temperature`,
 | `scratchpad/audit_surface.py` (local) | 39 `standard_surface` inputs | Each input changes the image, references local and gitignored | Agreement with Karma beyond the four measured cases |
 
 Taken together: the suite catches a node that stops rendering, a socket
-rename, a dead parameter, a dropped input (`mtlx_inputs.py`), and - for the
-eleven cases it carries - a wrong value. It does not yet catch a wrong closure
-mix or a mistranslated OpenPBR input; those come with phases 2 and 4.
+rename, a dead parameter, a dropped input (`mtlx_inputs.py`), a wrong value
+on the 49 MaterialX cases, a wrong closure mix, a surface model's default,
+a wrong pass, a prim rendered where its settings hide it, a curve or an
+instance drawn in the wrong place. What it cannot see is the live viewport:
+`tests/houdini/` holds the scenes to check by hand there.
 
 Testing a freshly built DLL while Houdini holds the installed one: every
 bench honours a `PXR_PLUGINPATH_NAME` already in the environment, so the

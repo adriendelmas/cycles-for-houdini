@@ -178,7 +178,7 @@ Settings LOP renders all its AOVs through Cycles (`bench_karma_settings.py`,
 | ✅ Try-lock with a deferred re-execute instead of a blocking lock (0096) | K-32 |
 | Vulkan Hgi: either a Vulkan interop display driver or a cheaper readback path; at least log which path is active at startup (already done) | - |
 | ✅ COP cache eviction on material finalize; cap by bytes (0096) | K-41 |
-| MaterialX-to-OSL for the nodes a node graph cannot express (`switch`, `swizzle`, `extract`, matrices), CPU and OptiX only, behind a setting | - |
+| ✅ Replaced: MaterialX-to-OSL is not possible against Houdini (its OIIO 2.5 vs Cycles' OSL 1.15 built on OIIO 3.1; Houdini ships no OSL headers and `HOSL.dll` exports no OSL class). Instead, nodedefs the library defines as nodegraphs are expanded into the nodes the table knows, `extract` and `swizzle` rewritten by hand (0098); matrices stay out | - |
 
 Done when: a material edit on the user's reference scene shows in under one
 sample time on CPU, and the UI thread never blocks longer than 100 ms in the
@@ -189,7 +189,7 @@ stopwatch log.
 | Task | Closes |
 |---|---|
 | ✅ Translate comments and log messages to English (0097, tools too) | K-53 |
-| `bootstrap.py` re-run on a clean clone in a temporary directory; record the time and the result in ENVIRONMENT.md | - |
+| ✅ `bootstrap.py` re-run on a clean clone: 14 min 20 s, two tool defects fixed (ENVIRONMENT.md) | - |
 | ✅ Document the farm workflow in one place (README, COP feature; not automated) | K-40 |
 | ✅ `preview translator` scope stated in the README | K-42 |
 

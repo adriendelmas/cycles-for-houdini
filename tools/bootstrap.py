@@ -52,8 +52,13 @@ def clone(src, cfg):
     """
     run(["git", "clone", "--filter=tree:0", UPSTREAM, src])
     run(["git", "checkout", "-b", cfg["branch"], cfg["commit"]], cwd=src)
-    # Blender's precompiled libraries, as a submodule + git-lfs.
-    run(["git", "submodule", "update", "--init", "lib/windows_x64"], cwd=src)
+    # Blender's precompiled libraries, as a submodule + git-lfs. Blender's
+    # .gitmodules declares them `update = none` so that a plain checkout does
+    # not pull gigabytes: asked for explicitly, or `git submodule update`
+    # prints "Skipping submodule" and the configure step fails for want of
+    # every dependency (seen on the clean-clone check of 2026-10-08).
+    run(["git", "-c", "submodule.lib/windows_x64.update=checkout",
+         "submodule", "update", "--init", "--progress", "lib/windows_x64"], cwd=src)
 
 
 def apply_patches(src, version):
@@ -64,7 +69,14 @@ def apply_patches(src, version):
     if not patches:
         sys.exit("no patch in " + series)
     print("%d patches to apply" % len(patches))
-    run(["git", "am"] + patches, cwd=src)
+    # `git am` commits, so it needs an identity; a machine that has never
+    # committed has none, and the run stopped at the first patch.
+    identity = []
+    if not subprocess.run(["git", "config", "user.email"], cwd=src,
+                          capture_output=True).stdout.strip():
+        identity = ["-c", "user.name=hdCycles bootstrap",
+                    "-c", "user.email=bootstrap@hdcycles.local"]
+    run(["git"] + identity + ["am"] + patches, cwd=src)
 
 
 def configure(src, cfg, houdini, optix, arch, osl):

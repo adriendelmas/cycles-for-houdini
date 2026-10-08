@@ -25,6 +25,8 @@ import sys
 
 import MaterialX as mx
 
+from mtlx_rules import Resolver
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HFS = os.path.join(os.environ.get("HFS", "E:/Side Effects Software/Houdini22.0.368"), "bin")
 SOURCE = os.path.join(ROOT, "external", "cycles-53", "src", "hydra", "material.cpp")
@@ -109,15 +111,14 @@ DOC = mx.createDocument()
 
 
 def routed_nodedefs():
-    known = prefixes()
     doc = DOC
     mx.loadLibraries(["libraries"], mx.getDefaultDataSearchPath(), doc)
+    resolver = Resolver(doc)
     out = []
     for nd in doc.getNodeDefs():
         if NOT_SHADING.match(nd.getNodeString()):
             continue
-        name = nd.getName()
-        if name.startswith(INLINE) or any(name.startswith(p) for p in known):
+        if resolver.resolves(nd.getName()):
             out.append(nd)
     return out
 

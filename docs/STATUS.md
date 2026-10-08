@@ -2071,3 +2071,30 @@ s'affichent et disparaissent ; le flou revenait mais l'objet disparaissait
 MCP, démarrage manuel). Bancs ajoutés : `bench_curves` (`--karma`),
 `bench_motion`, `bench_instances`, `bench_implicit`, `bench_settings`,
 `bench_aovs`, `bench_karma_settings`.
+
+**MaterialX → OSL, écarté sur mesure (2026-10-08).** Le script de build
+amont désactive OSL contre Houdini, et pour cause : Houdini 22 embarque
+OpenImageIO 2.5.18 (le délégué est compilé contre lui), l'OSL précompilé de
+Cycles (1.15.3) est lié à OpenImageIO 3.1.13, Houdini ne livre ni en-têtes
+OSL ni bibliothèque utilisable (`HOSL.dll` n'exporte aucune classe OSL). Il
+faudrait recompiler OSL et LLVM contre l'OIIO de Houdini, pour du CPU seul.
+À la place : **dépliage des nodegraphs** (0098). La bibliothèque MaterialX
+définit `switch`, `ramp4`, `hsvadjust`, `colorcorrect`, tous les `hmtlx*`
+comme des graphes de nœuds plus simples ; le délégué les lit dans
+`$HFS/houdini/materialx` et les remplace par leurs nœuds internes avant la
+traduction, `extract` et `swizzle` réécrits à la main. Couverture : 135 →
+172 familles complètes (762/822 nodedefs), entrées conservées 543 → 636,
+cas de valeur 36 → 49. Deux défauts trouvés en chemin, dans la table
+existante : un `vector2` (`float2` USD) tombait à zéro faute de conversion
+vers `float3` ; et une entrée d'un nœud interne laissée au défaut de Cycles
+plutôt qu'à celui de MaterialX (`modulo` divisait par 0,5) — d'où
+l'écriture explicite de tous les défauts des nœuds dépliés. Un helper
+(coordonnée de texture d'un `splitlr`) cède maintenant la place à la
+connexion du réseau, en regardant à travers les nœuds de conversion que
+Cycles intercale.
+
+**Bootstrap sur clone propre (2026-10-08).** 14 min 20 s, 6,6 Go de
+bibliothèques. Deux défauts de l'outil que la copie de travail ne montrait
+jamais : le sous-module `lib/windows_x64` déclaré `update = none` par
+Blender (sauté sans un mot), et `git am` sans identité de commit. La DLL
+diffère de 1,2 % de celle de production : HIP activé par défaut.

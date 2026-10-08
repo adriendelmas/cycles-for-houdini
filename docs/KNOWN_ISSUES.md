@@ -463,6 +463,16 @@ warnings per nodedef. First measurement, after 0076:
 A third number, value-verified by rendering against the MaterialX
 definition, is `bench_mtlx.py`'s case count: 16.
 
+2026-10-08, after 0098 (nodegraph expansion, `tools/mtlx_rules.py` shared by
+both tools): routed **775**, clean **636**, inputs dropped 139, outputs and
+nodes missing 0; `bench_mtlx.py` 49 cases. The 31 families still out:
+matrices (`transformmatrix`, `creatematrix`, `invertmatrix`, `transpose`,
+`determinant`), the colour4 compositing nodes (`over`, `in`, `out`, `mask`,
+`matte`, `premult`, `disjointover`...), `time`, `frame`, `curveadjust`,
+`splitlr`/`splittb` of colour4 and vector4, `blur`, and the BSDF helpers
+(`artistic_ior`, `roughness_*`, `thin_film_bsdf`, `generalized_schlick_bsdf`,
+the Disney BSDFs, `thin_surface`).
+
 ### K-52 Bench expected values derived from the code — confirmed — **fixed**
 `tools/bench_mtlx.py` now computes every expected colour from the MaterialX
 source expression or nodegraph, with the file named next to the formula, and

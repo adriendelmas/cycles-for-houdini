@@ -100,12 +100,15 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 
 ## Materials - MaterialX
 
-Three numbers, measured 2026-10-07 (commands in [TESTING.md](TESTING.md)):
-**652** of 823 nodedefs route to a mapping (`mtlx_coverage.py`), **543** of
-those keep every input, output and node when rendered with all inputs authored
-(`mtlx_inputs.py`), **36** are verified against a value computed from the
-MaterialX definition (`bench_mtlx.py`), and the five surface models keep their
-own defaults for unauthored inputs (`mtlx_defaults.py`). This table says what renders right.
+Three numbers, measured 2026-10-08 (commands in [TESTING.md](TESTING.md)):
+**762** of 822 nodedefs are rendered - 651 through the mapping table, 71 by
+expanding the nodegraph the library defines them with, 40 by rewriting
+(`mtlx_coverage.py`); **636** of the 775 that route keep every input, output
+and node when rendered with all inputs authored (`mtlx_inputs.py`); **49** are
+verified against a value computed from the MaterialX definition
+(`bench_mtlx.py`), and the five surface models keep their own defaults for
+unauthored inputs (`mtlx_defaults.py`). On 2026-10-07 the numbers were 652,
+543 and 36. This table says what renders right.
 
 | Family | State | Notes |
 |---|---|---|

@@ -17,6 +17,8 @@ import sys
 
 import MaterialX as mx
 
+from mtlx_rules import Resolver, load_library, prefixes
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SOURCE = os.path.join(ROOT, "external", "cycles-53", "src", "hydra", "material.cpp")
 
@@ -41,15 +43,9 @@ def prefixes():
 
 
 def main():
-    known = prefixes()
-
-    def resolves(nodedef):
-        if nodedef.startswith(INLINE):
-            return True
-        return any(nodedef.startswith(p) for p in known)
-
-    doc = mx.createDocument()
-    mx.loadLibraries(["libraries"], mx.getDefaultDataSearchPath(), doc)
+    doc = load_library()
+    resolver = Resolver(doc)
+    resolves = resolver.resolves
 
     categories = {}
     for nodedef in doc.getNodeDefs():
@@ -71,6 +67,13 @@ def main():
           % (len(covered), len(partial), len(missing)))
     print("nodedefs               : %d/%d (%.0f %%)"
           % (defs_hit, defs_total, 100.0 * defs_hit / max(defs_total, 1)))
+    by_how = {}
+    for n in shading.values():
+        for d in n:
+            how = resolver.how(d)
+            if how:
+                by_how[how] = by_how.get(how, 0) + 1
+    print("of which               : " + ", ".join("%d %s" % (c, h) for h, c in sorted(by_how.items())))
 
     if "--list" in sys.argv:
         for title, group in (("PARTIAL", partial), ("MISSING", missing)):

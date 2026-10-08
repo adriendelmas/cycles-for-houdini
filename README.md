@@ -22,7 +22,11 @@ where the work went.
 - **MaterialX to Cycles translation** inside the delegate, so a MaterialX network
   authored anywhere in a USD pipeline renders in Cycles. Includes MaterialX's
   procedural noise implemented exactly, as native SVM and OSL kernel nodes.
-  Both follow Ben Houston's work — see [Credits](#credits).
+  Both follow Ben Houston's work — see [Credits](#credits). Nodes the table
+  does not hold but the MaterialX library defines as nodegraphs - `switch`,
+  `ramp4`, `hsvadjust`, `colorcorrect`, every `hmtlx*` node of Houdini - are
+  expanded into their inner nodes at translation time, read from Houdini's
+  own library.
 - **Copernicus COP textures read live**, without a round trip through disk.
   This needs a live Houdini: under husk (a USD Render ROP, a farm) there is no
   node graph to cook, so put the **Flatten COP Textures** LOP
@@ -171,11 +175,15 @@ not compare against committed reference images — is set out in
 The complete list, with line numbers, is [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md).
 The ones a user meets first:
 
-- MaterialX: of the 652 nodedefs that route to a mapping, 543 keep every input
-  when rendered (`tools/mtlx_inputs.py`); 36 are value-checked against the
-  MaterialX definition (`tools/bench_mtlx.py`). Matrices, `switch`,
-  `swizzle`-style nodes and the other nodes a Cycles graph cannot express are
-  not translated.
+- MaterialX: 762 of the library's 822 shading nodedefs are rendered - 651
+  by the mapping table, 71 by expanding the nodegraph the library defines
+  them with, 40 by rewriting (`extract`, `swizzle`); of the 775 that route,
+  636 keep every input when rendered (`tools/mtlx_inputs.py`), and 49 are
+  value-checked against the MaterialX definition (`tools/bench_mtlx.py`).
+  Out: matrices, the colour4 compositing nodes, `time`/`frame`, `blur`,
+  `curveadjust`, and a few BSDF helpers - Cycles' node graph has no
+  equivalent, and OSL is not an option against Houdini (its OpenImageIO is
+  2.5, Cycles' OSL is built on 3.1; Houdini ships no usable OSL).
 - Cycles has no light path expressions: Karma's usual LPEs are mapped to the
   Cycles pass holding the same light, any other one renders black and says so
   in the log.
