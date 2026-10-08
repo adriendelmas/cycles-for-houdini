@@ -2131,6 +2131,19 @@ transmission avec `base_color` — et 0099 écrit maintenant le défaut blanc de
 `transmission_color`, qui est ce que dit MaterialX. Karma rendu côte à côte
 sur le même décor : cube neutre (rapport r/b 0,90 ; Cycles 0100 : 0,89 ;
 ancienne référence : 0,51). Les 97 références acceptées après cette
-vérification, pas avant. Vu au passage sur la même image, noté K-57 : la
-sphère de métal doré est presque noire chez Cycles, dorée chez Karma, et ce
-depuis les premières références — à mesurer.
+vérification, pas avant. Fausse alerte levée dans la foulée : la sphère
+« noire » des références est celle du banc, qui y pose le matériau sondé ;
+le décor rendu seul en 480×360 montre la même sphère dorée chez Cycles et
+chez Karma (K-57 retiré avant d'exister). Restent, visibles sur cette
+image : le ciel du dome, bleu-gris chez Cycles et noir chez Karma, et le
+verre, laiteux chez Cycles, clair à face sombre chez Karma.
+
+**Effet de bord de 0099 sur le choix du lobe de verre (0101, 2026-10-08).**
+`AsksForGlassLobe` prenait la variante « principled + glass_bsdf » dès que
+`transmission_color` était écrit — ce qui, depuis que 0099 écrit tous les
+défauts, valait pour chaque `standard_surface`, dispersion perdue partout. Le
+critère est maintenant la transmission elle-même : câblée, ou écrite au-dessus
+de zéro ; une dispersion écrite garde le principled entier. Vérifié : les 5
+surfaces aux défauts identiques, 49 cas MaterialX, 97 nœuds contre leurs
+références sans écart, le cube de verre inchangé (transmission 1 → lobe de
+verre, r/b 0,89 comme Karma).

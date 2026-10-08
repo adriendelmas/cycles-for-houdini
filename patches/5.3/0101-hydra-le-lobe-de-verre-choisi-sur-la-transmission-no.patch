@@ -1,0 +1,81 @@
+From 172e2a6a6277e2c96f46e572dc8a53dc1726488f Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 8 Oct 2026 08:30:42 +0200
+Subject: [PATCH 101/101] hydra: le lobe de verre choisi sur la transmission,
+ non sur transmission_color
+
+Depuis que CompleteMaterialXDefaults (0099) ecrit chaque entree non ecrite,
+transmission_color est present sur tout standard_surface, et sa presence ne
+dit plus l'intention : la variante a lobe de verre separe, qui perd la
+dispersion, etait prise pour chaque materiau. Le critere est la transmission
+elle-meme - cablee, ou ecrite au-dessus de zero - et une dispersion ecrite
+garde le principled entier. Surfaces aux defauts, 49 cas MaterialX et 97
+noeuds inchanges ; le verre garde son lobe.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp | 42 ++++++++++++++++++++++++++----------------
+ 1 file changed, 26 insertions(+), 16 deletions(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index 2f4529ba..52e29897 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -3723,31 +3723,41 @@ void HdCyclesMaterial::UpdateConnections(NodeDesc &nodeDesc,
+ namespace {
+ 
+ /* Does the network ask for what only a separate transmission lobe can
+- * render? A written value and a plugged wire both count: Hydra only passes
+- * what the network has set, so their mere presence states the intent. */
++ * render? Transmission itself: a wire into it, or a written weight above
++ * zero. The mere presence of `transmission_color` used to state the intent,
++ * when Hydra only passed what the network had set; since
++ * CompleteMaterialXDefaults (0099) writes every unwritten input, it is on
++ * every standard_surface, and the value has to speak. A written dispersion
++ * keeps the whole principled, the only node that renders it. */
+ bool AsksForGlassLobe(HdMaterialNodeSchema nodeSchema)
+ {
+-  static const TfToken kNames[] = {TfToken("transmission_color"),
+-                                   TfToken("transmission_extra_roughness")};
+-
+   HdMaterialNodeParameterContainerSchema params = nodeSchema.GetParameters();
+-  for (const TfToken &name : kNames) {
+-    for (const TfToken &authored : params.GetNames()) {
+-      if (authored == name) {
+-        return true;
+-      }
++  auto valueOf = [&](const char *name) -> float {
++    const auto value = params.Get(TfToken(name)).GetValue();
++    const VtValue v = value ? value->GetValue(0.0f) : VtValue();
++    if (v.IsHolding<float>()) {
++      return v.UncheckedGet<float>();
++    }
++    if (v.IsHolding<double>()) {
++      return float(v.UncheckedGet<double>());
++    }
++    if (v.IsHolding<int>()) {
++      return float(v.UncheckedGet<int>());
+     }
++    return 0.0f;
++  };
++  if (valueOf("transmission_dispersion") > 0.0f) {
++    return false;
+   }
+ 
++  static const TfToken kTransmission("transmission");
+   HdMaterialConnectionVectorContainerSchema conns = nodeSchema.GetInputConnections();
+-  for (const TfToken &name : kNames) {
+-    for (const TfToken &connected : conns.GetNames()) {
+-      if (connected == name) {
+-        return true;
+-      }
++  for (const TfToken &connected : conns.GetNames()) {
++    if (connected == kTransmission) {
++      return true;
+     }
+   }
+-  return false;
++  return valueOf("transmission") > 0.0f;
+ }
+ 
+ }  // namespace

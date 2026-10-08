@@ -1,7 +1,7 @@
 From b1ff3fa735a01e477131408f92b752fbb4e795f9 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 02:59:29 +0200
-Subject: [PATCH 091/100] hydra: couper le flou de mouvement ne fait plus
+Subject: [PATCH 091/101] hydra: couper le flou de mouvement ne fait plus
  disparaitre les objets
 
 Au viewport, desactiver le flou faisait disparaitre l'objet anime jusqu'a

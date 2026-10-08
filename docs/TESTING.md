@@ -141,6 +141,12 @@ A handful of scenes rendered by both renderers from the same USD - lights,
 region with a tolerance that admits the two engines' real differences (a few
 percent) and rejects a factor of two. This is the test that caught the ×4
 distant light and the ×π dome; it should be a command, not a one-off.
+Two differences to look at first when it exists, seen on 2026-10-08 on
+`tests/materialx/scenes/phase4b_mtlx.usda` at 480×360 (`husk --renderer
+BRAY_HdKarma` against the delegate, same camera): the dome light's sky is
+blue-grey in Cycles and black in Karma, and the glass cube is milky in Cycles
+where Karma's is clear with a dark top face - the two may be one thing, the
+sky showing through the glass. The gold sphere agrees.
 
 ## Measuring interactivity
 

@@ -130,6 +130,7 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0098` | hydra: les nodegraphs MaterialX deplies, extract et swizzle reecrits, vector2 converti |
 | `0099` | hydra: les defauts MaterialX ecrits sur toute entree non ecrite |
 | `0100` | hydra: le journal `CYCLES_LOG_FILE` horodate chaque ligne (secondes depuis la premiere) |
+| `0101` | hydra: le lobe de verre de standard_surface choisi sur la transmission (cablee ou > 0), plus sur la presence de `transmission_color`, que 0099 ecrit partout |
 
 ---
 

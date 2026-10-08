@@ -1,7 +1,7 @@
 From 35d48cdd7f0f66d83ed14b920d5eeab942d8be39 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 9 Sep 2026 18:03:28 +0200
-Subject: [PATCH 068/100] hydra: le passe-plat MaterialX, deux entrees mortes,
+Subject: [PATCH 068/101] hydra: le passe-plat MaterialX, deux entrees mortes,
  et six familles de plus
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8

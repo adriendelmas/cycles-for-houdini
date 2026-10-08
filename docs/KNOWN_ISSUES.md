@@ -203,19 +203,6 @@ Acceptable for most networks; should be logged once per material.
 Only the first UV set; `normal`/`tangent` are world space while the nodedef
 default is object space (differs once the object rotates). Noted in STATUS A11.
 
-### K-57 The metal sphere of the shared bench stage is dark in Cycles, bright gold in Karma — seen, unverified
-`tests/materialx/scenes/phase4b_mtlx.usda`, material `mxMetal`
-(`standard_surface`, base_color (0.95, 0.72, 0.3), metalness 1,
-specular_roughness 0.14): rendered side by side on 2026-10-08 (120×90,
-`husk --renderer BRAY_HdKarma` against the delegate), Karma shows a gold
-sphere reflecting the 6×6 area light over most of its upper half; Cycles a
-near-black sphere with a small highlight, in the references since the first
-bench. Candidates: the area light's size or its visibility to glossy rays
-(a point-like reflection of a 6×6 light), or the metal's base colour lost on
-the way (black metal = black F0). Not a 0098/0099 regression: identical with
-the 0097 DLL. To measure with the Karma-agreement bench (TESTING §4) once it
-exists; until then a one-off at higher resolution.
-
 ## B. Geometry and scene
 
 ### K-19 float3 primvars copied at the wrong stride — confirmed — **fixed** (0075)
