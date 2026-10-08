@@ -679,6 +679,34 @@ Kept: at the exact poles Cycles' map wraps vertically, blending the first
 and last rows within half a texel - invisible on a real HDRI, visible on the
 bench's 8-row texture, so the bench checks the poles at 75 degrees.
 
+### K-68 Rect light texture mirrored — confirmed — **fixed** (0112)
+`tools/bench_rect.py`, the four-corner texture on a 2 x 2 rect light seen
+head-on from its emitting side, against Karma. USD puts the texture's min
+corner at the light's (+X, +Y); Cycles' parametric u runs the other way
+along X, and the delegate read the image with it as is: the texture came out
+mirrored left to right, in the camera's view and in the light it casts. The
+image is now read at (1 - u, v). Both cases (plain, turned a quarter about
+the light's axis) match Karma within 0.003.
+
+### K-69 Spot softness and emission focus off Karma — confirmed — **fixed** (0112)
+`tools/bench_lights.py`, a white floor under one light per case, its
+radiance under the light and 1 to 3 units aside, against Karma: sphere,
+disk, rect, cylinder, distant, normalized or not, exposure and colour
+temperature all agreed within 3 % (cylinder within 7 % at the far edge).
+Two did not:
+- `shaping:cone:softness` went to Cycles' spot `smooth` as is. USD smooths
+  over the angle, from cutoff x (1 - softness) to the cutoff; Cycles over the
+  cosine, over `smooth` of (1 - cos cutoff), a narrower penumbra: 28 % too
+  bright inside it. The softness is now converted so both ramps start at the
+  same angle (ratio 1.01). Softness without a cone angle took Cycles' 45
+  degree default; it now takes USD's 90. Karma seems to ignore a softness
+  without an angle (Houdini's Light LOP always writes one): there the
+  delegate follows the USD formula, Karma does not.
+- `shaping:focus` and `focusTint` were ignored, the light 3 times too bright
+  3 units aside. The light shader now multiplies the emission by
+  lerp(focusTint, 1, |direction . axis| ^ focus): within 3 %, tinted too.
+`tools/bench_lights.py`: 15 cases, all within 10 % (most within 1 %).
+
 ## C. Houdini side
 
 ### K-40 `op:` textures fail under husk — confirmed

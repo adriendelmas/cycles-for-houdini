@@ -2336,3 +2336,18 @@ du mauvais côté. Une permutation d'axes fixe après la transformation du dôme
 le `poleAxis` de `DomeLight_1` (scène Z-up) arrive en `domeOffset`, appliqué
 aussi. 11 directions sur 11 identiques à Karma. **Les scènes déjà éclairées
 par un HDRI changent d'éclairage** : c'est le bon côté désormais.
+
+**Texture des rect lights en miroir (0112, K-68).** Banc `bench_rect.py` :
+la texture à quatre coins sur une rect light vue de face sortait inversée
+gauche-droite par rapport à Karma (USD met le coin min de l'image en +X, +Y ;
+le `u` paramétrique de Cycles court dans l'autre sens). Lue en (1 - u, v) :
+les deux cas à 0,003 près.
+
+**Lumières contre Karma (0112, K-69).** Nouveau banc `bench_lights.py` :
+un sol blanc sous une lumière par cas, mesuré sous la lumière et à 1, 2,
+3 unités. Sphère, disque, rect, cylindre, distante, normalisées ou non,
+exposition, température : déjà d'accord à 3 % près. Deux écarts corrigés :
+la douceur du cône des spots (USD lisse en angle, Cycles en cosinus : 28 %
+trop clair dans la pénombre, maintenant 1 %), et `shaping:focus` ignoré
+(jusqu'à 3 fois trop clair sur les côtés, maintenant 3 %, teinte comprise).
+15 cas sur 15.

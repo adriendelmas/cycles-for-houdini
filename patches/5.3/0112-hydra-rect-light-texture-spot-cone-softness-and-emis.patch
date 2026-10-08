@@ -1,0 +1,136 @@
+From 6649da27e1032a6748cbb8df06d5a261cdde126d Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 8 Oct 2026 23:29:29 +0200
+Subject: [PATCH 112/112] hydra: rect light texture, spot cone softness and
+ emission focus as USD says
+
+Rect light texture: USD puts the image's min corner at the light's
+(+X, +Y), Cycles' parametric u runs the other way along X; the image is
+read at (1 - u, v) (K-68, tools/bench_rect.py).
+
+Spot softness: USD smooths over the angle, from cutoff * (1 - softness) to
+the cutoff, Cycles over the cosine; the softness is converted so both ramps
+start at the same angle. A softness without a cone angle takes USD's 90
+degree default, not Cycles' 45.
+
+shaping:focus and focusTint: the light shader multiplies the emission by
+lerp(focusTint, 1, |direction . axis| ^ focus), the axis baked and the
+graph rebuilt when the light moves (K-69, tools/bench_lights.py: 15 cases
+against Karma).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/light.cpp | 84 ++++++++++++++++++++++++++++++++++++++-------
+ 1 file changed, 72 insertions(+), 12 deletions(-)
+
+diff --git a/src/hydra/light.cpp b/src/hydra/light.cpp
+index 503617d6..fb7bb9c2 100644
+--- a/src/hydra/light.cpp
++++ b/src/hydra/light.cpp
+@@ -212,19 +212,27 @@ void HdCyclesLight::Sync(HdSceneDelegate *sceneDelegate,
+         spot_light->set_radius(ds->GetTypedValue(0.0f));
+       }
+ 
+-      bool shaping = false;
+-
+-      if (auto ds = GetTypedDataSource<float>(lightDs, HdLightTokens->shapingConeAngle)) {
+-        spot_light->set_angle(GfDegreesToRadians(ds->GetTypedValue(0.0f)) * 2.0f);
+-        shaping = true;
+-      }
+-
+-      if (auto ds = GetTypedDataSource<float>(lightDs, HdLightTokens->shapingConeSoftness)) {
+-        spot_light->set_smooth(ds->GetTypedValue(0.0f));
+-        shaping = true;
++      const auto angleDs = GetTypedDataSource<float>(lightDs, HdLightTokens->shapingConeAngle);
++      const auto softnessDs = GetTypedDataSource<float>(lightDs,
++                                                        HdLightTokens->shapingConeSoftness);
++      if (angleDs || softnessDs) {
++        /* USD's defaults: a 90 degree cone, no softness. */
++        const float cutoff = GfDegreesToRadians(angleDs ? angleDs->GetTypedValue(0.0f) : 90.0f);
++        const float softness = clamp(softnessDs ? softnessDs->GetTypedValue(0.0f) : 0.0f,
++                                     0.0f,
++                                     1.0f);
++        spot_light->set_angle(cutoff * 2.0f);
++        /* USD smooths over the angle, from cutoff * (1 - softness) to the
++         * cutoff; Cycles over the cosine, from the cutoff over `smooth` of
++         * (1 - cos cutoff). Starting both ramps at the same angle matches
++         * Karma within the light's own size (tools/bench_lights.py). */
++        const float cosCutoff = cosf(cutoff);
++        const float cosStart = cosf(cutoff * (1.0f - softness));
++        spot_light->set_smooth(cosCutoff < 1.0f ? (cosStart - cosCutoff) / (1.0f - cosCutoff) :
++                                                  0.0f);
+       }
+ 
+-      _light->set_light_type(shaping ? LIGHT_SPOT : LIGHT_POINT);
++      _light->set_light_type((angleDs || softnessDs) ? LIGHT_SPOT : LIGHT_POINT);
+     }
+ 
+     bool visible = true;
+@@ -436,7 +444,15 @@ void HdCyclesLight::PopulateShaderGraph(const HdContainerDataSourceHandle &light
+           textureNode = graph->create_node<ImageTextureNode>();
+           static_cast<ImageTextureNode *>(textureNode)->set_filename(ustring(filename));
+ 
+-          graph->connect(coordNode->output("Parametric"), textureNode->input("Vector"));
++          /* USD puts the texture's min corner at the light's (+X, +Y); Cycles'
++           * parametric u runs the other way along X: mirrored without 1 - u. */
++          VectorMathNode *flipNode = graph->create_node<VectorMathNode>();
++          flipNode->set_math_type(NODE_VECTOR_MATH_MULTIPLY_ADD);
++          flipNode->set_vector2(make_float3(-1.0f, 1.0f, 1.0f));
++          flipNode->set_vector3(make_float3(1.0f, 0.0f, 0.0f));
++
++          graph->connect(coordNode->output("Parametric"), flipNode->input("Vector1"));
++          graph->connect(flipNode->output("Vector"), textureNode->input("Vector"));
+         }
+ 
+         if (hasColorTemperature) {
+@@ -462,6 +478,50 @@ void HdCyclesLight::PopulateShaderGraph(const HdContainerDataSourceHandle &light
+         }
+       }
+     }
++
++    /* shaping:focus: the emission times |direction . axis| ^ focus, tinted
++     * towards focusTint off the axis (lerp(focusTint, 1, factor)). Cycles has
++     * no such control; the axis is baked, the graph is rebuilt on a move. */
++    const float focus = GetTypedValue<float>(lightContainer, HdLightTokens->shapingFocus, 0.0f);
++    if (focus > 0.0f && _lightType != HdPrimTypeTokens->domeLight) {
++      const GfVec3f tint = GetTypedValue<GfVec3f>(
++          lightContainer, HdLightTokens->shapingFocusTint, GfVec3f(0.0f));
++      const float3 axis = safe_normalize(
++          transform_direction(&_object->get_tfm(), make_float3(0.0f, 0.0f, 1.0f)));
++
++      GeometryNode *geomNode = graph->create_node<GeometryNode>();
++      VectorMathNode *dotNode = graph->create_node<VectorMathNode>();
++      dotNode->set_math_type(NODE_VECTOR_MATH_DOT_PRODUCT);
++      dotNode->set_vector2(axis);
++      MathNode *absNode = graph->create_node<MathNode>();
++      absNode->set_math_type(NODE_MATH_ABSOLUTE);
++      MathNode *powNode = graph->create_node<MathNode>();
++      powNode->set_math_type(NODE_MATH_POWER);
++      powNode->set_value2(focus);
++      VectorMathNode *tintNode = graph->create_node<VectorMathNode>();
++      tintNode->set_math_type(NODE_VECTOR_MATH_MULTIPLY_ADD);
++      tintNode->set_vector2(make_float3(1.0f - tint[0], 1.0f - tint[1], 1.0f - tint[2]));
++      tintNode->set_vector3(make_float3(tint[0], tint[1], tint[2]));
++
++      graph->connect(geomNode->output("Incoming"), dotNode->input("Vector1"));
++      graph->connect(dotNode->output("Value"), absNode->input("Value1"));
++      graph->connect(absNode->output("Value"), powNode->input("Value1"));
++      graph->connect(powNode->output("Value"), tintNode->input("Vector1"));
++
++      ShaderInput *const colorInput = outputNode->input("Color");
++      if (colorInput->link) {
++        VectorMathNode *mulNode = graph->create_node<VectorMathNode>();
++        mulNode->set_math_type(NODE_VECTOR_MATH_MULTIPLY);
++        graph->connect(colorInput->link, mulNode->input("Vector1"));
++        graph->disconnect(colorInput);
++        graph->connect(tintNode->output("Vector"), mulNode->input("Vector2"));
++        graph->connect(mulNode->output("Vector"), colorInput);
++      }
++      else {
++        graph->connect(tintNode->output("Vector"), colorInput);
++      }
++      hasSpatialVarying = true;
++    }
+   }
+ 
+   Shader *const shader = _light->get_shader();

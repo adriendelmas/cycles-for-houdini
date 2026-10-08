@@ -1,0 +1,185 @@
+"""Does each kind of light put on the floor what Karma puts there?
+
+A white diffuse floor seen from straight above by an orthographic camera,
+lit by one light per case, two units up, facing down. The floor's radiance
+is sampled under the light and at 1, 2 and 3 units off to the side, so both
+the level and the falloff are compared - a spot's cone shows at the side.
+Cases: sphere (normalized and not), disk, rect, cylinder, distant; spots
+(a shaping cone, hard, soft, softness alone), emission focus with and
+without a tint, exposure, colour temperature.
+
+    hython tools/bench_lights.py [pattern]
+
+Scenes and images go to tests/lights/output/.
+"""
+
+import os
+import subprocess
+import sys
+
+import numpy as np
+import OpenImageIO as oiio
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+HFS = os.path.join(os.environ.get("HFS", "E:/Side Effects Software/Houdini22.0.368"), "bin")
+OUT = os.path.join(ROOT, "tests", "lights", "output")
+RES = 80          # 10 pixels per unit over the 8-unit frame
+TOL_REL = 0.10
+TOL_ABS = 0.003
+OFFSETS = (0, 1, 2, 3)
+
+SCENE = """#usda 1.0
+(
+    defaultPrim = "world"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+def Scope "Render"
+{
+    def RenderSettings "settings"
+    {
+        rel camera = </world/camera>
+        int2 resolution = (%(res)d, %(res)d)
+        int cycles:samples = 64
+        int karma:global:pixelsamples = 64
+    }
+}
+def Xform "world"
+{
+    def Camera "camera"
+    {
+        token projection = "orthographic"
+        float horizontalAperture = 80
+        float verticalAperture = 80
+        float2 clippingRange = (0.1, 100)
+        matrix4d xformOp:transform = ( (1,0,0,0), (0,0,-1,0), (0,1,0,0), (0,10,0,1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+    def Mesh "floor" (prepend apiSchemas = ["MaterialBindingAPI"])
+    {
+        rel material:binding = </world/Materials/floor>
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 3, 2, 1]
+        point3f[] points = [(-20, 0, -20), (20, 0, -20), (20, 0, 20), (-20, 0, 20)]
+        normal3f[] normals = [(0, 1, 0), (0, 1, 0), (0, 1, 0), (0, 1, 0)] (interpolation = "vertex")
+        uniform token subdivisionScheme = "none"
+    }
+    def Scope "Materials"
+    {
+        def Material "floor"
+        {
+            token outputs:mtlx:surface.connect = </world/Materials/floor/surf.outputs:out>
+            def Shader "surf"
+            {
+                uniform token info:id = "ND_standard_surface_surfaceshader"
+                color3f inputs:base_color = (0.8, 0.8, 0.8)
+                float inputs:specular = 0
+                token outputs:out
+            }
+        }
+    }
+    def %(light)s "light" %(schemas)s
+    {
+%(inputs)s
+        float3 xformOp:translate = (0, 2, 0)
+        float3 xformOp:rotateXYZ = (-90, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
+    }
+}
+"""
+
+SHAPING = '(prepend apiSchemas = ["ShapingAPI"])'
+
+# (name, light type, api schemas, inputs)
+CASES = [
+    ("sphere", "SphereLight", "", ["float inputs:radius = 0.25", "float inputs:intensity = 10"]),
+    ("sphere_normalized", "SphereLight", "", ["float inputs:radius = 0.25",
+                                              "float inputs:intensity = 2",
+                                              "bool inputs:normalize = 1"]),
+    ("disk", "DiskLight", "", ["float inputs:radius = 0.5", "float inputs:intensity = 5"]),
+    ("rect", "RectLight", "", ["float inputs:width = 1", "float inputs:height = 0.5",
+                               "float inputs:intensity = 5"]),
+    ("rect_normalized", "RectLight", "", ["float inputs:width = 1", "float inputs:height = 0.5",
+                                          "float inputs:intensity = 2",
+                                          "bool inputs:normalize = 1"]),
+    ("cylinder", "CylinderLight", "", ["float inputs:radius = 0.1", "float inputs:length = 1",
+                                       "float inputs:intensity = 5"]),
+    ("distant", "DistantLight", "", ["float inputs:intensity = 1", "bool inputs:normalize = 1"]),
+    ("spot", "SphereLight", SHAPING, ["float inputs:radius = 0.05", "float inputs:intensity = 200",
+                                      "float inputs:shaping:cone:angle = 30",
+                                      "float inputs:shaping:cone:softness = 0.2"]),
+    ("spot_hard", "SphereLight", SHAPING, ["float inputs:radius = 0.05",
+                                           "float inputs:intensity = 200",
+                                           "float inputs:shaping:cone:angle = 40"]),
+    ("focus", "RectLight", SHAPING, ["float inputs:width = 1", "float inputs:height = 1",
+                                     "float inputs:intensity = 5",
+                                     "float inputs:shaping:focus = 2"]),
+    ("focus_tint", "RectLight", SHAPING, ["float inputs:width = 1", "float inputs:height = 1",
+                                          "float inputs:intensity = 5",
+                                          "float inputs:shaping:focus = 2",
+                                          "color3f inputs:shaping:focusTint = (1, 0.2, 0)"]),
+    ("focus_sphere", "SphereLight", SHAPING, ["float inputs:radius = 0.25",
+                                              "float inputs:intensity = 10",
+                                              "float inputs:shaping:focus = 3"]),
+    # Softness alone: USD's default cone is 90 degrees.
+    ("softness_only", "SphereLight", SHAPING, ["float inputs:radius = 0.05",
+                                               "float inputs:intensity = 200",
+                                               "float inputs:shaping:cone:softness = 0.5"]),
+    ("exposure", "SphereLight", "", ["float inputs:radius = 0.25", "float inputs:intensity = 5",
+                                     "float inputs:exposure = 1"]),
+    ("temperature", "SphereLight", "", ["float inputs:radius = 0.25",
+                                        "float inputs:intensity = 10",
+                                        "bool inputs:enableColorTemperature = 1",
+                                        "float inputs:colorTemperature = 3000"]),
+]
+
+
+def render(renderer, scene, exr):
+    if os.path.exists(exr):
+        os.remove(exr)
+    env = dict(os.environ)
+    env["PATH"] = HFS + ";" + env["PATH"]
+    subprocess.run([os.path.join(HFS, "husk.exe"), "--renderer", renderer, "--frame", "1",
+                    "--frame-count", "1", "-s", "/Render/settings", "--output", exr, scene],
+                   capture_output=True, text=True, env=env, cwd=OUT)
+    buf = oiio.ImageBuf(exr)
+    if buf.has_error:
+        return None
+    img = buf.get_pixels(oiio.FLOAT)[..., :3]
+    c = RES // 2
+    return np.array([img[c - 2:c + 3, c + 10 * x - 2:c + 10 * x + 3].reshape(-1, 3).mean(axis=0)
+                     for x in OFFSETS])
+
+
+def main():
+    if not os.path.isdir(OUT):
+        os.makedirs(OUT)
+    pattern = sys.argv[1] if len(sys.argv) > 1 else None
+    problems, count = [], 0
+    for name, light, schemas, inputs in CASES:
+        if pattern and pattern not in name:
+            continue
+        count += 1
+        scene = os.path.join(OUT, name + ".usda")
+        open(scene, "w", encoding="utf-8").write(SCENE % {
+            "res": RES, "light": light, "schemas": schemas,
+            "inputs": "\n".join("        " + l for l in inputs)})
+        cyc = render("HdCyclesPlugin", scene, os.path.join(OUT, name + "_cycles.exr"))
+        kar = render("BRAY_HdKarma", scene, os.path.join(OUT, name + "_karma.exr"))
+        if cyc is None or kar is None:
+            problems.append(name)
+            print("%-18s NO IMAGE" % name)
+            continue
+        bad = np.abs(cyc - kar) > np.maximum(TOL_ABS, TOL_REL * np.abs(kar))
+        print("%-18s %s" % (name, "ok" if not bad.any() else "DIFFERS"))
+        for x, a, b in zip(OFFSETS, cyc, kar):
+            ratio = a.mean() / max(b.mean(), 1e-6)
+            print("      at %d  cycles %s  karma %s  ratio %.2f" % (x, np.round(a, 4), np.round(b, 4), ratio))
+        if bad.any():
+            problems.append(name)
+    print("\n%d cases, %d problems" % (count, len(problems)))
+    sys.exit(1 if problems else 0)
+
+
+if __name__ == "__main__":
+    main()

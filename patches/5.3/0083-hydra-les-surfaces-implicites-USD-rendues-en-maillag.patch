@@ -1,7 +1,7 @@
 From e934a766142ab432b9a8fbb5b006641b9e5d2349 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 22:46:04 +0200
-Subject: [PATCH 083/111] hydra: les surfaces implicites USD rendues, en
+Subject: [PATCH 083/112] hydra: les surfaces implicites USD rendues, en
  maillages fins
 
 Sphere, Cube, Cylinder, Cone, Capsule et Plane arrivaient au delegue sous
