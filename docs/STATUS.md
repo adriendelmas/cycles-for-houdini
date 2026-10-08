@@ -2351,3 +2351,11 @@ la douceur du cône des spots (USD lisse en angle, Cycles en cosinus : 28 %
 trop clair dans la pénombre, maintenant 1 %), et `shaping:focus` ignoré
 (jusqu'à 3 fois trop clair sur les côtés, maintenant 3 %, teinte comprise).
 15 cas sur 15.
+
+**Profils IES (0113, K-70).** Sur une petite sphère, le profil était lu
+avec la normale du point tiré sur la sphère (flou, pic divisé par deux),
+converti en unités radiométriques (30 fois sous Karma), `normalize` et
+`angleScale` ignorés, et l'angle horizontal partait de -Y au lieu de -X.
+Lu maintenant selon la direction d'émission dans le repère de la lumière,
+en candelas, normalisé par la moyenne du profil comme Karma : quatre cas
+IES à 5 % près.

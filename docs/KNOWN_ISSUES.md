@@ -707,6 +707,28 @@ Two did not:
   lerp(focusTint, 1, |direction . axis| ^ focus): within 3 %, tinted too.
 `tools/bench_lights.py`: 15 cases, all within 10 % (most within 1 %).
 
+### K-70 IES profiles blurred, scaled and never normalized — confirmed — **fixed** (0113)
+`tools/bench_lights.py`, IES profiles on a small sphere light over the
+floor, against Karma, which follows USD's formula (emission x the profile's
+candela value; with `shaping:ies:normalize`, over the profile's mean
+intensity):
+- the profile was read along the texture coordinate's normal, which on a
+  sphere light is the normal of the point sampled on the sphere - it sweeps
+  the whole visible side, so the profile came out blurred, its peak halved;
+- Cycles reads candela values times 4 pi / 177.83 (a radiometric
+  conversion), 30 times below Karma with the blur;
+- `normalize` and `angleScale` were ignored;
+- the horizontal angle ran from the light's -Y where Karma's runs from -X.
+The profile is now read along the emission direction in the light's frame
+(the shading point's incoming direction through the light's baked axes, x
+and y swapped), angleScale remaps the angle off the axis as USD says, and
+the IES node's strength undoes Cycles' conversion, or divides by the
+profile's mean (each patch's corners weighed by its solid angle over the
+solid angle covered, as Karma does - `IESFile::mean_intensity`). Four cases
+(plain, normalized, angle-scaled, asymmetric) within 5 % of Karma. Kept:
+Cycles interpolates the profile cubically, Karma linearly - visible only on
+coarse profiles (a 30 degree step: 20 % off the lobe), not on 5 degree ones.
+
 ## C. Houdini side
 
 ### K-40 `op:` textures fail under husk — confirmed

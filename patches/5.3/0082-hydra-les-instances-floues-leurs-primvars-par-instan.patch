@@ -1,7 +1,7 @@
 From 72799555dac46721c24cea7360c0b823e80e879e Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 22:24:33 +0200
-Subject: [PATCH 082/112] hydra: les instances floues, leurs primvars par
+Subject: [PATCH 082/113] hydra: les instances floues, leurs primvars par
  instance, et les primvars constants scalaires
 
 Le flou des instances : l'instancer lisait ses positions, rotations,

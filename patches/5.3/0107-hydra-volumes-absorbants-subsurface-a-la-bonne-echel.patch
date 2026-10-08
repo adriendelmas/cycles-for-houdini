@@ -1,7 +1,7 @@
 From fac59ec9128ce8fa537266f0cf9042df95cd500f Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 19:09:57 +0200
-Subject: [PATCH 107/112] hydra: volumes absorbants, subsurface a la bonne
+Subject: [PATCH 107/113] hydra: volumes absorbants, subsurface a la bonne
  echelle, surface unlit
 
 Le coefficient d'absorption de MaterialX etait passe tel quel comme couleur

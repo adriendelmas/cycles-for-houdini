@@ -1,7 +1,7 @@
 From 6f81debeec923b39a512b022238344b4ee2d23df Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 22:26:06 +0200
-Subject: [PATCH 110/112] hydra: UsdPreviewSurface switches, texture colour
+Subject: [PATCH 110/113] hydra: UsdPreviewSurface switches, texture colour
  spaces and wrap modes
 
 UsdPreviewSurface picks one of four mappings by useSpecularWorkflow and

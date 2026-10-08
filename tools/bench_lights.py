@@ -6,13 +6,15 @@ is sampled under the light and at 1, 2 and 3 units off to the side, so both
 the level and the falloff are compared - a spot's cone shows at the side.
 Cases: sphere (normalized and not), disk, rect, cylinder, distant; spots
 (a shaping cone, hard, soft, softness alone), emission focus with and
-without a tint, exposure, colour temperature.
+without a tint, IES profiles (plain, normalized, angle-scaled, asymmetric),
+exposure, colour temperature.
 
     hython tools/bench_lights.py [pattern]
 
 Scenes and images go to tests/lights/output/.
 """
 
+import math
 import os
 import subprocess
 import sys
@@ -125,6 +127,23 @@ CASES = [
     ("softness_only", "SphereLight", SHAPING, ["float inputs:radius = 0.05",
                                                "float inputs:intensity = 200",
                                                "float inputs:shaping:cone:softness = 0.5"]),
+    # IES profiles (written by write_ies): read as candela values, over the
+    # profile's mean with normalize, narrowed by angleScale; the asymmetric
+    # one's lobe points away from the sampled side (Karma's horizontal angle
+    # 0 is the light's -X), so a turned profile shows 3 times too bright.
+    ("ies", "SphereLight", SHAPING, ["float inputs:radius = 0.05", "float inputs:intensity = 0.2",
+                                     "asset inputs:shaping:ies:file = @profile.ies@"]),
+    ("ies_normalize", "SphereLight", SHAPING, ["float inputs:radius = 0.05",
+                                               "float inputs:intensity = 80",
+                                               "asset inputs:shaping:ies:file = @profile.ies@",
+                                               "bool inputs:shaping:ies:normalize = 1"]),
+    ("ies_angle_scale", "SphereLight", SHAPING, ["float inputs:radius = 0.05",
+                                                 "float inputs:intensity = 0.2",
+                                                 "asset inputs:shaping:ies:file = @profile.ies@",
+                                                 "float inputs:shaping:ies:angleScale = 1.5"]),
+    ("ies_asymmetric", "SphereLight", SHAPING, ["float inputs:radius = 0.05",
+                                                "float inputs:intensity = 1",
+                                                "asset inputs:shaping:ies:file = @asym.ies@"]),
     ("exposure", "SphereLight", "", ["float inputs:radius = 0.25", "float inputs:intensity = 5",
                                      "float inputs:exposure = 1"]),
     ("temperature", "SphereLight", "", ["float inputs:radius = 0.25",
@@ -132,6 +151,22 @@ CASES = [
                                         "bool inputs:enableColorTemperature = 1",
                                         "float inputs:colorTemperature = 3000"]),
 ]
+
+
+def write_ies():
+    """Two type C profiles at 5 degree steps down to 90: 1000 cos^2, the
+    same on every horizontal angle, and with its 0 degree side 3 times
+    brighter than the others (horizontal angles 0, 90, 180, 270, 360)."""
+    v = list(range(0, 95, 5))
+    base = [1000.0 * math.cos(math.radians(a)) ** 2 for a in v]
+    for name, sides in (("profile.ies", [1.0]), ("asym.ies", [1.0, 0.3, 0.3, 0.3, 1.0])):
+        h = [0] if len(sides) == 1 else [0, 90, 180, 270, 360]
+        lines = ["IESNA:LM-63-2002", "TILT=NONE",
+                 "1 -1 1 %d %d 1 1 0 0 0" % (len(v), len(h)), "1 1 100",
+                 " ".join(str(a) for a in v), " ".join(str(a) for a in h)]
+        lines += [" ".join("%.3f" % (b * f) for b in base) for f in sides]
+        with open(os.path.join(OUT, name), "w", newline="\r\n") as f:
+            f.write("\n".join(lines) + "\n")
 
 
 def render(renderer, scene, exr):
@@ -154,6 +189,7 @@ def render(renderer, scene, exr):
 def main():
     if not os.path.isdir(OUT):
         os.makedirs(OUT)
+    write_ies()
     pattern = sys.argv[1] if len(sys.argv) > 1 else None
     problems, count = [], 0
     for name, light, schemas, inputs in CASES:

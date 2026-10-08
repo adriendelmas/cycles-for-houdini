@@ -1,0 +1,194 @@
+From c528084ff9443a79365bcd4099f2ef0385b1e966 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 8 Oct 2026 23:55:09 +0200
+Subject: [PATCH 113/113] hydra: IES profiles read along the emission
+ direction, in USD's units
+
+The profile was read along the texture coordinate's normal, which on a
+sphere light is the normal of the point sampled on the sphere: it swept the
+whole visible side, blurring the profile and halving its peak. It is now
+read along the emission direction in the light's frame (the incoming
+direction through the light's baked axes), with Karma's horizontal origin
+(the light's -X, x and y swapped for Cycles' node).
+
+USD multiplies the emission by the profile's candela values; Cycles reads
+them times 4 pi / 177.83, which the IES node's strength now undoes. With
+shaping:ies:normalize, the values are divided by the profile's mean
+intensity, each patch's corners weighed by its solid angle over the solid
+angle the profile covers (IESFile::mean_intensity, as Karma measures).
+shaping:ies:angleScale remaps the angle off the axis as USD says (K-70,
+tools/bench_lights.py: four IES cases within 5 % of Karma).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/light.cpp | 98 +++++++++++++++++++++++++++++++++++++++++++--
+ src/util/ies.cpp    | 17 ++++++++
+ src/util/ies.h      |  6 +++
+ 3 files changed, 117 insertions(+), 4 deletions(-)
+
+diff --git a/src/hydra/light.cpp b/src/hydra/light.cpp
+index fb7bb9c2..517d302c 100644
+--- a/src/hydra/light.cpp
++++ b/src/hydra/light.cpp
+@@ -14,7 +14,9 @@
+ #include "scene/shader_graph.h"
+ #include "scene/shader_nodes.h"
+ #include "util/hash.h"
++#include "util/ies.h"
+ #include "util/log.h"
++#include "util/path.h"
+ #include "util/transform.h"
+ 
+ #include <pxr/imaging/hd/lightSchema.h>
+@@ -387,14 +389,102 @@ void HdCyclesLight::PopulateShaderGraph(const HdContainerDataSourceHandle &light
+       }
+ 
+       if (!filename.empty()) {
+-        TextureCoordinateNode *coordNode = graph->create_node<TextureCoordinateNode>();
+-        coordNode->set_ob_tfm(_object->get_tfm());
+-        coordNode->set_use_transform(true);
++        /* The profile is read along the emission direction in the light's
++         * frame - the incoming direction of the light's shading point, taken
++         * into the frame by its baked axes. The texture coordinate's normal
++         * used before is the normal of the point sampled on a sphere light,
++         * which sweeps its whole visible side: the profile came out blurred
++         * and at half its peak. Karma measures the horizontal angle from -X
++         * towards -Y, Cycles' node from -Y towards -X: x and y are swapped. */
++        const Transform &tfm = _object->get_tfm();
++        const float3 axisX = safe_normalize(transform_direction(&tfm, make_float3(1, 0, 0)));
++        const float3 axisY = safe_normalize(transform_direction(&tfm, make_float3(0, 1, 0)));
++        const float3 axisZ = safe_normalize(transform_direction(&tfm, make_float3(0, 0, 1)));
++
++        GeometryNode *geomNode = graph->create_node<GeometryNode>();
++        auto dotWith = [&](const float3 axis) {
++          VectorMathNode *node = graph->create_node<VectorMathNode>();
++          node->set_math_type(NODE_VECTOR_MATH_DOT_PRODUCT);
++          node->set_vector2(axis);
++          graph->connect(geomNode->output("Incoming"), node->input("Vector1"));
++          return node->output("Value");
++        };
++        auto mathNode = [&](const NodeMathType type, const float value2) {
++          MathNode *node = graph->create_node<MathNode>();
++          node->set_math_type(type);
++          node->set_value2(value2);
++          return node;
++        };
++
++        ShaderOutput *const localX = dotWith(axisX);
++        ShaderOutput *const localY = dotWith(axisY);
++        ShaderOutput *const localZ = dotWith(axisZ);
++
++        CombineXYZNode *combineNode = graph->create_node<CombineXYZNode>();
++
++        /* shaping:ies:angleScale rescales the angle off the axis (-Z):
++         * theta / s for s > 0, (theta - pi) / -s + pi for s < 0. The
++         * direction keeps its azimuth. */
++        const float angleScale = GetTypedValue<float>(
++            lightContainer, HdLightTokens->shapingIesAngleScale, 0.0f);
++        if (angleScale != 0.0f) {
++          const float k = 1.0f / fabsf(angleScale);
++          MathNode *negZ = mathNode(NODE_MATH_MULTIPLY, -1.0f);
++          MathNode *theta = mathNode(NODE_MATH_ARCCOSINE, 0.0f);
++          MathNode *scaled = mathNode(NODE_MATH_MULTIPLY_ADD, k);
++          scaled->set_value3(angleScale > 0.0f ? 0.0f : M_PI_F * (1.0f - k));
++          MathNode *clampHigh = mathNode(NODE_MATH_MINIMUM, M_PI_F);
++          MathNode *cosNew = mathNode(NODE_MATH_COSINE, 0.0f);
++          MathNode *zNew = mathNode(NODE_MATH_MULTIPLY, -1.0f);
++          MathNode *sinNew = mathNode(NODE_MATH_SINE, 0.0f);
++          MathNode *sinOld = mathNode(NODE_MATH_SINE, 0.0f);
++          MathNode *ratio = mathNode(NODE_MATH_DIVIDE, 0.0f);
++          MathNode *xNew = mathNode(NODE_MATH_MULTIPLY, 0.0f);
++          MathNode *yNew = mathNode(NODE_MATH_MULTIPLY, 0.0f);
++
++          graph->connect(localZ, negZ->input("Value1"));
++          graph->connect(negZ->output("Value"), theta->input("Value1"));
++          graph->connect(theta->output("Value"), scaled->input("Value1"));
++          graph->connect(scaled->output("Value"), clampHigh->input("Value1"));
++          graph->connect(clampHigh->output("Value"), cosNew->input("Value1"));
++          graph->connect(cosNew->output("Value"), zNew->input("Value1"));
++          graph->connect(clampHigh->output("Value"), sinNew->input("Value1"));
++          graph->connect(theta->output("Value"), sinOld->input("Value1"));
++          graph->connect(sinNew->output("Value"), ratio->input("Value1"));
++          graph->connect(sinOld->output("Value"), ratio->input("Value2"));
++          graph->connect(localX, xNew->input("Value1"));
++          graph->connect(ratio->output("Value"), xNew->input("Value2"));
++          graph->connect(localY, yNew->input("Value1"));
++          graph->connect(ratio->output("Value"), yNew->input("Value2"));
++
++          graph->connect(yNew->output("Value"), combineNode->input("X"));
++          graph->connect(xNew->output("Value"), combineNode->input("Y"));
++          graph->connect(zNew->output("Value"), combineNode->input("Z"));
++        }
++        else {
++          graph->connect(localY, combineNode->input("X"));
++          graph->connect(localX, combineNode->input("Y"));
++          graph->connect(localZ, combineNode->input("Z"));
++        }
++
++        /* Cycles reads the profile's candela values times 4 pi / 177.83 (a
++         * radiometric conversion, util/ies.cpp); USD multiplies the emission
++         * by the values as they are, or by the values over the profile's mean
++         * intensity with shaping:ies:normalize. */
++        float iesStrength = 1.0f / 0.0706650768394f;
++        if (GetTypedValue<bool>(lightContainer, HdLightTokens->shapingIesNormalize, false)) {
++          string content;
++          IESFile ies;
++          if (path_read_text(filename, content) && ies.load(content) && ies.mean_intensity() > 0.0f) {
++            iesStrength = 1.0f / ies.mean_intensity();
++          }
++        }
+ 
+         IESLightNode *iesNode = graph->create_node<IESLightNode>();
+         iesNode->set_filename(ustring(filename));
++        iesNode->set_strength(iesStrength);
+ 
+-        graph->connect(coordNode->output("Normal"), iesNode->input("Vector"));
++        graph->connect(combineNode->output("Vector"), iesNode->input("Vector"));
+         graph->connect(iesNode->output("Fac"), outputNode->input("Strength"));
+ 
+         hasSpatialVarying = true;
+diff --git a/src/util/ies.cpp b/src/util/ies.cpp
+index 5f7ddee4..6d3b5b16 100644
+--- a/src/util/ies.cpp
++++ b/src/util/ies.cpp
+@@ -401,6 +401,23 @@ bool IESFile::process()
+   return true;
+ }
+ 
++float IESFile::mean_intensity() const
++{
++  double weighted = 0.0;
++  double solid_angle = 0.0;
++  for (size_t h = 0; h + 1 < h_angles.size(); h++) {
++    const double dh = h_angles[h + 1] - h_angles[h];
++    for (size_t v = 0; v + 1 < v_angles.size(); v++) {
++      const double patch = dh * (cosf(v_angles[v]) - cosf(v_angles[v + 1]));
++      const double corners = intensity[h][v] + intensity[h][v + 1] + intensity[h + 1][v] +
++                             intensity[h + 1][v + 1];
++      weighted += patch * corners * 0.25;
++      solid_angle += patch;
++    }
++  }
++  return solid_angle > 0.0 ? float(weighted / solid_angle) : 0.0f;
++}
++
+ IESFile::~IESFile()
+ {
+   clear();
+diff --git a/src/util/ies.h b/src/util/ies.h
+index 0c620f59..c1125172 100644
+--- a/src/util/ies.h
++++ b/src/util/ies.h
+@@ -20,6 +20,12 @@ class IESFile {
+   bool load(const string &ies);
+   void clear();
+ 
++  /* The mean intensity over the directions the profile covers: each patch
++   * between neighbouring angles weighs the mean of its four corners by its
++   * solid angle (USD's shaping:ies:normalize, measured on Karma). Zero when
++   * nothing is loaded. */
++  float mean_intensity() const;
++
+  protected:
+   bool parse(const string &ies);
+   bool process();
