@@ -1,0 +1,381 @@
+From 6f81debeec923b39a512b022238344b4ee2d23df Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 8 Oct 2026 22:26:06 +0200
+Subject: [PATCH 110/110] hydra: UsdPreviewSurface switches, texture colour
+ spaces and wrap modes
+
+UsdPreviewSurface picks one of four mappings by useSpecularWorkflow and
+opacityThreshold: in the specular workflow the principled's IOR comes from
+specularColor's largest component and the colour tints the specular; in
+the metallic workflow specularColor is ignored, as USD says. A threshold
+above zero cuts out below it (K-65).
+
+Texture colour spaces (K-66): UsdImaging moves sourceColorSpace and a
+MaterialX file input's colorSpace metadata into the parameter's colour-space
+field, which is now read. Names resolve against the active OCIO config
+(ColorSpaceManager::resolve_texture_colorspace), so sRGB reaches Houdini's
+config as its sRGB texture space instead of a builtin it does not know.
+Translated image nodes start in auto instead of the constructor's
+scene_linear, and auto picks the config's sRGB texture space for a file
+tagged sRGB. wrapS/wrapT translate to Cycles' extension names (repeat ->
+periodic, useMetadata -> black).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp  | 151 +++++++++++++++++++++++++++++++++++-----
+ src/util/colorspace.cpp |  70 +++++++++++++++++++
+ src/util/colorspace.h   |  13 ++++
+ 3 files changed, 217 insertions(+), 17 deletions(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index 7701eccb..954be114 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -12,6 +12,7 @@
+ #  include "hydra/houdini_cop.h"
+ #endif
+ 
++#include "util/colorspace.h"
+ #include "util/log.h"
+ #include "util/path.h"
+ #include "util/string.h"
+@@ -252,10 +253,16 @@ class UsdToCyclesTexture : public UsdToCyclesMapping {
+       if (name == CyclesMaterialTokens->wrapS || name == CyclesMaterialTokens->wrapT) {
+         const std::string valueString = VtValue::Cast<std::string>(*value).Get<std::string>();
+ 
+-        /* A value of 'repeat' in USD is equivalent to 'periodic' in Cycles. */
++        /* Cycles' enum spells black, clamp and mirror as USD does; repeat is
++         * periodic. useMetadata - the default - reads the file's wrap
++         * metadata, and with none, the common case, USD reads black outside
++         * the image, as Karma and Storm do. */
+         if (valueString == "repeat") {
+           *value = VtValue(CyclesMaterialTokens->periodic);
+         }
++        else if (valueString == "useMetadata") {
++          *value = VtValue(std::string("black"));
++        }
+ 
+         return "extension";
+       }
+@@ -267,15 +274,8 @@ class UsdToCyclesTexture : public UsdToCyclesMapping {
+       static const TfToken sourceColorSpace("sourceColorSpace");
+       if (name == sourceColorSpace && value->CanCast<std::string>()) {
+         const std::string space = VtValue::Cast<std::string>(*value).Get<std::string>();
+-        if (space == "raw") {
+-          *value = VtValue(std::string("data"));
+-        }
+-        else if (space == "sRGB") {
+-          *value = VtValue(std::string("__builtin_srgb"));
+-        }
+-        else if (space == "auto") {
+-          *value = VtValue(std::string());
+-        }
++        const ustring resolved = ColorSpaceManager::resolve_texture_colorspace(space);
++        *value = VtValue(resolved == u_colorspace_auto ? std::string() : resolved.string());
+         return "colorspace";
+       }
+     }
+@@ -3182,20 +3182,37 @@ class UsdToCycles {
+    * while Cycles keeps the two apart and defaults the strength to zero. The
+    * strength is pinned to one and the colour to black, so a network that emits
+    * nothing stays dark and one that sets a colour gets it at face value. */
+-  const UsdToCyclesMapping UsdPreviewSurface = [] {
++  /* UsdPreviewSurface, by its two switches (tools/surface_audit.py, K-65):
++   *
++   * - the specular workflow. In the metallic one, the default, specularColor
++   *   is ignored - it used to tint the specular anyway, and a file writing it
++   *   black, as many exporters do, lost all reflection. In the specular one,
++   *   specularColor is the colour at normal incidence and metallic is
++   *   ignored: the principled's dielectric gets the IOR whose F0 is the
++   *   colour's largest component, n = (1 + sqrt F0) / (1 - sqrt F0), and the
++   *   colour over that component as its specular tint;
++   * - opacityThreshold above zero cuts out: opacity below it is fully
++   *   transparent, at or above it fully opaque. */
++  static UsdToCyclesMapping MakeUsdPreviewSurface(const bool specular, const bool cutout)
++  {
+     UsdToCyclesMapping mapping{
+         "principled_bsdf",
+         {
+             {TfToken("diffuseColor"), ustring("base_color")},
+             {TfToken("emissiveColor"), ustring("emission_color")},
+-            {TfToken("specularColor"), ustring("specular_tint")},
+             {TfToken("clearcoat"), ustring("coat_weight")},
+             {TfToken("clearcoatRoughness"), ustring("coat_roughness")},
+-            {TfToken("opacity"), ustring("alpha")},
+-            /* opacityThreshold, occlusion: no counterpart.
+-             * displacement: carried by the material's displacement terminal.
+-             * specularColor is taken whatever useSpecularWorkflow says. */
++            {TfToken("opacity"), ustring(cutout ? "cut:value1" : "alpha")},
++            {TfToken("opacityThreshold"), ustring(cutout ? "cut:value2" : "")},
++            {TfToken("useSpecularWorkflow"), ustring("")},
++            {TfToken("specularColor"), ustring(specular ? "sep:color;tdiv:vector1" : "")},
++            /* occlusion: no counterpart. displacement: carried by the
++             * material's displacement terminal. */
+         }};
++    if (specular) {
++      mapping.setParameterName(TfToken("metallic"), ustring(""));
++      mapping.setParameterName(TfToken("ior"), ustring(""));
++    }
+     /* UsdPreviewSurface's own defaults where Cycles' differ: a diffuse of
+      * 0.18 (Cycles 0.8 - an unauthored diffuseColor rendered four times too
+      * bright), a coat roughness of 0.01. */
+@@ -3203,8 +3220,56 @@ class UsdToCycles {
+                             {ustring("emission_color"), "0,0,0"},
+                             {ustring("base_color"), "0.18,0.18,0.18"},
+                             {ustring("coat_roughness"), "0.01"}});
++    if (specular) {
++      using FV = UsdToCyclesMapping::FixedMap;
++      auto math = [](const char *const name, const char *const to, FV fixed) {
++        return UsdToCyclesMapping::Helper{name, "math", {{"Value", to}}, std::move(fixed)};
++      };
++      mapping.addHelper({"tdiv",
++                         "vector_math",
++                         {{"Vector", "Specular Tint"}},
++                         {{ustring("math_type"), "divide"}, {ustring("vector1"), "0,0,0"}}});
++      mapping.addHelper(math("iorh", "IOR", {{ustring("math_type"), "divide"}}));
++      mapping.addHelper(
++          math("onep", "iorh:Value1", {{ustring("math_type"), "add"}, {ustring("value1"), "1"}}));
++      mapping.addHelper(math(
++          "onem", "iorh:Value2", {{ustring("math_type"), "subtract"}, {ustring("value1"), "1"}}));
++      UsdToCyclesMapping::Helper sq{"sq",
++                                    "math",
++                                    {{"Value", "onep:Value2"}, {"Value", "onem:Value2"}},
++                                    {{ustring("math_type"), "sqrt"}}};
++      mapping.addHelper(sq);
++      mapping.addHelper(math(
++          "mcl", "sq:Value1", {{ustring("math_type"), "minimum"}, {ustring("value2"), "0.99"}}));
++      UsdToCyclesMapping::Helper mx2{"mx2",
++                                     "math",
++                                     {{"Value", "mcl:Value1"}, {"Value", "tdiv:Vector2"}},
++                                     {{ustring("math_type"), "maximum"}}};
++      mapping.addHelper(mx2);
++      mapping.addHelper(math("mx1", "mx2:Value1", {{ustring("math_type"), "maximum"}}));
++      mapping.addHelper({"sep",
++                         "separate_color",
++                         {{"Red", "mx1:Value1"}, {"Green", "mx1:Value2"}, {"Blue", "mx2:Value2"}},
++                         {{ustring("color"), "0,0,0"}}});
++    }
++    if (cutout) {
++      mapping.addHelper({"msk",
++                         "math",
++                         {{"Value", "Alpha"}},
++                         {{ustring("math_type"), "subtract"}, {ustring("value1"), "1"}}});
++      mapping.addHelper({"cut",
++                         "math",
++                         {{"Value", "msk:Value2"}},
++                         {{ustring("math_type"), "less_than"},
++                          {ustring("value1"), "1"},
++                          {ustring("value2"), "0"}}});
++    }
+     return mapping;
+-  }();
++  }
++  const UsdToCyclesMapping UsdPreviewSurface = MakeUsdPreviewSurface(false, false);
++  const UsdToCyclesMapping UsdPreviewSurfaceCutout = MakeUsdPreviewSurface(false, true);
++  const UsdToCyclesMapping UsdPreviewSurfaceSpecular = MakeUsdPreviewSurface(true, false);
++  const UsdToCyclesMapping UsdPreviewSurfaceSpecularCutout = MakeUsdPreviewSurface(true, true);
+   const UsdToCyclesTexture UsdUVTexture = [] {
+     UsdToCyclesTexture m{"image_texture",
+                          {
+@@ -3229,6 +3294,10 @@ class UsdToCycles {
+     sb.takesMainOutput = "Vector1";
+     sb.mainOutputName = "Color";
+     m.addHelper(std::move(sb));
++    /* wrapS and wrapT default to useMetadata: black outside the image. An
++     * unwrapped texture used to repeat - Cycles' own default
++     * (tools/bench_usdtex.py). */
++    m.setFixedValues({{ustring("extension"), "black"}});
+     return m;
+   }();
+   const UsdToCyclesTransform2d UsdTransform2d = [] {
+@@ -3240,6 +3309,26 @@ class UsdToCycles {
+                                                {{TfToken("varname"), ustring("attribute")}}};
+ 
+  public:
++  /* The UsdPreviewSurface mapping for a node's two switches, when `mapping`
++   * is the preview surface's. */
++  const UsdToCyclesMapping *previewFor(const UsdToCyclesMapping *mapping,
++                                       HdMaterialNodeSchema nodeSchema) const
++  {
++    if (mapping != &UsdPreviewSurface) {
++      return mapping;
++    }
++    HdMaterialNodeParameterContainerSchema params = nodeSchema.GetParameters();
++    auto number = [&](const char *const name) -> double {
++      const auto ds = params.Get(TfToken(name)).GetValue();
++      const VtValue v = ds ? ds->GetValue(0.0f) : VtValue();
++      return v.CanCast<double>() ? VtValue::Cast<double>(v).UncheckedGet<double>() : 0.0;
++    };
++    const bool specular = number("useSpecularWorkflow") != 0.0;
++    const bool cutout = number("opacityThreshold") > 0.0;
++    return specular ? (cutout ? &UsdPreviewSurfaceSpecularCutout : &UsdPreviewSurfaceSpecular) :
++                      (cutout ? &UsdPreviewSurfaceCutout : &UsdPreviewSurface);
++  }
++
+   const UsdToCyclesMapping *findUsd(const TfToken &usdNodeType)
+   {
+     if (usdNodeType == CyclesMaterialTokens->UsdPreviewSurface) {
+@@ -3608,6 +3697,26 @@ void HdCyclesMaterial::UpdateParameters(NodeDesc &nodeDesc,
+     if (rampParams.find(paramName) != rampParams.end()) {
+       continue;
+     }
++
++    /* A texture's colour space does not come as a parameter of its own:
++     * UsdImaging puts UsdUVTexture's sourceColorSpace, and Houdini a
++     * MaterialX image's colour space, on the file parameter
++     * (HdMaterialNodeParameterSchema colorSpace). It was never read, so every
++     * texture took Cycles' auto - which under Houdini's ACES config left an
++     * 8-bit sRGB image undecoded (tools/bench_usdtex.py). */
++    if (const HdTokenDataSourceHandle csDs = params.Get(paramName).GetColorSpace()) {
++      const TfToken space = csDs->GetTypedValue(0.0f);
++      const SocketType *const socket = nodeDesc.node ?
++                                           nodeDesc.node->type->find_input(ustring("colorspace")) :
++                                           nullptr;
++      if (!space.IsEmpty() && socket != nullptr && socket->type == SocketType::STRING) {
++        const ustring resolved = ColorSpaceManager::resolve_texture_colorspace(space.GetString());
++        if (resolved != u_colorspace_auto) {
++          nodeDesc.node->set(*socket, resolved);
++        }
++      }
++    }
++
+     auto valueDs = params.Get(paramName).GetValue();
+     if (!valueDs) {
+       continue;
+@@ -4261,6 +4370,7 @@ unique_ptr<ShaderGraph> HdCyclesMaterial::BuildShaderGraph(HdMaterialNetworkSche
+       else {
+         /* Check if any remapping is needed (e.g. for USDPreviewSurface to Cycles nodes). */
+         nodeDesc.mapping = sUsdToCyles->findUsd(nodeTypeIdToken);
++        nodeDesc.mapping = sUsdToCyles->previewFor(nodeDesc.mapping, nodeSchema);
+         if (!nodeDesc.mapping) {
+           nodeDesc.mapping = FindMtlxMapping(nodeTypeId);
+         }
+@@ -4309,6 +4419,13 @@ unique_ptr<ShaderGraph> HdCyclesMaterial::BuildShaderGraph(HdMaterialNetworkSche
+         /* Apply the constants that pick this node's mode, if the mapping
+          * carries any. */
+         if (nodeDesc.mapping) {
++          /* Cycles' image node starts in scene_linear; a USD or MaterialX
++           * image with no colour space is `auto`, an 8 bit file read as sRGB
++           * (Karma, tools/bench_usdtex.py). Fixed values and parameters
++           * still override it. */
++          if (ImageTextureNode *const image = dynamic_cast<ImageTextureNode *>(nodeDesc.node)) {
++            image->set_colorspace(u_colorspace_auto);
++          }
+           for (const auto &fixed : nodeDesc.mapping->fixedValues()) {
+             if (const SocketType *socket = nodeType->find_input(fixed.first)) {
+               SetNodeValue(nodeDesc.node, *socket, FixedValue(*socket, fixed.second));
+diff --git a/src/util/colorspace.cpp b/src/util/colorspace.cpp
+index 792c02e9..80d7adfa 100644
+--- a/src/util/colorspace.cpp
++++ b/src/util/colorspace.cpp
+@@ -168,6 +168,64 @@ ColorSpaceProcessor *ColorSpaceManager::get_processor(ustring colorspace)
+ #endif
+ }
+ 
++ustring ColorSpaceManager::srgb_texture_colorspace()
++{
++#ifdef WITH_OCIO
++  OCIO::ConstConfigRcPtr config = nullptr;
++  try {
++    config = OCIO::GetCurrentConfig();
++  }
++  catch (const OCIO::Exception &) {
++    return u_colorspace_srgb;
++  }
++  if (config) {
++    /* OCIO v2 configs alias it srgb_tx; ACES 1.x studio configs name it in
++     * full; simple configs call it sRGB. */
++    static const char *const names[] = {
++        "srgb_tx", "sRGB - Texture", "Utility - sRGB - Texture", "sRGB"};
++    for (const char *name : names) {
++      try {
++        if (const OCIO::ConstColorSpaceRcPtr space = config->getColorSpace(name)) {
++          return ustring(space->getName());
++        }
++      }
++      catch (const OCIO::Exception &) {
++      }
++    }
++  }
++#endif
++  return u_colorspace_srgb;
++}
++
++ustring ColorSpaceManager::resolve_texture_colorspace(const string &name)
++{
++  if (name.empty() || name == "auto") {
++    return u_colorspace_auto;
++  }
++  if (name == "raw" || name == "data" || name == "Raw" || name == "Utility - Raw") {
++    return u_colorspace_data;
++  }
++  if (name == "sRGB" || name == "srgb_texture" || name == "srgb_tx") {
++    return srgb_texture_colorspace();
++  }
++#ifdef WITH_OCIO
++  try {
++    const OCIO::ConstConfigRcPtr config = OCIO::GetCurrentConfig();
++    if (config) {
++      if (const OCIO::ConstColorSpaceRcPtr space = config->getColorSpace(name.c_str())) {
++        return ustring(space->getName());
++      }
++    }
++  }
++  catch (const OCIO::Exception &) {
++  }
++#endif
++  if (name == "lin_rec709" || name == "Linear" || name == "linear") {
++    return u_colorspace_scene_linear;
++  }
++  return u_colorspace_auto;
++}
++
+ bool ColorSpaceManager::colorspace_is_data(ustring colorspace)
+ {
+   if (colorspace == u_colorspace_data) {
+@@ -303,9 +361,21 @@ ustring ColorSpaceManager::detect_known_colorspace(ustring colorspace,
+   /* Rely on OpenImageIO and OpenColorIO guessed color spaces when available. This relies on
+    * recent OpenImageIO versions supporting interop IDs. */
+   if (config && colorspace == u_colorspace_auto) {
++    /* OpenImageIO tags an 8-bit PNG or JPEG "sRGB" (or with an interop ID),
++     * names an ACES-style config does not have. Houdini's config is one, and
++     * has no default_byte role either: such a texture fell to the builtin
++     * sRGB, which under that config left it undecoded, where Karma decodes it
++     * (hdCycles tools/bench_usdtex.py). The config's own sRGB texture space
++     * is what the tag means. */
++    const bool file_is_srgb = strcmp(file_colorspace, "sRGB") == 0 ||
++                              strcmp(file_colorspace, "srgb_rec709_scene") == 0 ||
++                              strcmp(file_colorspace, "srgb_rec709_display") == 0;
+     if (file_colorspace[0] && config->getColorSpace(file_colorspace)) {
+       colorspace = file_colorspace;
+     }
++    else if (file_is_srgb && srgb_texture_colorspace() != u_colorspace_srgb) {
++      colorspace = srgb_texture_colorspace();
++    }
+     else {
+ #  if OCIO_VERSION_MAJOR == 2 && OCIO_VERSION_MINOR == 2
+       int default_float_id = 0;
+diff --git a/src/util/colorspace.h b/src/util/colorspace.h
+index a42fea57..74453210 100644
+--- a/src/util/colorspace.h
++++ b/src/util/colorspace.h
+@@ -35,6 +35,19 @@ class ColorSpaceManager {
+ 
+   /* Test if colorspace is for non-color data. */
+   static bool colorspace_is_data(ustring colorspace);
++
++  /* The colour space of sRGB-encoded textures in the current OpenColorIO
++   * config, under one of its usual names, or the builtin sRGB when the config
++   * has none. A USD file's "sRGB" means this space: ACES configs have no
++   * colour space called "sRGB", and the builtin one, under them, did not decode
++   * an 8-bit texture the way Karma does. */
++  static ustring srgb_texture_colorspace();
++
++  /* A texture colour space as USD and MaterialX name it - "sRGB" or
++   * "srgb_texture", "raw", "auto", or a name of the OpenColorIO config - as
++   * Cycles takes it: the config's sRGB texture space, data, auto, the config's
++   * own space. A name the config does not know is read as auto. */
++  static ustring resolve_texture_colorspace(const string &name);
+   /* Return color interop forum interop ID. */
+   static const char *colorspace_interop_id(ustring colorspace);
+ 

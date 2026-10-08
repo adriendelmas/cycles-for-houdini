@@ -2305,3 +2305,23 @@ image et perdaient répétition, décalage, transformation glTF ; `place2d`
 allait sur le nœud mapping de Cycles, sans pivot, sans ordre SRT/TRS, angle
 pris en radians ; `image_float` rendait la couleur au lieu du premier canal.
 19 nœuds image sur 21 identiques à Karma ensuite.
+
+**UsdPreviewSurface (0110, K-65).** L'audit entrée par entrée sur la
+surface la plus répandue : le workflow spéculaire était ignoré
+(`specularColor` sans effet en spéculaire, et appliqué à tort en métallique
+— un fichier qui l'écrit noir, comme beaucoup d'exportateurs, perdait toute
+réflexion), et `opacityThreshold` ne détourait pas. Quatre variantes de la
+traduction, choisies selon les deux réglages ; en spéculaire, le F0 coloré
+s'obtient du principled par l'IOR tiré de la composante max et la teinte
+spéculaire.
+
+**Espaces couleur des textures (0110, K-66).** Nouveau banc
+`bench_usdtex.py` (texture à quatre coins, Cycles contre Karma) : un PNG
+sRGB sortait linéaire. Trois causes : UsdImaging range `sourceColorSpace`
+et la métadonnée `colorSpace` de MaterialX dans un champ à part que le
+délégué ne lisait pas ; les noms passés (`sRGB`, `raw`) sont ceux de Cycles,
+inconnus de la config OCIO de Houdini ; et sans espace indiqué, le nœud image
+de Cycles part en `scene_linear` au lieu d'`auto`. Corrigé, plus les modes
+`wrapS`/`wrapT` (passés tels quels, toujours en clamp). 13 cas sur 13 (UDIM
+compris) à
+0,011 près de Karma.

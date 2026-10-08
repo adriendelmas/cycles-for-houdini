@@ -191,7 +191,10 @@ FLAT_TEXEL = (0.2, 0.9, 0.4, 0.6)
 def uvtex(extra, output):
     return (['uniform token info:id = "UsdUVTexture"',
              "asset inputs:file = @flat.exr@",
-             'token inputs:sourceColorSpace = "raw"'] + extra + [output])
+             'token inputs:sourceColorSpace = "raw"',
+             # USD's default wrap, useMetadata, is black without metadata: the
+             # border texels would blend with it. These cases test channels.
+             'token inputs:wrapS = "repeat"', 'token inputs:wrapT = "repeat"'] + extra + [output])
 
 
 def write_flat_texture():

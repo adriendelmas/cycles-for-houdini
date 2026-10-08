@@ -377,6 +377,49 @@ mirrored or shifted shows. Five of the image family went wrong:
 After: 19 of 21 image nodedefs as Karma; `hextiledimage`'s random tiling is
 each engine's own.
 
+### K-65 UsdPreviewSurface ignored both its switches — confirmed — **fixed** (0110)
+`tools/surface_audit.py UsdPreviewSurface`, 15 inputs against Karma:
+- the specular workflow: with `useSpecularWorkflow = 1`, `specularColor` -
+  the colour at normal incidence - had no effect, and in the metallic
+  workflow, the default, where USD ignores it, it tinted the specular anyway:
+  a file writing it black, as many exporters do, lost all reflection;
+- `opacityThreshold`: no cut-out.
+0110 picks one of four mappings by the two switches. Specular workflow: the
+principled's dielectric gets the IOR whose F0 is the colour's largest
+component, (1 + sqrt F0) / (1 - sqrt F0), and the colour over it as specular
+tint; metallic is ignored. Threshold above zero: opacity at or above it is
+opaque, below it transparent. After: `specularColor` red +0.232 against
+Karma's +0.196, `opacityThreshold` +0.048 against +0.069. Kept: on the
+weak channels of a strong specular colour Cycles takes away more diffuse
+than Karma (its energy balance follows the untinted F0), and a partial
+`opacity` darkens the sphere slightly in Karma where it lightens it in
+Cycles.
+
+### K-66 Texture colour spaces and wrap modes lost on the way — confirmed — **fixed** (0110)
+`tools/bench_usdtex.py`, a four-corner texture on a quad through
+`UsdUVTexture` and a MaterialX `image`, against Karma, under Houdini's OCIO
+config:
+- the colour space never arrived. UsdImaging moves `sourceColorSpace` and a
+  MaterialX file input's `colorSpace` metadata out of the parameters, into
+  the parameter's own colour-space field, which the delegate did not read; and
+  the names it did map (`sRGB`, `raw`) were Cycles' builtins, which Houdini's
+  config does not know - an sRGB PNG came out linear, 0.90 white where Karma
+  decodes 0.79;
+- with no colour space at all, the common case, Cycles' image node keeps the
+  `scene_linear` its constructor gives it, where USD and MaterialX mean
+  `auto` (an 8-bit file read as sRGB);
+- `wrapS`/`wrapT` were passed as USD's tokens (`repeat`, `useMetadata`), which
+  Cycles' extension enum does not have, so every texture clamped, and USD's
+  default (`useMetadata`, black outside the image without metadata) did too.
+0110 reads the colour-space field, resolves a name against the active OCIO
+config (`ColorSpaceManager::resolve_texture_colorspace`: raw/data, the
+config's own sRGB texture space under its usual names, any space the config
+knows, linear), starts translated image nodes in `auto`, has `auto` pick the
+config's sRGB texture space for a file tagged sRGB, and translates the wrap
+tokens (`repeat` → `periodic`, `useMetadata` → `black`). 13 cases (UDIMs
+included), all
+within 0.011 of Karma.
+
 ## B. Geometry and scene
 
 ### K-19 float3 primvars copied at the wrong stride — confirmed — **fixed** (0075)

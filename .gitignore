@@ -23,6 +23,8 @@ tests/aovs/output/
 tests/karma_settings/output/
 tests/agreement/output/
 tests/volume/output/
+tests/usdtex/output/
+tests/dome/output/
 tests/materialx/hair/
 tests/materialx/standard_surface/*.exr
 tests/scratch/

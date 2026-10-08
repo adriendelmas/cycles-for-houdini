@@ -43,7 +43,13 @@ NEEDS = {
     "geometry_thin_walled": {"transmission_weight": "1"},
     "thin_walled": {"transmission": "1"},
     "emission_color": {"emission": "1", "emission_luminance": "1"},
+    "specularColor": {"useSpecularWorkflow": "1"},
+    "opacityThreshold": {"opacity": "0.4"},
 }
+
+# UsdPreviewSurface reaches the delegate under its own id, through the
+# UsdPreviewSurface translation; the library's nodedef only lists its inputs.
+NODEDEF_FOR = {"UsdPreviewSurface": "ND_UsdPreviewSurface_surfaceshader"}
 
 
 # A starting point per model, where its default is a poor one to measure
@@ -77,7 +83,9 @@ def moved(inp):
             new = 0.3
         else:
             new = v * 2.0
-        return "%d" % int(new) if t == "integer" else "%g" % new
+        if t == "integer":
+            return "1" if v == 0.0 else "0"
+        return "%g" % new
     if t in ("color3", "vector3"):
         return "(0.9, 0.3, 0.1)" if "radius" not in name else "(1, 0.2, 0.05)"
     return None
@@ -122,7 +130,7 @@ def main():
         os.makedirs(OUT)
     bench_agree.OUT = OUT  # renders run from there
     library = mtlx_rules.load_library()  # kept: a nodedef does not hold its document
-    nd = library.getNodeDef(nd_name)
+    nd = library.getNodeDef(NODEDEF_FOR.get(nd_name, nd_name))
     if nd is None:
         sys.exit("no nodedef %s" % nd_name)
     uniform = {"float": "float", "integer": "int", "boolean": "bool",
