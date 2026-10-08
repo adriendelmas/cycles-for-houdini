@@ -276,7 +276,9 @@ def main():
         quads.append(QUAD % {"i": i, "name": name, "x0": c, "x1": c + 0.9, "y0": r, "y1": r + 0.9})
     materials = "\n".join('        def Material "%s"\n        {\n%s\n        }' % (name, block)
                           for name, block in blocks)
-    scene = HEAD % {"res": 256, "aperture": cols + 1, "center": cols / 2.0,
+    # The aperture is in tenths of a unit; only the log is read, so the framing
+    # never mattered here, but mtlx_pinned.py reads the pixels of this grid.
+    scene = HEAD % {"res": 256, "aperture": (cols + 1) * 10, "center": cols / 2.0,
                     "quads": "".join(quads), "materials": materials}
     scene_path = os.path.join(OUT, "inputs.usda")
     open(scene_path, "w", encoding="utf-8").write(scene)
