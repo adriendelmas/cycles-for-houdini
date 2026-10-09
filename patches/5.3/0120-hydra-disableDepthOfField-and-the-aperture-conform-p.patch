@@ -1,7 +1,7 @@
 From 947a2b6f3a3a7121870a9bc206bac2cd04ae2f9d Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 9 Oct 2026 04:20:36 +0200
-Subject: [PATCH 120/125] hydra: disableDepthOfField and the aperture conform
+Subject: [PATCH 120/126] hydra: disableDepthOfField and the aperture conform
  policy
 
 The render settings' disableDepthOfField, which Houdini's Render Settings

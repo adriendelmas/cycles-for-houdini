@@ -1,0 +1,132 @@
+From 1a0dfe1009e9e56387e40df6714f726000749ce9 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Fri, 9 Oct 2026 19:46:27 +0200
+Subject: [PATCH 126/126] hydra: cook op: COP textures to files as a USD Render
+ ROP saves
+
+husk, which the USD Render ROP and farms run, has no Houdini session: an
+op: texture path could not be read there (Karma black, Cycles magenta).
+An output processor, hdcycles_cookcoptextures, cooks each referenced COP
+through flatten_op_textures to an EXR in cop_textures/ beside the layer the
+ROP writes and points the saved path at it. Creation scripts add it to
+every new USD Render ROP, in LOPs and in /out (K-40).
+---
+ src/hydra/CMakeLists.txt                      |  5 ++
+ .../hdcycles_cookcoptextures.py               | 58 +++++++++++++++++++
+ .../scripts/lop/usdrender_rop_OnCreated.py    |  9 +++
+ .../scripts/out/usdrender_OnCreated.py        |  9 +++
+ 4 files changed, 81 insertions(+)
+ create mode 100644 src/hydra/resources/husdplugins/outputprocessors/hdcycles_cookcoptextures.py
+ create mode 100644 src/hydra/resources/scripts/lop/usdrender_rop_OnCreated.py
+ create mode 100644 src/hydra/resources/scripts/out/usdrender_OnCreated.py
+
+diff --git a/src/hydra/CMakeLists.txt b/src/hydra/CMakeLists.txt
+index c8e889f1..a7284275 100644
+--- a/src/hydra/CMakeLists.txt
++++ b/src/hydra/CMakeLists.txt
+@@ -269,6 +269,11 @@ if(WITH_CYCLES_HYDRA_RENDER_DELEGATE)
+     # where it assumes Karma. The rest of the translation remains Houdini's,
+     # inherited as is.
+     delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources/husdplugins/shadertranslators" "cycles.py" "${CYCLES_INSTALL_PATH}/houdini/husdplugins/shadertranslators")
++    # Cooks op: COP textures to files as a USD ROP saves (husk, farms), and
++    # the creation hooks that add it to every new USD Render ROP.
++    delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources/husdplugins/outputprocessors" "hdcycles_cookcoptextures.py" "${CYCLES_INSTALL_PATH}/houdini/husdplugins/outputprocessors")
++    delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources/scripts/lop" "usdrender_rop_OnCreated.py" "${CYCLES_INSTALL_PATH}/houdini/scripts/lop")
++    delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources/scripts/out" "usdrender_OnCreated.py" "${CYCLES_INSTALL_PATH}/houdini/scripts/out")
+     # The choice of render device, in Houdini's Render menu. It cannot live on a
+     # node - it is frozen when the session is built, and describes the machine
+     # rather than the scene - hence a global menu, a user preference, and the
+diff --git a/src/hydra/resources/husdplugins/outputprocessors/hdcycles_cookcoptextures.py b/src/hydra/resources/husdplugins/outputprocessors/hdcycles_cookcoptextures.py
+new file mode 100644
+index 00000000..4e89de04
+--- /dev/null
++++ b/src/hydra/resources/husdplugins/outputprocessors/hdcycles_cookcoptextures.py
+@@ -0,0 +1,58 @@
++"""hdCycles: cook `op:` COP textures to image files as a USD ROP saves.
++
++A texture path may point at a COP (`op:/img/net/OUT`). Houdini's viewport
++reads it from the live session, but husk - the USD Render ROP's renderer,
++and every render farm - runs without one: Karma renders the texture black,
++Cycles its missing-image colour. This processor cooks each referenced COP to
++an EXR beside the layer being written and points the saved USD at it, so
++the render that follows, here or on a farm, reads a real file.
++
++hdCycles adds it to every new USD Render ROP (scripts/lop and scripts/out);
++add it by hand on an existing one (Output Processors).
++"""
++
++import os
++
++import hou
++import husd.outputprocessor as base
++
++
++class CookCopTexturesOutputProcessor(base.OutputProcessor):
++    def __init__(self):
++        super(CookCopTexturesOutputProcessor, self).__init__()
++        self.frame = 1.0
++        self.cache = {}
++
++    @staticmethod
++    def name():
++        return 'hdcycles_cookcoptextures'
++
++    @staticmethod
++    def displayName():
++        return 'Cook COP Textures to Files (op: paths)'
++
++    def beginSave(self, config_node, config_overrides, lop_node, t, stage_variables):
++        super(CookCopTexturesOutputProcessor, self).beginSave(
++            config_node, config_overrides, lop_node, t, stage_variables)
++        self.frame = hou.timeToFrame(t)
++        # One cook per COP and frame: a new frame cooks again.
++        self.cache = {}
++
++    def processReferencePath(self, asset_path, referencing_layer_path, asset_is_layer):
++        if asset_is_layer or not asset_path.startswith('op:'):
++            return asset_path
++        # Imported here: plugins load before the package's python libs are on
++        # the path.
++        import flatten_op_textures
++        directory = os.path.join(os.path.dirname(referencing_layer_path), 'cop_textures')
++        try:
++            os.makedirs(directory, exist_ok=True)
++        except OSError:
++            return asset_path
++        cooked = flatten_op_textures._flatten(asset_path[len('op:'):], self.frame, directory,
++                                              self.cache)
++        return cooked.replace(os.sep, '/') if cooked else asset_path
++
++
++def usdOutputProcessor():
++    return CookCopTexturesOutputProcessor
+diff --git a/src/hydra/resources/scripts/lop/usdrender_rop_OnCreated.py b/src/hydra/resources/scripts/lop/usdrender_rop_OnCreated.py
+new file mode 100644
+index 00000000..27201512
+--- /dev/null
++++ b/src/hydra/resources/scripts/lop/usdrender_rop_OnCreated.py
+@@ -0,0 +1,9 @@
++# hdCycles: a new USD Render LOP cooks its `op:` COP textures to files as it
++# saves, so husk and render farms can read them (hdcycles_cookcoptextures).
++import loputils
++
++node = kwargs['node']
++parm = node.parm('outputprocessors')
++if parm is not None and node.parm('enableoutputprocessor_hdcycles_cookcoptextures') is None:
++    loputils.handleOutputProcessorAdd(
++        {'node': node, 'parm': parm, 'script_value': 'hdcycles_cookcoptextures'})
+diff --git a/src/hydra/resources/scripts/out/usdrender_OnCreated.py b/src/hydra/resources/scripts/out/usdrender_OnCreated.py
+new file mode 100644
+index 00000000..004fab56
+--- /dev/null
++++ b/src/hydra/resources/scripts/out/usdrender_OnCreated.py
+@@ -0,0 +1,9 @@
++# hdCycles: a new USD Render ROP cooks its `op:` COP textures to files as it
++# saves, so husk and render farms can read them (hdcycles_cookcoptextures).
++import loputils
++
++node = kwargs['node']
++parm = node.parm('outputprocessors')
++if parm is not None and node.parm('enableoutputprocessor_hdcycles_cookcoptextures') is None:
++    loputils.handleOutputProcessorAdd(
++        {'node': node, 'parm': parm, 'script_value': 'hdcycles_cookcoptextures'})

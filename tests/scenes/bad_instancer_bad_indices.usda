@@ -1,5 +1,6 @@
 #usda 1.0
-# Robustness: a PointInstancer whose protoIndices name missing prototypes and outnumber its positions (tools/bench_robust.py).
+# Robustness: a PointInstancer whose protoIndices outnumber its positions (tools/bench_robust.py). Indices naming missing
+# prototypes are left out: they crash USD itself, under Karma as well (K-86).
 (
     defaultPrim = "world"
     metersPerUnit = 1
@@ -26,7 +27,7 @@ def Xform "world"
     def PointInstancer "pi"
     {
         rel prototypes = [</world/pi/proto>]
-        int[] protoIndices = [0, 5, -1]
+        int[] protoIndices = [0, 0, 0]
         point3f[] positions = [(0, 0, 0), (1, 0, 0)]
         def Sphere "proto"
         {

@@ -85,7 +85,7 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | Ramps and curves (Houdini encoding → table) | ✅ | phase 10 | |
 | UDIM (`<UDIM>`, `%(UDIM)d`) | ✅ | code and render | |
 | Image reload on filename change | ✅ | phase 24 | |
-| Copernicus `op:` textures, live | ✅ | phases 23-29 | In Houdini only; husk needs flattening |
+| Copernicus `op:` textures, live | ✅ | phases 23-29 | Under husk, cooked to files by the USD Render ROP (K-40, 0126) |
 | Material settings (`displacement_method`...) | ✅ | phase 20 | |
 | Enum validation | ✅ | phase 14 | |
 | 8-bit sRGB auto-detection under ACES | ✅ | `bench_usdtex.py` | `auto` picks the config's sRGB texture space (K-66, 0110) |
@@ -173,7 +173,7 @@ surface models (`surface_audit.py`, K-63). On 2026-10-07 the numbers were
 | Material Builder tab-menu mask | ✅ | `cycles_*` only |
 | Material settings translator | ✅ | |
 | Preview translator | 🟡 | See above |
-| `op:` textures in husk / on a farm | ❌ | `flatten_op_textures` exists, nothing automates it |
+| `op:` textures in husk / on a farm | ✅ | An output processor on every new USD Render ROP cooks them to files as it saves (K-40, 0126); `bench_cop_rop.py` |
 | COP cache eviction | ✅ | On material finalize, capped by bytes (K-41, 0096) |
 | Karma Material Builder (`kma`) | ✅ | Read after `mtlx` since 2026-10-07 (K-16) |
 

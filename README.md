@@ -28,10 +28,12 @@ where the work went.
   expanded into their inner nodes at translation time, read from Houdini's
   own library.
 - **Copernicus COP textures read live**, without a round trip through disk.
-  This needs a live Houdini: under husk (a USD Render ROP, a farm) there is no
-  node graph to cook, so put the **Flatten COP Textures** LOP
-  (`hdcycles::flatten_op_textures`) before the render node - it cooks every
-  referenced COP to an image file and rewrites the paths on its own layer.
+  Under husk (a USD Render ROP, a farm) there is no node graph to cook: every
+  new USD Render ROP gets the **Cook COP Textures to Files** output processor,
+  which cooks each referenced COP to an EXR in `cop_textures/` beside the USD
+  it writes and points the file at it - for Karma too. On a ROP made before
+  hdCycles was installed, add it under Output Processors, or put the
+  **Flatten COP Textures** LOP (`hdcycles::flatten_op_textures`) before it.
 - Motion blur on animated transforms **and on deforming geometry** — meshes,
   curves and point clouds alike, from time-sampled points or from a
   `velocities` field, so a simulation whose point count changes still blurs;

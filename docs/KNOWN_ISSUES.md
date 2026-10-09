@@ -911,13 +911,42 @@ any more. `bench_settings.py`, `volume_hidden_camera`.
 
 ## C. Houdini side
 
-### K-40 `op:` textures fail under husk — confirmed
+### K-40 `op:` textures fail under husk — confirmed — **fixed** (0126)
 `houdini_cop.cpp` needs `hou.node()` on a live session; husk has no node
 graph, so the capture warns and the texture is missing. `flatten_op_textures`
 exists; nothing runs it automatically when a USD Render ROP is used.
 
 Documented 2026-10-08 in the README, under the COP feature: under husk, put
 the Flatten COP Textures LOP (`hdcycles::flatten_op_textures`) before the render node. Not automated.
+
+Fixed 2026-10-09 with a USD output processor, `hdcycles_cookcoptextures`
+(`husdplugins/outputprocessors`): as the ROP writes its USD, each `op:` asset
+path is cooked by `flatten_op_textures` to an EXR in `cop_textures/` beside
+the layer, and the saved path points at it. The ROP still runs in Houdini, so
+the COP can cook; husk and a farm then read a plain file. It fixes Karma as
+well (black before). Node creation scripts (`scripts/lop/usdrender_rop_OnCreated.py`,
+`scripts/out/usdrender_OnCreated.py`) add it to every new USD Render ROP.
+Measured with `bench_cop_rop.py`: a red COP on a LOP-authored quad renders red
+in Karma and Cycles through fresh ROPs (black and magenta without it).
+
+Kept: an output processor only sees layers a LOP writes, so an `op:` path in
+a sublayered file on disk is not cooked (flatten it with the LOP). A ROP made
+before the install does not get it; add it under Output Processors. Another
+package's `usdrender_rop_OnCreated.py` earlier on HOUDINI_PATH would shadow
+ours.
+
+### K-86 A PointInstancer naming missing prototypes crashes USD — confirmed — upstream, not fixable here
+`protoIndices` holding an index with no prototype (`[0, 5, -1]` with one
+prototype) crashes husk at random: inside OpenUSD 26.05 as Houdini 22.0.368
+ships it, `UsdImagingDataSourcePointInstancerPrim` pushes each instance onto
+the list of its prototype index without a bounds check, writing past the end
+of its vector (trace: `VtArray<int>::push_back` from
+`HdInstancerTopologySchema::ComputeInstanceIndicesForProto`). Karma crashes
+the same way, 19 renders out of 25 (2026-10-09). The delegate only asks for
+the indices; the raw `protoIndices` reach Hydra through nothing else, so it
+cannot check them first. `bad_instancer_bad_indices.usda` now carries only
+`protoIndices` that outnumber the positions, which the delegate handles.
+Worth reporting to SideFX / Pixar.
 
 ### K-41 COP pixel cache never evicts — confirmed — **fixed** (0096), unmeasured live
 `houdini_cop.cpp` `Cache()` keeps every captured layer for the session: an 8K

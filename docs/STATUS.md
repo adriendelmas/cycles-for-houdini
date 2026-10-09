@@ -2441,3 +2441,12 @@ d'une constante color4 est maintenant transmise. Les 8 nœuds de composition
 sont identiques à Karma. Les volumes ne lisaient aucune de leurs primvars ;
 ils lisent maintenant `cycles:object:*` et `cycles:volume:*` (pas,
 espace objet, échelle de vélocité).
+
+0126 (2026-10-09) : les textures `op:` (COP) marchent sous husk et sur une
+ferme. Chaque nouveau USD Render ROP reçoit un processeur de sortie qui cuit
+les COP référencés en EXR dans `cop_textures/` à côté de l'USD qu'il écrit,
+et y pointe le chemin ; Karma en profite aussi (noir avant). Vérifié aussi :
+le flou de bouger de la caméra suit déjà tous les échantillons de la scène
+dans l'obturateur (cas `camera` et `camera_bounce` ajoutés à bench_motion),
+et l'affichage direct dans le viewport marche sous le viewport Vulkan de
+Houdini 22, qui donne toujours un Hgi OpenGL aux délégués.
