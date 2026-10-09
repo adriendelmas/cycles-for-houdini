@@ -885,6 +885,30 @@ the path is no UDIM pattern nor a COP), the texture's scale-and-bias step
 now outputs rgb * 0 + fallback, the single channels taken after it.
 Kept: the alpha output stays 1.
 
+### K-84 Alpha compositing and hextilednormalmap missing — confirmed — **fixed** (0125)
+`over`, `in`, `out`, `mask`, `matte`, `disjointover`, `premult` and
+`unpremult` (MaterialX's compositing group) and `hextilednormalmap` exist in
+Houdini's library as shader code only, so nothing rendered them. The
+delegate now ships nodegraphs for them (`mtlx_nodegraphs.h`, the spec's
+formulas, each mixed over bg by `mix`). They first read the red channel for
+alpha: Cycles carries no fourth channel on a wire, and only an image's alpha
+was routed to a `separate4`'s `outa` (K-17). A constant colour4's alpha is
+now handed to `outa`'s readers the same way. All eight compositing nodes
+match Karma (`mtlx_karma.py`). `hextilednormalmap` renders; it differs from
+Karma as `hextiledimage` does, each engine drawing its own tile variation.
+`thin_surface` is deprecated and gone from MaterialX 1.39; `time` and
+`frame` would need the material rebuilt every frame (section E).
+
+### K-85 Volumes read none of their primvars — confirmed — **fixed** (0125)
+A volume's initial dirty bits left out primvars, so its `cycles:object:*`
+properties (visibility, holdout...) were never read. They are now, and
+three volume settings join them as constant primvars:
+`cycles:volume:step_size` (0, the default, sizes the step from the voxels;
+in Cycles 5.3 it only paces the shadow rays through the volume),
+`cycles:volume:object_space` and `cycles:volume:velocity_scale` (the
+velocity field's weight in motion blur). Cycles 5.3 has no volume clipping
+any more. `bench_settings.py`, `volume_hidden_camera`.
+
 ## C. Houdini side
 
 ### K-40 `op:` textures fail under husk — confirmed
@@ -1009,7 +1033,9 @@ one renders differently from Karma, and that is expected.
   `shadow:color` is reported unsupported in the log (0093); light filters
   are dropped; UsdPreviewSurface's `occlusion` is ignored.
 - **MaterialX time, frame and matrix nodes**: no node in Cycles' graph
-  carries a matrix or the current time; those nodedefs are left out.
+  carries a matrix or the current time; those nodedefs are left out. A time
+  baked as a constant would need every material rebuilt each frame, which
+  Hydra does not ask of a delegate.
 - **`layer`**: Cycles has no layering closure; a Fresnel-weighted mix at IOR
   1.5 stands in, right for a dielectric top layer, approximate otherwise
   (K-09).

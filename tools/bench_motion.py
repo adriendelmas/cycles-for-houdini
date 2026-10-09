@@ -5,8 +5,8 @@ x = -1 at frame 1 to x = 1 at frame 2. The camera's shutter is open from
 -0.25 to 0.25 frames, so the square travels one unit while it is open and its
 trail covers two units of the image; a sharp square covers one. Each case moves
 the square a different way - its own transform, its points, a PointInstancer's
-positions or the instancer's transform - and the trail is measured along the
-middle row.
+positions or the instancer's transform; or the camera moves instead - and the
+trail is measured along the middle row.
 
     hython tools/bench_motion.py [pattern]
 
@@ -50,7 +50,7 @@ def Xform "world"
         float2 clippingRange = (0.1, 100)
         double shutter:open = -0.25
         double shutter:close = 0.25
-        matrix4d xformOp:transform = ( (1,0,0,0), (0,1,0,0), (0,0,1,0), (0, 0, 10, 1) )
+        %(camera)s
         uniform token[] xformOpOrder = ["xformOp:transform"]
     }
     def DomeLight "black"
@@ -111,6 +111,23 @@ def instancer(positions, extra=""):
     }""" % (positions, extra, mesh("square", "").replace("\n    ", "\n            "))
 
 
+STILL_CAMERA = "matrix4d xformOp:transform = ( (1,0,0,0), (0,1,0,0), (0,0,1,0), (0, 0, 10, 1) )"
+
+
+def camera_keys(keys):
+    return "matrix4d xformOp:transform.timeSamples = {%s}" % ", ".join(
+        "%s: ( (1,0,0,0), (0,1,0,0), (0,0,1,0), (%s, 0, 10, 1) )" % k for k in keys)
+
+
+# Cases where the camera moves past a still square. Its keys sit outside the
+# shutter, so sampling at the keys' own times (as the delegate once did) blurs
+# too long; `camera_bounce` turns back mid-shutter (x 0.5, 1, 0.5 while open),
+# which two samples cannot show.
+CAMERAS = {
+    "camera": camera_keys([(1, -1), (2, 1)]),
+    "camera_bounce": camera_keys([(1, 0), (1.5, 1), (2, 0)]),
+}
+
 # (name, scene body, expected trail in units)
 CASES = [
     ("still", mesh("square", ""), 1.0),
@@ -126,6 +143,8 @@ CASES = [
         }"""), 2.0),
     ("instancer_transform", instancer("point3f[] positions = [(0, 0, 0)]",
                                       MOVING_XFORM.replace("\n        ", "\n        ")), 2.0),
+    ("camera", mesh("square", ""), 2.0),
+    ("camera_bounce", mesh("square", ""), 1.5),
 ]
 
 
@@ -145,7 +164,7 @@ def main():
     cases = [c for c in CASES if pattern in c[0]]
     for name, body, expected in cases:
         scene = os.path.join(OUT, name + ".usda")
-        open(scene, "w", encoding="utf-8").write(SCENE % {"body": body})
+        open(scene, "w", encoding="utf-8").write(SCENE % {"body": body, "camera": CAMERAS.get(name, STILL_CAMERA)})
         exr = os.path.join(OUT, name + ".exr")
         if os.path.exists(exr):
             os.remove(exr)

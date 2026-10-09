@@ -33,7 +33,7 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | Constant scalar primvars (`float x = 0.5`) | ✅ | rendered | Read uninitialised memory before 0082; doubles and ints now converted |
 | Implicit surfaces (Sphere, Cube...) | ✅ | `bench_implicit.py` 6/6 | Our scene index meshes them, 64 segments, smooth normals (A1, 0083) |
 | OpenVDB volumes | ✅ | phase 5, `bench_settings.py` | `openvdbAsset` only; Houdini `vel`/`Cd` aliased (K-33, 0086) |
-| Volume step size, clipping per prim | ❌ | code read | |
+| Volume step size, object space, velocity scale per prim | ✅ | `bench_settings.py` | `primvars:cycles:volume:*`; volumes read their primvars since 0125 (K-85); no clipping in Cycles 5.3 |
 
 ## Lights and camera
 
@@ -53,7 +53,7 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | Camera exposure | ✅ | `bench_camera.py` | Times the render settings' film exposure (K-71, 0114) |
 | Crop (`dataWindowNDC`), pixel aspect | ✅ | `bench_camera.py` | Under husk, from its render settings (K-77, 0119) |
 | `disableDepthOfField`, `aspectRatioConformPolicy` | ✅ | `bench_camera.py` | Policy from the render settings under husk (K-78, 0120) |
-| Camera motion blur | 🟡 | upstream | Two samples: linear only |
+| Camera motion blur | ✅ | `bench_motion.py` camera cases, 2026-10-09 | Every sample the scene gives inside the shutter, not only two: a camera turning back mid-shutter blurs back and forth. Cycles spaces the steps evenly over the shutter, so keys spaced unevenly inside it shift where the blur is densest, not how far it reaches |
 | Camera switch without manual restart | ✅ | phase 25 | |
 
 ## Rendering and output
@@ -73,7 +73,7 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | Per-object ray visibility, holdout, shadow catcher, light groups, caustics flags | ✅ | `bench_settings.py` | `primvars:cycles:object:*` and Karma's visibility/holdout (K-27, 0088); light group passes since 0092 |
 | Render tags / purposes | ✅ | checked in Houdini | Honoured live (K-28, 0090) |
 | Batch mode under husk | ✅ | measured | `background = true` brings nothing (K-29); crop, pixel aspect, conform policy read from husk's settings (K-77, K-78) |
-| GL display driver | 🟡 | user's viewport | Correct on OpenGL Hgi; falls back under Vulkan and husk |
+| GL display driver | ✅ | user's viewport; agent's MCP session, 2026-10-09 | Houdini 22's own viewport is Vulkan ("Houdini VK", the default), but it ships only `hgiGL`: a delegate always gets an OpenGL Hgi and the display driver works under it (checked live, Cycles CPU in a Houdini VK viewport). The output driver remains for husk, which has no Hgi, and for a future Hgi that is not OpenGL |
 | Viewport interactivity | ✅ | timestamped live log | K-31 closed 2026-10-08: 871 restarts by hand, first sample 19 ms median, no host-thread pass over 50 ms |
 
 ## Materials - native Cycles
@@ -161,8 +161,9 @@ surface models (`surface_audit.py`, K-63). On 2026-10-07 the numbers were
 | `uniform_edf` and the other EDFs | 🟡 | All become `emission` |
 | Chiang hair BSDF, roughness, absorption nodes | ✅ | Exact vs native principled hair, 4 pairs < 1e-3 |
 | `switch`, `swizzle`, `extract`, `ramp4`, `splitlr/tb` | ❌ | Need a mechanism the mapping lacks |
-| Matrices, alpha compositing, `time`/`frame` | ❌ | No Cycles equivalent |
-| `colorcorrect`, `hsvadjust`, `curveadjust`, triplanar, Houdini `hmtlx*`, 2D patterns, `blur` | ❌ | Feasible, not done |
+| Alpha compositing | ✅ | Own nodegraphs, 8 nodes same as Karma (K-84, 0125) |
+| Matrices, `time`/`frame` | ❌ | No Cycles equivalent (section E of KNOWN_ISSUES) |
+| `colorcorrect`, `hsvadjust`, `curveadjust`, triplanar, Houdini `hmtlx*`, 2D patterns, `blur`, `hextilednormalmap` | ✅ | Through their nodegraphs (`mtlx_coverage.py`); `hextilednormalmap` from the delegate's own (K-84) |
 
 ## Houdini integration
 

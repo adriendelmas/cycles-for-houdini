@@ -299,6 +299,14 @@ CASES = [
      img[24, RES // 2, 2] > 3 * img[24, RES // 2, 0] else
      "bottom %s, top %s: expected red below, blue above"
      % (img[40, RES // 2, :3].round(3), img[24, RES // 2, :3].round(3))),
+    # A volume's own primvars: hidden from camera rays, the dome shows
+    # through (volumes read no primvar before 0125).
+    ("volume_hidden_camera", VOLUME.replace(
+        "        rel field:density = </world/vol/density>",
+        "        rel field:density = </world/vol/density>" + chr(10) +
+        "        bool primvars:cycles:object:visibility:camera = 0"), "", [],
+     lambda img: None if centre(img)[0] > 0.95 and abs(centre(img)[0] - centre(img)[1]) < 0.05 else
+     "centre %s, expected the dome through a camera-invisible volume" % centre(img).round(3)),
     ("volume_cd", VOLUME, "", [],
      lambda img: None if centre(img)[0] > 2.0 * centre(img)[1] else
      "volume %s, expected red from the Cd field" % centre(img).round(3)),

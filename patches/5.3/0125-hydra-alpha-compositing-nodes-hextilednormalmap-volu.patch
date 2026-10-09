@@ -1,0 +1,460 @@
+From 97c8f5bf99b04c58f7e6a491e31cd6f9a4d29f4f Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Fri, 9 Oct 2026 19:37:52 +0200
+Subject: [PATCH 125/125] hydra: alpha compositing nodes, hextilednormalmap,
+ volume primvars
+
+MaterialX's compositing group (over, in, out, mask, matte, disjointover,
+premult, unpremult) and hextilednormalmap exist in Houdini's library as
+shader code only; the delegate now ships nodegraphs for them, the spec's
+formulas, each mixed over bg by mix. A constant colour4's alpha is handed
+to the readers of a separate4's outa, as an image's already was: they read
+the red channel before. The eight compositing nodes match Karma (K-84).
+
+A volume's initial dirty bits left out primvars, so it read none of its
+own. It now reads cycles:object:* like any geometry, and three volume
+settings: cycles:volume:step_size, object_space and velocity_scale (K-85).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/mtlx_expand.cpp   |  38 +++++
+ src/hydra/mtlx_nodegraphs.h | 321 ++++++++++++++++++++++++++++++++++++
+ src/hydra/volume.cpp        |  24 ++-
+ 3 files changed, 382 insertions(+), 1 deletion(-)
+
+diff --git a/src/hydra/mtlx_expand.cpp b/src/hydra/mtlx_expand.cpp
+index 12797a11..cc46b354 100644
+--- a/src/hydra/mtlx_expand.cpp
++++ b/src/hydra/mtlx_expand.cpp
+@@ -964,6 +964,43 @@ bool FoldThinFilm(Network &net)
+  * straight from an image, every reader of `outa` reads the image's `a`
+  * instead, which the mapping names `alpha`. `extract` and `swizzle` of
+  * channel 3 come here too, rewritten into a separate first. */
++/* The alpha of a constant colour4: a separate4 whose input is a value, not a
++ * wire, hands its `a` to every reader of `outa` as a value. Without it the
++ * compositing nodes (over, in, out, mask...) read the red channel for alpha
++ * (tools/mtlx_karma.py). */
++bool RouteConstantAlpha(Network &net)
++{
++  static const TfToken kIn("in"), kOuta("outa");
++  bool any = false;
++  for (const auto &[name, node] : net.nodes) {
++    if (node.typeId != TfToken("ND_separate4_color4")) {
++      continue;
++    }
++    const auto in = node.conns.find(kIn);
++    if (in != node.conns.end() && !in->second.empty()) {
++      continue;
++    }
++    const auto value = node.params.find(kIn);
++    if (value == node.params.end() || !value->second.IsHolding<GfVec4f>()) {
++      continue;
++    }
++    const float alpha = value->second.UncheckedGet<GfVec4f>()[3];
++    for (auto &[otherName, other] : net.nodes) {
++      for (auto &[input, list] : other.conns) {
++        const size_t before = list.size();
++        std::erase_if(list, [&](const Conn &conn) {
++          return conn.upstream == name && conn.output == kOuta;
++        });
++        if (list.size() != before) {
++          other.params[input] = VtValue(alpha);
++          any = true;
++        }
++      }
++    }
++  }
++  return any;
++}
++
+ bool RouteImageAlpha(Network &net)
+ {
+   static const TfToken kIn("in"), kOuta("outa"), kA("a");
+@@ -1204,6 +1241,7 @@ HdMaterialNetworkSchema ExpandMaterialXNodegraphs(HdMaterialNetworkSchema networ
+     }
+   }
+   net.changed |= RouteImageAlpha(net);
++  net.changed |= RouteConstantAlpha(net);
+ 
+   return net.changed ? Write(net) : network;
+ }
+diff --git a/src/hydra/mtlx_nodegraphs.h b/src/hydra/mtlx_nodegraphs.h
+index 76a54c9c..55b314d9 100644
+--- a/src/hydra/mtlx_nodegraphs.h
++++ b/src/hydra/mtlx_nodegraphs.h
+@@ -676,5 +676,326 @@ static const char *const kCyclesMaterialXNodegraphs = R"MTLX(<?xml version="1.0"
+     <output name="out" type="color3" nodename="mixed" />
+   </nodegraph>
+ 
++)MTLX"
++    R"MTLX(
++  <!-- Alpha compositing (MaterialX stdlib, compositing group), written with
++       nodes the delegate translates; Houdini's library gives them as shader
++       code only. Each mixes its result over bg by `mix`, as the spec says.
++       A colour times a channel goes through a combine4 splat: a color4 times
++       a float read off separate4 came out wrong (mtlx_karma.py). -->
++
++  <!-- premult: rgb * a, a. -->
++  <nodegraph name="NG_cycles_premult_color4" nodedef="ND_premult_color4">
++    <separate4 name="s" type="multioutput">
++      <input name="in" type="color4" interfacename="in" />
++    </separate4>
++    <combine4 name="f" type="color4">
++      <input name="in1" type="float" nodename="s" output="outa" />
++      <input name="in2" type="float" nodename="s" output="outa" />
++      <input name="in3" type="float" nodename="s" output="outa" />
++      <input name="in4" type="float" value="1" />
++    </combine4>
++    <multiply name="o" type="color4">
++      <input name="in1" type="color4" interfacename="in" />
++      <input name="in2" type="color4" nodename="f" />
++    </multiply>
++    <output name="out" type="color4" nodename="o" />
++  </nodegraph>
++
++  <!-- unpremult: rgb / a, a; passed through where a is 0. -->
++  <nodegraph name="NG_cycles_unpremult_color4" nodedef="ND_unpremult_color4">
++    <separate4 name="s" type="multioutput">
++      <input name="in" type="color4" interfacename="in" />
++    </separate4>
++    <divide name="inv" type="float">
++      <input name="in1" type="float" value="1" />
++      <input name="in2" type="float" nodename="s" output="outa" />
++    </divide>
++    <ifgreater name="k" type="float">
++      <input name="value1" type="float" nodename="s" output="outa" />
++      <input name="value2" type="float" value="0" />
++      <input name="in1" type="float" nodename="inv" />
++      <input name="in2" type="float" value="1" />
++    </ifgreater>
++    <combine4 name="f" type="color4">
++      <input name="in1" type="float" nodename="k" />
++      <input name="in2" type="float" nodename="k" />
++      <input name="in3" type="float" nodename="k" />
++      <input name="in4" type="float" value="1" />
++    </combine4>
++    <multiply name="o" type="color4">
++      <input name="in1" type="color4" interfacename="in" />
++      <input name="in2" type="color4" nodename="f" />
++    </multiply>
++    <output name="out" type="color4" nodename="o" />
++  </nodegraph>
++
++  <!-- over: fg + bg * (1 - fg.a). -->
++  <nodegraph name="NG_cycles_over_color4" nodedef="ND_over_color4">
++    <separate4 name="sf" type="multioutput">
++      <input name="in" type="color4" interfacename="fg" />
++    </separate4>
++    <subtract name="oma" type="float">
++      <input name="in1" type="float" value="1" />
++      <input name="in2" type="float" nodename="sf" output="outa" />
++    </subtract>
++    <combine4 name="b_k" type="color4">
++      <input name="in1" type="float" nodename="oma" />
++      <input name="in2" type="float" nodename="oma" />
++      <input name="in3" type="float" nodename="oma" />
++      <input name="in4" type="float" nodename="oma" />
++    </combine4>
++    <multiply name="b" type="color4">
++      <input name="in1" type="color4" interfacename="bg" />
++      <input name="in2" type="color4" nodename="b_k" />
++    </multiply>
++    <add name="r" type="color4">
++      <input name="in1" type="color4" interfacename="fg" />
++      <input name="in2" type="color4" nodename="b" />
++    </add>
++    <mix name="m" type="color4">
++      <input name="fg" type="color4" nodename="r" />
++      <input name="bg" type="color4" interfacename="bg" />
++      <input name="mix" type="float" interfacename="mix" />
++    </mix>
++    <output name="out" type="color4" nodename="m" />
++  </nodegraph>
++
++  <!-- in: fg * bg.a. -->
++  <nodegraph name="NG_cycles_in_color4" nodedef="ND_in_color4">
++    <separate4 name="sb" type="multioutput">
++      <input name="in" type="color4" interfacename="bg" />
++    </separate4>
++    <combine4 name="r_k" type="color4">
++      <input name="in1" type="float" nodename="sb" output="outa" />
++      <input name="in2" type="float" nodename="sb" output="outa" />
++      <input name="in3" type="float" nodename="sb" output="outa" />
++      <input name="in4" type="float" nodename="sb" output="outa" />
++    </combine4>
++    <multiply name="r" type="color4">
++      <input name="in1" type="color4" interfacename="fg" />
++      <input name="in2" type="color4" nodename="r_k" />
++    </multiply>
++    <mix name="m" type="color4">
++      <input name="fg" type="color4" nodename="r" />
++      <input name="bg" type="color4" interfacename="bg" />
++      <input name="mix" type="float" interfacename="mix" />
++    </mix>
++    <output name="out" type="color4" nodename="m" />
++  </nodegraph>
++
++  <!-- out: fg * (1 - bg.a). -->
++  <nodegraph name="NG_cycles_out_color4" nodedef="ND_out_color4">
++    <separate4 name="sb" type="multioutput">
++      <input name="in" type="color4" interfacename="bg" />
++    </separate4>
++    <subtract name="oma" type="float">
++      <input name="in1" type="float" value="1" />
++      <input name="in2" type="float" nodename="sb" output="outa" />
++    </subtract>
++    <combine4 name="r_k" type="color4">
++      <input name="in1" type="float" nodename="oma" />
++      <input name="in2" type="float" nodename="oma" />
++      <input name="in3" type="float" nodename="oma" />
++      <input name="in4" type="float" nodename="oma" />
++    </combine4>
++    <multiply name="r" type="color4">
++      <input name="in1" type="color4" interfacename="fg" />
++      <input name="in2" type="color4" nodename="r_k" />
++    </multiply>
++    <mix name="m" type="color4">
++      <input name="fg" type="color4" nodename="r" />
++      <input name="bg" type="color4" interfacename="bg" />
++      <input name="mix" type="float" interfacename="mix" />
++    </mix>
++    <output name="out" type="color4" nodename="m" />
++  </nodegraph>
++
++  <!-- mask: bg * fg.a. -->
++  <nodegraph name="NG_cycles_mask_color4" nodedef="ND_mask_color4">
++    <separate4 name="sf" type="multioutput">
++      <input name="in" type="color4" interfacename="fg" />
++    </separate4>
++    <combine4 name="r_k" type="color4">
++      <input name="in1" type="float" nodename="sf" output="outa" />
++      <input name="in2" type="float" nodename="sf" output="outa" />
++      <input name="in3" type="float" nodename="sf" output="outa" />
++      <input name="in4" type="float" nodename="sf" output="outa" />
++    </combine4>
++    <multiply name="r" type="color4">
++      <input name="in1" type="color4" interfacename="bg" />
++      <input name="in2" type="color4" nodename="r_k" />
++    </multiply>
++    <mix name="m" type="color4">
++      <input name="fg" type="color4" nodename="r" />
++      <input name="bg" type="color4" interfacename="bg" />
++      <input name="mix" type="float" interfacename="mix" />
++    </mix>
++    <output name="out" type="color4" nodename="m" />
++  </nodegraph>
++
++  <!-- matte: fg.rgb * fg.a + bg.rgb * (1 - fg.a), fg.a + bg.a * (1 - fg.a). -->
++  <nodegraph name="NG_cycles_matte_color4" nodedef="ND_matte_color4">
++    <separate4 name="sf" type="multioutput">
++      <input name="in" type="color4" interfacename="fg" />
++    </separate4>
++    <combine4 name="f" type="color4">
++      <input name="in1" type="float" nodename="sf" output="outa" />
++      <input name="in2" type="float" nodename="sf" output="outa" />
++      <input name="in3" type="float" nodename="sf" output="outa" />
++      <input name="in4" type="float" value="1" />
++    </combine4>
++    <multiply name="a" type="color4">
++      <input name="in1" type="color4" interfacename="fg" />
++      <input name="in2" type="color4" nodename="f" />
++    </multiply>
++    <subtract name="oma" type="float">
++      <input name="in1" type="float" value="1" />
++      <input name="in2" type="float" nodename="sf" output="outa" />
++    </subtract>
++    <combine4 name="b_k" type="color4">
++      <input name="in1" type="float" nodename="oma" />
++      <input name="in2" type="float" nodename="oma" />
++      <input name="in3" type="float" nodename="oma" />
++      <input name="in4" type="float" nodename="oma" />
++    </combine4>
++    <multiply name="b" type="color4">
++      <input name="in1" type="color4" interfacename="bg" />
++      <input name="in2" type="color4" nodename="b_k" />
++    </multiply>
++    <add name="r" type="color4">
++      <input name="in1" type="color4" nodename="a" />
++      <input name="in2" type="color4" nodename="b" />
++    </add>
++    <mix name="m" type="color4">
++      <input name="fg" type="color4" nodename="r" />
++      <input name="bg" type="color4" interfacename="bg" />
++      <input name="mix" type="float" interfacename="mix" />
++    </mix>
++    <output name="out" type="color4" nodename="m" />
++  </nodegraph>
++
++  <!-- disjointover: fg + bg while fg.a + bg.a <= 1, else
++       fg.rgb + bg.rgb * (1 - fg.a) / bg.a; alpha min(fg.a + bg.a, 1). -->
++  <nodegraph name="NG_cycles_disjointover_color4" nodedef="ND_disjointover_color4">
++    <separate4 name="sf" type="multioutput">
++      <input name="in" type="color4" interfacename="fg" />
++    </separate4>
++    <separate4 name="sb" type="multioutput">
++      <input name="in" type="color4" interfacename="bg" />
++    </separate4>
++    <add name="sum" type="float">
++      <input name="in1" type="float" nodename="sf" output="outa" />
++      <input name="in2" type="float" nodename="sb" output="outa" />
++    </add>
++    <subtract name="oma" type="float">
++      <input name="in1" type="float" value="1" />
++      <input name="in2" type="float" nodename="sf" output="outa" />
++    </subtract>
++    <divide name="q" type="float">
++      <input name="in1" type="float" nodename="oma" />
++      <input name="in2" type="float" nodename="sb" output="outa" />
++    </divide>
++    <ifgreater name="x" type="float">
++      <input name="value1" type="float" nodename="sum" />
++      <input name="value2" type="float" value="1" />
++      <input name="in1" type="float" nodename="q" />
++      <input name="in2" type="float" value="1" />
++    </ifgreater>
++    <combine4 name="b_k" type="color4">
++      <input name="in1" type="float" nodename="x" />
++      <input name="in2" type="float" nodename="x" />
++      <input name="in3" type="float" nodename="x" />
++      <input name="in4" type="float" nodename="x" />
++    </combine4>
++    <multiply name="b" type="color4">
++      <input name="in1" type="color4" interfacename="bg" />
++      <input name="in2" type="color4" nodename="b_k" />
++    </multiply>
++    <add name="r" type="color4">
++      <input name="in1" type="color4" interfacename="fg" />
++      <input name="in2" type="color4" nodename="b" />
++    </add>
++    <separate4 name="sr" type="multioutput">
++      <input name="in" type="color4" nodename="r" />
++    </separate4>
++    <min name="alpha" type="float">
++      <input name="in1" type="float" nodename="sum" />
++      <input name="in2" type="float" value="1" />
++    </min>
++    <combine4 name="c" type="color4">
++      <input name="in1" type="float" nodename="sr" output="outr" />
++      <input name="in2" type="float" nodename="sr" output="outg" />
++      <input name="in3" type="float" nodename="sr" output="outb" />
++      <input name="in4" type="float" nodename="alpha" />
++    </combine4>
++    <mix name="m" type="color4">
++      <input name="fg" type="color4" nodename="c" />
++      <input name="bg" type="color4" interfacename="bg" />
++      <input name="mix" type="float" interfacename="mix" />
++    </mix>
++    <output name="out" type="color4" nodename="m" />
++  </nodegraph>
++
++  <!-- hextilednormalmap: the hex-tiled image read as data, its green flipped
++       on request (y + flip * (1 - 2y)), through normalmap scaled by
++       strength. Houdini's library gives it as shader code only. -->
++  <nodegraph name="NG_cycles_hextilednormalmap_vector3" nodedef="ND_hextilednormalmap_vector3">
++    <convert name="def" type="color3">
++      <input name="in" type="vector3" interfacename="default" />
++    </convert>
++    <hextiledimage name="img" type="color3">
++      <input name="file" type="filename" interfacename="file" colorspace="raw" />
++      <input name="default" type="color3" nodename="def" />
++      <input name="texcoord" type="vector2" interfacename="texcoord" />
++      <input name="tiling" type="vector2" interfacename="tiling" />
++      <input name="rotation" type="float" interfacename="rotation" />
++      <input name="rotationrange" type="vector2" interfacename="rotationrange" />
++      <input name="scale" type="float" interfacename="scale" />
++      <input name="scalerange" type="vector2" interfacename="scalerange" />
++      <input name="offset" type="float" interfacename="offset" />
++      <input name="offsetrange" type="vector2" interfacename="offsetrange" />
++      <input name="falloff" type="float" interfacename="falloff" />
++    </hextiledimage>
++    <convert name="v" type="vector3">
++      <input name="in" type="color3" nodename="img" />
++    </convert>
++    <separate3 name="s" type="multioutput">
++      <input name="in" type="vector3" nodename="v" />
++    </separate3>
++    <convert name="flip" type="float">
++      <input name="in" type="boolean" interfacename="flip_g" />
++    </convert>
++    <multiply name="twoy" type="float">
++      <input name="in1" type="float" nodename="s" output="outy" />
++      <input name="in2" type="float" value="2" />
++    </multiply>
++    <subtract name="d" type="float">
++      <input name="in1" type="float" value="1" />
++      <input name="in2" type="float" nodename="twoy" />
++    </subtract>
++    <multiply name="fd" type="float">
++      <input name="in1" type="float" nodename="flip" />
++      <input name="in2" type="float" nodename="d" />
++    </multiply>
++    <add name="y2" type="float">
++      <input name="in1" type="float" nodename="s" output="outy" />
++      <input name="in2" type="float" nodename="fd" />
++    </add>
++    <combine3 name="c" type="vector3">
++      <input name="in1" type="float" nodename="s" output="outx" />
++      <input name="in2" type="float" nodename="y2" />
++      <input name="in3" type="float" nodename="s" output="outz" />
++    </combine3>
++    <normalmap name="n" type="vector3">
++      <input name="in" type="vector3" nodename="c" />
++      <input name="scale" type="float" interfacename="strength" />
++      <input name="normal" type="vector3" interfacename="normal" />
++      <input name="tangent" type="vector3" interfacename="tangent" />
++      <input name="bitangent" type="vector3" interfacename="bitangent" />
++    </normalmap>
++    <output name="out" type="vector3" nodename="n" />
++  </nodegraph>
++
+ </materialx>
+ )MTLX";
+diff --git a/src/hydra/volume.cpp b/src/hydra/volume.cpp
+index c8e31280..07d74272 100644
+--- a/src/hydra/volume.cpp
++++ b/src/hydra/volume.cpp
+@@ -9,6 +9,7 @@
+ #include "hydra/util.h"
+ #include "scene/volume.h"
+ 
++#include <pxr/imaging/hd/primvarsSchema.h>
+ #include <pxr/imaging/hd/volumeFieldBindingSchema.h>
+ 
+ HDCYCLES_NAMESPACE_OPEN_SCOPE
+@@ -26,7 +27,9 @@ HdCyclesVolume::~HdCyclesVolume() = default;
+ HdDirtyBits HdCyclesVolume::GetInitialDirtyBitsMask() const
+ {
+   HdDirtyBits bits = HdCyclesGeometry::GetInitialDirtyBitsMask();
+-  bits |= HdChangeTracker::DirtyVolumeField;
++  /* Primvars too: without them a volume never read its own
++   * (`cycles:volume:*`, nor `cycles:object:*`). */
++  bits |= HdChangeTracker::DirtyVolumeField | HdChangeTracker::DirtyPrimvar;
+   return bits;
+ }
+ 
+@@ -34,6 +37,25 @@ void HdCyclesVolume::Populate(HdSceneDelegate *sceneDelegate, HdDirtyBits dirtyB
+ {
+   Scene *const scene = (Scene *)_geom->get_owner();
+ 
++  /* Per-volume ray marching, as constant primvars (as `cycles:object:*` for
++   * objects): `cycles:volume:step_size` (0, the default, sizes the step from
++   * the voxels), `object_space` (the step in the object's units) and
++   * `velocity_scale` (the velocity field's weight in motion blur). */
++  if (dirtyBits & HdChangeTracker::DirtyPrimvar) {
++    const HdPrimvarsSchema primvars = HdPrimvarsSchema::GetFromParent(
++        GetPrim(sceneDelegate, GetId()).dataSource);
++    const VtValue step = ReadPrimvar(primvars, TfToken("cycles:volume:step_size"));
++    _geom->set_step_size(step.CanCast<float>() ? VtValue::Cast<float>(step).UncheckedGet<float>() :
++                                                 0.0f);
++    const VtValue objectSpace = ReadPrimvar(primvars, TfToken("cycles:volume:object_space"));
++    _geom->set_object_space(objectSpace.CanCast<bool>() &&
++                            VtValue::Cast<bool>(objectSpace).UncheckedGet<bool>());
++    const VtValue velocity = ReadPrimvar(primvars, TfToken("cycles:volume:velocity_scale"));
++    _geom->set_velocity_scale(velocity.CanCast<float>() ?
++                                  VtValue::Cast<float>(velocity).UncheckedGet<float>() :
++                                  1.0f);
++  }
++
+   if (dirtyBits & HdChangeTracker::DirtyVolumeField) {
+     const HdSceneIndexPrim prim = GetPrim(sceneDelegate, GetId());
+     HdVolumeFieldBindingSchema bindings = HdVolumeFieldBindingSchema::GetFromParent(

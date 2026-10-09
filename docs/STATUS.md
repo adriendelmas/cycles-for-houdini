@@ -2433,3 +2433,11 @@ outil `tools/gui_capture.py` pour ces vérifications.
 **Texture manquante (0124, K-83).** Un fichier introuvable donnait le
 magenta de Cycles ; il donne maintenant le `fallback` de USD (noir par
 défaut), comme Karma.
+
+**Composition alpha, volumes (0125, K-84, K-85).** Les nœuds de composition
+MaterialX (over, in, out, mask, matte, disjointover, premult, unpremult) et
+`hextilednormalmap` n'étaient pas rendus : nodegraphs maison, et l'alpha
+d'une constante color4 est maintenant transmise. Les 8 nœuds de composition
+sont identiques à Karma. Les volumes ne lisaient aucune de leurs primvars ;
+ils lisent maintenant `cycles:object:*` et `cycles:volume:*` (pas,
+espace objet, échelle de vélocité).
