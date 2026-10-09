@@ -14,9 +14,10 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | Per-vertex colours and vector primvars | ✅ | `geomcolor` bench case exact | Garbage until 2026-10-07 (K-19, patch 0075) |
 | Face-varying (corner) normals | ✅ | bit-identical vs per-point normals | |
 | Smooth/flat from authored normals | ✅ | measured | |
-| Catmull-Clark subdivision, creases, corners | ✅ | measured | Always for `catmullClark`, capped by `cycles:max_subdivisions` (K-30, 0084) |
+| Catmull-Clark subdivision, creases, corners, boundary rules | ✅ | `bench_subdiv.py` 7/7 vs Karma | Always for `catmullClark`, capped by `cycles:max_subdivisions` (K-30, 0084); the tags were never read before 0115 (K-72) |
 | Adaptive dicing rate, dicing camera | ✅ | 10.3 M → expected triangle counts | Setting `cycles:dicing_rate`, clamped ≥ 0.1 |
-| Holes, left-handed subdivided meshes | ❌ | code read | `// TODO: Handle hole indices` |
+| Holes on subdivided meshes | ✅ | `bench_subdiv.py` | Not diced, still shaping the neighbours (K-72, 0115) |
+| Left-handed subdivided meshes | ❌ | code read | |
 | Geom subsets (per-face materials) | ✅ | upstream | Face sets only |
 | Transform motion blur | ✅ | 179 px blur measured | 3 steps, evenly spaced |
 | Deformation blur (sampled points) | ✅ | measured, mesh/curves/points | |
@@ -25,7 +26,7 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | Curves: every USD basis and wrap | ✅ | `bench_curves.py` 5/5 | Bézier, B-spline, Catmull-Rom, periodic, pinned resampled to keys (K-20, 0081); indexed handled, untestable from a file |
 | Curves: `widths` `varying` | ✅ | `bench_curves.py` | Blended per key (K-21, 0081) |
 | Thick 3D curves | ✅ | rendered, end-on test | `cycles:curve_shape` auto/thick/ribbon, live; default auto = thick (K-22, 0081) |
-| Points | ✅ | phase 5 | `varying` widths read as per-point (0081) |
+| Points | ✅ | `bench_points.py` 5/5 vs Karma | `varying` widths read as per-point (0081); no widths: width 1 as Hydra and Karma (K-74, 0117) |
 | Point instancer, nested instancers | ✅ | phase 3 | |
 | Instance motion blur | ✅ | `bench_motion.py` 6/6 | Positions and instancer transform sampled over the shutter (K-23, 0082) |
 | Per-instance primvars | ✅ | `bench_instances.py` 5/5 | `instance` primvars as object attributes, nested instancers, `displayColor` → Object Info colour (0082) |
@@ -38,15 +39,18 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 
 | Feature | State | Verified by | Notes |
 |---|---|---|---|
-| Rect, disk, sphere, spot, distant, dome | ✅ | within 1 % of Karma | Units measured per type |
+| Rect, disk, sphere, spot, distant, dome | ✅ | `bench_lights.py` 24/24 vs Karma | Units measured per type; spot softness converted from USD's angle to Cycles' cosine (K-69, 0112) |
 | Agreement with Karma on materials | ✅ | `bench_agree.py` 21/21 | Diffuse, dielectric, metal, glass, coat, emission, preview surface: floor to 1 %, spheres to 25 %, glass loose (2026-10-08) |
 | Cylinder light | 🟡 | 0.95 of Karma | Rectangle approximation, one-sided |
-| IES, colour temperature, textures | ✅ | upstream | |
+| IES profiles | ✅ | `bench_lights.py` | Read along the emission direction, in candelas, `normalize` and `angleScale` (K-70, 0113) - blurred and 30x off before |
+| Colour temperature, emission focus and tint | ✅ | `bench_lights.py` | Focus in the light shader (K-69, 0112) |
+| Dome and rect light textures | ✅ | `bench_dome.py`, `bench_rect.py` | Dome in USD's lat-long orientation and `poleAxis` (K-67, 0111); rect texture no longer mirrored (K-68, 0112) |
 | `visibleInPrimaryRay`, `shadowEnable` | ✅ | upstream | |
 | Light linking, shadow linking | ✅ | `bench_settings.py` | Hydra's light linking scene index → Cycles light and shadow sets (K-24, 0089); no light filters |
 | `shadow:color`, `diffuse`/`specular` multipliers, light filters | ❌ | code read | |
 | Dome `textureFormat` | ❌ | code read | Lat-long assumed |
-| Camera: perspective, ortho, DoF, apertures | ✅ | phase 2 | |
+| Camera: perspective, ortho, DoF, apertures, lens shift, aspect conform | ✅ | `bench_camera.py` 7/7 vs Karma | |
+| Camera exposure | ✅ | `bench_camera.py` | Times the render settings' film exposure (K-71, 0114) |
 | Camera motion blur | 🟡 | upstream | Two samples: linear only |
 | Camera switch without manual restart | ✅ | phase 25 | |
 
@@ -82,7 +86,7 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | Copernicus `op:` textures, live | ✅ | phases 23-29 | In Houdini only; husk needs flattening |
 | Material settings (`displacement_method`...) | ✅ | phase 20 | |
 | Enum validation | ✅ | phase 14 | |
-| 8-bit sRGB auto-detection under ACES | 🟡 | A21 | Falls back to linear; menu as workaround |
+| 8-bit sRGB auto-detection under ACES | ✅ | `bench_usdtex.py` | `auto` picks the config's sRGB texture space (K-66, 0110) |
 | Viewport preview from the Cycles graph | 🟡 | phase 27 | One image per input; no `mix`, no procedurals |
 
 ## Materials - UsdPreviewSurface
@@ -90,14 +94,16 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | Feature | State | Notes |
 |---|---|---|
 | Surface inputs | ✅ | |
-| `UsdUVTexture` wrap, file | ✅ | |
+| `UsdUVTexture` wrap, file | ✅ | `bench_usdtex.py` | `repeat`, `useMetadata` (black) translated (K-66, 0110) |
 | `UsdUVTexture` per-channel outputs | ✅ | Were averaged (K-56); 4 bench cases |
 | `UsdUVTexture` `scale`/`bias` | ✅ | rgb only (K-15) |
 | `UsdUVTexture` `fallback` | ❌ | |
-| `UsdTransform2d` | 🟡 | Mapped to `mapping` (K-15); untested |
-| `sourceColorSpace` | ✅ | `raw`/`sRGB`/`auto` spelled for Cycles |
+| `UsdTransform2d` | ✅ | `bench_usdtex.py`: rotation, translation, scale against Karma |
+| `sourceColorSpace` | ✅ | Read from Hydra's colour-space field, resolved in the OCIO config (K-66, 0110) |
 | Preview surface defaults | ✅ | Diffuse 0.18 pinned - was 0.8 (K-55) |
-| `displacement`, `occlusion`, `opacityThreshold` | ❌ | |
+| `displacement` | ✅ | Cycles displacement node (K-75, 0117) |
+| `opacityThreshold`, `useSpecularWorkflow` | ✅ | Four mapping variants (K-65, 0110) |
+| `occlusion` | ❌ | No Cycles counterpart |
 
 ## Materials - MaterialX
 
@@ -121,7 +127,7 @@ surface models (`surface_audit.py`, K-63). On 2026-10-07 the numbers were
 | `open_pbr_surface`, `disney_principled`, `gltf_pbr` | ✅ | Own tables since 2026-10-07 (K-05); defaults verified by `mtlx_defaults.py`; each lists its dropped inputs |
 | Unauthored inputs of every surface | ✅ | MaterialX / USD defaults pinned (K-55) |
 | `image`, `tiledimage`, `hextiledimage`, `gltf_image` | ✅ | `constant` wrap only exact for black |
-| `normalmap`, `bump`, `displacement` | ✅ | |
+| `normalmap`, `bump`, `displacement` | ✅ | `bench_normalmap.py`, `bench_displace.py`; per-vertex UVs broke the tangent space before 0116 (K-73) |
 | `heighttonormal` | 🐞 | Outputs a world normal, not a tangent map (K-12) |
 | `texcoord`, `position`, `normal`, `tangent` | 🟡 | `position` object space ✅; `normal`/`tangent` world space; no UV set index |
 | `geomcolor` | ✅ | Exact since 2026-10-07 (K-06, K-19); `index` not carried |
