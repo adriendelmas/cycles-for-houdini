@@ -1,0 +1,100 @@
+From c0f2f2ed3b0552dd6a23ec001bedb48db0940308 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Fri, 9 Oct 2026 18:51:10 +0200
+Subject: [PATCH 124/124] hydra: UsdUVTexture fallback for a file that cannot
+ be found
+
+A texture whose file does not exist renders USD's fallback in Karma (black
+by default); Cycles showed its missing-image magenta. When the resolver
+cannot find the file (and the path is no UDIM pattern nor a COP), the
+texture's scale-and-bias step outputs rgb * 0 + fallback, the single
+channels taken after it; alpha stays 1 (K-83, tools/bench_usdtex.py).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp | 43 +++++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 40 insertions(+), 3 deletions(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index 8e99cb57..66c42e6c 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -3280,7 +3280,8 @@ class UsdToCycles {
+   const UsdToCyclesMapping UsdPreviewSurfaceCutout = MakeUsdPreviewSurface(false, true);
+   const UsdToCyclesMapping UsdPreviewSurfaceSpecular = MakeUsdPreviewSurface(true, false);
+   const UsdToCyclesMapping UsdPreviewSurfaceSpecularCutout = MakeUsdPreviewSurface(true, true);
+-  const UsdToCyclesTexture UsdUVTexture = [] {
++  static UsdToCyclesTexture MakeUsdUVTexture(const bool missing)
++  {
+     UsdToCyclesTexture m{"image_texture",
+                          {
+                              {CyclesMaterialTokens->st, ustring("vector")},
+@@ -3299,7 +3300,7 @@ class UsdToCycles {
+                                   "vector_math",
+                                   {{"Vector", "sep:Color"}},
+                                   {{ustring("math_type"), "multiply_add"},
+-                                   {ustring("vector2"), "1,1,1"},
++                                   {ustring("vector2"), missing ? "0,0,0" : "1,1,1"},
+                                    {ustring("vector3"), "0,0,0"}}};
+     sb.takesMainOutput = "Vector1";
+     sb.mainOutputName = "Color";
+@@ -3308,8 +3309,18 @@ class UsdToCycles {
+      * unwrapped texture used to repeat - Cycles' own default
+      * (tools/bench_usdtex.py). */
+     m.setFixedValues({{ustring("extension"), "black"}});
++    if (missing) {
++      /* A file the resolver could not find: USD's `fallback` instead of
++       * Cycles' magenta, as Karma does - rgb * 0 + fallback, the channels
++       * taken after it. ponytail: alpha stays the missing image's 1. */
++      m.setParameterName(TfToken("scale"), ustring(""));
++      m.setParameterName(TfToken("bias"), ustring(""));
++      m.setParameterName(TfToken("fallback"), ustring("sb:vector3"));
++    }
+     return m;
+-  }();
++  }
++  const UsdToCyclesTexture UsdUVTexture = MakeUsdUVTexture(false);
++  const UsdToCyclesTexture UsdUVTextureMissing = MakeUsdUVTexture(true);
+   const UsdToCyclesTransform2d UsdTransform2d = [] {
+     UsdToCyclesTransform2d m{"mapping", {}};
+     m.setFixedValues({{ustring("mapping_type"), "point"}});
+@@ -3339,6 +3350,31 @@ class UsdToCycles {
+                       (cutout ? &UsdPreviewSurfaceCutout : &UsdPreviewSurface);
+   }
+ 
++  /* UsdUVTexture whose file the resolver could not find (or with no file):
++   * the variant that outputs `fallback`. A UDIM pattern resolves to nothing
++   * by design and keeps the image. */
++  const UsdToCyclesMapping *missingTextureFor(const UsdToCyclesMapping *mapping,
++                                              HdMaterialNodeSchema nodeSchema) const
++  {
++    if (mapping != &UsdUVTexture) {
++      return mapping;
++    }
++    const auto ds = nodeSchema.GetParameters().Get(TfToken("file")).GetValue();
++    const VtValue v = ds ? ds->GetValue(0.0f) : VtValue();
++    if (!v.IsHolding<SdfAssetPath>()) {
++      return &UsdUVTextureMissing;
++    }
++    const SdfAssetPath &asset = v.UncheckedGet<SdfAssetPath>();
++    const std::string &path = asset.GetAssetPath();
++    if (!asset.GetResolvedPath().empty() || path.find("<UDIM>") != std::string::npos ||
++        path.find("%(UDIM)d") != std::string::npos || path.find("<UVTILE>") != std::string::npos ||
++        path.starts_with("op:") || path_exists(path))
++    {
++      return mapping;
++    }
++    return &UsdUVTextureMissing;
++  }
++
+   const UsdToCyclesMapping *findUsd(const TfToken &usdNodeType)
+   {
+     if (usdNodeType == CyclesMaterialTokens->UsdPreviewSurface) {
+@@ -4381,6 +4417,7 @@ unique_ptr<ShaderGraph> HdCyclesMaterial::BuildShaderGraph(HdMaterialNetworkSche
+         /* Check if any remapping is needed (e.g. for USDPreviewSurface to Cycles nodes). */
+         nodeDesc.mapping = sUsdToCyles->findUsd(nodeTypeIdToken);
+         nodeDesc.mapping = sUsdToCyles->previewFor(nodeDesc.mapping, nodeSchema);
++        nodeDesc.mapping = sUsdToCyles->missingTextureFor(nodeDesc.mapping, nodeSchema);
+         if (!nodeDesc.mapping) {
+           nodeDesc.mapping = FindMtlxMapping(nodeTypeId);
+         }

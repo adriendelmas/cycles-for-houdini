@@ -99,7 +99,7 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | `UsdUVTexture` wrap, file | ✅ | `bench_usdtex.py` | `repeat`, `useMetadata` (black) translated (K-66, 0110) |
 | `UsdUVTexture` per-channel outputs | ✅ | Were averaged (K-56); 4 bench cases |
 | `UsdUVTexture` `scale`/`bias` | ✅ | rgb only (K-15) |
-| `UsdUVTexture` `fallback` | ❌ | |
+| `UsdUVTexture` `fallback` | ✅ | When the file cannot be found, as Karma (K-83, 0124); alpha stays 1 |
 | `UsdTransform2d` | ✅ | `bench_usdtex.py`: rotation, translation, scale against Karma |
 | `sourceColorSpace` | ✅ | Read from Hydra's colour-space field, resolved in the OCIO config (K-66, 0110) |
 | Preview surface defaults | ✅ | Diffuse 0.18 pinned - was 0.8 (K-55) |

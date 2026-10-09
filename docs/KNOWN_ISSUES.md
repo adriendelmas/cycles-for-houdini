@@ -877,6 +877,14 @@ and a malformed one is dropped with a warning, as Karma ignores it. The
 robustness bench renders each scene three times, so an intermittent crash
 shows.
 
+### K-83 A missing UsdUVTexture file showed Cycles' magenta — confirmed — **fixed** (0124)
+`tools/bench_usdtex.py`: a texture whose file does not exist renders USD's
+`fallback` in Karma (black by default); Cycles showed its missing-image
+magenta whatever the fallback. When the resolver cannot find the file (and
+the path is no UDIM pattern nor a COP), the texture's scale-and-bias step
+now outputs rgb * 0 + fallback, the single channels taken after it.
+Kept: the alpha output stays 1.
+
 ## C. Houdini side
 
 ### K-40 `op:` textures fail under husk — confirmed

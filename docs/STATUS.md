@@ -2429,3 +2429,7 @@ moteur. Le délégué marquait bien les prims dans le suivi de changements de
 Hydra, ce qui ne resynchronise rien dans le viewport de Houdini. Chaque
 géométrie rééchantillonne maintenant ses transformations elle-même. Nouvel
 outil `tools/gui_capture.py` pour ces vérifications.
+
+**Texture manquante (0124, K-83).** Un fichier introuvable donnait le
+magenta de Cycles ; il donne maintenant le `fallback` de USD (noir par
+défaut), comme Karma.

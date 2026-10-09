@@ -153,6 +153,7 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0121` | hydra: `displayOpacity` constant des prims sans materiau -> alpha de l'objet, lue par la surface par defaut (melange transparent) (K-79) |
 | `0122` | hydra: la surface par defaut lit `displayColor` comme attribut (par sommet, face, coin), gris 0,8 en repli par instance (K-80) |
 | `0123` | hydra: flou de mouvement reactive en direct - chaque geometrie reechantillonne ses transformations sur l'obturateur sans passer par Hydra, dont le marquage ne resynchronisait rien dans le viewport de Houdini (K-81) ; topologie de maillage verifiee a la lecture, compteurs incoherents ecartes (plantage intermittent, K-82) |
+| `0124` | hydra: UsdUVTexture dont le fichier est introuvable -> `fallback` (noir par defaut) au lieu du magenta de Cycles (K-83) |
 
 ---
 

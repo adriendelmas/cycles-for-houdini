@@ -11,7 +11,8 @@ Cases: the plain read; a 2x tiling with repeat wrap; a quarter-turn
 rotation; a translation; scale and bias on the texture; an 8-bit PNG read
 as sRGB, as raw and with no colour space (auto); the same PNG through a
 MaterialX image, with and without a colour space; two UDIM tiles; a
-left-handed subdivided grid with UVs per corner and per vertex.
+left-handed subdivided grid with UVs per corner and per vertex; a missing
+file, with and without a fallback.
 
     hython tools/bench_usdtex.py
 
@@ -126,6 +127,10 @@ CASES = [
     # second spelling is the one Houdini writes.
     ("udim", "tile.<UDIM>.exr", ["float2 inputs:scale = (2, 1)"], []),
     ("udim_houdini", "tile.%(UDIM)d.exr", ["float2 inputs:scale = (2, 1)"], []),
+    # A file that does not exist: USD's fallback, black by default, where
+    # Cycles showed its magenta.
+    ("missing_default", "missing_file.exr", None, []),
+    ("missing_fallback", "missing_file.exr", None, ["float4 inputs:fallback = (0.2, 0.5, 0.8, 1)"]),
     # A left-handed subdivided grid, UVs per corner and per vertex.
     ("left_subd_corner_uv", "corners.exr", "LEFT", "faceVarying"),
     ("left_subd_vertex_uv", "corners.exr", "LEFT", "vertex"),
