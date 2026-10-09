@@ -1,0 +1,431 @@
+From a4b151aa4708540881738ca264ed0466bd7341dd Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Fri, 9 Oct 2026 18:16:59 +0200
+Subject: [PATCH 123/123] hydra: motion blur turned back on in a live viewport
+
+With the renderer started while disableMotionBlur was on, unticking it
+restarted the render but moving objects stayed sharp until the frame
+changed or the renderer was restarted. The delegate asked for every prim to
+be synced again by marking it dirty in Hydra's change tracker; in Houdini's
+viewport (Hydra 2) that synced nothing. Each geometry now keeps its prim's
+data source and the render index, and when the blur or the shutter changes
+the render pass has every prim sample its transforms, and its instances',
+again over the shutter (UpdateTransforms, shared with Sync; RefreshMotion).
+Deforming points keep their samples until their next sync (K-81, checked
+live through the MCP with tools/gui_capture.py).
+
+Mesh topology is checked as it is read: face vertex counts that do not add
+up to the indices, or negative ones, crashed Cycles' render threads now and
+then (two runs in five); such a mesh is dropped with a warning (K-82).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/geometry.h      |  15 +++
+ src/hydra/geometry.inl    | 275 ++++++++++++++++++++++----------------
+ src/hydra/mesh.cpp        |  25 ++++
+ src/hydra/render_pass.cpp |  14 +-
+ 4 files changed, 210 insertions(+), 119 deletions(-)
+
+diff --git a/src/hydra/geometry.h b/src/hydra/geometry.h
+index 365198c5..4c0e3cea 100644
+--- a/src/hydra/geometry.h
++++ b/src/hydra/geometry.h
+@@ -18,6 +18,8 @@ class HdCyclesTaggedPrim {
+  public:
+   virtual ~HdCyclesTaggedPrim() = default;
+   virtual void SetTagVisible(bool visible, PXR_NS::HdRenderParam *renderParam) = 0;
++  /* Motion blur or the shutter changed: sample the motion again. */
++  virtual void RefreshMotion(PXR_NS::HdRenderParam *renderParam) = 0;
+ };
+ 
+ template<typename Base, typename CyclesBase>
+@@ -36,6 +38,8 @@ class HdCyclesGeometry : public Base, public HdCyclesTaggedPrim {
+ 
+   void SetTagVisible(bool visible, PXR_NS::HdRenderParam *renderParam) override;
+ 
++  void RefreshMotion(PXR_NS::HdRenderParam *renderParam) override;
++
+  protected:
+   void _InitRepr(const PXR_NS::TfToken &reprToken, PXR_NS::HdDirtyBits *dirtyBits) override;
+ 
+@@ -68,6 +72,17 @@ class HdCyclesGeometry : public Base, public HdCyclesTaggedPrim {
+ 
+   void InitializeInstance(const int index);
+ 
++  /* The prim's transform (sampled over the shutter when blur is on) and its
++   * instances', onto the Cycles objects. */
++  void UpdateTransforms(PXR_NS::HdRenderIndex &index,
++                        const PXR_NS::HdContainerDataSourceHandle &primDs,
++                        PXR_NS::HdRenderParam *renderParam,
++                        CCL_NS::Scene *scene,
++                        bool xformDirty);
++
++  PXR_NS::HdRenderIndex *_renderIndex = nullptr;
++  PXR_NS::HdContainerDataSourceHandle _primDs;
++
+   PXR_NS::GfMatrix4d _geomTransform;
+   PXR_NS::GfMatrix4d _geomTransformSamples[kMotionSteps];
+   bool _geomTransformAnimated = false;
+diff --git a/src/hydra/geometry.inl b/src/hydra/geometry.inl
+index ab8e3106..70e3464b 100644
+--- a/src/hydra/geometry.inl
++++ b/src/hydra/geometry.inl
+@@ -3,6 +3,7 @@
+  *
+  * SPDX-License-Identifier: Apache-2.0 */
+ 
++#include "util/log.h"
+ #include "hydra/geometry.h"
+ #include "hydra/instancer.h"
+ #include "hydra/material.h"
+@@ -154,124 +155,16 @@ void HdCyclesGeometry<Base, CyclesBase>::Sync(HdSceneDelegate *sceneDelegate,
+     _instances[0]->set_pass_id(Base::GetPrimId() + 1);
+   }
+ 
+-  if (HdChangeTracker::IsTransformDirty(*dirtyBits, id)) {
+-    _geomTransform = GfMatrix4d(1.0);
+-    _geomTransformAnimated = false;
+-    for (int step = 0; step < kMotionSteps; ++step) {
+-      _geomTransformSamples[step] = GfMatrix4d(1.0);
+-    }
+-
+-    if (auto matrixDs = HdXformSchema::GetFromParent(primDs).GetMatrix()) {
+-      _geomTransform = matrixDs->GetTypedValue(0.0f);
+-
+-      const auto *const session = static_cast<const HdCyclesSession *>(renderParam);
+-      if (session->IsMotionBlurEnabled()) {
+-        /* Sample at evenly spaced times rather than at the data source's own
+-         * contributing sample times: Object::motion_time() spreads motion
+-         * steps linearly over the shutter, so irregular spacing would blur
+-         * along a distorted path. */
+-        const float open = session->GetShutterOpen();
+-        const float close = session->GetShutterClose();
+-
+-        for (int step = 0; step < kMotionSteps; ++step) {
+-          const float t = open + (close - open) * step / float(kMotionSteps - 1);
+-          _geomTransformSamples[step] = matrixDs->GetTypedValue(t);
+-          if (_geomTransformSamples[step] != _geomTransformSamples[0]) {
+-            _geomTransformAnimated = true;
+-          }
+-        }
+-        /* Blur is centred on the shutter, so drive the static transform from
+-         * the middle sample rather than from time zero. */
+-        if (_geomTransformAnimated) {
+-          _geomTransform = _geomTransformSamples[kMotionSteps / 2];
+-        }
+-      }
+-    }
+-  }
+-
++  _renderIndex = &sceneDelegate->GetRenderIndex();
++  _primDs = primDs;
+   if (HdChangeTracker::IsTransformDirty(*dirtyBits, id) ||
+       HdChangeTracker::IsInstancerDirty(*dirtyBits, id))
+   {
+-    auto *const instancer = static_cast<HdCyclesInstancer *>(
+-        sceneDelegate->GetRenderIndex().GetInstancer(Base::GetInstancerId()));
+-
+-    // Make sure the first object attribute is the instanceId
+-    assert(_instances[0]->attributes.size() >= 1 &&
+-           _instances[0]->attributes.front().name() == HdAovTokens->instanceId.GetString());
+-
+-    VtMatrix4dArray transforms;
+-    /* Instance transforms at the same evenly spaced shutter times as the
+-     * prim's own. Empty unless some instance moves during the shutter. */
+-    VtMatrix4dArray stepTransforms[kMotionSteps];
+-    bool instancesAnimated = false;
+-    if (instancer) {
+-      transforms = instancer->ComputeInstanceTransforms(id);
+-      _instances[0]->attributes.front() = ParamValue(HdAovTokens->instanceId.GetString(), +0.0f);
+-
+-      if (_motionBlur) {
+-        for (int step = 0; step < kMotionSteps; ++step) {
+-          const float t = _shutterOpen +
+-                          (_shutterClose - _shutterOpen) * step / float(kMotionSteps - 1);
+-          stepTransforms[step] = instancer->ComputeInstanceTransforms(id, t);
+-          /* Instances born or dying inside the shutter have no path to blur
+-           * along; leave every instance sharp rather than pair them wrongly. */
+-          if (stepTransforms[step].size() != transforms.size()) {
+-            instancesAnimated = false;
+-            break;
+-          }
+-          if (stepTransforms[step] != stepTransforms[0]) {
+-            instancesAnimated = true;
+-          }
+-        }
+-        if (instancesAnimated) {
+-          /* Like the prim's own transform: the static one is the middle of
+-           * the shutter, where the blur is centred. */
+-          transforms = stepTransforms[kMotionSteps / 2];
+-        }
+-      }
+-    }
+-    else {
+-      // Default to a single instance with an identity transform
+-      transforms.push_back(GfMatrix4d(1.0));
+-      _instances[0]->attributes.front() = ParamValue(HdAovTokens->instanceId.GetString(), -1.0f);
+-    }
+-
+-    const size_t oldSize = _instances.size();
+-    const size_t newSize = transforms.size();
+-
+-    // Resize instance list
+-    for (size_t i = newSize; i < oldSize; ++i) {
+-      static_cast<HdCyclesSession *>(renderParam)->ForgetObject(_instances[i]);
+-      lock.scene->delete_node(_instances[i]);
+-    }
+-    _instances.resize(newSize);
+-    for (size_t i = oldSize; i < newSize; ++i) {
+-      _instances[i] = lock.scene->create_node<Object>();
+-      InitializeInstance(static_cast<int>(i));
+-    }
+-
+-    // Update transforms of all instances
+-    const float metersPerUnit = static_cast<HdCyclesSession *>(renderParam)
+-                                    ->GetStageMetersPerUnit();
+-    const Transform unitScale = transform_scale(make_float3(metersPerUnit));
+-
+-    for (size_t i = 0; i < transforms.size(); ++i) {
+-      const Transform tfm = unitScale * convert_transform(_geomTransform * transforms[i]);
+-      _instances[i]->set_tfm(tfm);
+-
+-      array<Transform> motion;
+-      if (_geomTransformAnimated || instancesAnimated) {
+-        motion.resize(kMotionSteps);
+-        for (int step = 0; step < kMotionSteps; ++step) {
+-          const GfMatrix4d &geomStep = _geomTransformAnimated ? _geomTransformSamples[step] :
+-                                                                _geomTransform;
+-          const GfMatrix4d &instanceStep = instancesAnimated ? stepTransforms[step][i] :
+-                                                               transforms[i];
+-          motion[step] = unitScale * convert_transform(geomStep * instanceStep);
+-        }
+-      }
+-      _instances[i]->set_motion(motion);
+-    }
++    UpdateTransforms(*_renderIndex,
++                     primDs,
++                     renderParam,
++                     lock.scene,
++                     HdChangeTracker::IsTransformDirty(*dirtyBits, id));
+   }
+ 
+   if (HdChangeTracker::IsTransformDirty(*dirtyBits, id) ||
+@@ -445,4 +338,156 @@ void HdCyclesGeometry<Base, CyclesBase>::InitializeInstance(int index)
+   instance->set_asset_name(ustring(Base::GetId().GetParentPath().GetString()));
+ }
+ 
++template<typename Base, typename CyclesBase>
++void HdCyclesGeometry<Base, CyclesBase>::UpdateTransforms(HdRenderIndex &index,
++                                                          const HdContainerDataSourceHandle &primDs,
++                                                          HdRenderParam *renderParam,
++                                                          Scene *scene,
++                                                          const bool xformDirty)
++{
++  const SdfPath &id = Base::GetId();
++  if (xformDirty) {
++    _geomTransform = GfMatrix4d(1.0);
++    _geomTransformAnimated = false;
++    for (int step = 0; step < kMotionSteps; ++step) {
++      _geomTransformSamples[step] = GfMatrix4d(1.0);
++    }
++
++    if (auto matrixDs = HdXformSchema::GetFromParent(primDs).GetMatrix()) {
++      _geomTransform = matrixDs->GetTypedValue(0.0f);
++
++      const auto *const session = static_cast<const HdCyclesSession *>(renderParam);
++      if (session->IsMotionBlurEnabled()) {
++        /* Sample at evenly spaced times rather than at the data source's own
++         * contributing sample times: Object::motion_time() spreads motion
++         * steps linearly over the shutter, so irregular spacing would blur
++         * along a distorted path. */
++        const float open = session->GetShutterOpen();
++        const float close = session->GetShutterClose();
++
++        for (int step = 0; step < kMotionSteps; ++step) {
++          const float t = open + (close - open) * step / float(kMotionSteps - 1);
++          _geomTransformSamples[step] = matrixDs->GetTypedValue(t);
++          if (_geomTransformSamples[step] != _geomTransformSamples[0]) {
++            _geomTransformAnimated = true;
++          }
++        }
++        /* Blur is centred on the shutter, so drive the static transform from
++         * the middle sample rather than from time zero. */
++        if (_geomTransformAnimated) {
++          _geomTransform = _geomTransformSamples[kMotionSteps / 2];
++        }
++      }
++    }
++  }
++
++  {
++    auto *const instancer = static_cast<HdCyclesInstancer *>(
++        index.GetInstancer(Base::GetInstancerId()));
++
++    // Make sure the first object attribute is the instanceId
++    assert(_instances[0]->attributes.size() >= 1 &&
++           _instances[0]->attributes.front().name() == HdAovTokens->instanceId.GetString());
++
++    VtMatrix4dArray transforms;
++    /* Instance transforms at the same evenly spaced shutter times as the
++     * prim's own. Empty unless some instance moves during the shutter. */
++    VtMatrix4dArray stepTransforms[kMotionSteps];
++    bool instancesAnimated = false;
++    if (instancer) {
++      transforms = instancer->ComputeInstanceTransforms(id);
++      _instances[0]->attributes.front() = ParamValue(HdAovTokens->instanceId.GetString(), +0.0f);
++
++      if (_motionBlur) {
++        for (int step = 0; step < kMotionSteps; ++step) {
++          const float t = _shutterOpen +
++                          (_shutterClose - _shutterOpen) * step / float(kMotionSteps - 1);
++          stepTransforms[step] = instancer->ComputeInstanceTransforms(id, t);
++          /* Instances born or dying inside the shutter have no path to blur
++           * along; leave every instance sharp rather than pair them wrongly. */
++          if (stepTransforms[step].size() != transforms.size()) {
++            instancesAnimated = false;
++            break;
++          }
++          if (stepTransforms[step] != stepTransforms[0]) {
++            instancesAnimated = true;
++          }
++        }
++        if (instancesAnimated) {
++          /* Like the prim's own transform: the static one is the middle of
++           * the shutter, where the blur is centred. */
++          transforms = stepTransforms[kMotionSteps / 2];
++        }
++      }
++    }
++    else {
++      // Default to a single instance with an identity transform
++      transforms.push_back(GfMatrix4d(1.0));
++      _instances[0]->attributes.front() = ParamValue(HdAovTokens->instanceId.GetString(), -1.0f);
++    }
++
++    const size_t oldSize = _instances.size();
++    const size_t newSize = transforms.size();
++
++    // Resize instance list
++    for (size_t i = newSize; i < oldSize; ++i) {
++      static_cast<HdCyclesSession *>(renderParam)->ForgetObject(_instances[i]);
++      scene->delete_node(_instances[i]);
++    }
++    _instances.resize(newSize);
++    for (size_t i = oldSize; i < newSize; ++i) {
++      _instances[i] = scene->create_node<Object>();
++      InitializeInstance(static_cast<int>(i));
++    }
++
++    // Update transforms of all instances
++    const float metersPerUnit = static_cast<HdCyclesSession *>(renderParam)
++                                    ->GetStageMetersPerUnit();
++    const Transform unitScale = transform_scale(make_float3(metersPerUnit));
++
++    for (size_t i = 0; i < transforms.size(); ++i) {
++      const Transform tfm = unitScale * convert_transform(_geomTransform * transforms[i]);
++      _instances[i]->set_tfm(tfm);
++
++      array<Transform> motion;
++      if (_geomTransformAnimated || instancesAnimated) {
++        motion.resize(kMotionSteps);
++        for (int step = 0; step < kMotionSteps; ++step) {
++          const GfMatrix4d &geomStep = _geomTransformAnimated ? _geomTransformSamples[step] :
++                                                                _geomTransform;
++          const GfMatrix4d &instanceStep = instancesAnimated ? stepTransforms[step][i] :
++                                                               transforms[i];
++          motion[step] = unitScale * convert_transform(geomStep * instanceStep);
++        }
++      }
++      _instances[i]->set_motion(motion);
++    }
++  }
++
++}
++
++/* Motion blur turned on or off, or a new shutter, in a live session: the
++ * transforms sampled again over it from the prim's own data source. Hydra
++ * is not asked to sync the prim: marked dirty from the delegate, Houdini's
++ * viewport synced nothing, and blur turned back on never showed until the
++ * renderer was restarted. Deforming points keep their samples until their
++ * next sync. */
++template<typename Base, typename CyclesBase>
++void HdCyclesGeometry<Base, CyclesBase>::RefreshMotion(HdRenderParam *renderParam)
++{
++  if (!_renderIndex || !_primDs) {
++    return;
++  }
++  const SceneLock lock(renderParam);
++  auto *const session = static_cast<HdCyclesSession *>(renderParam);
++  _motionBlur = session->IsMotionBlurEnabled();
++  _shutterOpen = session->GetShutterOpen();
++  _shutterClose = session->GetShutterClose();
++  session->MarkPrimSynced();
++  UpdateTransforms(*_renderIndex, _primDs, renderParam, lock.scene, true);
++  for (Object *instance : _instances) {
++    instance->tag_update(lock.scene);
++  }
++}
++
+ HDCYCLES_NAMESPACE_CLOSE_SCOPE
+diff --git a/src/hydra/mesh.cpp b/src/hydra/mesh.cpp
+index d8925d80..b67afac2 100644
+--- a/src/hydra/mesh.cpp
++++ b/src/hydra/mesh.cpp
+@@ -526,6 +526,31 @@ void HdCyclesMesh::PopulateTopology(HdSceneDelegate *sceneDelegate)
+     holeIndices = ds->GetTypedValue(0.0f);
+   }
+ 
++  /* Counts that do not add up to the indices, or negative ones, left the
++   * triangulation reading past the index array: an intermittent crash in
++   * the render threads (tests/scenes/bad_counts_mismatch.usda). Such a mesh
++   * is dropped with a warning; negative indices too. */
++  size_t cornerCount = 0;
++  bool malformed = false;
++  for (const int count : faceVertexCounts) {
++    malformed |= count < 0;
++    cornerCount += size_t(std::max(count, 0));
++  }
++  malformed |= cornerCount != faceVertexIndices.size();
++  for (const int index : faceVertexIndices) {
++    malformed |= index < 0;
++  }
++  if (malformed) {
++    TF_WARN("Mesh %s: %zu face vertex counts add up to %zu, with %zu indices; not rendered",
++            GetId().GetText(),
++            faceVertexCounts.size(),
++            cornerCount,
++            faceVertexIndices.size());
++    faceVertexCounts = VtIntArray();
++    faceVertexIndices = VtIntArray();
++    holeIndices = VtIntArray();
++  }
++
+   _topology = HdMeshTopology(
+       scheme, orientation, faceVertexCounts, faceVertexIndices, holeIndices, refineLevel);
+ 
+diff --git a/src/hydra/render_pass.cpp b/src/hydra/render_pass.cpp
+index cd866fb1..da788e3d 100644
+--- a/src/hydra/render_pass.cpp
++++ b/src/hydra/render_pass.cpp
+@@ -134,11 +134,17 @@ void HdCyclesRenderPass::_Execute(const HdRenderPassStateSharedPtr &renderPassSt
+     }
+   }
+ 
++  /* Motion blur turned on or off, or the shutter moved: every prim samples
++   * its motion again, here - marking them dirty for Hydra synced nothing in
++   * Houdini's viewport, and blur turned back on never showed. */
+   if (_renderParam->TakeMotionResync()) {
+-    GetRenderIndex()->GetChangeTracker().MarkAllRprimsDirty(
+-        HdChangeTracker::DirtyTransform | HdChangeTracker::DirtyPoints |
+-        HdChangeTracker::DirtyPrimvar | HdChangeTracker::DirtyInstancer |
+-        HdChangeTracker::DirtyWidths | HdChangeTracker::DirtyNormals);
++    HdRenderIndex *const index = GetRenderIndex();
++    for (const SdfPath &id : index->GetRprimIds()) {
++      HdRprim *const rprim = const_cast<HdRprim *>(index->GetRprim(id));
++      if (auto *const tagged = dynamic_cast<HdCyclesTaggedPrim *>(rprim)) {
++        tagged->RefreshMotion(_renderParam);
++      }
++    }
+   }
+ 
+   {

@@ -71,7 +71,7 @@ after a Cycles standard attribute (`heat`, `density`, `color`, `temperature`,
 | `hython tools/bench_normalmap.py [pattern]` | A quad with a constant tangent-space normal map tilted along +-u and +-v, lit from +X then +Y; the map's `scale`; UVs mirrored along X | Centre brightness within 10 % of Karma (Cycles' bump terminator term takes up to 8 %) (K-73) | Normal maps from textures, object-space maps, `bump` |
 | `hython tools/bench_points.py [pattern]` | White unlit points seen from above: constant width, a width per point, no width, under a scaled transform; linear curves without widths | Covered pixels overlap Karma's (IoU at least 0.9) (K-74) | Point shapes other than spheres, motion |
 | `hython tools/bench_displace.py` | A Catmull-Clark plane seen from 30 degrees above: flat, a MaterialX displacement ramp along u, a UsdPreviewSurface constant displacement | The rows its silhouette covers, per column, within one of Karma's (K-75) | Vector displacement, displacement on bump-only materials |
-| `python tools/bench_robust.py` | `tests/scenes/bad_*.usda`, 15 malformed files: unparsable attributes (mesh normals, points, point widths), NaN points, indices out of range (plain and subdivided), counts that do not add up (meshes, curves), degenerate faces, short face-varying and per-vertex primvars, an instancer naming missing prototypes, a cyclic material graph, missing textures and IES files, an IES file with no angles | husk renders every file, exit 0, image on disk - no crash on a malformed file (K-57) | That the image is right |
+| `python tools/bench_robust.py` | `tests/scenes/bad_*.usda`, 15 malformed files: unparsable attributes (mesh normals, points, point widths), NaN points, indices out of range (plain and subdivided), counts that do not add up (meshes, curves), degenerate faces, short face-varying and per-vertex primvars, an instancer naming missing prototypes, a cyclic material graph, missing textures and IES files, an IES file with no angles | husk renders every file three times, exit 0, image on disk - no crash on a malformed file, even an intermittent one (K-57, K-82) | That the image is right |
 | `hython tools/bench_agree.py [pattern]` | 7 surface materials and 3 hand-built BSDF networks × 3 regions, plus the highlight's 99th percentile on the glossy ones, Cycles against Karma on the same USD | Floor within 1 %, spheres within 25 % (glass: order of magnitude), highlights within 35 % of Karma; normal, position and tangent lookups by space on a turned sphere, the whole subsurface sphere within 6 % - 61 checks | Fine shading differences: the tolerance admits the engines' own |
 | `hython tools/mtlx_coverage.py [--list]` | MaterialX library vs the table | Which nodedefs the delegate renders - by the table, by nodegraph expansion or by rewriting (796/822, `tools/mtlx_rules.py` holds the rule) | Which translate correctly |
 | `hython tools/mtlx_inputs.py [--list] [pattern]` | Every routed nodedef, all inputs authored, one husk run | Which nodedefs keep every input, output and node (543/652 on 2026-10-07); `--list` names what each one loses | Values |
@@ -92,7 +92,25 @@ rename, a dead parameter, a dropped input (`mtlx_inputs.py`), a wrong value
 on the 49 MaterialX cases, a wrong closure mix, a surface model's default,
 a wrong pass, a prim rendered where its settings hide it, a curve or an
 instance drawn in the wrong place. What it cannot see is the live viewport:
-`tests/houdini/` holds the scenes to check by hand there.
+`tests/houdini/` holds the scenes to check there.
+
+**Checks in the Houdini GUI are done by the agent, not handed to Adrien**
+(his rule, 2026-10-09: everything to test in the interface is checkable
+through the MCP). Start a session with `tests/houdini/launch_cycles_log.cmd
+<scene>` (it starts the houdini-mcp server), drive it with
+`python tools/hou_remote.py`, read `tests/scratch/cycles_viewport.log`, grab
+the viewport or the render buffer from Python, and close the session when
+done - never his own Houdini, never save his `.hip` files. A patch that
+touches the viewport, live edits (moving a light, toggling a setting while
+rendering) or the display driver is not finished until this check ran.
+`python tools/gui_capture.py NAME "<python step>"` runs a step in that
+session and grabs its window with PrintWindow, which works while the window
+sits behind others; Houdini's flipbook does not (it returned one stale image
+for every state). The tool checks the scene is under `hdCycles/tests` and
+grabs the window of the very process the MCP server runs in, so it can never
+drive or capture Adrien's own Houdini. Measure the region you need from the
+PNG (`tests/scratch/gui/`); a window resized between two steps makes the
+first grab after it stale.
 
 Testing a freshly built DLL while Houdini holds the installed one: every
 bench honours a `PXR_PLUGINPATH_NAME` already in the environment, so the

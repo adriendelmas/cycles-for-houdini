@@ -648,7 +648,8 @@ prims synced without it or over another shutter are synced again. Batch
 behaviour measured (`bench_settings.py`). In Houdini (2026-10-08, user,
 `tests/houdini/motion_toggle.hip`) the blur came back, but turning it off made
 the moving object vanish until the render was restarted: prims kept their
-motion samples. Patch 0091 resyncs them on the way off too - to recheck.
+motion samples. Patch 0091 resyncs them on the way off too. Rechecked live
+2026-10-09: off now keeps the object, but on never blurred again - K-81.
 
 ### K-57 An attribute whose value failed to parse segfaulted the delegate — confirmed — **fixed** (0102)
 `tests/scenes/bad_normals_type.usda`: a mesh whose `normals` is declared
@@ -851,6 +852,31 @@ which a displayColor on the geometry, or one per PointInstancer instance,
 overrides. Karma's own fallback shading stays about twice as dark (see
 `bench_agree.py`). `tools/bench_settings.py`, `display_color_vertex`.
 
+### K-81 Motion blur turned back on in a live viewport never showed — confirmed — **fixed** (0123)
+Checked in Houdini through the MCP (`tests/houdini/motion_toggle.hip`,
+`tools/gui_capture.py`), 2026-10-09: with the renderer started while
+`disableMotionBlur` was on, unticking it restarted the render but the moving
+ball stayed sharp until the frame changed or the renderer was restarted
+(CPU and GPU alike). The delegate did ask for every prim to be synced again
+(0086, 0091) - by marking them dirty in Hydra's change tracker, from the
+render pass and then from the settings call - but in Houdini's viewport
+(Hydra 2) that synced nothing at all. Each geometry now keeps its prim's data
+source and the render index, and when the blur or the shutter changes the
+render pass asks every prim to sample its transforms (and its instances')
+again over the shutter, without Hydra. Blur off then on, twice, at the same
+frame: 104 px sharp, 131 px blurred, each time. Deforming points keep their
+samples until their next sync.
+
+### K-82 Face counts that do not add up crashed husk now and then — confirmed — **fixed** (0123)
+`tests/scenes/bad_counts_mismatch.usda` (two faces of four vertices over four
+indices) passed the robustness bench once and crashed it the next time: two
+runs in five died with a segmentation fault in Cycles' render threads, the
+triangulation reading past the index array. The mesh's topology is now
+checked as it is read - counts adding up to the indices, none negative -
+and a malformed one is dropped with a warning, as Karma ignores it. The
+robustness bench renders each scene three times, so an intermittent crash
+shows.
+
 ## C. Houdini side
 
 ### K-40 `op:` textures fail under husk — confirmed
@@ -961,3 +987,37 @@ published, 64 `convert_*` hidden, 99 exposed as VOPs (plus the generated
 `cycles_material` terminal makes the 100 of CYCLES_VOPS.md), 97 probed by the
 bench (99 minus `cycles_output` and `cycles_aov_output`). STATUS.md's 161 was
 the 5.2 count.
+
+## E. Limits of Cycles itself
+
+What the delegate cannot fix, because Cycles has no counterpart or behaves
+otherwise by design. Each is measured and kept on purpose; a file relying on
+one renders differently from Karma, and that is expected.
+
+- **Cylinder light**: Cycles has no cylinder light; it is a rectangle,
+  one-sided, normalized like the tube (0.95-1.07 of Karma across the floor,
+  `bench_lights.py`).
+- **`shadow:color`, light filters, `occlusion`**: no Cycles equivalent.
+  `shadow:color` is reported unsupported in the log (0093); light filters
+  are dropped; UsdPreviewSurface's `occlusion` is ignored.
+- **MaterialX time, frame and matrix nodes**: no node in Cycles' graph
+  carries a matrix or the current time; those nodedefs are left out.
+- **`layer`**: Cycles has no layering closure; a Fresnel-weighted mix at IOR
+  1.5 stands in, right for a dielectric top layer, approximate otherwise
+  (K-09).
+- **Remaining differences with Karma on the MaterialX library**
+  (`mtlx_karma.py`): 37 of 695 value nodes and 7 of 45 closures differ beyond
+  the tolerance; each is explained in K-61 and K-64 (engine-specific
+  hextiled blending, noise and cellular functions, closures Karma itself
+  approximates). Glass agrees in order of magnitude only (`bench_agree.py`):
+  the two engines' rough refraction differ.
+- **Bump and normal map terminator**: Cycles darkens a bumped or
+  normal-mapped surface towards its terminator (Conty Estevez et al.); Karma
+  does not - up to 8 % on strong tilts (K-73).
+- **IES interpolation**: Cycles interpolates a profile cubically, Karma
+  linearly; only coarse profiles show it (K-70).
+- **Dome poles**: Cycles' environment map wraps vertically, so the half
+  texel at each pole blends the first and last rows - invisible on a real
+  HDRI (K-67).
+- **Fallback shading of unbound prims**: Karma's is about twice as dark on
+  the same `displayColor` (K-80, `bench_agree.py`).

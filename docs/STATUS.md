@@ -2421,3 +2421,11 @@ mélanger un transparent.
 par sommet restait gris : la surface par défaut ne lisait que la couleur
 constante. Elle lit maintenant l'attribut `displayColor`, avec un gris 0,8
 de repli porté par chaque instance.
+
+**Flou de mouvement réactivé en direct (0123, K-81).** Vérifié dans
+Houdini par le MCP : démarré sans flou, le décocher redémarrait le rendu mais
+la boule restait nette jusqu'au changement d'image ou au redémarrage du
+moteur. Le délégué marquait bien les prims dans le suivi de changements de
+Hydra, ce qui ne resynchronise rien dans le viewport de Houdini. Chaque
+géométrie rééchantillonne maintenant ses transformations elle-même. Nouvel
+outil `tools/gui_capture.py` pour ces vérifications.

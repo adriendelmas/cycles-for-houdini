@@ -25,6 +25,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HFS = os.path.join(os.environ.get("HFS", "E:/Side Effects Software/Houdini22.0.368"), "bin")
 OUT = os.path.join(ROOT, "tests", "scratch", "robust")
+RUNS = 3
 
 
 def main():
@@ -35,21 +36,36 @@ def main():
     for scene in scenes:
         name = os.path.splitext(os.path.basename(scene))[0]
         exr = os.path.join(OUT, name + ".exr")
-        if os.path.exists(exr):
-            os.remove(exr)
-        run = subprocess.run([os.path.join(HFS, "husk.exe"), "--renderer", "HdCyclesPlugin",
-                              "--frame", "1", "--frame-count", "1", "--camera", "/world/camera",
-                              "--res", "120", "90", "--output", exr, scene],
-                             capture_output=True, text=True)
-        log = (run.stdout or "") + (run.stderr or "")
-        if "Fatal error" in log or run.returncode != 0 or not os.path.exists(exr):
-            reason = "crashed" if "Fatal error" in log else "exit %d, no image" % run.returncode
+        reason = None
+        # A crash reading out of bounds can be intermittent (bad_counts_mismatch
+        # crashed two runs in five): each scene renders RUNS times.
+        for _ in range(RUNS):
+            reason = render_once(scene, exr)
+            if reason:
+                break
+        if reason:
             problems.append((name, reason))
             print("%-22s %s" % (name, reason.upper()))
         else:
             print("%-22s ok" % name)
     print("\n%d malformed scenes, %d problems" % (len(scenes), len(problems)))
     sys.exit(1 if problems else 0)
+
+
+def render_once(scene, exr):
+    """None when husk rendered the scene, else what went wrong."""
+    if os.path.exists(exr):
+        os.remove(exr)
+    run = subprocess.run([os.path.join(HFS, "husk.exe"), "--renderer", "HdCyclesPlugin",
+                          "--frame", "1", "--frame-count", "1", "--camera", "/world/camera",
+                          "--res", "120", "90", "--output", exr, scene],
+                         capture_output=True, text=True)
+    log = (run.stdout or "") + (run.stderr or "")
+    if "Fatal error" in log:
+        return "crashed"
+    if run.returncode != 0 or not os.path.exists(exr):
+        return "exit %d, no image" % run.returncode
+    return None
 
 
 if __name__ == "__main__":

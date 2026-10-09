@@ -48,7 +48,7 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | `visibleInPrimaryRay`, `shadowEnable` | ✅ | upstream | |
 | Light linking, shadow linking | ✅ | `bench_settings.py` | Hydra's light linking scene index → Cycles light and shadow sets (K-24, 0089); no light filters |
 | `shadow:color`, `diffuse`/`specular` multipliers, light filters | ❌ | code read | |
-| Dome `textureFormat` | ❌ | code read | Lat-long assumed |
+| Dome `textureFormat` | ⏸ | Karma, 2026-10-09 | Lat-long only. Not done on purpose: Karma itself reads `mirroredBall` and `angular` maps as lat-long (measured), so there is no reference for their orientation, which the HDRShop pages USD cites leave ambiguous |
 | Camera: perspective, ortho, DoF, apertures, lens shift, aspect conform | ✅ | `bench_camera.py` 7/7 vs Karma | |
 | Camera exposure | ✅ | `bench_camera.py` | Times the render settings' film exposure (K-71, 0114) |
 | Crop (`dataWindowNDC`), pixel aspect | ✅ | `bench_camera.py` | Under husk, from its render settings (K-77, 0119) |

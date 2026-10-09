@@ -1,7 +1,7 @@
 From b8d34214125df9637ec2b54541ab47d60188d49b Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 11 Sep 2026 17:01:21 +0200
-Subject: [PATCH 074/122] hydra: crediter Ben Houston a la tete de la
+Subject: [PATCH 074/123] hydra: crediter Ben Houston a la tete de la
  traduction MaterialX
 
 La traduction MaterialX suit le blender-materialx-importer de Ben Houston
