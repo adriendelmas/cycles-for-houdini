@@ -2383,3 +2383,10 @@ sommet : chaque triangle après le premier lisait les UV de ses voisins, le
 bitangent changeait de signe d'un triangle à l'autre. Les UV par sommet
 passent maintenant par coin. 12 cas sur 12 (le reste, jusqu'à 8 %, est le
 terme d'ombrage de bump propre à Cycles).
+
+**Largeurs par défaut, displacement de UsdPreviewSurface (0117, K-74,
+K-75).** Bancs `bench_points.py` et `bench_displace.py`. Des points ou des
+courbes sans `widths` n'étaient pas dessinés (rayon 0) ; Karma prend la
+largeur 1 de Hydra, Cycles aussi maintenant. Le `displacement` d'un
+UsdPreviewSurface était ignoré ; il passe par un nœud displacement de Cycles.
+Le displacement MaterialX, lui, était déjà juste.

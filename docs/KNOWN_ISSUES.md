@@ -775,6 +775,25 @@ within 10 % of Karma; the rest is Cycles' own bump terminator term (Conty
 Estevez et al., `kernel/closure/bsdf.h`), which darkens a tilted normal
 towards its terminator where Karma does not - up to 8 % here.
 
+### K-74 Points and curves without widths not drawn — confirmed — **fixed** (0117)
+`tools/bench_points.py`, white unlit points seen from above against Karma
+(intersection over union of the covered pixels): constant, per-point and
+scaled widths agreed (IoU 0.94-0.96), but points with no `widths` at all
+were not drawn - the radius stayed 0 - where Karma draws Hydra's fallback
+width of 1. Linear curves without widths, the same. Both now take a width
+of 1 (IoU 0.95 and 0.98).
+
+### K-75 UsdPreviewSurface displacement dropped — confirmed — **fixed** (0117)
+`tools/bench_displace.py`, a Catmull-Clark plane seen from 30 degrees above,
+the rows its silhouette covers against Karma: a MaterialX `displacement`
+already agreed within a pixel row, but a UsdPreviewSurface's
+`displacement` input was dropped (a comment said the material's terminal
+carried it; nothing did) - Karma moved the plane, Cycles did not. It now
+drives a Cycles displacement node (height along the normal, object space,
+midlevel 0) that the displacement terminal reads; the terminal finds that
+helper's output by type, the output sharing the input's name. Three cases
+within a row.
+
 ## C. Houdini side
 
 ### K-40 `op:` textures fail under husk — confirmed

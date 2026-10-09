@@ -1,7 +1,7 @@
 From 974654c221ff381dd07926003b2b5ca45508bd7d Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 22:57:55 +0200
-Subject: [PATCH 111/116] hydra: dome light texture in USD's lat-long
+Subject: [PATCH 111/117] hydra: dome light texture in USD's lat-long
  orientation
 
 USD's dome follows OpenEXR's lat-long convention: top pole +Y, longitude 0

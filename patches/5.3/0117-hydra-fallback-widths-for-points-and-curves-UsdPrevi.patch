@@ -1,0 +1,127 @@
+From 57db8c73b1cb75196ed66d6dafb7e1c78f7ad643 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Fri, 9 Oct 2026 02:02:02 +0200
+Subject: [PATCH 117/117] hydra: fallback widths for points and curves,
+ UsdPreviewSurface displacement
+
+Points and curves with no widths kept a radius of 0 and were not drawn;
+they take Hydra's fallback width of 1, as Karma draws them (K-74,
+tools/bench_points.py).
+
+A UsdPreviewSurface's displacement input was dropped. It now drives a
+Cycles displacement node (height along the normal, object space, midlevel
+0) that the material's displacement terminal reads; since the surface's
+displacement output shares the input's name, the terminal takes the
+helper's output of its own type (K-75, tools/bench_displace.py).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/curves.cpp     | 10 ++++++++--
+ src/hydra/material.cpp   | 25 +++++++++++++++++++++++--
+ src/hydra/pointcloud.cpp |  8 ++++++++
+ 3 files changed, 39 insertions(+), 4 deletions(-)
+
+diff --git a/src/hydra/curves.cpp b/src/hydra/curves.cpp
+index 7c22d851..53f5625f 100644
+--- a/src/hydra/curves.cpp
++++ b/src/hydra/curves.cpp
+@@ -204,6 +204,14 @@ void HdCyclesCurves::PopulateWidths(HdSceneDelegate *sceneDelegate)
+   const HdPrimvarsSchema primvars = HdPrimvarsSchema::GetFromParent(prim.dataSource);
+   const VtValue value = ReadPrimvar(primvars, HdTokens->widths);
+   const HdInterpolation interpolation = ReadPrimvarInterpolation(primvars, HdTokens->widths);
++  float *radius = _geom->get_radius_for_write();
++  const size_t numKeys = _geom->num_keys();
++
++  /* No widths at all: Hydra's fallback, a width of 1, as for points. */
++  if (value.IsEmpty()) {
++    std::fill_n(radius, numKeys, 0.5f);
++    return;
++  }
+ 
+   if (!value.IsHolding<VtFloatArray>()) {
+     TF_WARN("Invalid widths data for %s", GetId().GetText());
+@@ -211,8 +219,6 @@ void HdCyclesCurves::PopulateWidths(HdSceneDelegate *sceneDelegate)
+   }
+ 
+   VtFloatArray widths = value.UncheckedGet<VtFloatArray>();
+-  float *radius = _geom->get_radius_for_write();
+-  const size_t numKeys = _geom->num_keys();
+ 
+   if (interpolation == HdInterpolationConstant) {
+     TF_VERIFY(widths.size() == 1);
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index 954be114..8e99cb57 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -3206,8 +3206,11 @@ class UsdToCycles {
+             {TfToken("opacityThreshold"), ustring(cutout ? "cut:value2" : "")},
+             {TfToken("useSpecularWorkflow"), ustring("")},
+             {TfToken("specularColor"), ustring(specular ? "sep:color;tdiv:vector1" : "")},
+-            /* occlusion: no counterpart. displacement: carried by the
+-             * material's displacement terminal. */
++            /* displacement: a height along the normal, in object space, on a
++             * Cycles displacement node the material's displacement terminal
++             * reads (the output shares the input's name). It was dropped:
++             * Karma displaced, Cycles did not. occlusion: no counterpart. */
++            {TfToken("displacement"), ustring("disp:height")},
+         }};
+     if (specular) {
+       mapping.setParameterName(TfToken("metallic"), ustring(""));
+@@ -3220,6 +3223,13 @@ class UsdToCycles {
+                             {ustring("emission_color"), "0,0,0"},
+                             {ustring("base_color"), "0.18,0.18,0.18"},
+                             {ustring("coat_roughness"), "0.01"}});
++    mapping.addHelper({"disp",
++                       "displacement",
++                       {},
++                       {{ustring("height"), "0"},
++                        {ustring("midlevel"), "0"},
++                        {ustring("scale"), "1"},
++                        {ustring("space"), "object"}}});
+     if (specular) {
+       using FV = UsdToCyclesMapping::FixedMap;
+       auto math = [](const char *const name, const char *const to, FV fixed) {
+@@ -4585,6 +4595,17 @@ unique_ptr<ShaderGraph> HdCyclesMaterial::BuildShaderGraph(HdMaterialNetworkSche
+         const auto helper = nodeIt->second.helperNodes.find(split.first);
+         if (helper != nodeIt->second.helperNodes.end()) {
+           helperOutput = FindOutput(helper->second, split.second);
++          /* An input and an output may share a name (UsdPreviewSurface's
++           * displacement): the name then leads to the helper's input, and
++           * its output of the terminal's type is the one meant. */
++          for (ShaderOutput *out : helper->second->outputs) {
++            if (helperOutput) {
++              break;
++            }
++            if (SameSocketClass(out->socket_type.type, input->socket_type.type)) {
++              helperOutput = out;
++            }
++          }
+         }
+       }
+     }
+diff --git a/src/hydra/pointcloud.cpp b/src/hydra/pointcloud.cpp
+index e2a6bf76..5be03f52 100644
+--- a/src/hydra/pointcloud.cpp
++++ b/src/hydra/pointcloud.cpp
+@@ -3,6 +3,7 @@
+  *
+  * SPDX-License-Identifier: Apache-2.0 */
+ 
++#include <algorithm>
+ #include <vector>
+ 
+ #include "hydra/pointcloud.h"
+@@ -115,6 +116,13 @@ void HdCyclesPoints::PopulateWidths(HdSceneDelegate *sceneDelegate)
+   const VtValue value = ReadPrimvar(primvars, HdTokens->widths);
+   const HdInterpolation interpolation = ReadPrimvarInterpolation(primvars, HdTokens->widths);
+ 
++  /* No widths at all: Hydra's fallback, a width of 1, as Karma draws them.
++   * The radius stayed 0 and the points were not drawn (tools/bench_points.py). */
++  if (value.IsEmpty()) {
++    std::fill_n(_geom->get_radius_for_write(), _geom->num_points(), 0.5f);
++    return;
++  }
++
+   if (!value.IsHolding<VtFloatArray>()) {
+     TF_WARN("Invalid widths data for %s", GetId().GetText());
+     return;

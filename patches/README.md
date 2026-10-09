@@ -146,6 +146,7 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0114` | hydra: exposition de la camera (echelle lineaire de Hydra) multipliee a celle des render settings sur le film (K-71) |
 | `0115` | hydra + scene: tags de subdivision lus dans le conteneur du mesh (plis, coins), acuite USD / 10, coins sans plis, regles de bord et face-varying, trous non decoupes (`Mesh::subd_hole`), coins effaces par `Mesh::clear` (K-72) |
 | `0116` | hydra: coordonnees de texture par sommet passees par coin (l'espace tangent mikktspace les lit par coin) - normal maps justes le long de v et sur des UV en miroir (K-73) |
+| `0117` | hydra: largeur 1 par defaut (celle de Hydra) pour les points et courbes sans `widths` (K-74) ; `displacement` de UsdPreviewSurface par un noeud displacement de Cycles (K-75) |
 
 ---
 

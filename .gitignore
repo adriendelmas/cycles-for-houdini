@@ -30,6 +30,8 @@ tests/lights/output/
 tests/camera/output/
 tests/subdiv/output/
 tests/normalmap/output/
+tests/points/output/
+tests/displace/output/
 tests/materialx/hair/
 tests/materialx/standard_surface/*.exr
 tests/scratch/
