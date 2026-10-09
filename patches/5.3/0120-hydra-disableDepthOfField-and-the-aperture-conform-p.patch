@@ -1,0 +1,138 @@
+From 947a2b6f3a3a7121870a9bc206bac2cd04ae2f9d Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Fri, 9 Oct 2026 04:20:36 +0200
+Subject: [PATCH 120/120] hydra: disableDepthOfField and the aperture conform
+ policy
+
+The render settings' disableDepthOfField, which Houdini's Render Settings
+LOP writes, left the depth of field on; it now renders the camera sharp, and
+a camera whose f-stop goes back to 0 closes its aperture too, where it used
+to stay open. The aspectRatioConformPolicy was always expandAperture; in a
+batch render it now comes from the render settings, the viewport keeping
+the camera's own (K-78, tools/bench_camera.py: 15 cases against Karma).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/camera.cpp          | 11 +++++++--
+ src/hydra/render_delegate.cpp | 12 ++++++++++
+ src/hydra/session.h           | 44 +++++++++++++++++++++++++++++++++++
+ 3 files changed, 65 insertions(+), 2 deletions(-)
+
+diff --git a/src/hydra/camera.cpp b/src/hydra/camera.cpp
+index 0674c562..5b9832bb 100644
+--- a/src/hydra/camera.cpp
++++ b/src/hydra/camera.cpp
+@@ -188,8 +188,10 @@ void HdCyclesCamera::Finalize(HdRenderParam *renderParam)
+ 
+ void HdCyclesCamera::ApplyCameraSettings(HdRenderParam *renderParam, Camera *cam) const
+ {
+-  ApplyCameraSettings(renderParam, _data, _windowPolicy, cam);
+   HdCyclesSession *const session = static_cast<HdCyclesSession *>(renderParam);
++  CameraUtilConformWindowPolicy policy = _windowPolicy;
++  session->GetConformPolicy(&policy);
++  ApplyCameraSettings(renderParam, _data, policy, cam);
+   session->SetFilmExposure(-1.0f, GetLinearExposureScale());
+ 
+   const float metersPerUnit = static_cast<HdCyclesSession *>(renderParam)->GetStageMetersPerUnit();
+@@ -244,10 +246,15 @@ void HdCyclesCamera::ApplyCameraSettings(HdRenderParam *renderParam,
+   cam->set_viewplane_bottom(viewplane.GetMin()[1]);
+   cam->set_viewplane_top(viewplane.GetMax()[1]);
+ 
+-  if (data.GetFStop() != 0.0f) {
++  if (data.GetFStop() != 0.0f &&
++      !static_cast<HdCyclesSession *>(renderParam)->IsDepthOfFieldDisabled())
++  {
+     cam->set_focaldistance(data.GetFocusDistance() * metersPerUnit);
+     cam->set_aperturesize(focalLength / (2.0f * data.GetFStop()));
+   }
++  else {
++    cam->set_aperturesize(0.0f);
++  }
+ 
+   cam->set_matrix(convert_camera_transform(data.GetTransform(), metersPerUnit));
+ }
+diff --git a/src/hydra/render_delegate.cpp b/src/hydra/render_delegate.cpp
+index b24753c3..60d8bcfc 100644
+--- a/src/hydra/render_delegate.cpp
++++ b/src/hydra/render_delegate.cpp
+@@ -595,6 +595,18 @@ void HdCyclesDelegate::SetRenderSetting(const PXR_NS::TfToken &key, const PXR_NS
+   Scene *const scene = _renderParam->session->scene.get();
+   Session *const session = _renderParam->session;
+ 
++  /* Houdini's Render Settings LOP writes it; it was ignored. */
++  static const TfToken disableDepthOfFieldToken("disableDepthOfField");
++  if (key == disableDepthOfFieldToken) {
++    _renderParam->SetDepthOfFieldDisabled(VtValue::Cast<bool>(value).GetWithDefault(false));
++  }
++  /* How the aperture meets an image of another aspect; it was always
++   * expanded (tools/bench_camera.py). */
++  static const TfToken conformPolicyToken("aspectRatioConformPolicy");
++  if (key == conformPolicyToken) {
++    _renderParam->SetConformPolicy(value);
++  }
++
+   static const TfToken resolutionToken("resolution"), dataWindowToken("dataWindowNDC"),
+       pixelAspectToken("pixelAspectRatio"), renderModeToken("renderMode");
+   if (key == resolutionToken || key == dataWindowToken || key == pixelAspectToken ||
+diff --git a/src/hydra/session.h b/src/hydra/session.h
+index 39206df1..56ce9973 100644
+--- a/src/hydra/session.h
++++ b/src/hydra/session.h
+@@ -38,6 +38,48 @@ class HdCyclesSession final : public PXR_NS::HdRenderParam {
+   /* The width of a pixel over its height, from the render pass framing
+    * (USD's pixelAspectRatio); the camera's window conforms to the image's
+    * width times it. */
++  /* The render settings' aspectRatioConformPolicy, honoured in a batch
++   * render (husk); the viewport keeps the camera's own. Returns false when
++   * there is none to apply. */
++  bool GetConformPolicy(PXR_NS::CameraUtilConformWindowPolicy *policy) const
++  {
++    if (!_batch || _conformPolicy.IsEmpty()) {
++      return false;
++    }
++    const std::string name = _conformPolicy.GetString();
++    if (name == "cropAperture") {
++      *policy = PXR_NS::CameraUtilCrop;
++    }
++    else if (name == "adjustApertureWidth") {
++      *policy = PXR_NS::CameraUtilMatchVertically;
++    }
++    else if (name == "adjustApertureHeight") {
++      *policy = PXR_NS::CameraUtilMatchHorizontally;
++    }
++    else if (name == "adjustPixelAspectRatio") {
++      *policy = PXR_NS::CameraUtilDontConform;
++    }
++    else {
++      *policy = PXR_NS::CameraUtilFit;
++    }
++    return true;
++  }
++  void SetConformPolicy(const PXR_NS::VtValue &value)
++  {
++    _conformPolicy = PXR_NS::TfToken(
++        PXR_NS::VtValue::Cast<std::string>(value).GetWithDefault(std::string()));
++  }
++
++  /* The render settings' disableDepthOfField: every camera renders sharp. */
++  bool IsDepthOfFieldDisabled() const
++  {
++    return _disableDepthOfField;
++  }
++  void SetDepthOfFieldDisabled(const bool disabled)
++  {
++    _disableDepthOfField = disabled;
++  }
++
+   float GetPixelAspect() const
+   {
+     return _pixelAspect;
+@@ -328,6 +370,8 @@ class HdCyclesSession final : public PXR_NS::HdRenderParam {
+   int _transparentOverride = -1; /* -1: not set, 0 or 1 */
+   float _settingsExposure = 1.0f;
+   float _pixelAspect = 1.0f;
++  bool _disableDepthOfField = false;
++  PXR_NS::TfToken _conformPolicy;
+   bool _batch = false;
+   PXR_NS::GfVec2i _batchResolution = PXR_NS::GfVec2i(0);
+   PXR_NS::GfVec4f _batchDataWindowNDC = PXR_NS::GfVec4f(0.0f, 0.0f, 1.0f, 1.0f);

@@ -7,7 +7,8 @@ Karma's. Cases: an off-axis perspective framing; the aperture offsets (lens
 shift); depth of field (an f-stop and a focus distance, squares in and out
 of focus); an orthographic camera; the camera's exposure; an image whose
 aspect differs from the aperture's (USD's aperture conform policy); a crop
-window (dataWindowNDC); a pixel aspect ratio of 2.
+window (dataWindowNDC); a pixel aspect ratio of 2; depth of field turned off
+by the render settings (disableDepthOfField).
 
     hython tools/bench_camera.py [pattern]
 
@@ -104,11 +105,25 @@ SETTINGS = {
     "crop": "        float4 dataWindowNDC = (0.25, 0.25, 0.75, 0.75)",
     "crop_corner": "        float4 dataWindowNDC = (0.5, 0.5, 1, 1)",
     "pixel_aspect": "        float pixelAspectRatio = 2",
+    "dof_disabled": "        uniform bool disableDepthOfField = 1",
+    "conform_crop": '        uniform token aspectRatioConformPolicy = "cropAperture"',
+    "conform_width": '        uniform token aspectRatioConformPolicy = "adjustApertureWidth"',
+    "conform_height": '        uniform token aspectRatioConformPolicy = "adjustApertureHeight"',
+    "conform_pixel": '        uniform token aspectRatioConformPolicy = "adjustPixelAspectRatio"',
 }
 CASES += [
     ("crop", "(120, 80)", PERSP, [(0, 0, -10, 0.4), (2, 1, -10, 0.4)]),
     ("crop_corner", "(120, 80)", PERSP, [(2, 1, -10, 0.4), (3, 2, -10, 0.4)]),
     ("pixel_aspect", "(120, 80)", PERSP, [(0, 0, -10, 0.4), (2, 1, -10, 0.4)]),
+    # An image wider than the aperture under each of USD's conform policies
+    # (expandAperture, the default, is aspect_wider above).
+    ("conform_crop", "(160, 80)", PERSP, [(0, 0, -10, 0.4), (3, 1.5, -10, 0.4)]),
+    ("conform_width", "(160, 80)", PERSP, [(0, 0, -10, 0.4), (3, 1.5, -10, 0.4)]),
+    ("conform_height", "(160, 80)", PERSP, [(0, 0, -10, 0.4), (3, 1.5, -10, 0.4)]),
+    ("conform_pixel", "(160, 80)", PERSP, [(0, 0, -10, 0.4), (3, 1.5, -10, 0.4)]),
+    # The depth of field case with the render settings' switch off.
+    ("dof_disabled", "(120, 80)", PERSP + ["float fStop = 8", "float focusDistance = 5"],
+     [(0, 0, -5, 0.2), (1.5, 0.5, -15, 0.6)]),
 ]
 
 

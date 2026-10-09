@@ -820,6 +820,17 @@ buffer's window, Cycles' overscan, not its place in the frame - and the
 camera's window conforms to the width times the pixel aspect. The viewport
 keeps its own framing as before. Ten camera cases within a pixel of Karma.
 
+### K-78 Render settings' disableDepthOfField and conform policy ignored — confirmed — **fixed** (0120)
+`tools/bench_camera.py`, five more cases. `disableDepthOfField`, which
+Houdini's Render Settings LOP writes, left the depth of field on; the
+camera now renders sharp under it - and setting a camera's f-stop back to 0
+also turns its aperture off, where it used to stay open. The
+`aspectRatioConformPolicy` (how the aperture meets an image of another
+aspect) was always `expandAperture`: `cropAperture` and
+`adjustApertureHeight` framed differently from Karma. In a batch render the
+policy now comes from the render settings (the viewport keeps the camera's
+own). 15 camera cases within a pixel of Karma.
+
 ## C. Houdini side
 
 ### K-40 `op:` textures fail under husk — confirmed

@@ -2405,3 +2405,9 @@ ignoré : husk ne donne au délégué qu'un viewport de la taille du crop et
 passe résolution, crop et pixel aspect en réglages de rendu. Le cadrage est
 reconstruit à partir d'eux en batch (le viewport de Houdini garde le sien) ;
 10 cas caméra sur 10.
+
+**disableDepthOfField et politique de conformation (0120, K-78).** Le
+réglage « Disable Depth of Field » des render settings laissait le flou ; la
+politique `aspectRatioConformPolicy` était toujours « expand ». Les deux sont
+respectés sous husk ; remettre le f-stop d'une caméra à 0 referme aussi son
+ouverture. 15 cas caméra sur 15.

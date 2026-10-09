@@ -149,6 +149,7 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0117` | hydra: largeur 1 par defaut (celle de Hydra) pour les points et courbes sans `widths` (K-74) ; `displacement` de UsdPreviewSurface par un noeud displacement de Cycles (K-75) |
 | `0118` | hydra: maillages subdivises `leftHanded` (ceux de Houdini) retournes pour Cycles, coins de chaque face inverses et primvars par coin permutees (K-76) |
 | `0119` | hydra: sous husk, cadrage reconstruit depuis `resolution`, `dataWindowNDC` et `pixelAspectRatio` - camera sur la fenetre d'affichage, tampon place par full_x/full_y, fenetre conformee a largeur x pixel aspect (K-77) |
+| `0120` | hydra: `disableDepthOfField` des render settings respecte (et ouverture refermee a fStop 0), `aspectRatioConformPolicy` applique sous husk (K-78) |
 
 ---
 

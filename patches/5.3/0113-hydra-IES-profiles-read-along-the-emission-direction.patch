@@ -1,7 +1,7 @@
 From c528084ff9443a79365bcd4099f2ef0385b1e966 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 23:55:09 +0200
-Subject: [PATCH 113/119] hydra: IES profiles read along the emission
+Subject: [PATCH 113/120] hydra: IES profiles read along the emission
  direction, in USD's units
 
 The profile was read along the texture coordinate's normal, which on a

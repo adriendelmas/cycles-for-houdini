@@ -52,6 +52,7 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | Camera: perspective, ortho, DoF, apertures, lens shift, aspect conform | ✅ | `bench_camera.py` 7/7 vs Karma | |
 | Camera exposure | ✅ | `bench_camera.py` | Times the render settings' film exposure (K-71, 0114) |
 | Crop (`dataWindowNDC`), pixel aspect | ✅ | `bench_camera.py` | Under husk, from its render settings (K-77, 0119) |
+| `disableDepthOfField`, `aspectRatioConformPolicy` | ✅ | `bench_camera.py` | Policy from the render settings under husk (K-78, 0120) |
 | Camera motion blur | 🟡 | upstream | Two samples: linear only |
 | Camera switch without manual restart | ✅ | phase 25 | |
 
