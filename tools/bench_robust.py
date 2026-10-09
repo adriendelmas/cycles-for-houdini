@@ -1,10 +1,16 @@
 """Does the delegate survive a malformed file?
 
-Each `tests/scenes/bad_*.usda` carries one attribute USD could not parse - a
-misspelt type name, so the value reaches Hydra as an empty array of the right
-type. Karma renders such a file and ignores the attribute; the delegate read
-past the end of the empty array and took husk down with it (K-57). Each scene
-must render, with an image on disk and a husk exit code of 0.
+Each `tests/scenes/bad_*.usda` carries one malformed thing. Three carry an
+attribute USD could not parse - a misspelt type name, so the value reaches
+Hydra as an empty array of the right type; Karma renders such a file and
+ignores the attribute, the delegate read past the end of the empty array and
+took husk down with it (K-57). The others (2026-10-09): NaN points, indices
+out of range on plain and subdivided meshes, counts that do not add up on
+meshes and curves, degenerate faces, short face-varying and per-vertex
+primvars, an instancer naming missing prototypes, a material graph with a
+cycle, missing textures and IES files, an IES file with no angles. Each
+scene must render, with an image on disk and a husk exit code of 0, as
+Karma does.
 
     python tools/bench_robust.py
 

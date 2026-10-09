@@ -1,0 +1,34 @@
+#usda 1.0
+# Robustness: B-spline curves whose counts ask for more points than there are (tools/bench_robust.py).
+(
+    defaultPrim = "world"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+def Xform "world"
+{
+    def Camera "camera"
+    {
+        float focalLength = 30
+        float horizontalAperture = 36
+        float verticalAperture = 27
+        float2 clippingRange = (0.1, 1000)
+        matrix4d xformOp:transform = ( (1,0,0,0), (0,0.966,-0.259,0), (0,0.259,0.966,0), (0, 3.5, 10, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+    def DistantLight "sun"
+    {
+        float inputs:intensity = 2
+        bool inputs:normalize = 1
+        float3 xformOp:rotateXYZ = (-50, 30, 0)
+        uniform token[] xformOpOrder = ["xformOp:rotateXYZ"]
+    }
+    def BasisCurves "c"
+    {
+        uniform token type = "cubic"
+        uniform token basis = "bspline"
+        int[] curveVertexCounts = [4, 10]
+        point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]
+        float[] widths = [0.1]
+    }
+}

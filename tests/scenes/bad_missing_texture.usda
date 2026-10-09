@@ -1,0 +1,58 @@
+#usda 1.0
+# Robustness: missing textures on a material (a UDIM), a dome, a rect light and an IES file (tools/bench_robust.py).
+(
+    defaultPrim = "world"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+def Xform "world"
+{
+    def Camera "camera"
+    {
+        float focalLength = 30
+        float horizontalAperture = 36
+        float verticalAperture = 27
+        float2 clippingRange = (0.1, 1000)
+        matrix4d xformOp:transform = ( (1,0,0,0), (0,0.966,-0.259,0), (0,0.259,0.966,0), (0, 3.5, 10, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+    def DistantLight "sun"
+    {
+        float inputs:intensity = 2
+        bool inputs:normalize = 1
+        float3 xformOp:rotateXYZ = (-50, 30, 0)
+        uniform token[] xformOpOrder = ["xformOp:rotateXYZ"]
+    }
+    def Mesh "m" (prepend apiSchemas = ["MaterialBindingAPI"])
+    {
+        rel material:binding = </world/M>
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(-1, 0, 0), (1, 0, 0), (1, 1, 0), (-1, 1, 0)]
+    }
+    def DomeLight "dome"
+    {
+        asset inputs:texture:file = @does_not_exist.exr@
+    }
+    def RectLight "rect" (prepend apiSchemas = ["ShapingAPI"])
+    {
+        asset inputs:texture:file = @nope.exr@
+        asset inputs:shaping:ies:file = @nope.ies@
+    }
+    def Material "M"
+    {
+        token outputs:mtlx:surface.connect = </world/M/s.outputs:out>
+        def Shader "s"
+        {
+            uniform token info:id = "ND_standard_surface_surfaceshader"
+            color3f inputs:base_color.connect = </world/M/t.outputs:out>
+            token outputs:out
+        }
+        def Shader "t"
+        {
+            uniform token info:id = "ND_image_color3"
+            asset inputs:file = @missing.<UDIM>.png@
+            color3f outputs:out
+        }
+    }
+}

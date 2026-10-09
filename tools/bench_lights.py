@@ -7,7 +7,8 @@ the level and the falloff are compared - a spot's cone shows at the side.
 Cases: sphere (normalized and not), disk, rect, cylinder, distant; spots
 (a shaping cone, hard, soft, softness alone), emission focus with and
 without a tint, IES profiles (plain, normalized, angle-scaled, asymmetric),
-exposure, colour temperature.
+a normalized disk and cylinder, a point (treatAsPoint), a colour with a
+temperature, a textured rect light, exposure, colour temperature.
 
     hython tools/bench_lights.py [pattern]
 
@@ -144,6 +145,22 @@ CASES = [
     ("ies_asymmetric", "SphereLight", SHAPING, ["float inputs:radius = 0.05",
                                                 "float inputs:intensity = 1",
                                                 "asset inputs:shaping:ies:file = @asym.ies@"]),
+    ("disk_normalized", "DiskLight", "", ["float inputs:radius = 0.5", "float inputs:intensity = 2",
+                                          "bool inputs:normalize = 1"]),
+    ("cylinder_normalized", "CylinderLight", "", ["float inputs:radius = 0.1",
+                                                  "float inputs:length = 1",
+                                                  "float inputs:intensity = 5",
+                                                  "bool inputs:normalize = 1"]),
+    ("treat_as_point", "SphereLight", "", ["float inputs:radius = 0.25", "float inputs:intensity = 10",
+                                           "bool treatAsPoint = 1"]),
+    ("color_and_temperature", "SphereLight", "", ["float inputs:radius = 0.25",
+                                                  "float inputs:intensity = 10",
+                                                  "color3f inputs:color = (0.2, 0.5, 1)",
+                                                  "bool inputs:enableColorTemperature = 1",
+                                                  "float inputs:colorTemperature = 3000"]),
+    ("rect_textured", "RectLight", "", ["float inputs:width = 1", "float inputs:height = 1",
+                                        "float inputs:intensity = 5",
+                                        "asset inputs:texture:file = @corners.exr@"]),
     ("exposure", "SphereLight", "", ["float inputs:radius = 0.25", "float inputs:intensity = 5",
                                      "float inputs:exposure = 1"]),
     ("temperature", "SphereLight", "", ["float inputs:radius = 0.25",
@@ -151,6 +168,18 @@ CASES = [
                                         "bool inputs:enableColorTemperature = 1",
                                         "float inputs:colorTemperature = 3000"]),
 ]
+
+
+def write_corners():
+    """The four-corner texture for the textured rect light."""
+    px = np.zeros((8, 8, 3), dtype=np.float32)
+    px[:4, :4] = (0.1, 0.2, 0.9)
+    px[:4, 4:] = (0.9, 0.9, 0.9)
+    px[4:, :4] = (0.9, 0.1, 0.1)
+    px[4:, 4:] = (0.1, 0.8, 0.2)
+    buf = oiio.ImageBuf(oiio.ImageSpec(8, 8, 3, oiio.FLOAT))
+    buf.set_pixels(oiio.ROI(0, 8, 0, 8), px)
+    buf.write(os.path.join(OUT, "corners.exr"))
 
 
 def write_ies():
@@ -190,6 +219,7 @@ def main():
     if not os.path.isdir(OUT):
         os.makedirs(OUT)
     write_ies()
+    write_corners()
     pattern = sys.argv[1] if len(sys.argv) > 1 else None
     problems, count = [], 0
     for name, light, schemas, inputs in CASES:
