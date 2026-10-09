@@ -1,7 +1,7 @@
 From 9af7050ff8ddd6cccda9a3dbc50cd842f35cff8e Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 17:53:25 +0200
-Subject: [PATCH 080/118] hydra: OpenPBR, glTF et Disney traduits, les defauts
+Subject: [PATCH 080/119] hydra: OpenPBR, glTF et Disney traduits, les defauts
  de chaque surface, UsdUVTexture par canal, kma
 
 Les trois surfaces MaterialX autres que standard_surface pointaient sur sa

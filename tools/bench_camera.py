@@ -6,7 +6,8 @@ of its light from the centroid) and its total light are compared with
 Karma's. Cases: an off-axis perspective framing; the aperture offsets (lens
 shift); depth of field (an f-stop and a focus distance, squares in and out
 of focus); an orthographic camera; the camera's exposure; an image whose
-aspect differs from the aperture's (USD's aperture conform policy).
+aspect differs from the aperture's (USD's aperture conform policy); a crop
+window (dataWindowNDC); a pixel aspect ratio of 2.
 
     hython tools/bench_camera.py [pattern]
 
@@ -40,6 +41,7 @@ def Scope "Render"
         int2 resolution = %(res)s
         int cycles:samples = 128
         int karma:global:pixelsamples = 128
+%(settings)s
     }
 }
 def Xform "world"
@@ -95,12 +97,26 @@ CASES = [
     ("aspect_taller", "(80, 80)", PERSP, [(0, 0, -10, 0.4), (3, 1.5, -10, 0.4)]),
 ]
 
+# Render settings beyond the resolution: a crop of the frame's middle, which
+# is rendered as a data window inside the full display window, and pixels
+# twice as wide as they are tall.
+SETTINGS = {
+    "crop": "        float4 dataWindowNDC = (0.25, 0.25, 0.75, 0.75)",
+    "crop_corner": "        float4 dataWindowNDC = (0.5, 0.5, 1, 1)",
+    "pixel_aspect": "        float pixelAspectRatio = 2",
+}
+CASES += [
+    ("crop", "(120, 80)", PERSP, [(0, 0, -10, 0.4), (2, 1, -10, 0.4)]),
+    ("crop_corner", "(120, 80)", PERSP, [(2, 1, -10, 0.4), (3, 2, -10, 0.4)]),
+    ("pixel_aspect", "(120, 80)", PERSP, [(0, 0, -10, 0.4), (2, 1, -10, 0.4)]),
+]
 
-def scene_text(res, camera, squares):
+
+def scene_text(res, camera, squares, settings=""):
     sq = "".join(SQUARE % {"i": i, "x0": x - s / 2, "x1": x + s / 2, "y0": y - s / 2,
                            "y1": y + s / 2, "z": z} for i, (x, y, z, s) in enumerate(squares))
     return SCENE % {"res": res, "camera": "\n".join("        " + l for l in camera),
-                    "squares": sq}
+                    "squares": sq, "settings": settings}
 
 
 def render(renderer, scene, exr):
@@ -145,7 +161,8 @@ def main():
             continue
         count += 1
         scene = os.path.join(OUT, name + ".usda")
-        open(scene, "w", encoding="utf-8").write(scene_text(res, camera, squares))
+        open(scene, "w", encoding="utf-8").write(scene_text(res, camera, squares,
+                                                             SETTINGS.get(name, "")))
         cyc = render("HdCyclesPlugin", scene, os.path.join(OUT, name + "_cycles.exr"))
         kar = render("BRAY_HdKarma", scene, os.path.join(OUT, name + "_karma.exr"))
         if cyc is None or kar is None:

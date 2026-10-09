@@ -806,6 +806,20 @@ for Cycles (the first kept) and its corner primvars permuted the same way.
 `tools/bench_usdtex.py` a left-handed subdivided grid textured through
 per-corner and per-vertex UVs against Karma (within 0.010).
 
+### K-77 Crop windows and pixel aspect ignored under husk — confirmed — **fixed** (0119)
+`tools/bench_camera.py`, new cases: a render settings `dataWindowNDC` crop
+(centred, then a corner) and a `pixelAspectRatio` of 2. husk gives a
+delegate no framing, only a viewport the size of the data window, and the
+image's resolution, crop and pixel aspect as render settings. The delegate
+sized the camera to that viewport, so a crop rendered the whole view
+shrunk into the crop's pixels, and the pixel aspect never reached it. In a
+batch render the framing is now rebuilt from those settings: the camera
+spans the display window, the buffer is placed in it by Cycles' full_x and
+full_y (counted from the bottom) - the data window had gone into the
+buffer's window, Cycles' overscan, not its place in the frame - and the
+camera's window conforms to the width times the pixel aspect. The viewport
+keeps its own framing as before. Ten camera cases within a pixel of Karma.
+
 ## C. Houdini side
 
 ### K-40 `op:` textures fail under husk — confirmed

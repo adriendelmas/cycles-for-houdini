@@ -1,0 +1,234 @@
+From 57e711efb582263b44f380fdd3024252c66b2a19 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Fri, 9 Oct 2026 03:41:10 +0200
+Subject: [PATCH 119/119] hydra: crop windows and pixel aspect under husk
+
+husk gives a delegate no framing, only a viewport the size of the data
+window, and the image's resolution, crop (dataWindowNDC) and pixel aspect
+as render settings. The camera was sized to the viewport, so a crop
+rendered the whole view shrunk into its pixels, and the pixel aspect never
+arrived. In a batch render the framing is now rebuilt from those settings:
+the camera spans the display window, the buffer is placed in the frame by
+full_x/full_y, counted from the bottom (the data window had gone into the
+buffer's window, Cycles' overscan), and the camera's window conforms to
+the width times the pixel aspect. The viewport keeps its framing as before
+(K-77, tools/bench_camera.py: crop, corner crop, pixel aspect 2).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/camera.cpp          |  5 ++-
+ src/hydra/render_delegate.cpp | 11 ++++++
+ src/hydra/render_pass.cpp     | 53 +++++++++++++++++++++------
+ src/hydra/session.h           | 68 +++++++++++++++++++++++++++++++++++
+ 4 files changed, 126 insertions(+), 11 deletions(-)
+
+diff --git a/src/hydra/camera.cpp b/src/hydra/camera.cpp
+index 31e55311..0674c562 100644
+--- a/src/hydra/camera.cpp
++++ b/src/hydra/camera.cpp
+@@ -206,7 +206,10 @@ void HdCyclesCamera::ApplyCameraSettings(HdRenderParam *renderParam,
+                                          CameraUtilConformWindowPolicy windowPolicy,
+                                          Camera *cam)
+ {
+-  const float width = cam->get_full_width();
++  /* A pixel aspect other than 1 widens what each pixel covers: the window
++   * conforms to the image's width times it (it was ignored). */
++  const float width = cam->get_full_width() *
++                      static_cast<HdCyclesSession *>(renderParam)->GetPixelAspect();
+   const float height = cam->get_full_height();
+ 
+   auto data = dataUnconformedWindow;
+diff --git a/src/hydra/render_delegate.cpp b/src/hydra/render_delegate.cpp
+index d0ef9caa..b24753c3 100644
+--- a/src/hydra/render_delegate.cpp
++++ b/src/hydra/render_delegate.cpp
+@@ -595,6 +595,17 @@ void HdCyclesDelegate::SetRenderSetting(const PXR_NS::TfToken &key, const PXR_NS
+   Scene *const scene = _renderParam->session->scene.get();
+   Session *const session = _renderParam->session;
+ 
++  static const TfToken resolutionToken("resolution"), dataWindowToken("dataWindowNDC"),
++      pixelAspectToken("pixelAspectRatio"), renderModeToken("renderMode");
++  if (key == resolutionToken || key == dataWindowToken || key == pixelAspectToken ||
++      key == renderModeToken)
++  {
++    _renderParam->SetBatchImage(key == resolutionToken ? value : VtValue(),
++                                key == dataWindowToken ? value : VtValue(),
++                                key == pixelAspectToken ? value : VtValue(),
++                                key == renderModeToken ? value : VtValue());
++  }
++
+   if (key == HdCyclesRenderSettingsTokens->stageMetersPerUnit) {
+     _renderParam->SetStageMetersPerUnit(
+         VtValue::Cast<double>(value).GetWithDefault(_renderParam->GetStageMetersPerUnit()));
+diff --git a/src/hydra/render_pass.cpp b/src/hydra/render_pass.cpp
+index 7e41b77e..cd866fb1 100644
+--- a/src/hydra/render_pass.cpp
++++ b/src/hydra/render_pass.cpp
+@@ -211,13 +211,31 @@ void HdCyclesRenderPass::_Execute(const HdRenderPassStateSharedPtr &renderPassSt
+ 
+     // Update camera dimensions to the viewport size
+     CameraUtilFraming framing = renderPassState->GetFraming();
++    bool batchFraming = false;
+     if (!framing.IsValid()) {
+       const GfVec4f vp = renderPassState->GetViewport();
+-      framing = CameraUtilFraming(GfRect2i(GfVec2i(0), int(vp[2]), int(vp[3])));
++      /* husk gives no framing but the crop and the pixel aspect as render
++       * settings; without them a crop rendered the whole view shrunk into
++       * its pixels and the pixel aspect was ignored (tools/bench_camera.py). */
++      framing = _renderParam->BatchFraming(int(vp[2]), int(vp[3]));
++      batchFraming = framing.IsValid();
++      if (!batchFraming) {
++        framing = CameraUtilFraming(GfRect2i(GfVec2i(0), int(vp[2]), int(vp[3])));
++      }
+     }
+ 
+-    scene->camera->set_full_width(framing.dataWindow.GetWidth());
+-    scene->camera->set_full_height(framing.dataWindow.GetHeight());
++    /* A batch crop: the camera spans the display window and the buffer
++     * renders the data window inside it. Elsewhere - the viewport - the
++     * camera spans the data window as it always has. */
++    if (batchFraming) {
++      scene->camera->set_full_width(int(framing.displayWindow.GetSize()[0] + 0.5f));
++      scene->camera->set_full_height(int(framing.displayWindow.GetSize()[1] + 0.5f));
++    }
++    else {
++      scene->camera->set_full_width(framing.dataWindow.GetWidth());
++      scene->camera->set_full_height(framing.dataWindow.GetHeight());
++    }
++    _renderParam->SetPixelAspect(framing.pixelAspectRatio);
+ 
+     /* The camera prim on one side, the render pass state matrices on the other:
+      * both describe the same view, but the former also carries the depth of
+@@ -298,14 +316,29 @@ void HdCyclesRenderPass::_Execute(const HdRenderPassStateSharedPtr &renderPassSt
+       // Reset convergence state of all render buffers
+       ResetConverged();
+ 
++      /* Cycles places the buffer in the frame by full_x/full_y (Blender's
++       * border render); its window is an overscan inside the buffer. The
++       * data window went into the window, and a crop rendered the wrong part
++       * of the frame. Cycles counts y from the bottom, the framing from the
++       * top. */
+       BufferParams buffer_params;
+-      buffer_params.full_x = static_cast<int>(framing.displayWindow.GetMin()[0]);
+-      buffer_params.full_y = static_cast<int>(framing.displayWindow.GetMin()[1]);
+-      buffer_params.full_width = static_cast<int>(framing.displayWindow.GetSize()[0]);
+-      buffer_params.full_height = static_cast<int>(framing.displayWindow.GetSize()[1]);
+-
+-      buffer_params.window_x = framing.dataWindow.GetMinX() - buffer_params.full_x;
+-      buffer_params.window_y = framing.dataWindow.GetMinY() - buffer_params.full_y;
++      if (batchFraming) {
++        const int displayHeight = static_cast<int>(framing.displayWindow.GetSize()[1] + 0.5f);
++        buffer_params.full_x = framing.dataWindow.GetMinX();
++        buffer_params.full_y = displayHeight - 1 - framing.dataWindow.GetMaxY();
++        buffer_params.full_width = static_cast<int>(framing.displayWindow.GetSize()[0] + 0.5f);
++        buffer_params.full_height = displayHeight;
++        buffer_params.window_x = 0;
++        buffer_params.window_y = 0;
++      }
++      else {
++        buffer_params.full_x = static_cast<int>(framing.displayWindow.GetMin()[0]);
++        buffer_params.full_y = static_cast<int>(framing.displayWindow.GetMin()[1]);
++        buffer_params.full_width = static_cast<int>(framing.displayWindow.GetSize()[0]);
++        buffer_params.full_height = static_cast<int>(framing.displayWindow.GetSize()[1]);
++        buffer_params.window_x = framing.dataWindow.GetMinX() - buffer_params.full_x;
++        buffer_params.window_y = framing.dataWindow.GetMinY() - buffer_params.full_y;
++      }
+       buffer_params.window_width = framing.dataWindow.GetWidth();
+       buffer_params.window_height = framing.dataWindow.GetHeight();
+ 
+diff --git a/src/hydra/session.h b/src/hydra/session.h
+index 106f3709..39206df1 100644
+--- a/src/hydra/session.h
++++ b/src/hydra/session.h
+@@ -8,9 +8,11 @@
+ #include "hydra/config.h"
+ #include "util/thread.h"
+ 
++#include <cmath>
+ #include <map>
+ #include <string>
+ 
++#include <pxr/imaging/cameraUtil/framing.h>
+ #include <pxr/imaging/hd/renderDelegate.h>
+ 
+ HDCYCLES_NAMESPACE_OPEN_SCOPE
+@@ -33,6 +35,67 @@ class HdCyclesSession final : public PXR_NS::HdRenderParam {
+ 
+   void UpdateScene();
+ 
++  /* The width of a pixel over its height, from the render pass framing
++   * (USD's pixelAspectRatio); the camera's window conforms to the image's
++   * width times it. */
++  float GetPixelAspect() const
++  {
++    return _pixelAspect;
++  }
++  void SetPixelAspect(const float pixelAspect)
++  {
++    _pixelAspect = pixelAspect > 0.0f ? pixelAspect : 1.0f;
++  }
++
++  /* What husk asks for in a batch render: it hands the delegate a viewport
++   * the size of the data window, no framing, and the image's resolution,
++   * crop (dataWindowNDC) and pixel aspect as render settings. */
++  void SetBatchImage(const PXR_NS::VtValue &resolution,
++                     const PXR_NS::VtValue &dataWindowNDC,
++                     const PXR_NS::VtValue &pixelAspect,
++                     const PXR_NS::VtValue &renderMode)
++  {
++    if (resolution.IsHolding<PXR_NS::GfVec2i>()) {
++      _batchResolution = resolution.UncheckedGet<PXR_NS::GfVec2i>();
++    }
++    if (dataWindowNDC.IsHolding<PXR_NS::GfVec4f>()) {
++      _batchDataWindowNDC = dataWindowNDC.UncheckedGet<PXR_NS::GfVec4f>();
++    }
++    if (pixelAspect.IsHolding<float>()) {
++      _batchPixelAspect = pixelAspect.UncheckedGet<float>();
++    }
++    if (!renderMode.IsEmpty()) {
++      /* A string from husk; a token would do too. */
++      _batch = PXR_NS::VtValue::Cast<std::string>(renderMode).GetWithDefault(std::string()) ==
++               "batch";
++    }
++  }
++
++  /* The framing of a batch render, or an invalid one when there is none or
++   * when the viewport is not the data window it describes. */
++  PXR_NS::CameraUtilFraming BatchFraming(const int viewportWidth, const int viewportHeight) const
++  {
++    if (!_batch || _batchResolution[0] <= 0 || _batchResolution[1] <= 0) {
++      return PXR_NS::CameraUtilFraming();
++    }
++    const PXR_NS::GfVec4f &ndc = _batchDataWindowNDC;
++    const int width = _batchResolution[0];
++    const int height = _batchResolution[1];
++    /* NDC runs up, pixels down. */
++    const int x0 = int(std::ceil(ndc[0] * width - 0.5f));
++    const int x1 = int(std::ceil(ndc[2] * width - 0.5f)) - 1;
++    const int y0 = int(std::ceil((1.0f - ndc[3]) * height - 0.5f));
++    const int y1 = int(std::ceil((1.0f - ndc[1]) * height - 0.5f)) - 1;
++    const PXR_NS::GfRect2i dataWindow(PXR_NS::GfVec2i(x0, y0), PXR_NS::GfVec2i(x1, y1));
++    if (dataWindow.GetWidth() != viewportWidth || dataWindow.GetHeight() != viewportHeight) {
++      return PXR_NS::CameraUtilFraming();
++    }
++    return PXR_NS::CameraUtilFraming(
++        PXR_NS::GfRange2f(PXR_NS::GfVec2f(0.0f), PXR_NS::GfVec2f(float(width), float(height))),
++        dataWindow,
++        _batchPixelAspect > 0.0f ? _batchPixelAspect : 1.0f);
++  }
++
+   double GetStageMetersPerUnit() const
+   {
+     return _stageMetersPerUnit;
+@@ -264,6 +327,11 @@ class HdCyclesSession final : public PXR_NS::HdRenderParam {
+   void UpdateLightLinking(CCL_NS::Scene *scene);
+   int _transparentOverride = -1; /* -1: not set, 0 or 1 */
+   float _settingsExposure = 1.0f;
++  float _pixelAspect = 1.0f;
++  bool _batch = false;
++  PXR_NS::GfVec2i _batchResolution = PXR_NS::GfVec2i(0);
++  PXR_NS::GfVec4f _batchDataWindowNDC = PXR_NS::GfVec4f(0.0f, 0.0f, 1.0f, 1.0f);
++  float _batchPixelAspect = 1.0f;
+   float _cameraExposure = 1.0f;
+   bool _backgroundDirty = false;
+   bool _disableMotionBlur = false;

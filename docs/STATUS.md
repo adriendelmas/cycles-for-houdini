@@ -2398,3 +2398,10 @@ sur un matériau opaque (Cycles retourne la normale vers la caméra), faux en
 réfraction : un cube de verre gaucher rendait 0,44 au lieu de 0,56. Les
 coins de chaque face sont inversés et les primvars par coin permutées ;
 vérifié sur le verre et sur des UV par coin et par sommet contre Karma.
+
+**Crop et pixel aspect sous husk (0119, K-77).** Un `dataWindowNDC` rendait
+toute la vue rétrécie dans les pixels du crop, et `pixelAspectRatio` était
+ignoré : husk ne donne au délégué qu'un viewport de la taille du crop et
+passe résolution, crop et pixel aspect en réglages de rendu. Le cadrage est
+reconstruit à partir d'eux en batch (le viewport de Houdini garde le sien) ;
+10 cas caméra sur 10.
