@@ -16,6 +16,7 @@ tests/nodes/*/output/
 tests/materialx/output/
 tests/curves/output/
 tests/motion/output/
+tests/cop/output/
 tests/instances/output/
 tests/implicit/output/
 tests/settings/output/

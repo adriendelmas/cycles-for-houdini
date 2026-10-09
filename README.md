@@ -172,7 +172,7 @@ full MaterialX scene renders bit-identical between 5.2 and 5.3. Two more
 compare with Karma, rendering the same USD with both: seventeen materials
 region by region (`hython tools/bench_agree.py`, 61 checks, floor within
 1 %), and every MaterialX node one quad each (`hython tools/mtlx_karma.py`:
-625 of 695 value nodes and 38 of 45 closures the same, the rest explained in
+633 of 704 value nodes and 38 of 45 closures the same, the rest explained in
 docs/KNOWN_ISSUES.md, K-61 and K-64), and every input of the surface models
 (`hython tools/surface_audit.py`, K-63). What each bench does and does not prove is set out in
 [docs/TESTING.md](docs/TESTING.md).
@@ -182,11 +182,11 @@ docs/KNOWN_ISSUES.md, K-61 and K-64), and every input of the surface models
 The complete list, with line numbers, is [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md).
 The ones a user meets first:
 
-- MaterialX: 796 of the library's 822 shading nodedefs are rendered - 664
-  by the mapping table, 88 by expanding a nodegraph (the library's own, or
+- MaterialX: 805 of the library's 822 shading nodedefs are rendered - 651
+  by the mapping table, 110 by expanding a nodegraph (the library's own, or
   one the delegate ships for nodes the library writes in GLSL only), 44 by
   rewriting (`extract`, `swizzle`, `transformmatrix`, a 1.38 thin film); of
-  the 797 that route, 666 keep every input when rendered
+  the 806 that route, 666 keep every input when rendered
   (`tools/mtlx_inputs.py`), and 80 are
   value-checked against the MaterialX definition (`tools/bench_mtlx.py`).
   Out: the matrix nodes other than a constant `transformmatrix`, the colour4

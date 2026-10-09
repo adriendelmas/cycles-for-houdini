@@ -109,15 +109,15 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 
 ## Materials - MaterialX
 
-Three numbers, measured 2026-10-08 evening (commands in [TESTING.md](TESTING.md)):
-**796** of 822 nodedefs are rendered - 664 through the mapping table, 88 by
+Three numbers, measured 2026-10-09 (after 0125) (commands in [TESTING.md](TESTING.md)):
+**805** of 822 nodedefs are rendered - 651 through the mapping table, 110 by
 expanding a nodegraph (the library's, or one the delegate ships for nodes the
 library writes in GLSL only), 44 by rewriting or folding (`mtlx_coverage.py`);
-**666** of the 797 that route keep every input, output and node when rendered
+**666** of the 806 that route keep every input, output and node when rendered
 with all inputs authored (`mtlx_inputs.py`); **80** are verified against a
 value computed from the MaterialX definition (`bench_mtlx.py`), and the five
 surface models keep their own defaults for unauthored inputs
-(`mtlx_defaults.py`). Against Karma on the same file: 625 of 695 value nodes
+(`mtlx_defaults.py`). Against Karma on the same file: 633 of 704 value nodes
 and 38 of 45 closures alike (`mtlx_karma.py`, the rest explained in K-61 and
 K-64), hand-built BSDF networks (`bench_agree.py`), and every input of the
 surface models (`surface_audit.py`, K-63). On 2026-10-07 the numbers were
