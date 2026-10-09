@@ -1,0 +1,139 @@
+From 081cf6c4d933c1a28153d159cb92ca6a91e676e3 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Fri, 9 Oct 2026 16:18:38 +0200
+Subject: [PATCH 121/121] hydra: displayOpacity on prims without a material
+
+A prim without a material renders with the default surface, a diffuse in
+its constant displayColor; its displayOpacity was dropped and it rendered
+opaque where Karma lets the rest through. The constant opacity, on the prim
+or per instance on a PointInstancer, now goes to the object's alpha (which
+Cycles starts at 0: instances now start at 1), and the default surface
+mixes a transparent closure by it (K-79, tools/bench_settings.py).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/curves.cpp     | 13 +++++++++++++
+ src/hydra/geometry.inl   |  6 ++++++
+ src/hydra/mesh.cpp       | 13 +++++++++++++
+ src/hydra/pointcloud.cpp | 13 +++++++++++++
+ src/hydra/session.cpp    |  9 ++++++++-
+ 5 files changed, 53 insertions(+), 1 deletion(-)
+
+diff --git a/src/hydra/curves.cpp b/src/hydra/curves.cpp
+index 53f5625f..b6621402 100644
+--- a/src/hydra/curves.cpp
++++ b/src/hydra/curves.cpp
+@@ -306,6 +306,19 @@ void HdCyclesCurves::PopulatePrimvars(HdSceneDelegate *sceneDelegate)
+           }
+         }
+       }
++      /* Its opacity, which the default surface reads as the object's alpha:
++       * an unbound prim with displayOpacity rendered opaque, Karma lets the
++       * rest through. */
++      else if (primvarName == HdTokens->displayOpacity &&
++               interpolation.first == HdInterpolationConstant)
++      {
++        if (value.IsHolding<VtFloatArray>() && value.GetArraySize() == 1) {
++          const float opacity = value.UncheckedGet<VtFloatArray>()[0];
++          for (auto *const instance : _instances) {
++            instance->set_alpha(opacity);
++          }
++        }
++      }
+ 
+       // Skip attributes that are not needed
+       if ((std != ATTR_STD_NONE && _geom->need_attribute(scene, std)) ||
+diff --git a/src/hydra/geometry.inl b/src/hydra/geometry.inl
+index f1ec2537..9eff14fe 100644
+--- a/src/hydra/geometry.inl
++++ b/src/hydra/geometry.inl
+@@ -315,6 +315,9 @@ void HdCyclesGeometry<Base, CyclesBase>::Sync(HdSceneDelegate *sceneDelegate,
+         if (pv.name == HdTokens->displayColor && pv.components == 3) {
+           instance->set_color(make_float3(v[0], v[1], v[2]));
+         }
++        if (pv.name == HdTokens->displayOpacity && pv.components == 1) {
++          instance->set_alpha(v[0]);
++        }
+       }
+     }
+     if (attributesChanged) {
+@@ -424,6 +427,9 @@ void HdCyclesGeometry<Base, CyclesBase>::InitializeInstance(int index)
+                                     _instances.size() == 1 ? -1.0f : static_cast<float>(index));
+ 
+   instance->set_color(make_float3(0.8f, 0.8f, 0.8f));
++  /* Cycles' object alpha starts at 0; the default surface reads it as the
++   * prim's opacity. */
++  instance->set_alpha(1.0f);
+   instance->set_random_id(hash_uint2(hash_string(_geom->name.c_str()), index));
+ 
+   /* What cryptomatte hashes: the prim's path for the object, its parent's for
+diff --git a/src/hydra/mesh.cpp b/src/hydra/mesh.cpp
+index 2f1b03dd..d8925d80 100644
+--- a/src/hydra/mesh.cpp
++++ b/src/hydra/mesh.cpp
+@@ -404,6 +404,19 @@ void HdCyclesMesh::PopulatePrimvars(HdSceneDelegate *sceneDelegate)
+           }
+         }
+       }
++      /* Its opacity, which the default surface reads as the object's alpha:
++       * an unbound prim with displayOpacity rendered opaque, Karma lets the
++       * rest through. */
++      else if (primvarName == HdTokens->displayOpacity &&
++               interpolation.first == HdInterpolationConstant)
++      {
++        if (value.IsHolding<VtFloatArray>() && value.GetArraySize() == 1) {
++          const float opacity = value.UncheckedGet<VtFloatArray>()[0];
++          for (auto *const instance : _instances) {
++            instance->set_alpha(opacity);
++          }
++        }
++      }
+ 
+       // Skip attributes that are not needed
+       if ((std != ATTR_STD_NONE && _geom->need_attribute(scene, std)) ||
+diff --git a/src/hydra/pointcloud.cpp b/src/hydra/pointcloud.cpp
+index 5be03f52..ac30b488 100644
+--- a/src/hydra/pointcloud.cpp
++++ b/src/hydra/pointcloud.cpp
+@@ -210,6 +210,19 @@ void HdCyclesPoints::PopulatePrimvars(HdSceneDelegate *sceneDelegate)
+           }
+         }
+       }
++      /* Its opacity, which the default surface reads as the object's alpha:
++       * an unbound prim with displayOpacity rendered opaque, Karma lets the
++       * rest through. */
++      else if (primvarName == HdTokens->displayOpacity &&
++               interpolation.first == HdInterpolationConstant)
++      {
++        if (value.IsHolding<VtFloatArray>() && value.GetArraySize() == 1) {
++          const float opacity = value.UncheckedGet<VtFloatArray>()[0];
++          for (auto *const instance : _instances) {
++            instance->set_alpha(opacity);
++          }
++        }
++      }
+ 
+       // Skip attributes that are not needed
+       if ((std != ATTR_STD_NONE && _geom->need_attribute(scene, std)) ||
+diff --git a/src/hydra/session.cpp b/src/hydra/session.cpp
+index 802e5698..cd4a7a86 100644
+--- a/src/hydra/session.cpp
++++ b/src/hydra/session.cpp
+@@ -290,9 +290,16 @@ HdCyclesSession::HdCyclesSession(const SessionParams &params)
+     ObjectInfoNode *objectNode = graph->create_node<ObjectInfoNode>();
+ 
+     DiffuseBsdfNode *diffuseNode = graph->create_node<DiffuseBsdfNode>();
++    /* displayOpacity, through the object's alpha: what it leaves goes
++     * through, as in Karma. */
++    TransparentBsdfNode *clearNode = graph->create_node<TransparentBsdfNode>();
++    MixClosureNode *mixNode = graph->create_node<MixClosureNode>();
+ 
+     graph->connect(objectNode->output("Color"), diffuseNode->input("Color"));
+-    graph->connect(diffuseNode->output("BSDF"), graph->output()->input("Surface"));
++    graph->connect(objectNode->output("Alpha"), mixNode->input("Fac"));
++    graph->connect(clearNode->output("BSDF"), mixNode->input("Closure1"));
++    graph->connect(diffuseNode->output("BSDF"), mixNode->input("Closure2"));
++    graph->connect(mixNode->output("Closure"), graph->output()->input("Surface"));
+ 
+     // Create the instanceId AOV output
+     const ustring instanceId(HdAovTokens->instanceId.GetString());

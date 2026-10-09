@@ -2411,3 +2411,8 @@ réglage « Disable Depth of Field » des render settings laissait le flou ; la
 politique `aspectRatioConformPolicy` était toujours « expand ». Les deux sont
 respectés sous husk ; remettre le f-stop d'une caméra à 0 referme aussi son
 ouverture. 15 cas caméra sur 15.
+
+**displayOpacity (0121, K-79).** Un prim sans matériau ignorait son
+`displayOpacity` (rendu opaque, Karma laisse passer le reste). L'opacité
+constante passe par l'alpha de l'objet, que la surface par défaut lit pour
+mélanger un transparent.

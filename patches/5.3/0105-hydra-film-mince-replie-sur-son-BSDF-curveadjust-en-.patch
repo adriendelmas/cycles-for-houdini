@@ -1,7 +1,7 @@
 From f983ebd85782f4319b41c7d4605308c0630e3358 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 18:14:11 +0200
-Subject: [PATCH 105/120] hydra: film mince replie sur son BSDF, curveadjust en
+Subject: [PATCH 105/121] hydra: film mince replie sur son BSDF, curveadjust en
  passe-plat, alpha d'image
 
 thin_film_bsdf (MaterialX 1.38) s'empile par layer sur un BSDF ; en 1.39 le

@@ -3,7 +3,8 @@
 Each case renders a small scene through husk and checks a few pixels against
 a value it knows: the film transparent behind a dome light, the exposure
 doubling the image, motion blur switched off, a Houdini volume's `Cd` field
-reaching a shader that asks for the standard `color`.
+reaching a shader that asks for the standard `color`, an unbound prim's
+`displayOpacity`.
 
     hython tools/bench_settings.py [pattern]
 
@@ -277,6 +278,12 @@ CASES = [
     }""", "", [],
      lambda img: None if abs(centre(img)[0] - 0.8) < 0.05 else
      "sphere %.3f, expected the dome alone (0.8): the sun's diffuse is 0" % centre(img)[0]),
+    # An unbound sphere, black, 30 % opaque: the dome through both of its
+    # sides, 0.7 x 0.7 (it rendered opaque black before 0121).
+    ("display_opacity", sphere_with("        color3f[] primvars:displayColor = [(0, 0, 0)]" + chr(10) +
+                                    "        float[] primvars:displayOpacity = [0.3]"), "", [],
+     lambda img: None if abs(centre(img)[0] - 0.49) < 0.05 else
+     "sphere %.3f, expected the dome through two 30 %% opaque sides (0.49)" % centre(img)[0]),
     ("volume_cd", VOLUME, "", [],
      lambda img: None if centre(img)[0] > 2.0 * centre(img)[1] else
      "volume %s, expected red from the Cd field" % centre(img).round(3)),

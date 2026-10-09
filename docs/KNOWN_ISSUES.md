@@ -831,6 +831,16 @@ aspect) was always `expandAperture`: `cropAperture` and
 policy now comes from the render settings (the viewport keeps the camera's
 own). 15 camera cases within a pixel of Karma.
 
+### K-79 displayOpacity ignored on unbound prims — confirmed — **fixed** (0121)
+A prim without a material renders with the delegate's default surface, a
+diffuse in its constant `displayColor`. Its `displayOpacity` was dropped: a
+30 % opaque black card in front of a white wall rendered black where Karma
+shows the wall at 0.73. The constant opacity (on the prim, or per instance
+on a PointInstancer) now goes to the object's alpha - which Cycles starts at
+0, so instances now start at 1 - and the default surface mixes a
+transparent closure by it: 0.70. `tools/bench_settings.py`,
+`display_opacity`: a 30 % opaque sphere shows the dome through both sides.
+
 ## C. Houdini side
 
 ### K-40 `op:` textures fail under husk — confirmed
