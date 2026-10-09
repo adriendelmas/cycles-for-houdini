@@ -1,7 +1,7 @@
 From 3c55d275b0383ca1954941039b091dbf628b5619 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 03:26:55 +0200
-Subject: [PATCH 093/121] hydra: les multiplicateurs diffuse et specular des
+Subject: [PATCH 093/122] hydra: les multiplicateurs diffuse et specular des
  lumieres USD
 
 inputs:diffuse et inputs:specular etaient ignores : une lumiere a 0 de

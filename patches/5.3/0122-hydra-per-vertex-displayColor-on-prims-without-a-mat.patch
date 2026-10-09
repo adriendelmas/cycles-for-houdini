@@ -1,0 +1,66 @@
+From 048cc6f67ab514d5b69e8e5f47ae2dbc61ced0ce Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Fri, 9 Oct 2026 16:48:14 +0200
+Subject: [PATCH 122/122] hydra: per-vertex displayColor on prims without a
+ material
+
+The default surface took its colour from Object Info, which only ever
+carried a constant displayColor: a mesh coloured per vertex, face or corner
+rendered grey. It now reads displayColor as an attribute; every instance
+carries a grey (0.8) object attribute of that name as the fallback, which
+a displayColor on the geometry, or one per PointInstancer instance,
+overrides (K-80, tools/bench_settings.py).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/geometry.inl | 10 ++++++++--
+ src/hydra/session.cpp  |  8 +++++++-
+ 2 files changed, 15 insertions(+), 3 deletions(-)
+
+diff --git a/src/hydra/geometry.inl b/src/hydra/geometry.inl
+index 9eff14fe..ab8e3106 100644
+--- a/src/hydra/geometry.inl
++++ b/src/hydra/geometry.inl
+@@ -289,8 +289,9 @@ void HdCyclesGeometry<Base, CyclesBase>::Sync(HdSceneDelegate *sceneDelegate,
+     bool attributesChanged = false;
+     for (size_t i = 0; i < _instances.size(); ++i) {
+       Object *const instance = _instances[i];
+-      if (instance->attributes.size() > 1) {
+-        instance->attributes.resize(1);
++      /* Keep the instance id and the grey displayColor fallback. */
++      if (instance->attributes.size() > 2) {
++        instance->attributes.resize(2);
+         attributesChanged = true;
+       }
+       for (const HdCyclesInstancer::InstancePrimvar &pv : instancePrimvars) {
+@@ -425,6 +426,11 @@ void HdCyclesGeometry<Base, CyclesBase>::InitializeInstance(int index)
+ 
+   instance->attributes.emplace_back(HdAovTokens->instanceId.GetString(),
+                                     _instances.size() == 1 ? -1.0f : static_cast<float>(index));
++  /* The default surface reads displayColor: a prim without one shows this
++   * grey. A displayColor on the geometry, or one per instance, wins. */
++  static const float grey[3] = {0.8f, 0.8f, 0.8f};
++  instance->attributes.emplace_back(
++      HdTokens->displayColor.GetString(), CCL_NS::TypeColor, 1, grey);
+ 
+   instance->set_color(make_float3(0.8f, 0.8f, 0.8f));
+   /* Cycles' object alpha starts at 0; the default surface reads it as the
+diff --git a/src/hydra/session.cpp b/src/hydra/session.cpp
+index cd4a7a86..b44fce60 100644
+--- a/src/hydra/session.cpp
++++ b/src/hydra/session.cpp
+@@ -295,7 +295,13 @@ HdCyclesSession::HdCyclesSession(const SessionParams &params)
+     TransparentBsdfNode *clearNode = graph->create_node<TransparentBsdfNode>();
+     MixClosureNode *mixNode = graph->create_node<MixClosureNode>();
+ 
+-    graph->connect(objectNode->output("Color"), diffuseNode->input("Color"));
++    /* displayColor as an attribute, so that one per vertex, per face or
++     * per corner shows - the object's colour only carried a constant one,
++     * and a coloured mesh rendered grey where Karma shows its colours. */
++    AttributeNode *colorNode = graph->create_node<AttributeNode>();
++    colorNode->set_attribute(ustring(HdTokens->displayColor.GetString()));
++
++    graph->connect(colorNode->output("Color"), diffuseNode->input("Color"));
+     graph->connect(objectNode->output("Alpha"), mixNode->input("Fac"));
+     graph->connect(clearNode->output("BSDF"), mixNode->input("Closure1"));
+     graph->connect(diffuseNode->output("BSDF"), mixNode->input("Closure2"));

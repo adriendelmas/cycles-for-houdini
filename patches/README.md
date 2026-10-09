@@ -151,6 +151,7 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0119` | hydra: sous husk, cadrage reconstruit depuis `resolution`, `dataWindowNDC` et `pixelAspectRatio` - camera sur la fenetre d'affichage, tampon place par full_x/full_y, fenetre conformee a largeur x pixel aspect (K-77) |
 | `0120` | hydra: `disableDepthOfField` des render settings respecte (et ouverture refermee a fStop 0), `aspectRatioConformPolicy` applique sous husk (K-78) |
 | `0121` | hydra: `displayOpacity` constant des prims sans materiau -> alpha de l'objet, lue par la surface par defaut (melange transparent) (K-79) |
+| `0122` | hydra: la surface par defaut lit `displayColor` comme attribut (par sommet, face, coin), gris 0,8 en repli par instance (K-80) |
 
 ---
 

@@ -71,8 +71,8 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | Film exposure, pixel filter | ✅ | `bench_settings.py` (exposure) | Any film/background socket as `cycles:film:*`, `cycles:background:*` (0086) |
 | Denoising (OIDN/OptiX) | ✅ | integrator sockets | |
 | Per-object ray visibility, holdout, shadow catcher, light groups, caustics flags | ✅ | `bench_settings.py` | `primvars:cycles:object:*` and Karma's visibility/holdout (K-27, 0088); light group passes since 0092 |
-| Render tags / purposes | ❌ | code read | `proxy` and `render` both render (K-28) |
-| Batch mode under husk | 🟡 | code read | `background = false` always (K-29) |
+| Render tags / purposes | ✅ | checked in Houdini | Honoured live (K-28, 0090) |
+| Batch mode under husk | ✅ | measured | `background = true` brings nothing (K-29); crop, pixel aspect, conform policy read from husk's settings (K-77, K-78) |
 | GL display driver | 🟡 | user's viewport | Correct on OpenGL Hgi; falls back under Vulkan and husk |
 | Viewport interactivity | ✅ | timestamped live log | K-31 closed 2026-10-08: 871 restarts by hand, first sample 19 ms median, no host-thread pass over 50 ms |
 
@@ -130,7 +130,7 @@ surface models (`surface_audit.py`, K-63). On 2026-10-07 the numbers were
 | Unauthored inputs of every surface | ✅ | MaterialX / USD defaults pinned (K-55) |
 | `image`, `tiledimage`, `hextiledimage`, `gltf_image` | ✅ | `constant` wrap only exact for black |
 | `normalmap`, `bump`, `displacement` | ✅ | `bench_normalmap.py`, `bench_displace.py`; per-vertex UVs broke the tangent space before 0116 (K-73) |
-| `heighttonormal` | 🐞 | Outputs a world normal, not a tangent map (K-12) |
+| `heighttonormal` | ✅ | Tangent-space map from the delegate's own nodegraph (K-12, 0108) |
 | `texcoord`, `position`, `normal`, `tangent` | 🟡 | `position` object space ✅; `normal`/`tangent` world space; no UV set index |
 | `geomcolor` | ✅ | Exact since 2026-10-07 (K-06, K-19); `index` not carried |
 | `geompropvalue` | 🟡 | Scalar output only |
@@ -173,7 +173,7 @@ surface models (`surface_audit.py`, K-63). On 2026-10-07 the numbers were
 | Material settings translator | ✅ | |
 | Preview translator | 🟡 | See above |
 | `op:` textures in husk / on a farm | ❌ | `flatten_op_textures` exists, nothing automates it |
-| COP cache eviction | ❌ | Pixels kept for the session |
+| COP cache eviction | ✅ | On material finalize, capped by bytes (K-41, 0096) |
 | Karma Material Builder (`kma`) | ✅ | Read after `mtlx` since 2026-10-07 (K-16) |
 
 ## Repository and process
@@ -181,7 +181,7 @@ surface models (`surface_audit.py`, K-63). On 2026-10-07 the numbers were
 | Item | State | Notes |
 |---|---|---|
 | Patch series regenerable from the worktree | ✅ | 74 patches |
-| Bootstrap from a clean clone | 🟡 | Written, not re-run end to end since the 5.3 move |
+| Bootstrap from a clean clone | ✅ | Re-run: 14 min 20 s (ENVIRONMENT.md) |
 | Regression tests on images | ✅ | `references/` tracked, `output/` ignored, `bench_diff.py --accept` (K-50) |
-| Code and messages in English | 🟡 | New code in English since 2026-10-07; French comments remain in older code (K-53) |
+| Code and messages in English | ✅ | Translated (K-53, 0097) |
 | README numbers reproducible | ✅ | `count_nodes.py`: 163 / 64 / 99 / 97 (K-54) |

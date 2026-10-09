@@ -1,7 +1,7 @@
 From ee48a61579aba5f2a5e7ae5ce3404ad8bb51d0e7 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 23:33:59 +0200
-Subject: [PATCH 086/121] hydra: le flou qui revient, les champs de volume
+Subject: [PATCH 086/122] hydra: le flou qui revient, les champs de volume
  d'Houdini, et le film transparent
 
 Le flou de mouvement : disableMotionBlur et instantaneousShutter a vrai le

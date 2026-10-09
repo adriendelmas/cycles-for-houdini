@@ -841,6 +841,16 @@ on a PointInstancer) now goes to the object's alpha - which Cycles starts at
 transparent closure by it: 0.70. `tools/bench_settings.py`,
 `display_opacity`: a 30 % opaque sphere shows the dome through both sides.
 
+### K-80 Per-vertex displayColor ignored on unbound prims — confirmed — **fixed** (0122)
+The default surface took its colour from the object (Object Info), which
+only ever carried a constant `displayColor`: a mesh coloured per vertex,
+per face or per corner rendered in the grey fallback where Karma shows its
+colours. The default surface now reads `displayColor` as an attribute; every
+instance carries a grey (0.8) object attribute of that name as the fallback,
+which a displayColor on the geometry, or one per PointInstancer instance,
+overrides. Karma's own fallback shading stays about twice as dark (see
+`bench_agree.py`). `tools/bench_settings.py`, `display_color_vertex`.
+
 ## C. Houdini side
 
 ### K-40 `op:` textures fail under husk — confirmed

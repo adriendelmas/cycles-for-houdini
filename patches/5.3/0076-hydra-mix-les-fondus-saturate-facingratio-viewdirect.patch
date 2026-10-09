@@ -1,7 +1,7 @@
 From a5045611f0139ef141321164cce6152a07c38eeb Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 16:46:27 +0200
-Subject: [PATCH 076/121] hydra: mix, les fondus, saturate, facingratio,
+Subject: [PATCH 076/122] hydra: mix, les fondus, saturate, facingratio,
  viewdirection et geomcolor, exacts
 
 Six traductions MaterialX rendaient faux sans que rien ne le dise, les

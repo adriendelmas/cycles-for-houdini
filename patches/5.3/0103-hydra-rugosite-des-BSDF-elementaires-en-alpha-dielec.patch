@@ -1,7 +1,7 @@
 From b88fdd424be0b2562460d1827bc3a51858fcad02 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 09:34:52 +0200
-Subject: [PATCH 103/121] hydra: rugosite des BSDF elementaires en alpha,
+Subject: [PATCH 103/122] hydra: rugosite des BSDF elementaires en alpha,
  dielectric_bsdf selon scatter_mode
 
 La rugosite de conductor_bsdf et dielectric_bsdf est deja l'alpha GGX dans

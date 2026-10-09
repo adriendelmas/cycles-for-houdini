@@ -284,6 +284,21 @@ CASES = [
                                     "        float[] primvars:displayOpacity = [0.3]"), "", [],
      lambda img: None if abs(centre(img)[0] - 0.49) < 0.05 else
      "sphere %.3f, expected the dome through two 30 %% opaque sides (0.49)" % centre(img)[0]),
+    # An unbound card coloured per vertex, red at the bottom, blue at the
+    # top: the default surface reads it (it showed the grey fallback before).
+    ("display_color_vertex", """    def Mesh "card"
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(-1, -1, 0), (1, -1, 0), (1, 1, 0), (-1, 1, 0)]
+        color3f[] primvars:displayColor = [(1, 0, 0), (1, 0, 0), (0, 0, 1), (0, 0, 1)] (
+            interpolation = "vertex"
+        )
+    }""", "", [],
+     lambda img: None if img[40, RES // 2, 0] > 3 * img[40, RES // 2, 2] and
+     img[24, RES // 2, 2] > 3 * img[24, RES // 2, 0] else
+     "bottom %s, top %s: expected red below, blue above"
+     % (img[40, RES // 2, :3].round(3), img[24, RES // 2, :3].round(3))),
     ("volume_cd", VOLUME, "", [],
      lambda img: None if centre(img)[0] > 2.0 * centre(img)[1] else
      "volume %s, expected red from the Cd field" % centre(img).round(3)),

@@ -1,7 +1,7 @@
 From c268f9f07b15006b514035ab24097c39765ebfd7 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 22:46:04 +0200
-Subject: [PATCH 084/121] hydra: un maillage Catmull-Clark subdivise sans
+Subject: [PATCH 084/122] hydra: un maillage Catmull-Clark subdivise sans
  attendre l'indice d'affichage
 
 Le delegue ne subdivisait qu'avec refineLevel > 0 et prenait ce nombre pour

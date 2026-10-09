@@ -2416,3 +2416,8 @@ ouverture. 15 cas caméra sur 15.
 `displayOpacity` (rendu opaque, Karma laisse passer le reste). L'opacité
 constante passe par l'alpha de l'objet, que la surface par défaut lit pour
 mélanger un transparent.
+
+**displayColor par sommet (0122, K-80).** Un prim sans matériau coloré
+par sommet restait gris : la surface par défaut ne lisait que la couleur
+constante. Elle lit maintenant l'attribut `displayColor`, avec un gris 0,8
+de repli porté par chaque instance.
