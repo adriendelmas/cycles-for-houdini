@@ -2390,3 +2390,11 @@ courbes sans `widths` n'étaient pas dessinés (rayon 0) ; Karma prend la
 largeur 1 de Hydra, Cycles aussi maintenant. Le `displacement` d'un
 UsdPreviewSurface était ignoré ; il passe par un nœud displacement de Cycles.
 Le displacement MaterialX, lui, était déjà juste.
+
+**Maillages subdivisés gauchers (0118, K-76).** Houdini écrit ses
+maillages `leftHanded` ; Hydra retourne les polygones triangulés, mais un
+maillage subdivisé partait vers Cycles tel quel, faces à l'envers. Invisible
+sur un matériau opaque (Cycles retourne la normale vers la caméra), faux en
+réfraction : un cube de verre gaucher rendait 0,44 au lieu de 0,56. Les
+coins de chaque face sont inversés et les primvars par coin permutées ;
+vérifié sur le verre et sur des UV par coin et par sommet contre Karma.

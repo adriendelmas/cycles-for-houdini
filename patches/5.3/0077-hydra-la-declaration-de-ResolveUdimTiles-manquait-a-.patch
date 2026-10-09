@@ -1,7 +1,7 @@
 From 416c0757afd145aaa1a2ad3cd94b689de64c5b34 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 16:49:20 +0200
-Subject: [PATCH 077/117] hydra: la declaration de ResolveUdimTiles manquait a
+Subject: [PATCH 077/118] hydra: la declaration de ResolveUdimTiles manquait a
  la serie
 
 material.cpp la definit et l'appelle depuis le correctif des tuiles UDIM,

@@ -17,7 +17,7 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | Catmull-Clark subdivision, creases, corners, boundary rules | ✅ | `bench_subdiv.py` 7/7 vs Karma | Always for `catmullClark`, capped by `cycles:max_subdivisions` (K-30, 0084); the tags were never read before 0115 (K-72) |
 | Adaptive dicing rate, dicing camera | ✅ | 10.3 M → expected triangle counts | Setting `cycles:dicing_rate`, clamped ≥ 0.1 |
 | Holes on subdivided meshes | ✅ | `bench_subdiv.py` | Not diced, still shaping the neighbours (K-72, 0115) |
-| Left-handed subdivided meshes | ❌ | code read | |
+| Left-handed subdivided meshes | ✅ | `bench_subdiv.py`, `bench_usdtex.py` | Faces reversed for Cycles, corner primvars with them (K-76, 0118) |
 | Geom subsets (per-face materials) | ✅ | upstream | Face sets only |
 | Transform motion blur | ✅ | 179 px blur measured | 3 steps, evenly spaced |
 | Deformation blur (sampled points) | ✅ | measured, mesh/curves/points | |

@@ -10,7 +10,8 @@ shows in the quad's quarters, compared between Cycles and Karma.
 Cases: the plain read; a 2x tiling with repeat wrap; a quarter-turn
 rotation; a translation; scale and bias on the texture; an 8-bit PNG read
 as sRGB, as raw and with no colour space (auto); the same PNG through a
-MaterialX image, with and without a colour space; two UDIM tiles.
+MaterialX image, with and without a colour space; two UDIM tiles; a
+left-handed subdivided grid with UVs per corner and per vertex.
 
     hython tools/bench_usdtex.py
 
@@ -125,6 +126,9 @@ CASES = [
     # second spelling is the one Houdini writes.
     ("udim", "tile.<UDIM>.exr", ["float2 inputs:scale = (2, 1)"], []),
     ("udim_houdini", "tile.%(UDIM)d.exr", ["float2 inputs:scale = (2, 1)"], []),
+    # A left-handed subdivided grid, UVs per corner and per vertex.
+    ("left_subd_corner_uv", "corners.exr", "LEFT", "faceVarying"),
+    ("left_subd_vertex_uv", "corners.exr", "LEFT", "vertex"),
 ]
 
 SCENE_MTLX_MATERIAL = '''            token outputs:mtlx:surface.connect = </world/Materials/M/unlit.outputs:out>
@@ -148,6 +152,31 @@ def mtlx_scene(file, colorspace):
     start = text.index("            token outputs:surface.connect")
     end = text.index('            def Shader "st"')
     return text[:start] + SCENE_MTLX_MATERIAL % (file, colorspace) + "\n" + text[end:]
+
+
+def left_handed_scene(interpolation):
+    """The plain case on a 2 x 2 grid wound clockwise (`leftHanded`, as
+    Houdini writes meshes) and subdivided: Cycles gets each face reversed,
+    and the corner UVs must follow."""
+    points = [(x - 0.5, y - 0.5) for y in range(3) for x in range(3)]
+    faces = [(0, 3, 4, 1), (1, 4, 5, 2), (3, 6, 7, 4), (4, 7, 8, 5)]
+    indices = [i for f in faces for i in f]
+    per_vertex = [(x / 2.0, y / 2.0) for y in range(3) for x in range(3)]
+    st = [per_vertex[i] for i in indices] if interpolation == "faceVarying" else per_vertex
+    mesh = "\n".join([
+        "        int[] faceVertexCounts = [4, 4, 4, 4]",
+        "        int[] faceVertexIndices = [%s]" % ", ".join(str(i) for i in indices),
+        "        point3f[] points = [%s]" % ", ".join("(%g,%g,0)" % p for p in points),
+        '        texCoord2f[] primvars:st = [%s] (interpolation = "%s")'
+        % (", ".join("(%g,%g)" % p for p in st), interpolation),
+        '        uniform token orientation = "leftHanded"',
+        '        uniform token subdivisionScheme = "catmullClark"',
+        '        uniform token faceVaryingLinearInterpolation = "all"'])
+    text = SCENE % {"file": "corners.exr", "transform": "", "stsource": "st.outputs:result",
+                    "texinputs": ""}
+    start = text.index("        int[] faceVertexCounts")
+    end = text.index('        uniform token subdivisionScheme = "none"')
+    return text[:start] + mesh + text[end + len('        uniform token subdivisionScheme = "none"'):]
 
 
 def write_textures():
@@ -203,6 +232,8 @@ def main():
         scene = os.path.join(OUT, name + ".usda")
         if xform == "MTLX":
             open(scene, "w", encoding="utf-8").write(mtlx_scene(file, texinputs))
+        elif xform == "LEFT":
+            open(scene, "w", encoding="utf-8").write(left_handed_scene(texinputs))
         else:
             transform = TRANSFORM % "\n".join("                " + l for l in xform) if xform else ""
             open(scene, "w", encoding="utf-8").write(SCENE % {

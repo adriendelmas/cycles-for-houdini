@@ -1,7 +1,7 @@
 From eff52496276e0a07727bafab1ad9c666c28836f2 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 20:14:25 +0200
-Subject: [PATCH 108/117] hydra: traductions corrigees par comparaison a Karma
+Subject: [PATCH 108/118] hydra: traductions corrigees par comparaison a Karma
  sur toute la bibliotheque
 
 tools/mtlx_karma.py rend chaque nodedef a valeur (695) avec Cycles et

@@ -1,0 +1,105 @@
+From 19a3bde5d101dfb6065a888d594d6a49aa56239b Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Fri, 9 Oct 2026 02:48:50 +0200
+Subject: [PATCH 118/118] hydra: left-handed subdivided meshes the right way
+ round
+
+Hydra triangulates a leftHanded polygon mesh the right way round, but a
+subdivided one went to Cycles with its faces as written, every face inside
+out. Cycles turns a back-facing normal towards the viewer, so opaque
+surfaces looked right; refraction did not (a left-handed glass cube 0.44
+where the right-handed one renders 0.56). Houdini writes its meshes
+left-handed. Each face's corners are now reversed (the first kept) and its
+corner primvars permuted the same way (K-76, tools/bench_subdiv.py and
+tools/bench_usdtex.py).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/mesh.cpp | 36 +++++++++++++++++++++++++++++++++++-
+ src/hydra/mesh.h   |  5 +++++
+ 2 files changed, 40 insertions(+), 1 deletion(-)
+
+diff --git a/src/hydra/mesh.cpp b/src/hydra/mesh.cpp
+index dfbdfe47..2f1b03dd 100644
+--- a/src/hydra/mesh.cpp
++++ b/src/hydra/mesh.cpp
+@@ -4,6 +4,7 @@
+  * SPDX-License-Identifier: Apache-2.0 */
+ 
+ #include <algorithm>
++#include <cstring>
+ #include <vector>
+ 
+ #include "hydra/mesh.h"
+@@ -453,6 +454,18 @@ void HdCyclesMesh::PopulatePrimvars(HdSceneDelegate *sceneDelegate)
+         }
+ 
+         ApplyPrimvars(attributes, name, value, element, std);
++
++        if (subdivision && element == ATTR_ELEMENT_CORNER && !_subdCornerOrder.empty()) {
++          Attribute *const attr = attributes.find(name);
++          char *const data = attr ? static_cast<char *>(attr->data_for_write<void>()) : nullptr;
++          if (data && size_t(attr->size) == _subdCornerOrder.size()) {
++            const size_t stride = attr->data_sizeof();
++            const std::vector<char> original(data, data + stride * attr->size);
++            for (size_t i = 0; i < _subdCornerOrder.size(); ++i) {
++              std::memcpy(data + i * stride, original.data() + _subdCornerOrder[i] * stride, stride);
++            }
++          }
++        }
+       }
+     }
+   }
+@@ -709,7 +722,28 @@ void HdCyclesMesh::PopulateTopology(HdSceneDelegate *sceneDelegate)
+     Attribute *subd_attr_P = _geom->subd_attributes.add(ATTR_STD_POSITION);
+     subd_attr_P->resize(_topology.GetNumPoints());
+ 
+-    std::copy_n(vertIndx.data(), vertIndx.size(), _geom->get_subd_face_corners().data());
++    /* Hydra triangulates a left-handed polygon mesh the right way round;
++     * a subdivided one went to Cycles as written, every face inside out - a
++     * glass came out refracting the wrong way. Each face's corners are
++     * reversed (the first kept), and its corner primvars with them. */
++    _subdCornerOrder.clear();
++    if (_topology.GetOrientation() == HdTokens->leftHanded) {
++      _subdCornerOrder.resize(vertIndx.size());
++      size_t start = 0;
++      for (const int count : vertCounts) {
++        for (int k = 0; k < count && start + k < vertIndx.size(); ++k) {
++          _subdCornerOrder[start + k] = int(start) + (k == 0 ? 0 : count - k);
++        }
++        start += count;
++      }
++      int *corners = _geom->get_subd_face_corners().data();
++      for (size_t i = 0; i < vertIndx.size(); ++i) {
++        corners[i] = vertIndx[_subdCornerOrder[i]];
++      }
++    }
++    else {
++      std::copy_n(vertIndx.data(), vertIndx.size(), _geom->get_subd_face_corners().data());
++    }
+ 
+     int *subd_start_corner = _geom->get_subd_start_corner().data();
+     int *subd_num_corners = _geom->get_subd_num_corners().data();
+diff --git a/src/hydra/mesh.h b/src/hydra/mesh.h
+index ac1b38dc..1ff93aa1 100644
+--- a/src/hydra/mesh.h
++++ b/src/hydra/mesh.h
+@@ -5,6 +5,8 @@
+ 
+ #pragma once
+ 
++#include <vector>
++
+ #include "hydra/config.h"
+ #include "hydra/geometry.h"
+ 
+@@ -39,6 +41,9 @@ class HdCyclesMesh final : public HdCyclesGeometry<PXR_NS::HdMesh, CCL_NS::Mesh>
+   PXR_NS::HdMeshUtil _util;
+   PXR_NS::HdMeshTopology _topology;
+   PXR_NS::VtIntArray _primitiveParams;
++  /* A left-handed subdivided mesh goes to Cycles with each face's corners
++   * reversed: the corner each one takes, or empty when none are. */
++  std::vector<int> _subdCornerOrder;
+ };
+ 
+ HDCYCLES_NAMESPACE_CLOSE_SCOPE

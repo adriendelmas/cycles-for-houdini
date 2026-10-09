@@ -794,6 +794,18 @@ midlevel 0) that the displacement terminal reads; the terminal finds that
 helper's output by type, the output sharing the input's name. Three cases
 within a row.
 
+### K-76 Left-handed subdivided meshes inside out — confirmed — **fixed** (0118)
+Hydra triangulates a `leftHanded` polygon mesh the right way round, but a
+subdivided one went to Cycles with its faces as written - every face inside
+out. Cycles turns a back-facing normal towards the viewer, so an opaque
+surface looked right; refraction did not: a left-handed glass cube rendered
+0.44 where the right-handed one renders 0.56 (Karma: the same for both).
+Houdini writes its meshes left-handed. Each face's corners are now reversed
+for Cycles (the first kept) and its corner primvars permuted the same way.
+`tools/bench_subdiv.py` compares the two glass cubes (0.0004 apart), and
+`tools/bench_usdtex.py` a left-handed subdivided grid textured through
+per-corner and per-vertex UVs against Karma (within 0.010).
+
 ## C. Houdini side
 
 ### K-40 `op:` textures fail under husk — confirmed
