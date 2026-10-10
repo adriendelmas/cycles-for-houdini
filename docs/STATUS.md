@@ -2464,3 +2464,12 @@ l'opacité ; le `weight` d'un BSDF MaterialX n'était jamais appliqué (un
 lobe à 0,5 rendait entier) ; `geompropvalue` en couleur ou vecteur rendait
 la moyenne. PROGRESS repassé ligne par ligne contre `mtlx_karma.py` : dix
 lignes « non testé » ou « ❌ » étaient déjà justes.
+
+0129 (2026-10-10, nuit) : la lumière cylindre est un vrai tube émissif ;
+l'ancien rectangle n'éclairait que d'un côté (un cylindre retourné laissait
+le sol noir). 0,98 à 1,04 de Karma, retourné compris.
+
+0130 (2026-10-10, nuit) : l'aperçu viewport d'un matériau Cycles suit les
+mix : une texture mélangée n'y arrivait jamais (le traducteur cherchait une
+entrée `color1` que le nœud n'a plus) ; un mix de deux couleurs est calculé.
+Nouveau bench `bench_preview.py`, 6 cas.

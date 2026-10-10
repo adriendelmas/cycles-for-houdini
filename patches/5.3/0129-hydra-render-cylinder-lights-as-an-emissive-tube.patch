@@ -1,0 +1,212 @@
+From 49efe1a5e8349442c750b6d3af5ddc6ea1e0cece Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Sat, 10 Oct 2026 09:22:54 +0200
+Subject: [PATCH 129/129] hydra: render cylinder lights as an emissive tube
+
+Cycles has no cylinder light, and the rectangle that stood in lit one side
+only: a cylinder light turned over left the floor dark. The light is now a
+32-segment tube mesh along its X axis, with the light's own shader and the
+radiance baked in (strength over pi, or over the tube's area when
+normalized); the area light stays off. The tube is out of shadow rays so it
+blocks nothing, and a Backfacing factor keeps its emission outward - Cycles
+emits from both sides, and the tube lit through itself (K-89).
+---
+ src/hydra/light.cpp | 122 +++++++++++++++++++++++++++++++++++++++++++-
+ src/hydra/light.h   |   7 +++
+ 2 files changed, 127 insertions(+), 2 deletions(-)
+
+diff --git a/src/hydra/light.cpp b/src/hydra/light.cpp
+index ed9daa74..abe4c7e0 100644
+--- a/src/hydra/light.cpp
++++ b/src/hydra/light.cpp
+@@ -8,6 +8,7 @@
+ #include "hydra/util.h"
+ #include "kernel/types.h"
+ #include "scene/light.h"
++#include "scene/mesh.h"
+ #include "scene/object.h"
+ #include "scene/scene.h"
+ #include "scene/shader.h"
+@@ -178,10 +179,12 @@ void HdCyclesLight::Sync(HdSceneDelegate *sceneDelegate,
+        * USD CylinderLight is the local X, hence the length on u. */
+       AreaLight *area_light = static_cast<AreaLight *>(_light);
+       if (auto ds = GetTypedDataSource<float>(lightDs, HdLightTokens->length)) {
+-        area_light->set_sizeu(ds->GetTypedValue(0.0f));
++        _tubeLength = ds->GetTypedValue(0.0f);
++        area_light->set_sizeu(_tubeLength);
+       }
+       if (auto ds = GetTypedDataSource<float>(lightDs, HdLightTokens->radius)) {
+-        area_light->set_sizev(ds->GetTypedValue(0.0f) * 2.0f);
++        _tubeRadius = ds->GetTypedValue(0.0f);
++        area_light->set_sizev(_tubeRadius * 2.0f);
+       }
+     }
+     else if (_lightType == HdPrimTypeTokens->sphereLight) {
+@@ -599,6 +602,40 @@ void HdCyclesLight::PopulateShaderGraph(const HdContainerDataSourceHandle &light
+     }
+   }
+ 
++  /* A cylinder renders as a mesh tube, which has no light strength of its
++   * own: the radiance goes in its emission (SyncTube). Unnormalized, the
++   * strength carries the factor pi of an area light; normalized, it is
++   * divided by the tube's area, as Karma does. */
++  if (_lightType == HdPrimTypeTokens->cylinderLight) {
++    if (EmissionNode *emission = dynamic_cast<EmissionNode *>(outputNode)) {
++      const float area = M_2PI_F * _tubeRadius * _tubeLength;
++      const float3 radiance = !_light->get_normalize() ? _strength * M_1_PI_F :
++                              area > 0.0f              ? _strength / area :
++                                                         zero_float3();
++      /* Outward only: Cycles emits from both sides of a face, and the tube,
++       * out of shadow rays, would light through itself from its far wall. */
++      GeometryNode *geomNode = graph->create_node<GeometryNode>();
++      MathNode *frontNode = graph->create_node<MathNode>();
++      frontNode->set_math_type(NODE_MATH_SUBTRACT);
++      frontNode->set_value1(1.0f);
++      VectorMathNode *scaleNode = graph->create_node<VectorMathNode>();
++      scaleNode->set_math_type(NODE_VECTOR_MATH_SCALE);
++      scaleNode->set_vector1(radiance);
++      VectorMathNode *mulNode = graph->create_node<VectorMathNode>();
++      mulNode->set_math_type(NODE_VECTOR_MATH_MULTIPLY);
++      mulNode->set_vector2(emission->get_color());
++      graph->connect(geomNode->output("Backfacing"), frontNode->input("Value2"));
++      graph->connect(frontNode->output("Value"), scaleNode->input("Scale"));
++      graph->connect(scaleNode->output("Vector"), mulNode->input("Vector1"));
++      ShaderInput *const colorInput = emission->input("Color");
++      if (colorInput->link) {
++        graph->connect(colorInput->link, mulNode->input("Vector2"));
++        graph->disconnect(colorInput);
++      }
++      graph->connect(mulNode->output("Vector"), colorInput);
++    }
++  }
++
+   Shader *const shader = _light->get_shader();
+   shader->set_graph(std::move(graph));
+   shader->tag_update((Scene *)_light->get_owner());
+@@ -616,6 +653,15 @@ void HdCyclesLight::Finalize(HdRenderParam *renderParam)
+   const bool keep_nodes = static_cast<const HdCyclesSession *>(renderParam)->keep_nodes;
+   static_cast<HdCyclesSession *>(renderParam)->ForgetObject(_object);
+   DeleteTwins(lock.scene, renderParam, 0);
++  if (_tubeObject) {
++    static_cast<HdCyclesSession *>(renderParam)->ForgetObject(_tubeObject);
++    if (!keep_nodes) {
++      lock.scene->delete_node(_tubeObject);
++      lock.scene->delete_node(_tubeMesh);
++    }
++    _tubeObject = nullptr;
++    _tubeMesh = nullptr;
++  }
+ 
+   if (!keep_nodes) {
+     /* Delete the object before the light, since the object references the light. */
+@@ -757,6 +803,13 @@ Light *HdCyclesLight::CreateLight(Scene *scene) const
+  * background, of which Cycles has one: it keeps the 0-or-1 lobe switch. */
+ void HdCyclesLight::SyncSplit(Scene *scene, HdRenderParam *renderParam)
+ {
++  if (_lightType == HdPrimTypeTokens->cylinderLight) {
++    DeleteTwins(scene, renderParam, 0);
++    _light->set_strength(zero_float3());
++    SyncTube(scene, renderParam);
++    return;
++  }
++
+   struct Part {
+     uint visibility;
+     float3 factor;
+@@ -864,6 +917,71 @@ void HdCyclesLight::SyncSplit(Scene *scene, HdRenderParam *renderParam)
+   }
+ }
+ 
++/* A cylinder light as what it is, a tube emitting all around its axis
++ * (K-89). Cycles has no cylinder light, and the rectangle that stood in lit
++ * one side only. The tube is an emissive mesh along the light's X axis,
++ * outward-facing; its shader is the light's own, with the radiance baked in
++ * (PopulateShaderGraph), and the area light stays off. Its object stays out
++ * of shadow rays, so the tube blocks nothing, as a light's shape does not.
++ * Lobe multipliers and a shadow colour are not carried on it. */
++void HdCyclesLight::SyncTube(Scene *scene, HdRenderParam *renderParam)
++{
++  constexpr int kSegments = 32;
++  if (!_tubeObject) {
++    _tubeMesh = scene->create_node<Mesh>();
++    _tubeMesh->name = _light->name;
++    array<Node *> shaders;
++    shaders.push_back_slow(_light->get_shader());
++    _tubeMesh->set_used_shaders(shaders);
++    _tubeObject = scene->create_node<Object>();
++    _tubeObject->name = _object->name;
++    _tubeObject->set_geometry(_tubeMesh);
++    _tubeObject->set_random_id(_object->get_random_id());
++  }
++
++  const float r = _tubeRadius;
++  const float halfLength = 0.5f * _tubeLength;
++  _tubeMesh->resize_mesh(2 * kSegments, 2 * kSegments);
++  packed_float3 *P =
++      _tubeMesh->attributes.find(ATTR_STD_POSITION)->data_for_write<packed_float3>();
++  int *triangles = _tubeMesh->get_triangles().data();
++  for (int i = 0; i < kSegments; ++i) {
++    const float angle = M_2PI_F * float(i) / float(kSegments);
++    const float y = r * cosf(angle);
++    const float z = r * sinf(angle);
++    P[i] = make_float3(-halfLength, y, z);
++    P[kSegments + i] = make_float3(halfLength, y, z);
++    /* (i, i+1, i+1 far, i far): around then along the axis, so the face
++     * normal - the cross product of the first two edges - points out. */
++    const int next = (i + 1) % kSegments;
++    const int quad[4] = {i, next, kSegments + next, kSegments + i};
++    const int tris[6] = {quad[0], quad[1], quad[2], quad[0], quad[2], quad[3]};
++    std::copy_n(tris, 6, triangles + i * 6);
++  }
++  std::ranges::fill(_tubeMesh->get_shader(), 0);
++  std::ranges::fill(_tubeMesh->get_smooth(), true);
++  _tubeMesh->tag_triangles_modified();
++  _tubeMesh->tag_shader_modified();
++  _tubeMesh->tag_smooth_modified();
++  _tubeMesh->tag_position_modified();
++
++  _tubeObject->set_tfm(_object->get_tfm());
++  _tubeObject->set_visibility(_light->get_is_enabled() ?
++                                  _baseVisibility & ~PATH_RAY_VISIBILITY_SHADOW :
++                                  0u);
++  _tubeObject->set_lightgroup(_object->get_lightgroup());
++  static_cast<HdCyclesSession *>(renderParam)->SetLightLinks(_tubeObject, _lightLink, _shadowLink);
++
++  if (_diffuse != 1.0f || _specular != 1.0f || !is_zero(_shadowColor) || !_castShadow) {
++    LOG_WARNING << "Light " << GetId().GetString()
++                << ": a cylinder light is an emissive tube; its diffuse and specular "
++                   "multipliers, shadow colour and shadow switch are not carried.";
++  }
++
++  _tubeMesh->tag_update(scene, true);
++  _tubeObject->tag_update(scene);
++}
++
+ void HdCyclesLight::DeleteTwins(Scene *scene, HdRenderParam *renderParam, const size_t keep)
+ {
+   auto *const session = static_cast<HdCyclesSession *>(renderParam);
+diff --git a/src/hydra/light.h b/src/hydra/light.h
+index 3d78327b..f0472c2b 100644
+--- a/src/hydra/light.h
++++ b/src/hydra/light.h
+@@ -38,6 +38,7 @@ class HdCyclesLight final : public PXR_NS::HdLight {
+   CCL_NS::Light *CreateLight(CCL_NS::Scene *scene) const;
+   void SyncSplit(CCL_NS::Scene *scene, PXR_NS::HdRenderParam *renderParam);
+   void DeleteTwins(CCL_NS::Scene *scene, PXR_NS::HdRenderParam *renderParam, size_t keep);
++  void SyncTube(CCL_NS::Scene *scene, PXR_NS::HdRenderParam *renderParam);
+ 
+   CCL_NS::Object *_object = nullptr;
+   CCL_NS::Light *_light = nullptr;
+@@ -56,6 +57,12 @@ class HdCyclesLight final : public PXR_NS::HdLight {
+   bool _castShadow = true;
+   PXR_NS::TfToken _lightLink;
+   PXR_NS::TfToken _shadowLink;
++
++  /* A cylinder light's emissive tube (K-89), with USD's default size. */
++  CCL_NS::Object *_tubeObject = nullptr;
++  CCL_NS::Mesh *_tubeMesh = nullptr;
++  float _tubeRadius = 0.5f;
++  float _tubeLength = 1.0f;
+ };
+ 
+ HDCYCLES_NAMESPACE_CLOSE_SCOPE

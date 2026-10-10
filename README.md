@@ -49,27 +49,31 @@ where the work went.
 - **Per-object properties** from the Render Geometry Settings node: ray
   visibility, holdout, shadow catcher, caustics, light group, dicing rate -
   and Karma's own visibility and holdout properties read as well.
-- **Light linking and shadow linking**, the diffuse/specular light
-  multipliers (as on/off: Cycles cannot scale a lobe).
+- **Light linking and shadow linking**; the diffuse/specular light
+  multipliers and `shadow:color`, which Cycles cannot carry on one light, by
+  splitting the light into twins (8 cases alike Karma); **cylinder lights as
+  emissive tubes** that light all around.
 - Displacement, render settings surfaced in Solaris, and a long list of crash
   and correctness fixes to the delegate. Every claim here comes from a bench:
   see [docs/TESTING.md](docs/TESTING.md).
 
 The viewport preview of a Cycles material (the GL shader Houdini draws before
-a render) follows one texture per input: a mix of two textures, a procedural
-or a ramp shows as the input's default value. It is a preview, not a link to
-the Cycles nodes.
+a render) follows one texture per input, through colour nodes and mixes (the
+side the mix favours); a mix of two colours is computed; a procedural or a
+ramp shows as the input's default value. It is a preview, not a link to the
+Cycles nodes.
 
 Rendering is CPU and CUDA/OptiX, chosen from **Render › Cycles Render Device**.
 The device is fixed when the render session is built, so it cannot come from a
 Render Settings node — and it describes the machine rather than the scene, so it
 is a per-installation preference the `.hip` does not carry.
 
-The GL display driver is on **when Houdini's viewport runs on OpenGL**: Cycles
-then writes straight into a texture the host owns, which is what makes the
-viewport refresh as promptly as Blender's. Under a Vulkan viewport, and under
-husk, rendering goes through the output driver and the buffer is read back on
-every refresh. The display driver misbehaved in Houdini's viewport in four
+The GL display driver is on **when Houdini hands the delegate an OpenGL
+Hgi** - which Houdini 22 does even in its Vulkan viewport ("Houdini VK", the
+default), shipping no other Hgi: Cycles then writes straight into a texture
+the host owns, which is what makes the viewport refresh as promptly as
+Blender's. Under husk, rendering goes through the output driver and the
+buffer is read back on every refresh. The display driver misbehaved in Houdini's viewport in four
 distinct ways; three were crashes, all fixed and documented in the patch
 series. The fourth, wrong pixels, has never been confirmed fixed and only shows
 in the viewport — `CYCLES_DISPLAY_DRIVER=0` falls back to the output driver.
@@ -189,16 +193,15 @@ The ones a user meets first:
   the 806 that route, 666 keep every input when rendered
   (`tools/mtlx_inputs.py`), and 80 are
   value-checked against the MaterialX definition (`tools/bench_mtlx.py`).
-  Out: the matrix nodes other than a constant `transformmatrix`, the colour4
-  compositing nodes (an image's own alpha does pass), `time`/`frame`,
+  Out: the matrix nodes other than a constant `transformmatrix`, `time`/`frame`,
   `thin_surface` - Cycles' node graph has no
   equivalent, and OSL is not an option against Houdini (its OpenImageIO is
   2.5, Cycles' OSL is built on 3.1; Houdini ships no usable OSL).
 - Cycles has no light path expressions: Karma's usual LPEs are mapped to the
   Cycles pass holding the same light, any other one renders black and says so
   in the log.
-- `shadow:color` and fractional diffuse/specular light multipliers are not
-  supported by Cycles.
+- A dome light's diffuse/specular multipliers are 0 or 1 (Cycles has one
+  background); light filters are not supported.
 - Implicit surfaces carry no UVs.
 - An intermittent CUDA "illegal address" on some scene edits, under investigation.
 

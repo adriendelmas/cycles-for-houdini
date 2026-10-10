@@ -158,6 +158,8 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0126` | hydra: processeur de sortie `hdcycles_cookcoptextures`, ajouté à chaque nouveau USD Render ROP, qui cuit les textures `op:` (COP) en EXR à côté de l'USD écrit, pour husk et les fermes (K-40) |
 | `0127` | hydra: lumière répartie sur des jumelles pour les multiplicateurs `diffuse`/`specular` entre 0 et 1 et `shadow:color` ; une lumière sans ombre n'est plus touchée par les rayons BSDF (ombres à moitié noires avec `shadow:enable = 0`) (K-87) |
 | `0128` | hydra: alpha d'une couleur calculée (jumeaux float des nœuds color4, K-17) ; `weight` des BSDF appliqué par un multiply (K-88) ; `geompropvalue` couleur et vecteur lus en entier |
+| `0129` | hydra: lumière cylindre rendue par un tube maillé émissif (émission vers l'extérieur seulement, radiance dans le shader) au lieu d'un rectangle à une face (K-89) |
+| `0130` | hydra: aperçu viewport d'un matériau Cycles à travers les mix (entrées `a`/`b`, côté favorisé par le facteur), `math`/`vector_math`, mix de constantes calculés ; commentaires du traducteur en anglais (K-42) |
 
 ---
 

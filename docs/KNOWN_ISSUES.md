@@ -957,6 +957,23 @@ uses - and its own weight is removed from the node. `bench_mtlx.py`
 `closure_weight`, `closure_weight_wired`. `mtlx_karma.py --closures` never
 showed it: it authors the default weight, 1.
 
+### K-89 A cylinder light lit one side only — confirmed — **fixed** (0129)
+Cycles has no cylinder light; a rectangle of the tube's length by its
+diameter stood in, facing the light's -Z. Under it the floor got 0.95-1.07
+of Karma's light; anything beside or above the tube got none - a cylinder
+turned over left the floor dark. The light is now an emissive tube: a mesh
+of 32 segments along the light's X axis, its shader the light's own with the
+radiance baked in (the strength over pi, or over the tube's area 2 pi r l
+when normalized, as Karma), the area light kept off. Two traps: Cycles
+emits from both sides of a face, and the tube, kept out of shadow rays so
+that it blocks nothing, lit the floor through itself from its far wall - a
+`Backfacing` factor keeps the emission outward; and an emissive mesh has no
+light strength of its own. Measured with `bench_lights.py`: `cylinder`,
+`cylinder_normalized` and `cylinder_rolled` (turned over) 0.98-1.04 of
+Karma. Kept: lobe multipliers, shadow colour and `shadow:enable` are not
+carried on the tube (logged); its normalization uses the light's own size,
+not a scaled one.
+
 ## C. Houdini side
 
 ### K-40 `op:` textures fail under husk — confirmed — **fixed** (0126)
@@ -1010,6 +1027,15 @@ a procedural, or a ramp show as the default value. Acceptable, but the README
 should not imply the viewport is "linked" to the Cycles nodes.
 
 Stated in the README since 2026-10-08.
+
+0130 (2026-10-10): the relay for `cycles_mix_color` followed `color1`, a
+socket the node no longer has (its sides are `a` and `b`): a mixed texture
+never reached the viewport, and the preview showed the 0.8 default. Mixes
+now follow the side their factor favours first, then the other; `math` and
+`vector_math` both operands; a mix of two constants is computed from the
+values and the Sdr defaults. `bench_preview.py` builds real VOP networks
+and reads the preview back: 6 cases. Still one image per input, and a
+procedural shows the default.
 
 ## D. Repository and tests
 
@@ -1103,9 +1129,9 @@ What the delegate cannot fix, because Cycles has no counterpart or behaves
 otherwise by design. Each is measured and kept on purpose; a file relying on
 one renders differently from Karma, and that is expected.
 
-- **Cylinder light**: Cycles has no cylinder light; it is a rectangle,
-  one-sided, normalized like the tube (0.95-1.07 of Karma across the floor,
-  `bench_lights.py`).
+- **Cylinder light**: Cycles has no cylinder light; it renders as an
+  emissive tube mesh (K-89), 0.98-1.04 of Karma, without lobe multipliers,
+  shadow colour or shadow switch.
 - **Light filters, `occlusion`**: no Cycles equivalent. Light filters
   are dropped; UsdPreviewSurface's `occlusion` is ignored. (`shadow:color`
   and the lobe multipliers are carried by splitting the light, K-87; on a

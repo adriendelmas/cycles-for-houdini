@@ -41,7 +41,7 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 |---|---|---|---|
 | Rect, disk, sphere, spot, distant, dome | ✅ | `bench_lights.py` 24/24 vs Karma | Units measured per type; spot softness converted from USD's angle to Cycles' cosine (K-69, 0112) |
 | Agreement with Karma on materials | ✅ | `bench_agree.py` 21/21 | Diffuse, dielectric, metal, glass, coat, emission, preview surface: floor to 1 %, spheres to 25 %, glass loose (2026-10-08) |
-| Cylinder light | 🟡 | 0.95 of Karma | Rectangle approximation, one-sided |
+| Cylinder light | ✅ | `bench_lights.py` 0.98-1.04 of Karma | An emissive tube mesh, lights all around (K-89, 0129); no lobe multipliers or shadow colour on it |
 | IES profiles | ✅ | `bench_lights.py` | Read along the emission direction, in candelas, `normalize` and `angleScale` (K-70, 0113) - blurred and 30x off before |
 | Colour temperature, emission focus and tint | ✅ | `bench_lights.py` | Focus in the light shader (K-69, 0112) |
 | Dome and rect light textures | ✅ | `bench_dome.py`, `bench_rect.py` | Dome in USD's lat-long orientation and `poleAxis` (K-67, 0111); rect texture no longer mirrored (K-68, 0112) |
@@ -90,7 +90,7 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | Material settings (`displacement_method`...) | ✅ | phase 20 | |
 | Enum validation | ✅ | phase 14 | |
 | 8-bit sRGB auto-detection under ACES | ✅ | `bench_usdtex.py` | `auto` picks the config's sRGB texture space (K-66, 0110) |
-| Viewport preview from the Cycles graph | 🟡 | phase 27 | One image per input; no `mix`, no procedurals |
+| Viewport preview from the Cycles graph | 🟡 | `bench_preview.py` 6/6 | One image per input, followed through mixes (the side the factor favours) and colour nodes; mixes of constants computed (K-42, 0130); procedurals show the default |
 
 ## Materials - UsdPreviewSurface
 

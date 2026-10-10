@@ -64,6 +64,7 @@ after a Cycles standard attribute (`heat`, `density`, `color`, `temperature`,
 | `hython tools/bench_volume.py` | An absorbing cube in front of a white `surface_unlit` wall: MaterialX, native, and a `leftHanded` cube | Transmission equals exp(-2 sigma) within 0.02 - Karma renders no volume on a mesh without a surface, so the law is the reference | Scattering volumes |
 | `hython tools/bench_usdtex.py` | A four-corner texture on a quad: `UsdUVTexture` plain, tiled, rotated, translated, outside the image, scale/bias, an 8-bit PNG as sRGB, raw and auto; a MaterialX `image` with and without a colour space; two UDIM tiles, `<UDIM>` and Houdini's `%(UDIM)d`; a left-handed subdivided grid with UVs per corner and per vertex; a missing file with and without `fallback` | Each quarter within 0.03 of Karma, under Houdini's OCIO config (K-66) | `useMetadata` with metadata in the file |
 | `HOUDINI_PATH="<install>/houdini;&" hython tools/bench_cop_rop.py` (a Windows path: `$(pwd -W)` under Git Bash) | A red constant COP read through `op:` by a LOP-authored quad, rendered through fresh USD Render ROPs | The ROP gets the COP output processor on creation, and Karma and Cycles both render the COP's red (K-40) | `op:` paths in sublayered files on disk |
+| `HOUDINI_PATH="<install>/houdini;&" hython tools/bench_preview.py` | Cycles VOP networks built in hython - an image, through a gamma, on either side of a mix, two images mixed, two colours mixed - on a principled's base colour | The viewport preview's diffuse colour reads the right texture or holds the computed colour (K-42) | What the viewport draws of it |
 | `hython tools/bench_dome.py` | A lat-long texture, one colour per quarter of the horizon and a white top, on a dome seen by a narrow camera along the horizon axes and 75 degrees up and down; the same on a Z-up stage with `DomeLight_1` | Each direction within 0.03 of Karma (K-67) | The exact poles (Cycles wraps its map vertically there), lighting from the dome |
 | `hython tools/bench_rect.py` | The four-corner texture on a 2 x 2 rect light seen head-on, plain and turned a quarter | Each quarter within 0.03 of Karma (K-68) | Brightness of other light shapes |
 | `hython tools/bench_lights.py [pattern]` | A white floor under one light per case, seen from above: sphere, disk, rect, cylinder, distant, normalized or not; spots hard, soft and softness alone; emission focus with and without tint; IES profiles plain, normalized, angle-scaled and asymmetric; a normalized disk and cylinder, a point, a colour with a temperature, a textured rect light; exposure; colour temperature (24 cases) | Floor radiance under the light and 1, 2, 3 units aside within 10 % (or 0.003) of Karma (K-69, K-70) | Coarse IES profiles (Cycles interpolates cubically, Karma linearly), light textures (bench_rect), portals |
@@ -112,7 +113,12 @@ for every state). The tool checks the scene is under `hdCycles/tests` and
 grabs the window of the very process the MCP server runs in, so it can never
 drive or capture Adrien's own Houdini. Measure the region you need from the
 PNG (`tests/scratch/gui/`); a window resized between two steps makes the
-first grab after it stale.
+first grab after it stale. When another session's Houdini already holds the
+MCP port 9876, set `HDCYCLES_MCP_PORT` (9877...) before starting the session:
+the launcher's startup script and `hou_remote.py` both read it.
+`tests/houdini/lights_live.hip` (written by `tools/make_lights_live_hip.py`)
+is the scene for live light edits: its `edit` LOP sets the shadow colour,
+lobe multipliers and the cylinder's roll.
 
 Testing a freshly built DLL while Houdini holds the installed one: every
 bench honours a `PXR_PLUGINPATH_NAME` already in the environment, so the
