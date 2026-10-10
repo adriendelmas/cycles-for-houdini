@@ -163,6 +163,7 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0131` | hydra: `default` de `geompropvalue` posé en attribut d'objet, lu là où la géométrie n'a pas la primvar (K-90) |
 | `0132` | hydra: rugosité anisotrope des métaux (conductor, generalized_schlick) convertie vers l'anisotropie et la rotation du metallic_bsdf, tangente UV (K-91) ; un `weight` branché masqué sur le nœud d'origine |
 | `0133` | hydra: rugosité anisotrope d'un `dielectric_bsdf` réfléchissant (principled : `anisotropic`, `anisotropic_rotation`, tangente) (K-91) |
+| `0134` | hydra: `anisotropic_vdf` : `scattering` en couleur du scatter_volume (densité 1), `absorption` en absorption_vdf ajoutée ; l'ancienne traduction lisait un `albedo` inexistant (K-92) |
 
 ---
 

@@ -1007,6 +1007,18 @@ its `anisotropic` and `anisotropic_rotation`): a clear coat, 0.21 as Karma
 where it rendered 0.87. A transmitting dielectric stays isotropic: Cycles'
 glass and refraction have no anisotropy.
 
+### K-92 anisotropic_vdf dropped both its coefficients — confirmed — **fixed** (0134)
+MaterialX's `anisotropic_vdf` takes `absorption` and `scattering`, the
+coefficients sigma_a and sigma_s, and `anisotropy`. The mapping read an
+`albedo` the node does not have: both coefficients were dropped and every
+such medium was Cycles' default scatter volume - 42 times the light it should
+transmit in `bench_volume.py`, which husk's default lighting scattered into
+the camera. The scattering coefficient is now the scatter volume's colour at
+density 1, and the absorption an `absorption_vdf` added beside it
+(`FoldVdfAbsorption`). Measured: absorption alone transmits exp(-2 sigma_a)
+as Beer-Lambert says; scattering alone renders as Cycles' native scatter
+volume with the same coefficient, in the same scene.
+
 ## C. Houdini side
 
 ### K-40 `op:` textures fail under husk — confirmed — **fixed** (0126)

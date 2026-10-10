@@ -1,7 +1,7 @@
 From 081cf6c4d933c1a28153d159cb92ca6a91e676e3 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 9 Oct 2026 16:18:38 +0200
-Subject: [PATCH 121/133] hydra: displayOpacity on prims without a material
+Subject: [PATCH 121/134] hydra: displayOpacity on prims without a material
 
 A prim without a material renders with the default surface, a diffuse in
 its constant displayColor; its displayOpacity was dropped and it rendered

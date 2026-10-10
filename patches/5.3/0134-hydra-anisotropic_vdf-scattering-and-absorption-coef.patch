@@ -1,0 +1,135 @@
+From 5872680fae5023527864aaf1983ac92a63cfc551 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Sat, 10 Oct 2026 11:46:17 +0200
+Subject: [PATCH 134/134] hydra: anisotropic_vdf scattering and absorption
+ coefficients
+
+MaterialX's anisotropic_vdf takes `absorption` and `scattering`, the
+coefficients sigma_a and sigma_s; the mapping read an `albedo` the node
+does not have, so both were dropped and every such medium was Cycles'
+default scatter volume. The scattering is now the scatter volume's colour
+at density 1 and the absorption an absorption_vdf added beside it (K-92).
+---
+ src/hydra/material.cpp    | 20 ++++++++-----
+ src/hydra/mtlx_expand.cpp | 63 +++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 76 insertions(+), 7 deletions(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index b96560d1..f267c6f0 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -2122,13 +2122,19 @@ const std::vector<MtlxEntry> &MtlxTable()
+                   {ustring("vector2"), "0,0,0"}}});
+     return m;
+   }();
+-  static const UsdToCyclesMapping kScatterVdf = {
+-      "scatter_volume",
+-      {
+-          {TfToken("albedo"), ustring("color")},
+-          {TfToken("anisotropy"), ustring("anisotropy")},
+-          {CyclesMaterialTokens->out, ustring("volume")},
+-      }};
++  /* `anisotropic_vdf`'s scattering coefficient is the scatter volume's
++   * colour at density 1; its absorption becomes an absorption VDF beside it
++   * (mtlx_expand.cpp, K-92). */
++  static const UsdToCyclesMapping kScatterVdf = [] {
++    UsdToCyclesMapping m{"scatter_volume",
++                         {
++                             {TfToken("scattering"), ustring("color")},
++                             {TfToken("anisotropy"), ustring("anisotropy")},
++                             {CyclesMaterialTokens->out, ustring("volume")},
++                         }};
++    m.setFixedValues({{ustring("density"), "1"}});
++    return m;
++  }();
+   static const UsdToCyclesMapping kBlackbody = {
+       "blackbody",
+       {
+diff --git a/src/hydra/mtlx_expand.cpp b/src/hydra/mtlx_expand.cpp
+index 108016f5..962060d6 100644
+--- a/src/hydra/mtlx_expand.cpp
++++ b/src/hydra/mtlx_expand.cpp
+@@ -1474,6 +1474,63 @@ bool FoldAnisotropy(Network &net)
+   return any;
+ }
+ 
++/* `anisotropic_vdf` (K-92): its `scattering` and `absorption` are the
++ * coefficients sigma_s and sigma_a. Cycles' scatter volume scatters its
++ * colour times its density and absorbs nothing, so the scattering is its
++ * colour at density 1 - mapped - and the absorption a separate absorption
++ * VDF added to it here. The mapping read an `albedo` the node does not
++ * have: both coefficients were dropped, every such medium a grey 0.8. */
++bool FoldVdfAbsorption(Network &net)
++{
++  static const TfToken kAbsorption("absorption");
++  bool any = false;
++  std::vector<TfToken> names;
++  for (const auto &[name, node] : net.nodes) {
++    names.push_back(name);
++  }
++  for (const TfToken &name : names) {
++    if (net.nodes[name].typeId != TfToken("ND_anisotropic_vdf")) {
++      continue;
++    }
++    Node &node = net.nodes[name];
++    const auto conn = node.conns.find(kAbsorption);
++    const bool wired = conn != node.conns.end() && !conn->second.empty();
++    const auto param = node.params.find(kAbsorption);
++    const bool valued = !wired && param != node.params.end() &&
++                        param->second.IsHolding<GfVec3f>() &&
++                        param->second.UncheckedGet<GfVec3f>() != GfVec3f(0.0f);
++    if (!wired && param == node.params.end()) {
++      continue;
++    }
++    if (wired || valued) {
++      Node absorption;
++      absorption.typeId = TfToken("ND_absorption_vdf");
++      if (wired) {
++        absorption.conns[kAbsorption] = conn->second;
++      }
++      else {
++        absorption.params[kAbsorption] = param->second;
++      }
++      const TfToken absName(Prefix(name, "absorption"));
++      const TfToken addName(Prefix(name, "add"));
++      Redirect(net, name, {{kOut.GetString(), Conn{addName, kOut}}});
++      Node add;
++      add.typeId = TfToken("ND_add_vdf");
++      add.conns[TfToken("in1")] = {Conn{name, kOut}};
++      add.conns[TfToken("in2")] = {Conn{absName, kOut}};
++      net.nodes[absName] = std::move(absorption);
++      net.nodes[addName] = std::move(add);
++    }
++    /* Taken off the scatter node, which has no such input. */
++    Node &scatter = net.nodes[name];
++    scatter.conns[kAbsorption].clear();
++    scatter.params[kAbsorption] = VtValue();
++    scatter.paramsEdited = true;
++    any = true;
++  }
++  return any;
++}
++
+ /* The base colour of the two surface models whose base is more than one
+  * colour. Cycles' principled colours its diffuse, its subsurface and its metal
+  * with one base colour; standard_surface and OpenPBR give the subsurface its
+@@ -1622,6 +1679,11 @@ HdMaterialNetworkSchema ExpandMaterialXNodegraphs(HdMaterialNetworkSchema networ
+           candidate = true;
+           break;
+         }
++        /* A medium's absorption (FoldVdfAbsorption). */
++        if (id == "ND_anisotropic_vdf") {
++          candidate = true;
++          break;
++        }
+         /* An anisotropic metal or coat (FoldAnisotropy). */
+         if (id == "ND_conductor_bsdf" || id == "ND_generalized_schlick_bsdf" ||
+             id == "ND_dielectric_bsdf")
+@@ -1655,6 +1717,7 @@ HdMaterialNetworkSchema ExpandMaterialXNodegraphs(HdMaterialNetworkSchema networ
+   net.changed |= FoldSurfaceBase(net);
+   net.changed |= FoldClosureWeight(net, library);
+   net.changed |= FoldAnisotropy(net);
++  net.changed |= FoldVdfAbsorption(net);
+ 
+   /* Expanded nodes bring in nodes that may expand in turn. */
+   for (int pass = 0; pass < 8; ++pass) {

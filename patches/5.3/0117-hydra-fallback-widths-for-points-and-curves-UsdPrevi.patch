@@ -1,7 +1,7 @@
 From 57db8c73b1cb75196ed66d6dafb7e1c78f7ad643 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 9 Oct 2026 02:02:02 +0200
-Subject: [PATCH 117/133] hydra: fallback widths for points and curves,
+Subject: [PATCH 117/134] hydra: fallback widths for points and curves,
  UsdPreviewSurface displacement
 
 Points and curves with no widths kept a radius of 0 and were not drawn;

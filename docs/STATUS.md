@@ -2489,3 +2489,8 @@ d'où un quart de tour quand l'étirement est dans l'autre sens.
 
 0133 (2026-10-10, nuit) : même chose pour un vernis (dielectric_bsdf en
 réflexion) ; le verre reste isotrope, Cycles n'a pas d'anisotropie pour lui.
+
+0134 (2026-10-10, nuit) : le milieu MaterialX `anisotropic_vdf` ignorait ses deux
+coefficients (la traduction lisait une entrée qui n'existe pas) ; absorption
+et diffusion sont maintenant justes (Beer-Lambert, et identique au volume
+natif de Cycles).

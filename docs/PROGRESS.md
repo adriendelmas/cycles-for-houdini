@@ -114,7 +114,7 @@ Three numbers, measured 2026-10-09 (after 0125) (commands in [TESTING.md](TESTIN
 **805** of 822 nodedefs are rendered - 651 through the mapping table, 110 by
 expanding a nodegraph (the library's, or one the delegate ships for nodes the
 library writes in GLSL only), 44 by rewriting or folding (`mtlx_coverage.py`);
-**679** of the 806 that route keep every input, output and node when rendered
+**680** of the 806 that route keep every input, output and node when rendered
 with all inputs authored (`mtlx_inputs.py`); **80** are verified against a
 value computed from the MaterialX definition (`bench_mtlx.py`), and the five
 surface models keep their own defaults for unauthored inputs
@@ -158,7 +158,7 @@ surface models (`surface_audit.py`, K-63). On 2026-10-07 the numbers were
 | `facingratio`, `viewdirection` | ✅ | `facingratio` exact for its defaults (K-10); both same as Karma (`mtlx_karma.py`) |
 | `conductor_bsdf` | ✅ | `metallic_bsdf` physical conductor with `ior`/`extinction` (K-13); same as Karma (`mtlx_karma.py --closures`); anisotropic roughness as Karma (K-91, 0132, `bench_aniso.py`) |
 | `dielectric_bsdf`, diffuse, sheen, translucent, subsurface | 🟡 | `tint`, thin film, `scatter_mode` and `weight` (K-88, 0128) carried; an anisotropic (vector2) roughness carried on metals and a reflecting dielectric (K-91), averaged on glass |
-| `absorption_vdf`, `anisotropic_vdf` | 🟡 | Reachable through `volume` since 2026-10-07; coefficient vs colour approximation |
+| `absorption_vdf`, `anisotropic_vdf` | ✅ | Coefficients as MaterialX means them: absorption as Beer-Lambert, scattering as Cycles' scatter volume (K-92, 0134; `bench_volume.py`) |
 | `uniform_edf` and the other EDFs | 🟡 | All become `emission`; `conical_edf` same as Karma; `measured_edf` ignores its IES file, as Karma does (measured 2026-10-10) |
 | Chiang hair BSDF, roughness, absorption nodes | ✅ | Exact vs native principled hair, 4 pairs < 1e-3 |
 | `switch`, `swizzle`, `extract`, `ramp4`, `splitlr/tb` | ✅ | Expanded from nodegraphs or rewritten (`mtlx_coverage.py`); same as Karma |

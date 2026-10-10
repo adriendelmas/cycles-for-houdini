@@ -76,6 +76,12 @@ def Xform "world"
         matrix4d xformOp:transform = ( (1,0,0,0), (0,1,0,0), (0,0,1,0), (0, 0, 10, 1) )
         uniform token[] xformOpOrder = ["xformOp:transform"]
     }
+    # No light but the wall: husk lights a scene that has none, which a
+    # scattering medium sends to the camera.
+    def DomeLight "black"
+    {
+        float inputs:intensity = 0
+    }
     def Mesh "wall" (prepend apiSchemas = ["MaterialBindingAPI"])
     {
         rel material:binding = </world/Materials/W>
@@ -113,8 +119,45 @@ def Xform "world"
 }
 """
 
+# `anisotropic_vdf` with the same absorption and no scattering, and with a
+# scattering coefficient alone: its coefficients were both dropped before 0134
+# (K-92). Scattering brings some of the wall's light back to the camera,
+# which Beer-Lambert leaves out; that case is held against Cycles' own scatter
+# volume with the same coefficient, measured in the same scene.
+ANISO_VOLUME = """            token outputs:mtlx:volume.connect = </world/Materials/M/vol.outputs:out>
+            def Shader "vol"
+            {
+                uniform token info:id = "ND_volume"
+                token inputs:vdf.connect = </world/Materials/M/sc.outputs:out>
+                token outputs:out
+            }
+            def Shader "sc"
+            {
+                uniform token info:id = "ND_anisotropic_vdf"
+                vector3f inputs:absorption = (%g, %g, %g)
+                vector3f inputs:scattering = (%g, %g, %g)
+                float inputs:anisotropy = -0.9
+                token outputs:out
+            }"""
+SCATTER = (0.1, 0.25, 0.4)
+
+NATIVE_SCATTER = """            token outputs:cycles:volume.connect = </world/Materials/M/sc.outputs:volume>
+            def Shader "sc"
+            {
+                uniform token info:id = "cycles_scatter_volume"
+                color3f inputs:color = (%g, %g, %g)
+                float inputs:density = 1
+                float inputs:anisotropy = -0.9
+                token outputs:volume
+            }""" % SCATTER
+
 CASES = [
     ("mtlx_absorption", MTLX_VOLUME, OUTWARD, "rightHanded", tuple(math.exp(-2 * s) for s in SIGMA)),
+    ("vdf_absorption", ANISO_VOLUME % (SIGMA + (0, 0, 0)), OUTWARD, "rightHanded",
+     tuple(math.exp(-2 * s) for s in SIGMA)),
+    ("native_scattering", NATIVE_SCATTER, OUTWARD, "rightHanded", None),
+    ("vdf_scattering", ANISO_VOLUME % ((0, 0, 0) + SCATTER), OUTWARD, "rightHanded",
+     "native_scattering"),
     ("native_absorption", NATIVE_VOLUME, OUTWARD, "rightHanded", (math.exp(-1.0),) * 3),
     ("lefthanded", MTLX_VOLUME, INWARD, "leftHanded", tuple(math.exp(-2 * s) for s in SIGMA)),
 ]
@@ -126,6 +169,7 @@ def main():
     env = dict(os.environ)
     env["PATH"] = HFS + ";" + env["PATH"]
     problems = []
+    measured = {}
     for name, volume, indices, orientation, expected in CASES:
         scene = os.path.join(OUT, name + ".usda")
         open(scene, "w", encoding="utf-8").write(
@@ -146,6 +190,14 @@ def main():
         centre = px[34:46, 54:66, :3].reshape(-1, 3).mean(axis=0)
         wall = px[2:8, 2:8, :3].reshape(-1, 3).mean(axis=0)
         ratio = [c / max(w, 1e-6) for c, w in zip(centre, wall)]
+        measured[name] = ratio
+        if expected is None:
+            # A reference for a later case, not a check of its own.
+            print("%-18s wall %.3f  transmitted %s  (reference)"
+                  % (name, min(wall), " ".join("%.3f" % r for r in ratio)))
+            continue
+        if isinstance(expected, str):
+            expected = measured[expected]
         ok = all(abs(r - e) <= TOL for r, e in zip(ratio, expected)) and min(wall) > 0.95
         print("%-18s wall %.3f  transmitted %s  expected %s  %s"
               % (name, min(wall), " ".join("%.3f" % r for r in ratio),
