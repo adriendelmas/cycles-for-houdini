@@ -1,0 +1,464 @@
+From e230c5896e144a98c0e2779aef27e96d8ff425c9 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Sat, 10 Oct 2026 08:52:13 +0200
+Subject: [PATCH 128/128] hydra: computed colour4 alpha, BSDF weight,
+ geompropvalue colours
+
+The alpha a separate4 reads is now computed through colour4 nodes: each
+one on the way gets a float twin from the MaterialX library - the same
+operation on the alphas of its colour4 inputs - a constant gives its
+fourth component, combine4 its in4, a converted colour3 an alpha of 1
+(K-17).
+
+A pbrlib BSDF's own weight, which no Cycles BSDF has, was dropped: a lobe
+at weight 0.5 rendered whole. It is now applied by a multiply after the
+BSDF; edited parameters of a node from Hydra are written back, a removed
+one blocked (K-88).
+
+geompropvalue of a colour or a vector reads the attribute's colour or
+vector output instead of its averaged factor.
+---
+ src/hydra/material.cpp    |  16 ++
+ src/hydra/mtlx_expand.cpp | 340 +++++++++++++++++++++++++++++++++++++-
+ 2 files changed, 351 insertions(+), 5 deletions(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index 66c42e6c..d621c2dc 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -1799,6 +1799,20 @@ const std::vector<MtlxEntry> &MtlxTable()
+           {TfToken("geomprop"), ustring("attribute")},
+           {CyclesMaterialTokens->out, ustring("fac")},
+       }};
++  /* A colour or vector primvar is read whole from the matching output; on
++   * `fac` it came out as the average of its components. */
++  static const UsdToCyclesMapping kAttributeColor = {
++      "attribute",
++      {
++          {TfToken("geomprop"), ustring("attribute")},
++          {CyclesMaterialTokens->out, ustring("color")},
++      }};
++  static const UsdToCyclesMapping kAttributeVector = {
++      "attribute",
++      {
++          {TfToken("geomprop"), ustring("attribute")},
++          {CyclesMaterialTokens->out, ustring("vector")},
++      }};
+   /* `geomcolor` reads the vertex colour. The mesh stores it under the primvar
+    * name Houdini and USD give it, `displayColor`; an attribute node with no
+    * name asks Cycles for an attribute called "" and reads zero. `index` (a
+@@ -2718,6 +2732,8 @@ const std::vector<MtlxEntry> &MtlxTable()
+       {"ND_facingratio", &kFacingRatio},
+       {"ND_geomcolor", &kGeomColor},
+       {"ND_geompropvalue", &kAttribute},
++      {"ND_geompropvalue_color", &kAttributeColor},
++      {"ND_geompropvalue_vector", &kAttributeVector},
+ 
+       /* Utilities. */
+       {"ND_bump", &kBump},
+diff --git a/src/hydra/mtlx_expand.cpp b/src/hydra/mtlx_expand.cpp
+index cc46b354..322d0961 100644
+--- a/src/hydra/mtlx_expand.cpp
++++ b/src/hydra/mtlx_expand.cpp
+@@ -17,6 +17,7 @@
+ #include <pxr/base/gf/matrix4f.h>
+ #include <pxr/base/gf/vec2f.h>
+ #include <pxr/base/gf/vec3f.h>
++#include <pxr/base/gf/vec4d.h>
+ #include <pxr/base/gf/vec4f.h>
+ #include <pxr/base/tf/getenv.h>
+ #include <pxr/imaging/hd/materialConnectionSchema.h>
+@@ -95,6 +96,9 @@ struct Node {
+   std::map<TfToken, std::vector<Conn>> conns;
+   /* Everything else Hydra put on the node, to carry across unchanged. */
+   HdContainerDataSourceHandle original;
++  /* Set when a pass edited `params` of a node from Hydra: they are written
++   * back over the original ones, an empty value removing one. */
++  bool paramsEdited = false;
+ };
+ 
+ struct Network {
+@@ -272,12 +276,19 @@ HdContainerDataSourceHandle ConnectionsDs(const std::map<TfToken, std::vector<Co
+   return HdRetainedContainerDataSource::New(names.size(), names.data(), values.data());
+ }
+ 
+-HdContainerDataSourceHandle ParamsDs(const std::map<TfToken, VtValue> &params)
++/* An empty value is left out - or, over Hydra's own parameters, blocks the
++ * original one. */
++HdContainerDataSourceHandle ParamsDs(const std::map<TfToken, VtValue> &params,
++                                     const bool block = false)
+ {
+   std::vector<TfToken> names;
+   std::vector<HdDataSourceBaseHandle> values;
+   for (const auto &[name, value] : params) {
+     if (value.IsEmpty()) {
++      if (block) {
++        names.push_back(name);
++        values.push_back(HdBlockDataSource::New());
++      }
+       continue;
+     }
+     names.push_back(name);
+@@ -295,11 +306,14 @@ HdMaterialNetworkSchema Write(const Network &net)
+   for (const auto &[name, node] : net.nodes) {
+     HdContainerDataSourceHandle ds;
+     if (node.original) {
+-      /* Only the connections may have been redirected. */
+-      const TfToken keys[] = {HdMaterialNodeSchemaTokens->inputConnections};
+-      const HdDataSourceBaseHandle values[] = {ConnectionsDs(node.conns)};
++      /* The connections may have been redirected, the parameters edited. */
++      const TfToken keys[] = {HdMaterialNodeSchemaTokens->inputConnections,
++                              HdMaterialNodeSchemaTokens->parameters};
++      const HdDataSourceBaseHandle values[] = {ConnectionsDs(node.conns),
++                                               ParamsDs(node.params, true)};
+       ds = HdOverlayContainerDataSource::New(
+-          HdRetainedContainerDataSource::New(1, keys, values), node.original);
++          HdRetainedContainerDataSource::New(node.paramsEdited ? 2 : 1, keys, values),
++          node.original);
+     }
+     else {
+       ds = HdMaterialNodeSchema::Builder()
+@@ -1036,6 +1050,304 @@ bool RouteImageAlpha(Network &net)
+   return any;
+ }
+ 
++/* The alpha of a computed colour4 (K-17, the general case). Cycles carries
++ * three channels on a wire, so the alpha a `separate4` reads on `outa` has to
++ * be computed beside the colour: each colour4 node on the way gets a float
++ * twin - the same operation on the alphas of its colour4 inputs, its other
++ * inputs as they are - found in the MaterialX library. An image hands its
++ * own alpha, a constant its fourth component, `combine4` its `in4`, a
++ * colour3 converted to colour4 an alpha of 1. A node with no float twin
++ * leaves the alpha lost, as before. */
++struct Alpha {
++  bool ok = false;
++  bool wired = false;
++  Conn conn;
++  float value = 1.0f;
++};
++
++bool Vec4Alpha(const VtValue &value, float *alpha)
++{
++  if (value.IsHolding<GfVec4f>()) {
++    *alpha = value.UncheckedGet<GfVec4f>()[3];
++    return true;
++  }
++  if (value.IsHolding<GfVec4d>()) {
++    *alpha = float(value.UncheckedGet<GfVec4d>()[3]);
++    return true;
++  }
++  return false;
++}
++
++/* The float nodedef of the same node as `nodeDef`, colour4 inputs and output
++ * read as float, every other input of the same type. */
++mx::NodeDefPtr FloatTwin(const mx::DocumentPtr &library, const mx::NodeDefPtr &nodeDef)
++{
++  for (const mx::NodeDefPtr &candidate : library->getMatchingNodeDefs(nodeDef->getNodeString())) {
++    const std::vector<mx::OutputPtr> outs = candidate->getActiveOutputs();
++    if (outs.size() != 1 || outs[0]->getType() != "float") {
++      continue;
++    }
++    bool match = true;
++    for (const mx::InputPtr &input : nodeDef->getActiveInputs()) {
++      const mx::InputPtr other = candidate->getActiveInput(input->getName());
++      const std::string want = input->getType() == "color4" ? "float" : input->getType();
++      if (!other || other->getType() != want) {
++        match = false;
++        break;
++      }
++    }
++    if (match) {
++      return candidate;
++    }
++  }
++  return nullptr;
++}
++
++Alpha AlphaOf(Network &net,
++              const mx::DocumentPtr &library,
++              const Conn &source,
++              std::map<TfToken, Alpha> &done,
++              const int depth)
++{
++  Alpha result;
++  const auto memo = done.find(source.upstream);
++  if (memo != done.end()) {
++    return memo->second;
++  }
++  const auto it = net.nodes.find(source.upstream);
++  if (it == net.nodes.end() || depth > 64 ||
++      (!source.output.IsEmpty() && source.output != kOut))
++  {
++    return result;
++  }
++  /* Copy: twins are added to the map while it is read. */
++  const Node node = it->second;
++  const std::string &id = node.typeId.GetString();
++  const mx::NodeDefPtr nodeDef = library->getNodeDef(id);
++  if (!nodeDef) {
++    return result;
++  }
++  const std::string category = nodeDef->getNodeString();
++
++  /* An input's alpha: its wire's, or its value's. */
++  const auto inputAlpha = [&](const std::string &input, Alpha *out) {
++    const auto conn = node.conns.find(TfToken(input));
++    if (conn != node.conns.end() && !conn->second.empty()) {
++      *out = AlphaOf(net, library, conn->second.front(), done, depth + 1);
++      return out->ok;
++    }
++    out->ok = true;
++    out->wired = false;
++    const auto param = node.params.find(TfToken(input));
++    float alpha = 0.0f;
++    if (param != node.params.end() && Vec4Alpha(param->second, &alpha)) {
++      out->value = alpha;
++      return true;
++    }
++    const mx::InputPtr def = nodeDef->getActiveInput(input);
++    const mx::ValuePtr value = def ? def->getValue() : nullptr;
++    if (value && value->isA<mx::Color4>()) {
++      out->value = value->asA<mx::Color4>()[3];
++      return true;
++    }
++    out->value = 0.0f;
++    return true;
++  };
++
++  if (id == "ND_image_color4" || id == "ND_tiledimage_color4") {
++    result = {true, true, Conn{source.upstream, TfToken("a")}, 1.0f};
++  }
++  else if (id == "ND_constant_color4") {
++    inputAlpha("value", &result);
++  }
++  else if (id == "ND_combine4_color4") {
++    const auto conn = node.conns.find(TfToken("in4"));
++    if (conn != node.conns.end() && !conn->second.empty()) {
++      result = {true, true, conn->second.front(), 1.0f};
++    }
++    else {
++      const auto param = node.params.find(TfToken("in4"));
++      result.ok = true;
++      result.value = (param != node.params.end() && param->second.CanCast<float>()) ?
++                         VtValue::Cast<float>(param->second).UncheckedGet<float>() :
++                         0.0f;
++    }
++  }
++  else if (id == "ND_convert_color3_color4" || id == "ND_convert_vector3_color4") {
++    result.ok = true;
++  }
++  else if (id == "ND_convert_float_color4") {
++    const auto conn = node.conns.find(TfToken("in"));
++    if (conn != node.conns.end() && !conn->second.empty()) {
++      result = {true, true, conn->second.front(), 1.0f};
++    }
++    else {
++      const auto param = node.params.find(TfToken("in"));
++      result.ok = true;
++      result.value = (param != node.params.end() && param->second.CanCast<float>()) ?
++                         VtValue::Cast<float>(param->second).UncheckedGet<float>() :
++                         0.0f;
++    }
++  }
++  else if (category == "dot") {
++    inputAlpha("in", &result);
++  }
++  else if (const mx::NodeDefPtr twinDef = FloatTwin(library, nodeDef)) {
++    Node twin;
++    twin.typeId = TfToken(twinDef->getName());
++    bool ok = true;
++    for (const mx::InputPtr &input : nodeDef->getActiveInputs()) {
++      const TfToken name(input->getName());
++      if (input->getType() != "color4") {
++        if (const auto conn = node.conns.find(name); conn != node.conns.end()) {
++          twin.conns[name] = conn->second;
++        }
++        if (const auto param = node.params.find(name); param != node.params.end()) {
++          twin.params[name] = param->second;
++        }
++        continue;
++      }
++      Alpha alpha;
++      if (!inputAlpha(input->getName(), &alpha)) {
++        ok = false;
++        break;
++      }
++      if (alpha.wired) {
++        twin.conns[name] = {alpha.conn};
++      }
++      else {
++        twin.params[name] = VtValue(alpha.value);
++      }
++    }
++    if (ok) {
++      const TfToken twinName(Prefix(source.upstream, "alpha"));
++      net.nodes[twinName] = std::move(twin);
++      result = {true, true, Conn{twinName, kOut}, 1.0f};
++    }
++  }
++  done[source.upstream] = result;
++  return result;
++}
++
++bool RouteComputedAlpha(Network &net, const mx::DocumentPtr &library)
++{
++  static const TfToken kIn("in"), kOuta("outa");
++  bool any = false;
++  std::map<TfToken, Alpha> done;
++  std::vector<std::pair<TfToken, Conn>> separates;
++  for (const auto &[name, node] : net.nodes) {
++    if (node.typeId != TfToken("ND_separate4_color4")) {
++      continue;
++    }
++    const auto in = node.conns.find(kIn);
++    if (in != node.conns.end() && !in->second.empty()) {
++      separates.emplace_back(name, in->second.front());
++    }
++  }
++  for (const auto &[name, source] : separates) {
++    bool read = false;
++    for (const auto &[otherName, other] : net.nodes) {
++      for (const auto &[input, list] : other.conns) {
++        for (const Conn &conn : list) {
++          read |= conn.upstream == name && conn.output == kOuta;
++        }
++      }
++    }
++    if (!read) {
++      continue;
++    }
++    const Alpha alpha = AlphaOf(net, library, source, done, 0);
++    if (!alpha.ok) {
++      continue;
++    }
++    for (auto &[otherName, other] : net.nodes) {
++      for (auto &[input, list] : other.conns) {
++        const size_t before = list.size();
++        if (alpha.wired) {
++          for (Conn &conn : list) {
++            if (conn.upstream == name && conn.output == kOuta) {
++              conn = alpha.conn;
++            }
++          }
++          continue;
++        }
++        std::erase_if(list, [&](const Conn &conn) {
++          return conn.upstream == name && conn.output == kOuta;
++        });
++        if (list.size() != before) {
++          other.params[input] = VtValue(alpha.value);
++        }
++      }
++    }
++    any = true;
++  }
++  return any;
++}
++
++/* A BSDF's `weight` (K-88). Every pbrlib BSDF scales itself by it, and no
++ * Cycles BSDF has such an input: the mappings dropped it, so a lobe at
++ * weight 0.5 rendered whole. A BSDF whose weight is wired or other than 1 is
++ * followed by a `multiply` by that weight - a mix against nothing, as the
++ * table maps it - and its own weight is left out. */
++bool FoldClosureWeight(Network &net, const mx::DocumentPtr &library)
++{
++  static const TfToken kWeight("weight"), kIn1("in1"), kIn2("in2");
++  bool any = false;
++  std::vector<TfToken> names;
++  for (const auto &[name, node] : net.nodes) {
++    names.push_back(name);
++  }
++  for (const TfToken &name : names) {
++    Node &node = net.nodes[name];
++    const std::string &id = node.typeId.GetString();
++    if (!id.ends_with("_bsdf") || id.starts_with("ND_multiply_") || id.starts_with("ND_mix_") ||
++        id.starts_with("ND_add_") || id.starts_with("ND_layer_"))
++    {
++      continue;
++    }
++    const mx::NodeDefPtr nodeDef = library->getNodeDef(id);
++    const mx::InputPtr weightDef = nodeDef ? nodeDef->getActiveInput("weight") : nullptr;
++    if (!weightDef || weightDef->getType() != "float") {
++      continue;
++    }
++    const auto conn = node.conns.find(kWeight);
++    const bool wired = conn != node.conns.end() && !conn->second.empty();
++    const auto param = node.params.find(kWeight);
++    float weight = 1.0f;
++    if (!wired && param != node.params.end() && param->second.CanCast<float>()) {
++      weight = VtValue::Cast<float>(param->second).UncheckedGet<float>();
++    }
++    if (!wired && weight == 1.0f) {
++      /* Nothing to scale; the authored 1 is taken off, carried in full. */
++      if (param != node.params.end()) {
++        node.params[kWeight] = VtValue();
++        node.paramsEdited = true;
++        any = true;
++      }
++      continue;
++    }
++
++    Node scale;
++    scale.typeId = TfToken("ND_multiply_bsdfF");
++    if (wired) {
++      scale.conns[kIn2] = conn->second;
++      node.conns.erase(kWeight);
++    }
++    else {
++      scale.params[kIn2] = VtValue(weight);
++    }
++    node.params[kWeight] = VtValue();
++    node.paramsEdited = true;
++
++    const TfToken scaleName(Prefix(name, "weight"));
++    Redirect(net, name, {{kOut.GetString(), Conn{scaleName, kOut}}});
++    scale.conns[kIn1] = {Conn{name, kOut}};
++    net.nodes[scaleName] = std::move(scale);
++    any = true;
++  }
++  return any;
++}
++
+ /* The base colour of the two surface models whose base is more than one
+  * colour. Cycles' principled colours its diffuse, its subsurface and its metal
+  * with one base colour; standard_surface and OpenPBR give the subsurface its
+@@ -1184,6 +1496,18 @@ HdMaterialNetworkSchema ExpandMaterialXNodegraphs(HdMaterialNetworkSchema networ
+           candidate = true;
+           break;
+         }
++        /* A BSDF with a weight of its own (FoldClosureWeight). */
++        if (id.ends_with("_bsdf")) {
++          HdMaterialNodeSchema node = nodes.Get(name);
++          HdMaterialConnectionVectorSchema conns = node.GetInputConnections().Get(
++              TfToken("weight"));
++          if (node.GetParameters().Get(TfToken("weight")).GetValue() ||
++              (conns && conns.GetNumElements() > 0))
++          {
++            candidate = true;
++            break;
++          }
++        }
+       }
+     }
+   }
+@@ -1196,6 +1520,7 @@ HdMaterialNetworkSchema ExpandMaterialXNodegraphs(HdMaterialNetworkSchema networ
+ 
+   net.changed |= FoldThinFilm(net);
+   net.changed |= FoldSurfaceBase(net);
++  net.changed |= FoldClosureWeight(net, library);
+ 
+   /* Expanded nodes bring in nodes that may expand in turn. */
+   for (int pass = 0; pass < 8; ++pass) {
+@@ -1236,6 +1561,11 @@ HdMaterialNetworkSchema ExpandMaterialXNodegraphs(HdMaterialNetworkSchema networ
+       any |= done;
+       net.changed |= done;
+     }
++    /* After this pass's expansions, so their colour4 nodes are seen; its
++     * float twins may expand in the next. */
++    const bool routed = RouteComputedAlpha(net, library);
++    any |= routed;
++    net.changed |= routed;
+     if (!any) {
+       break;
+     }

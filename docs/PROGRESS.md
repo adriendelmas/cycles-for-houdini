@@ -132,17 +132,17 @@ surface models (`surface_audit.py`, K-63). On 2026-10-07 the numbers were
 | `image`, `tiledimage`, `hextiledimage`, `gltf_image` | ✅ | `constant` wrap only exact for black |
 | `normalmap`, `bump`, `displacement` | ✅ | `bench_normalmap.py`, `bench_displace.py`; per-vertex UVs broke the tangent space before 0116 (K-73) |
 | `heighttonormal` | ✅ | Tangent-space map from the delegate's own nodegraph (K-12, 0108) |
-| `texcoord`, `position`, `normal`, `tangent` | 🟡 | `position` object space ✅; `normal`/`tangent` world space; no UV set index |
+| `texcoord`, `position`, `normal`, `tangent` | ✅ | `index`, `space` as Karma (K-18, 0106); `mtlx_karma.py` |
 | `geomcolor` | ✅ | Exact since 2026-10-07 (K-06, K-19); `index` not carried |
-| `geompropvalue` | 🟡 | Scalar output only |
+| `geompropvalue` | 🟡 | Colour and vector outputs since 0128 (`bench_mtlx.py`); its `default` is not carried - a missing primvar reads 0 where Karma gives the default |
 | MaterialX noises (perlin, fractal, cell, worley, unified) | ✅ | Exact kernel from PR 158054 |
 | `checkerboard`, `randomcolor`, `ramplr` | ✅ / 🟡 | `ramptb` is the diagonal gradient |
 | `mix` | ✅ | Exact since 2026-10-07 (K-01) |
-| `plus`, `minus`, `difference`, `burn`, `dodge`, `screen`, `overlay` | ✅ | Orientation fixed (K-02); `plus` value-tested, the others not yet |
+| `plus`, `minus`, `difference`, `burn`, `dodge`, `screen`, `overlay` | ✅ | Orientation fixed (K-02); all compared with Karma (`mtlx_karma.py`); `dodge` differs where Karma departs from the library (K-64) |
 | `mix`/`add`/`multiply` of BSDF, EDF, VDF, surfaceshader | ✅ | Exact since 2026-10-07 (K-03); four bench cases |
-| `mix`/`add`/`multiply`/`dot` of displacementshader | ✅ | Vector nodes; untested |
+| `mix`/`add`/`multiply`/`dot` of displacementshader | ✅ | Vector nodes |
 | `surface` | ✅ | Added 2026-09-10 |
-| `volume` | ✅ | Added 2026-10-07 (K-04); no value case yet |
+| `volume` | ✅ | Added 2026-10-07 (K-04); same as Karma (`mtlx_karma.py --closures`) |
 | `layer` | 🟡 | Fresnel-weighted mix, IOR 1.5: right for a dielectric top, approximate otherwise (K-09) |
 | add/sub/mul/div, scalar and vector | ✅ | Split by type suffix |
 | Other math on colour/vector (`absval`, `floor`, `min`, `max`, `power`, `clamp`, `remap`, `smoothstep`...) | ✅ | Vector twins since 2026-10-07 (K-07); 15 bench cases |
@@ -150,19 +150,20 @@ surface models (`surface_audit.py`, K-63). On 2026-10-07 the numbers were
 | `contrast` scalar and vector | ✅ | |
 | `saturate` | ✅ | MaterialX nodegraph, ACEScg luma, exact since 2026-10-07 (K-08) |
 | `invert`, `luminance` | ✅ | `amount - in`; ACEScg `lumacoeffs` |
-| `rgbtohsv`, `hsvtorgb` | 🟡 | Untested |
+| `rgbtohsv`, `hsvtorgb` | ✅ | Same as Karma (`mtlx_karma.py`) |
 | `ifgreater`, `ifgreatereq`, `ifequal` | ✅ | Per type |
 | `logical_and/or/not` | ✅ | |
 | `dot`, `convert` pass-through, `constant` | ✅ | |
-| `rotate2d/3d`, `place2d`, `transform*` | 🟡 | `place2d` pivot/order unverified |
-| `facingratio`, `viewdirection` | ✅ / 🟡 | `facingratio` exact for its defaults (K-10); `viewdirection` negated, untested (K-11) |
-| `conductor_bsdf` | ✅ | `metallic_bsdf` physical conductor with `ior`/`extinction` (K-13); not value-tested |
-| `dielectric_bsdf`, diffuse, sheen, translucent, subsurface | 🟡 | `tint` and thin film carried; `scatter_mode`, `weight`, anisotropy not |
+| `rotate2d/3d`, `place2d`, `transform*` | ✅ | `place2d` from the library's nodegraph, both orders with a pivot value-tested (`bench_mtlx.py`) |
+| `facingratio`, `viewdirection` | ✅ | `facingratio` exact for its defaults (K-10); both same as Karma (`mtlx_karma.py`) |
+| `conductor_bsdf` | ✅ | `metallic_bsdf` physical conductor with `ior`/`extinction` (K-13); same as Karma (`mtlx_karma.py --closures`) |
+| `dielectric_bsdf`, diffuse, sheen, translucent, subsurface | 🟡 | `tint`, thin film, `scatter_mode` and `weight` (K-88, 0128) carried; an anisotropic (vector2) roughness is averaged - Cycles' default tangent is not MaterialX's |
 | `absorption_vdf`, `anisotropic_vdf` | 🟡 | Reachable through `volume` since 2026-10-07; coefficient vs colour approximation |
-| `uniform_edf` and the other EDFs | 🟡 | All become `emission` |
+| `uniform_edf` and the other EDFs | 🟡 | All become `emission`; `conical_edf` same as Karma; `measured_edf` ignores its IES file |
 | Chiang hair BSDF, roughness, absorption nodes | ✅ | Exact vs native principled hair, 4 pairs < 1e-3 |
-| `switch`, `swizzle`, `extract`, `ramp4`, `splitlr/tb` | ❌ | Need a mechanism the mapping lacks |
+| `switch`, `swizzle`, `extract`, `ramp4`, `splitlr/tb` | ✅ | Expanded from nodegraphs or rewritten (`mtlx_coverage.py`); same as Karma |
 | Alpha compositing | ✅ | Own nodegraphs, 8 nodes same as Karma (K-84, 0125) |
+| Alpha through colour4 nodes | ✅ | Float twins of the colour4 nodes on the way (K-17, 0128) |
 | Matrices, `time`/`frame` | ❌ | No Cycles equivalent (section E of KNOWN_ISSUES) |
 | `colorcorrect`, `hsvadjust`, `curveadjust`, triplanar, Houdini `hmtlx*`, 2D patterns, `blur`, `hextilednormalmap` | ✅ | Through their nodegraphs (`mtlx_coverage.py`); `hextilednormalmap` from the delegate's own (K-84) |
 

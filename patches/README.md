@@ -157,6 +157,7 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0125` | hydra: nodegraphs pour la composition alpha (over, in, out, mask, matte, disjointover, premult, unpremult) et hextilednormalmap, alpha d'une constante color4 transmise a `outa` (K-84) ; volumes : primvars lues, `cycles:volume:step_size/object_space/velocity_scale` (K-85) |
 | `0126` | hydra: processeur de sortie `hdcycles_cookcoptextures`, ajouté à chaque nouveau USD Render ROP, qui cuit les textures `op:` (COP) en EXR à côté de l'USD écrit, pour husk et les fermes (K-40) |
 | `0127` | hydra: lumière répartie sur des jumelles pour les multiplicateurs `diffuse`/`specular` entre 0 et 1 et `shadow:color` ; une lumière sans ombre n'est plus touchée par les rayons BSDF (ombres à moitié noires avec `shadow:enable = 0`) (K-87) |
+| `0128` | hydra: alpha d'une couleur calculée (jumeaux float des nœuds color4, K-17) ; `weight` des BSDF appliqué par un multiply (K-88) ; `geompropvalue` couleur et vecteur lus en entier |
 
 ---
 

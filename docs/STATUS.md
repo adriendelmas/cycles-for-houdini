@@ -2457,3 +2457,10 @@ répartie sur des copies (une par groupe de lobes, avec et sans ombre). Au
 passage, `shadow:enable = 0` laissait les ombres à moitié noires (le MIS
 d'une lumière sans ombre) ; corrigé. 8 cas sur 8 identiques à Karma
 (`bench_light_split.py`).
+
+0128 (2026-10-10, nuit) : l'alpha d'une couleur RGBA calculée (mix,
+multiply, add... d'une image ou de constantes) arrive maintenant jusqu'à
+l'opacité ; le `weight` d'un BSDF MaterialX n'était jamais appliqué (un
+lobe à 0,5 rendait entier) ; `geompropvalue` en couleur ou vecteur rendait
+la moyenne. PROGRESS repassé ligne par ligne contre `mtlx_karma.py` : dix
+lignes « non testé » ou « ❌ » étaient déjà justes.

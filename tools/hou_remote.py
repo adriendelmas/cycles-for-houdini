@@ -21,11 +21,14 @@ someone else is dropped when this one arrives.
 
 import argparse
 import json
+import os
 import socket
 import struct
 import sys
 
-HOST, PORT = "127.0.0.1", 9876
+# HDCYCLES_MCP_PORT moves both ends off 9876, when another session's Houdini
+# holds it (tests/houdini/autostart/scripts/456.py reads it too).
+HOST, PORT = "127.0.0.1", int(os.environ.get("HDCYCLES_MCP_PORT", "9876"))
 
 
 def call(command, params=None, timeout=300.0, port=None):

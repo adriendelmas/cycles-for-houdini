@@ -85,13 +85,16 @@ def Xform "world"
     {
 %(inputs)s
         float3 xformOp:translate = (0, 2, 0)
-        float3 xformOp:rotateXYZ = (-90, 0, 0)
+        float3 xformOp:rotateXYZ = %(rotate)s
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
     }
 }
 """
 
 SHAPING = '(prepend apiSchemas = ["ShapingAPI"])'
+
+# Lights turned otherwise than facing the floor.
+ROTATE = {"cylinder_rolled": "(90, 0, 0)"}
 
 # (name, light type, api schemas, inputs)
 CASES = [
@@ -151,6 +154,11 @@ CASES = [
                                                   "float inputs:length = 1",
                                                   "float inputs:intensity = 5",
                                                   "bool inputs:normalize = 1"]),
+    # Turned over: a tube lights all around its axis, where the rectangle
+    # that stood in for it faced up and left the floor dark (K-89).
+    ("cylinder_rolled", "CylinderLight", "", ["float inputs:radius = 0.1",
+                                              "float inputs:length = 1",
+                                              "float inputs:intensity = 5"]),
     ("treat_as_point", "SphereLight", "", ["float inputs:radius = 0.25", "float inputs:intensity = 10",
                                            "bool treatAsPoint = 1"]),
     ("color_and_temperature", "SphereLight", "", ["float inputs:radius = 0.25",
@@ -229,6 +237,7 @@ def main():
         scene = os.path.join(OUT, name + ".usda")
         open(scene, "w", encoding="utf-8").write(SCENE % {
             "res": RES, "light": light, "schemas": schemas,
+            "rotate": ROTATE.get(name, "(-90, 0, 0)"),
             "inputs": "\n".join("        " + l for l in inputs)})
         cyc = render("HdCyclesPlugin", scene, os.path.join(OUT, name + "_cycles.exr"))
         kar = render("BRAY_HdKarma", scene, os.path.join(OUT, name + "_karma.exr"))

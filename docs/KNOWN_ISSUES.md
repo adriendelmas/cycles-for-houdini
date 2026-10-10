@@ -237,6 +237,15 @@ the reader is wired to the image node's own alpha output
 (`bench_mtlx.py` `alpha_*`). Alpha that has gone through any other colour4
 node first is still lost, and with it the colour4 compositing nodes.
 
+0128 carries it through computed colours: each colour4 node between the
+`separate4` and the image gets a float twin from the MaterialX library -
+the same operation on the alphas of its colour4 inputs, its other inputs as
+they are (`mix`, `add`, `multiply` by a colour or a float, `clamp`...) - a
+constant gives its fourth component, `combine4` its `in4`, a colour3
+converted to colour4 an alpha of 1. `bench_mtlx.py` `alpha_mix`,
+`alpha_multiply_by_float`, `alpha_add_values`. Kept: a node with no float
+twin in the library (`hsvadjust`, `convert` from vector4...) still loses it.
+
 ### K-18 `texcoord.index`, `normal.space`, `tangent.space` ignored — confirmed — **fixed** (0106), index as Karma
 Only the first UV set; `normal`/`tangent` are world space while the nodedef
 default is object space (differs once the object rotates). Noted in STATUS A11.
@@ -936,6 +945,17 @@ other from BSDF rays.
 Kept: a dome is the scene's one background and keeps the 0-or-1 switch;
 light filters have no Cycles counterpart. Each twin is one more light to
 sample, so such a light costs up to five lights' worth of noise.
+
+### K-88 A BSDF's own weight was dropped — confirmed — **fixed** (0128)
+Every pbrlib BSDF (`oren_nayar_diffuse`, `burley_diffuse`, `translucent`,
+`dielectric`, `conductor`, `generalized_schlick`, `subsurface`, `sheen`)
+scales itself by a `weight` input; no Cycles BSDF has one, the mappings left
+it out, and a lobe at weight 0.5 rendered whole (the translator only warned
+"no input 'weight'"). A BSDF whose weight is wired or other than 1 is now
+followed by a `multiply` by it - the mix against nothing the table already
+uses - and its own weight is removed from the node. `bench_mtlx.py`
+`closure_weight`, `closure_weight_wired`. `mtlx_karma.py --closures` never
+showed it: it authors the default weight, 1.
 
 ## C. Houdini side
 
