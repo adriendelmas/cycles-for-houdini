@@ -2481,3 +2481,8 @@ jumelles se créent et disparaissent avec eux.
 
 0131 (2026-10-10, nuit) : un `geompropvalue` dont la primvar manque rend
 son `default`, comme Karma (Cycles rendait 0).
+
+0132 (2026-10-10, nuit) : les métaux anisotropes (métal brossé) étirent
+leur reflet comme Karma ; il était rond. Le métal de Cycles a sa propre
+formule (anisotropie de 0 à 1 le long de la tangente, plus une rotation),
+d'où un quart de tour quand l'étirement est dans l'autre sens.

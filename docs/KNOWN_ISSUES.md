@@ -986,6 +986,24 @@ the objects at their next transform, instancer or binding change;
 `mtlx_karma.py`'s quads author an empty `geomprop`, which names nothing to
 fall back for, and still differ.
 
+### K-91 Anisotropic metals rendered round — confirmed — **fixed** (0132)
+A MaterialX `conductor_bsdf` or `generalized_schlick_bsdf` takes its
+roughness as two alphas, along the tangent (the first UV set's) and the
+bitangent - a brushed metal, usually from `roughness_anisotropy`. The mapping
+averaged them into one roughness: the highlight came out round where Karma
+stretched it 5 to 8 times (`bench_aniso.py`: x/y spread 0.87 against 0.12
+and 6.86). Cycles' metallic BSDF has its own parametrisation, not the one of
+its other microfacet closures: an anisotropy A in [0, 1] stretching along
+its tangent only, alpha / aspect along it and alpha * aspect across, aspect
+= sqrt(1 - 0.9 A), and a rotation of that tangent. The two alphas become
+alpha = sqrt(ax ay), A = (1 - min / max) / 0.9 and a quarter turn when the
+bitangent's alpha is the larger - for a value at translation, for a wire as
+MaterialX nodes - and an unwired tangent is MaterialX's UV tangent, not
+Cycles' default radial one. After: isotropic, both directions and wired
+within 8 % of Karma's spread. Kept: Cycles caps A at 1, so alphas more than
+10 apart stretch as 10; a `dielectric_bsdf`'s anisotropy (through the
+principled) is still averaged.
+
 ## C. Houdini side
 
 ### K-40 `op:` textures fail under husk — confirmed — **fixed** (0126)

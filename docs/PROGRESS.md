@@ -156,8 +156,8 @@ surface models (`surface_audit.py`, K-63). On 2026-10-07 the numbers were
 | `dot`, `convert` pass-through, `constant` | ✅ | |
 | `rotate2d/3d`, `place2d`, `transform*` | ✅ | `place2d` from the library's nodegraph, both orders with a pivot value-tested (`bench_mtlx.py`) |
 | `facingratio`, `viewdirection` | ✅ | `facingratio` exact for its defaults (K-10); both same as Karma (`mtlx_karma.py`) |
-| `conductor_bsdf` | ✅ | `metallic_bsdf` physical conductor with `ior`/`extinction` (K-13); same as Karma (`mtlx_karma.py --closures`) |
-| `dielectric_bsdf`, diffuse, sheen, translucent, subsurface | 🟡 | `tint`, thin film, `scatter_mode` and `weight` (K-88, 0128) carried; an anisotropic (vector2) roughness is averaged - Cycles' default tangent is not MaterialX's |
+| `conductor_bsdf` | ✅ | `metallic_bsdf` physical conductor with `ior`/`extinction` (K-13); same as Karma (`mtlx_karma.py --closures`); anisotropic roughness as Karma (K-91, 0132, `bench_aniso.py`) |
+| `dielectric_bsdf`, diffuse, sheen, translucent, subsurface | 🟡 | `tint`, thin film, `scatter_mode` and `weight` (K-88, 0128) carried; an anisotropic (vector2) roughness is averaged on a dielectric (carried on metals, K-91) |
 | `absorption_vdf`, `anisotropic_vdf` | 🟡 | Reachable through `volume` since 2026-10-07; coefficient vs colour approximation |
 | `uniform_edf` and the other EDFs | 🟡 | All become `emission`; `conical_edf` same as Karma; `measured_edf` ignores its IES file |
 | Chiang hair BSDF, roughness, absorption nodes | ✅ | Exact vs native principled hair, 4 pairs < 1e-3 |

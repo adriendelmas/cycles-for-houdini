@@ -17,6 +17,7 @@ tests/materialx/output/
 tests/curves/output/
 tests/motion/output/
 tests/cop/output/
+tests/aniso/output/
 tests/instances/output/
 tests/implicit/output/
 tests/settings/output/

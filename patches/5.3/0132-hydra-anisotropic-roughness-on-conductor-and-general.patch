@@ -1,0 +1,191 @@
+From c3fe901ba8365451fa3357a0d050dfd37aeb8eb5 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Sat, 10 Oct 2026 10:40:11 +0200
+Subject: [PATCH 132/132] hydra: anisotropic roughness on conductor and
+ generalized Schlick
+
+MaterialX gives a metal's roughness as two alphas along the UV tangent and
+bitangent; the mapping averaged them and a brushed metal rendered round.
+Cycles' metallic BSDF stretches along its tangent only, with an anisotropy
+in [0, 1] and a rotation: the alphas become alpha = sqrt(ax ay),
+A = (1 - min/max) / 0.9 and a quarter turn when the bitangent's alpha is
+larger - for a value at translation, for a wire as MaterialX nodes - and an
+unwired tangent is MaterialX's UV tangent (K-91).
+
+A wired BSDF weight is now emptied rather than erased on the node from
+Hydra, so the original wire does not show through the overlay.
+---
+ src/hydra/material.cpp    |   5 ++
+ src/hydra/mtlx_expand.cpp | 115 +++++++++++++++++++++++++++++++++++++-
+ 2 files changed, 119 insertions(+), 1 deletion(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index 37b1c71e..0885df11 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -2017,6 +2017,9 @@ const std::vector<MtlxEntry> &MtlxTable()
+                              {TfToken("ior"), ustring("ior")},
+                              {TfToken("extinction"), ustring("k")},
+                              {TfToken("roughness"), ustring("rsq:value1")},
++                             /* From the two alphas (mtlx_expand.cpp, K-91). */
++                             {TfToken("cycles_anisotropy"), ustring("anisotropy")},
++                             {TfToken("cycles_rotation"), ustring("rotation")},
+                              {TfToken("normal"), ustring("normal")},
+                              {TfToken("tangent"), ustring("tangent")},
+                              {TfToken("thinfilm_thickness"), ustring("thin_film_thickness")},
+@@ -2041,6 +2044,8 @@ const std::vector<MtlxEntry> &MtlxTable()
+                              {TfToken("color0"), ustring("color")},
+                              {TfToken("color82"), ustring("edge_tint")},
+                              {TfToken("roughness"), ustring("rsq:value1")},
++                             {TfToken("cycles_anisotropy"), ustring("anisotropy")},
++                             {TfToken("cycles_rotation"), ustring("rotation")},
+                              {TfToken("normal"), ustring("normal")},
+                              {TfToken("tangent"), ustring("tangent")},
+                              {TfToken("thinfilm_thickness"), ustring("thin_film_thickness")},
+diff --git a/src/hydra/mtlx_expand.cpp b/src/hydra/mtlx_expand.cpp
+index 322d0961..636b9dcd 100644
+--- a/src/hydra/mtlx_expand.cpp
++++ b/src/hydra/mtlx_expand.cpp
+@@ -1331,7 +1331,9 @@ bool FoldClosureWeight(Network &net, const mx::DocumentPtr &library)
+     scale.typeId = TfToken("ND_multiply_bsdfF");
+     if (wired) {
+       scale.conns[kIn2] = conn->second;
+-      node.conns.erase(kWeight);
++      /* Emptied, not erased: written over Hydra's own, an empty list hides
++       * the original wire. */
++      node.conns[kWeight].clear();
+     }
+     else {
+       scale.params[kIn2] = VtValue(weight);
+@@ -1348,6 +1350,111 @@ bool FoldClosureWeight(Network &net, const mx::DocumentPtr &library)
+   return any;
+ }
+ 
++/* An anisotropic roughness on a conductor or a generalized Schlick BSDF
++ * (K-91). MaterialX gives the two alphas, (ax, ay) along the tangent (the
++ * first UV set's) and the bitangent; Cycles' metallic_bsdf one roughness r,
++ * alpha = r^2, an anisotropy A in [0, 1] and a rotation of the tangent in
++ * turns: along the tangent alpha / aspect, across it alpha * aspect, aspect =
++ * sqrt(1 - 0.9 A) - it stretches along its tangent only. So alpha =
++ * sqrt(ax ay), aspect^2 = min / max, A = (1 - min / max) / 0.9, and the
++ * tangent turned a quarter when ay is the larger. The mapping averaged the
++ * two alphas: a brushed metal rendered round. A value is converted here, a
++ * wire gets the same arithmetic as MaterialX nodes; Cycles caps A at 1, a
++ * ratio of 10 between the alphas. The tangent, when not wired, is
++ * MaterialX's, not Cycles' default, which is radial. */
++bool FoldAnisotropy(Network &net)
++{
++  static const TfToken kRoughness("roughness"), kTangent("tangent"),
++      kAnisotropy("cycles_anisotropy"), kRotation("cycles_rotation");
++  bool any = false;
++  std::vector<TfToken> names;
++  for (const auto &[name, node] : net.nodes) {
++    names.push_back(name);
++  }
++  for (const TfToken &name : names) {
++    const std::string id = net.nodes[name].typeId.GetString();
++    if (id != "ND_conductor_bsdf" && id != "ND_generalized_schlick_bsdf") {
++      continue;
++    }
++    auto add = [&](const std::string &suffix, const char *typeId) {
++      const TfToken nodeName(Prefix(name, suffix));
++      net.nodes[nodeName].typeId = TfToken(typeId);
++      return nodeName;
++    };
++    auto binary = [&](const std::string &suffix, const char *typeId, const Conn &a,
++                      const Conn &b) {
++      const TfToken n = add(suffix, typeId);
++      net.nodes[n].conns[TfToken("in1")] = {a};
++      net.nodes[n].conns[TfToken("in2")] = {b};
++      return Conn{n, kOut};
++    };
++    auto unary = [&](const std::string &suffix, const char *typeId, const Conn &a) {
++      const TfToken n = add(suffix, typeId);
++      net.nodes[n].conns[TfToken("in")] = {a};
++      return Conn{n, kOut};
++    };
++
++    const auto conn = net.nodes[name].conns.find(kRoughness);
++    if (conn != net.nodes[name].conns.end() && !conn->second.empty()) {
++      const Conn source = conn->second.front();
++      const TfToken sep = add("aniso_sep", "ND_separate2_vector2");
++      net.nodes[sep].conns[TfToken("in")] = {source};
++      const Conn x{sep, TfToken("outx")}, y{sep, TfToken("outy")};
++      const Conn alpha = unary("aniso_alpha", "ND_sqrt_float",
++                               binary("aniso_prod", "ND_multiply_float", x, y));
++      const TfToken comb = add("aniso_rough", "ND_combine2_vector2");
++      net.nodes[comb].conns[TfToken("in1")] = {alpha};
++      net.nodes[comb].conns[TfToken("in2")] = {alpha};
++      const Conn lo = binary("aniso_min", "ND_min_float", x, y);
++      const TfToken hiName = add("aniso_max", "ND_max_float");
++      net.nodes[hiName].conns[TfToken("in1")] = {binary("aniso_maxxy", "ND_max_float", x, y)};
++      net.nodes[hiName].params[TfToken("in2")] = VtValue(1e-6f);
++      const Conn ratio = binary("aniso_ratio", "ND_divide_float", lo, Conn{hiName, kOut});
++      const TfToken flat = add("aniso_flat", "ND_subtract_float");
++      net.nodes[flat].params[TfToken("in1")] = VtValue(1.0f);
++      net.nodes[flat].conns[TfToken("in2")] = {ratio};
++      const TfToken scale = add("aniso_amount", "ND_divide_float");
++      net.nodes[scale].conns[TfToken("in1")] = {Conn{flat, kOut}};
++      net.nodes[scale].params[TfToken("in2")] = VtValue(0.9f);
++      /* ifgreater: in1 when value1 > value2, else in2. */
++      const TfToken turn = add("aniso_turn", "ND_ifgreater_float");
++      net.nodes[turn].conns[TfToken("value1")] = {y};
++      net.nodes[turn].conns[TfToken("value2")] = {x};
++      net.nodes[turn].params[TfToken("in1")] = VtValue(0.25f);
++      net.nodes[turn].params[TfToken("in2")] = VtValue(0.0f);
++      Node &bsdf = net.nodes[name];
++      bsdf.conns[kRoughness] = {Conn{comb, kOut}};
++      bsdf.conns[kAnisotropy] = {Conn{scale, kOut}};
++      bsdf.conns[kRotation] = {Conn{turn, kOut}};
++    }
++    else {
++      Node &bsdf = net.nodes[name];
++      const auto param = bsdf.params.find(kRoughness);
++      if (param == bsdf.params.end() || !param->second.IsHolding<GfVec2f>()) {
++        continue;
++      }
++      const GfVec2f r = param->second.UncheckedGet<GfVec2f>();
++      const float ax = std::max(r[0], 1e-6f), ay = std::max(r[1], 1e-6f);
++      if (ax == ay) {
++        continue;
++      }
++      const float alpha = std::sqrt(ax * ay);
++      bsdf.params[kRoughness] = VtValue(GfVec2f(alpha, alpha));
++      bsdf.params[kAnisotropy] = VtValue((1.0f - std::min(ax, ay) / std::max(ax, ay)) / 0.9f);
++      bsdf.params[kRotation] = VtValue(ay > ax ? 0.25f : 0.0f);
++      bsdf.paramsEdited = true;
++    }
++    const auto tangent = net.nodes[name].conns.find(kTangent);
++    if (tangent == net.nodes[name].conns.end() || tangent->second.empty()) {
++      const TfToken t = add("aniso_tangent", "ND_tangent_vector3");
++      net.nodes[t].params[TfToken("space")] = VtValue(std::string("world"));
++      net.nodes[name].conns[kTangent] = {Conn{t, kOut}};
++    }
++    any = true;
++  }
++  return any;
++}
++
+ /* The base colour of the two surface models whose base is more than one
+  * colour. Cycles' principled colours its diffuse, its subsurface and its metal
+  * with one base colour; standard_surface and OpenPBR give the subsurface its
+@@ -1496,6 +1603,11 @@ HdMaterialNetworkSchema ExpandMaterialXNodegraphs(HdMaterialNetworkSchema networ
+           candidate = true;
+           break;
+         }
++        /* An anisotropic metal (FoldAnisotropy). */
++        if (id == "ND_conductor_bsdf" || id == "ND_generalized_schlick_bsdf") {
++          candidate = true;
++          break;
++        }
+         /* A BSDF with a weight of its own (FoldClosureWeight). */
+         if (id.ends_with("_bsdf")) {
+           HdMaterialNodeSchema node = nodes.Get(name);
+@@ -1521,6 +1633,7 @@ HdMaterialNetworkSchema ExpandMaterialXNodegraphs(HdMaterialNetworkSchema networ
+   net.changed |= FoldThinFilm(net);
+   net.changed |= FoldSurfaceBase(net);
+   net.changed |= FoldClosureWeight(net, library);
++  net.changed |= FoldAnisotropy(net);
+ 
+   /* Expanded nodes bring in nodes that may expand in turn. */
+   for (int pass = 0; pass < 8; ++pass) {

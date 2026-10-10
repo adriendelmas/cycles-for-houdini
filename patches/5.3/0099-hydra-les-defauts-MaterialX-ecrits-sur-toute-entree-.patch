@@ -1,7 +1,7 @@
 From c1a573b382a629ebf5f950d6c1d720b83d0baa7d Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 05:40:14 +0200
-Subject: [PATCH 099/131] hydra: les defauts MaterialX ecrits sur toute entree
+Subject: [PATCH 099/132] hydra: les defauts MaterialX ecrits sur toute entree
  non ecrite
 
 Hydra ne transmet que ce qu'Houdini a ecrit, et Houdini n'ecrit que ce que

@@ -1,7 +1,7 @@
 From ad59f7d5ac9a0f6806fa84a30578515644948ca7 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sat, 10 Oct 2026 10:03:08 +0200
-Subject: [PATCH 131/131] hydra: geompropvalue default for a missing primvar
+Subject: [PATCH 131/132] hydra: geompropvalue default for a missing primvar
 
 MaterialX's geompropvalue returns its `default` where the geometry has no
 primvar of that name; Cycles' attribute node read 0. The material records
