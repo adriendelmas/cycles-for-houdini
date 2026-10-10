@@ -101,6 +101,8 @@ CASES = [
     # folded onto the dielectric's thinfilm inputs (0105). Compared with the
     # same dielectric carrying its film itself, the 1.39 way, on both sides.
     ("thinfilm_layer", "LAYERED_THIN_FILM", {}),
+    ("layer_coat15", "LAYERED_COAT", {"ior": "1.5"}),
+    ("layer_coat25", "LAYERED_COAT", {"ior": "2.5"}),
     ("thinfilm_direct", "ND_dielectric_bsdf", {
         "float2 inputs:roughness": "(0.05, 0.05)", "float inputs:thinfilm_thickness": "400",
         "float inputs:thinfilm_ior": "1.4"}),
@@ -284,6 +286,31 @@ LAYERED_THIN_FILM = """            def Shader "layer"
 """
 
 
+# A dielectric coat over a diffuse base, through `layer`, at the IOR the case
+# gives: the layer's Fresnel weight follows the coat's IOR (K-09, 0135).
+LAYERED_COAT = """            def Shader "layer"
+            {
+                uniform token info:id = "ND_layer_bsdf"
+                token inputs:top.connect = </world/Materials/mat/coat.outputs:out>
+                token inputs:base.connect = </world/Materials/mat/b.outputs:out>
+                token outputs:out
+            }
+            def Shader "coat"
+            {
+                uniform token info:id = "ND_dielectric_bsdf"
+                float inputs:ior = %s
+                float2 inputs:roughness = (0.05, 0.05)
+                token outputs:out
+            }
+            def Shader "b"
+            {
+                uniform token info:id = "ND_oren_nayar_diffuse_bsdf"
+                color3f inputs:color = (0.8, 0.3, 0.1)
+                token outputs:out
+            }
+"""
+
+
 def scene_text(shader, inputs):
     mtlx = shader.startswith("ND_")
     if shader == "GEOM":
@@ -297,6 +324,12 @@ def scene_text(shader, inputs):
         text = text.replace(anchor, anchor + probe, 1)
         return text.replace(SPHERE_XFORM, TURNED_XFORM, 1)
     lines = "\n".join("                %s = %s" % kv for kv in inputs.items())
+    if shader == "LAYERED_COAT":
+        text = SCENE % {"terminal": "mtlx:surface", "output": "out", "shader": "ND_surface",
+                        "inputs": "                token inputs:bsdf.connect = "
+                                  "</world/Materials/mat/layer.outputs:out>"}
+        anchor = "</world/Materials/mat/surf.outputs:out>" + chr(10)
+        return text.replace(anchor, anchor + LAYERED_COAT % inputs["ior"], 1)
     if shader == "LAYERED_THIN_FILM":
         text = SCENE % {"terminal": "mtlx:surface", "output": "out", "shader": "ND_surface",
                         "inputs": "                token inputs:bsdf.connect = "

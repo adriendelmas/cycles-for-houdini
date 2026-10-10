@@ -111,6 +111,17 @@ A coat over a base loses half the base. Cycles has no exact node; the nearest
 is `add_closure` for thin coats, or a `layer_weight`-driven mix. Document the
 approximation chosen.
 
+0135 (2026-10-10): the Fresnel mix counted the top twice. A dielectric top
+carries its own Fresnel, and weighing it by F again gave top * F^2: a coat
+lost most of its reflection, and the IOR of the coat changed nothing - a
+coat of 2.5 over a red base rendered (1.09, 0.87, 0.55) of Karma. `layer` is
+now `top + base * (1 - F)`, as MaterialX's vertical layering is for a
+dielectric top - an `add_closure` of the top and of the base mixed against
+nothing by F - and F is taken at the top `dielectric_bsdf`'s own IOR when
+it is a value (blend 1 - 1 / ior), 1.5 otherwise. `bench_agree.py`
+`layer_coat15` and `layer_coat25`: 1.03-1.10 of Karma on every channel.
+Still approximate for a top that is not a dielectric.
+
 ### K-10 `facingratio` is inverted — confirmed — **fixed** (0076)
 `material.cpp:1204` returned `layer_weight.Facing`, which is 0 facing the
 camera; MaterialX `facingratio` (nprlib, `NG_facingratio_float`) is

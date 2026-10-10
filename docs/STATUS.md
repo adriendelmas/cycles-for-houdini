@@ -2494,3 +2494,7 @@ réflexion) ; le verre reste isotrope, Cycles n'a pas d'anisotropie pour lui.
 coefficients (la traduction lisait une entrée qui n'existe pas) ; absorption
 et diffusion sont maintenant justes (Beer-Lambert, et identique au volume
 natif de Cycles).
+
+0135 (2026-10-10, nuit) : `layer` (un vernis sur une base) comptait le Fresnel
+du vernis deux fois, qui perdait son reflet, et ignorait son IOR. Maintenant
+dessus + base·(1−F), F à l'IOR du vernis : 1,03 à 1,10 de Karma.

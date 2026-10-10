@@ -1,0 +1,113 @@
+From dfe3447d42235ce5a129762ca76852c3c5503e95 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Sat, 10 Oct 2026 12:20:08 +0200
+Subject: [PATCH 135/135] hydra: layer as top plus attenuated base, at the
+ coat's IOR
+
+`layer` was a mix weighted by a Fresnel term, which counted a dielectric
+top's own Fresnel twice (top * F^2): a coat lost most of its reflection and
+its IOR changed nothing. It is now top + base * (1 - F), an add_closure of
+the top and of the base mixed against nothing by F, with F taken at the top
+dielectric_bsdf's IOR when it is a value (K-09).
+---
+ src/hydra/material.cpp    | 16 +++++++++++----
+ src/hydra/mtlx_expand.cpp | 42 +++++++++++++++++++++++++++++++++++++--
+ 2 files changed, 52 insertions(+), 6 deletions(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index f267c6f0..8c1fce40 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -1840,13 +1840,21 @@ const std::vector<MtlxEntry> &MtlxTable()
+    * `blend` of 0.333 is an IOR of 1.5 in layer_weight's parametrisation. The
+    * fifty-fifty mix this used to be halved every base. */
+   static const UsdToCyclesMapping kLayer = [] {
+-    UsdToCyclesMapping m{"mix_closure",
++    /* top + base * (1 - F): the top, a dielectric, carries its own Fresnel;
++     * mixed by F as well, it was counted twice (top * F^2) and a coat lost
++     * its reflection (bench_agree.py, layer_coat). The base goes through a
++     * mix against nothing, F as factor. */
++    UsdToCyclesMapping m{"add_closure",
+                          {
+-                             {TfToken("top"), ustring("closure2")},
+-                             {TfToken("base"), ustring("closure1")},
++                             {TfToken("top"), ustring("closure1")},
++                             {TfToken("base"), ustring("under:closure1")},
++                             /* The top dielectric's IOR (mtlx_expand.cpp). */
++                             {TfToken("cycles_layer_blend"), ustring("fr:blend")},
+                              {CyclesMaterialTokens->out, ustring("closure")},
+                          }};
+-    m.addHelper({"fr", "layer_weight", {{"Fresnel", "Fac"}}, {{ustring("blend"), "0.333"}}});
++    m.addHelper({"under", "mix_closure", {{"Closure", "Closure2"}}, {}});
++    m.addHelper(
++        {"fr", "layer_weight", {{"Fresnel", "under:Fac"}}, {{ustring("blend"), "0.333"}}});
+     return m;
+   }();
+   /* A BSDF over a VDF describes a surface and the medium behind it; Cycles
+diff --git a/src/hydra/mtlx_expand.cpp b/src/hydra/mtlx_expand.cpp
+index 962060d6..61b871eb 100644
+--- a/src/hydra/mtlx_expand.cpp
++++ b/src/hydra/mtlx_expand.cpp
+@@ -1531,6 +1531,42 @@ bool FoldVdfAbsorption(Network &net)
+   return any;
+ }
+ 
++/* `layer` weighs its top by a Fresnel term at an IOR of 1.5 (the mapping,
++ * K-09). When the top is a `dielectric_bsdf` whose IOR is a value, the
++ * weight takes that IOR instead - layer_weight's blend is 1 - 1 / ior - so
++ * a coat of 2.5 reflects as one, where it reflected as glass of 1.5. */
++bool FoldLayerIor(Network &net)
++{
++  bool any = false;
++  for (auto &[name, node] : net.nodes) {
++    if (node.typeId != TfToken("ND_layer_bsdf")) {
++      continue;
++    }
++    const auto top = node.conns.find(TfToken("top"));
++    if (top == node.conns.end() || top->second.empty()) {
++      continue;
++    }
++    const auto upstream = net.nodes.find(top->second.front().upstream);
++    if (upstream == net.nodes.end() ||
++        upstream->second.typeId != TfToken("ND_dielectric_bsdf"))
++    {
++      continue;
++    }
++    const auto ior = upstream->second.params.find(TfToken("ior"));
++    if (ior == upstream->second.params.end() || !ior->second.CanCast<float>()) {
++      continue;
++    }
++    const float value = VtValue::Cast<float>(ior->second).UncheckedGet<float>();
++    if (value <= 1.0f) {
++      continue;
++    }
++    node.params[TfToken("cycles_layer_blend")] = VtValue(1.0f - 1.0f / value);
++    node.paramsEdited = true;
++    any = true;
++  }
++  return any;
++}
++
+ /* The base colour of the two surface models whose base is more than one
+  * colour. Cycles' principled colours its diffuse, its subsurface and its metal
+  * with one base colour; standard_surface and OpenPBR give the subsurface its
+@@ -1679,8 +1715,9 @@ HdMaterialNetworkSchema ExpandMaterialXNodegraphs(HdMaterialNetworkSchema networ
+           candidate = true;
+           break;
+         }
+-        /* A medium's absorption (FoldVdfAbsorption). */
+-        if (id == "ND_anisotropic_vdf") {
++        /* A medium's absorption, a layer's coat (FoldVdfAbsorption,
++         * FoldLayerIor). */
++        if (id == "ND_anisotropic_vdf" || id == "ND_layer_bsdf") {
+           candidate = true;
+           break;
+         }
+@@ -1718,6 +1755,7 @@ HdMaterialNetworkSchema ExpandMaterialXNodegraphs(HdMaterialNetworkSchema networ
+   net.changed |= FoldClosureWeight(net, library);
+   net.changed |= FoldAnisotropy(net);
+   net.changed |= FoldVdfAbsorption(net);
++  net.changed |= FoldLayerIor(net);
+ 
+   /* Expanded nodes bring in nodes that may expand in turn. */
+   for (int pass = 0; pass < 8; ++pass) {

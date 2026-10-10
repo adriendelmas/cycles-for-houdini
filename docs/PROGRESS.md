@@ -143,7 +143,7 @@ surface models (`surface_audit.py`, K-63). On 2026-10-07 the numbers were
 | `mix`/`add`/`multiply`/`dot` of displacementshader | ✅ | Vector nodes |
 | `surface` | ✅ | Added 2026-09-10 |
 | `volume` | ✅ | Added 2026-10-07 (K-04); same as Karma (`mtlx_karma.py --closures`) |
-| `layer` | 🟡 | Fresnel-weighted mix, IOR 1.5: right for a dielectric top, approximate otherwise (K-09) |
+| `layer` | ✅ / 🟡 | top + base * (1 - F), F at the top dielectric's IOR: coats within 10 % of Karma (K-09, 0135, `bench_agree.py`); approximate for a top that is not a dielectric |
 | add/sub/mul/div, scalar and vector | ✅ | Split by type suffix |
 | Other math on colour/vector (`absval`, `floor`, `min`, `max`, `power`, `clamp`, `remap`, `smoothstep`...) | ✅ | Vector twins since 2026-10-07 (K-07); 15 bench cases |
 | `ln`, `modulo`, `atan2` (scalar) | ✅ | Were wrong: base 0.5, truncated modulo, operands unmapped (K-07) |

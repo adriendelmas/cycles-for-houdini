@@ -174,7 +174,7 @@ hython tools/bench_export.py && python tools/bench_render.py && hython tools/ben
 97 nodes pass that check against their committed reference images, and the
 full MaterialX scene renders bit-identical between 5.2 and 5.3. Two more
 compare with Karma, rendering the same USD with both: seventeen materials
-region by region (`hython tools/bench_agree.py`, 61 checks, floor within
+region by region (`hython tools/bench_agree.py`, 67 checks, floor within
 1 %), and every MaterialX node one quad each (`hython tools/mtlx_karma.py`:
 633 of 704 value nodes and 38 of 45 closures the same, the rest explained in
 docs/KNOWN_ISSUES.md, K-61 and K-64), and every input of the surface models
