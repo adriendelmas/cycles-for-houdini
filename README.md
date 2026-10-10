@@ -203,7 +203,6 @@ The ones a user meets first:
 - A dome light's diffuse/specular multipliers are 0 or 1 (Cycles has one
   background); light filters are not supported.
 - Implicit surfaces carry no UVs.
-- An intermittent CUDA "illegal address" on some scene edits, under investigation.
 
 ## Credits
 
