@@ -2478,3 +2478,6 @@ Vérifié en interface (ma session, port MCP 9877, `lights_live.hip`) : la
 couleur d'ombre, le multiplicateur spéculaire et le retournement du tube se
 modifient en direct dans le viewport Cycles, sans relancer le rendu ; les
 jumelles se créent et disparaissent avec eux.
+
+0131 (2026-10-10, nuit) : un `geompropvalue` dont la primvar manque rend
+son `default`, comme Karma (Cycles rendait 0).

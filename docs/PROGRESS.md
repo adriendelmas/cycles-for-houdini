@@ -114,7 +114,7 @@ Three numbers, measured 2026-10-09 (after 0125) (commands in [TESTING.md](TESTIN
 **805** of 822 nodedefs are rendered - 651 through the mapping table, 110 by
 expanding a nodegraph (the library's, or one the delegate ships for nodes the
 library writes in GLSL only), 44 by rewriting or folding (`mtlx_coverage.py`);
-**669** of the 806 that route keep every input, output and node when rendered
+**679** of the 806 that route keep every input, output and node when rendered
 with all inputs authored (`mtlx_inputs.py`); **80** are verified against a
 value computed from the MaterialX definition (`bench_mtlx.py`), and the five
 surface models keep their own defaults for unauthored inputs
@@ -134,7 +134,7 @@ surface models (`surface_audit.py`, K-63). On 2026-10-07 the numbers were
 | `heighttonormal` | ✅ | Tangent-space map from the delegate's own nodegraph (K-12, 0108) |
 | `texcoord`, `position`, `normal`, `tangent` | ✅ | `index`, `space` as Karma (K-18, 0106); `mtlx_karma.py` |
 | `geomcolor` | ✅ | Exact since 2026-10-07 (K-06, K-19); `index` not carried |
-| `geompropvalue` | 🟡 | Colour and vector outputs since 0128 (`bench_mtlx.py`); its `default` is not carried - a missing primvar reads 0 where Karma gives the default |
+| `geompropvalue` | ✅ | Colour and vector outputs (0128); a missing primvar reads the `default`, as Karma (K-90, 0131) |
 | MaterialX noises (perlin, fractal, cell, worley, unified) | ✅ | Exact kernel from PR 158054 |
 | `checkerboard`, `randomcolor`, `ramplr` | ✅ / 🟡 | `ramptb` is the diagonal gradient |
 | `mix` | ✅ | Exact since 2026-10-07 (K-01) |

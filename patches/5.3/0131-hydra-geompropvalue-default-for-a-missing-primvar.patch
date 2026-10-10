@@ -1,0 +1,220 @@
+From ad59f7d5ac9a0f6806fa84a30578515644948ca7 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Sat, 10 Oct 2026 10:03:08 +0200
+Subject: [PATCH 131/131] hydra: geompropvalue default for a missing primvar
+
+MaterialX's geompropvalue returns its `default` where the geometry has no
+primvar of that name; Cycles' attribute node read 0. The material records
+the non-zero defaults of its geompropvalue nodes, and the objects of a
+geometry using it carry them as object attributes, which Cycles reads only
+where the geometry has no such attribute (K-90).
+---
+ src/hydra/geometry.inl | 24 +++++++++++-
+ src/hydra/material.cpp | 84 ++++++++++++++++++++++++++++++++++++++++++
+ src/hydra/material.h   | 15 ++++++++
+ 3 files changed, 122 insertions(+), 1 deletion(-)
+
+diff --git a/src/hydra/geometry.inl b/src/hydra/geometry.inl
+index 70e3464b..45bb6af1 100644
+--- a/src/hydra/geometry.inl
++++ b/src/hydra/geometry.inl
+@@ -168,7 +168,8 @@ void HdCyclesGeometry<Base, CyclesBase>::Sync(HdSceneDelegate *sceneDelegate,
+   }
+ 
+   if (HdChangeTracker::IsTransformDirty(*dirtyBits, id) ||
+-      HdChangeTracker::IsInstancerDirty(*dirtyBits, id))
++      HdChangeTracker::IsInstancerDirty(*dirtyBits, id) ||
++      (*dirtyBits & HdChangeTracker::DirtyMaterialId))
+   {
+     /* Per-instance primvars become object attributes, which an attribute
+      * node reads when the geometry has none of that name; `displayColor`
+@@ -213,6 +214,27 @@ void HdCyclesGeometry<Base, CyclesBase>::Sync(HdSceneDelegate *sceneDelegate,
+           instance->set_alpha(v[0]);
+         }
+       }
++      /* The defaults of the materials' geompropvalue nodes (K-90), read
++       * where neither the geometry nor the instance has the primvar. */
++      for (const Node *node : _geom->get_used_shaders()) {
++        for (const HdCyclesGeomPropDefault &d :
++             HdCyclesGeomPropDefaults(static_cast<const Shader *>(node)))
++        {
++          const ustring name(d.name);
++          if (std::any_of(instance->attributes.begin(),
++                          instance->attributes.end(),
++                          [&](const ParamValue &p) { return p.name() == name; }))
++          {
++            continue;
++          }
++          const TypeDesc type = d.components == 1 ? TypeFloat :
++                                d.components == 2 ? TypeFloat2 :
++                                d.components == 3 ? TypeColor :
++                                                    TypeRGBA;
++          instance->attributes.emplace_back(d.name, type, 1, d.value);
++          attributesChanged = true;
++        }
++      }
+     }
+     if (attributesChanged) {
+       /* Object attributes are packed with the geometry's. */
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index d621c2dc..37b1c71e 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -1797,6 +1797,8 @@ const std::vector<MtlxEntry> &MtlxTable()
+       "attribute",
+       {
+           {TfToken("geomprop"), ustring("attribute")},
++          /* Not a socket: the geometry sets it as an object attribute (K-90). */
++          {TfToken("default"), ustring("")},
+           {CyclesMaterialTokens->out, ustring("fac")},
+       }};
+   /* A colour or vector primvar is read whole from the matching output; on
+@@ -1805,12 +1807,16 @@ const std::vector<MtlxEntry> &MtlxTable()
+       "attribute",
+       {
+           {TfToken("geomprop"), ustring("attribute")},
++          /* Not a socket: the geometry sets it as an object attribute (K-90). */
++          {TfToken("default"), ustring("")},
+           {CyclesMaterialTokens->out, ustring("color")},
+       }};
+   static const UsdToCyclesMapping kAttributeVector = {
+       "attribute",
+       {
+           {TfToken("geomprop"), ustring("attribute")},
++          /* Not a socket: the geometry sets it as an object attribute (K-90). */
++          {TfToken("default"), ustring("")},
+           {CyclesMaterialTokens->out, ustring("vector")},
+       }};
+   /* `geomcolor` reads the vertex colour. The mesh stores it under the primvar
+@@ -3458,6 +3464,74 @@ HdDirtyBits HdCyclesMaterial::GetInitialDirtyBitsMask() const
+   return DirtyBits::DirtyResource | DirtyBits::DirtyParams;
+ }
+ 
++namespace {
++
++std::map<const Shader *, std::vector<HdCyclesGeomPropDefault>> &GeomPropRegistry()
++{
++  static std::map<const Shader *, std::vector<HdCyclesGeomPropDefault>> registry;
++  return registry;
++}
++
++/* The non-zero defaults of the network's geompropvalue nodes. */
++std::vector<HdCyclesGeomPropDefault> CollectGeomPropDefaults(HdMaterialNetworkSchema network)
++{
++  std::vector<HdCyclesGeomPropDefault> result;
++  HdMaterialNodeContainerSchema nodes = network.GetNodes();
++  for (const TfToken &name : nodes.GetNames()) {
++    HdMaterialNodeSchema node = nodes.Get(name);
++    const auto idDs = node.GetNodeIdentifier();
++    if (!idDs || !idDs->GetTypedValue(0.0f).GetString().starts_with("ND_geompropvalue")) {
++      continue;
++    }
++    HdMaterialNodeParameterContainerSchema params = node.GetParameters();
++    const auto propDs = params.Get(TfToken("geomprop")).GetValue();
++    const auto defaultDs = params.Get(TfToken("default")).GetValue();
++    if (!propDs || !defaultDs) {
++      continue;
++    }
++    const VtValue prop = propDs->GetValue(0.0f);
++    HdCyclesGeomPropDefault d;
++    d.name = prop.IsHolding<TfToken>() ? prop.UncheckedGet<TfToken>().GetString() :
++             prop.IsHolding<std::string>() ? prop.UncheckedGet<std::string>() :
++                                             std::string();
++    const VtValue value = defaultDs->GetValue(0.0f);
++    if (value.IsHolding<float>()) {
++      d.components = 1;
++      d.value[0] = value.UncheckedGet<float>();
++    }
++    else if (value.IsHolding<int>()) {
++      d.components = 1;
++      d.value[0] = float(value.UncheckedGet<int>());
++    }
++    else if (value.IsHolding<GfVec2f>()) {
++      d.components = 2;
++      std::copy_n(value.UncheckedGet<GfVec2f>().data(), 2, d.value);
++    }
++    else if (value.IsHolding<GfVec3f>()) {
++      d.components = 3;
++      std::copy_n(value.UncheckedGet<GfVec3f>().data(), 3, d.value);
++    }
++    else if (value.IsHolding<GfVec4f>()) {
++      d.components = 4;
++      std::copy_n(value.UncheckedGet<GfVec4f>().data(), 4, d.value);
++    }
++    const bool zero = std::all_of(d.value, d.value + 4, [](float v) { return v == 0.0f; });
++    if (!d.name.empty() && d.components > 0 && !zero) {
++      result.push_back(std::move(d));
++    }
++  }
++  return result;
++}
++
++}  // namespace
++
++const std::vector<HdCyclesGeomPropDefault> &HdCyclesGeomPropDefaults(const Shader *shader)
++{
++  static const std::vector<HdCyclesGeomPropDefault> none;
++  const auto it = GeomPropRegistry().find(shader);
++  return it != GeomPropRegistry().end() ? it->second : none;
++}
++
+ void HdCyclesMaterial::Sync(HdSceneDelegate *sceneDelegate,
+                             HdRenderParam *renderParam,
+                             HdDirtyBits *dirtyBits)
+@@ -3579,6 +3653,15 @@ void HdCyclesMaterial::Sync(HdSceneDelegate *sceneDelegate,
+       _shader->set_graph(std::move(graph));
+       _shader->tag_update(lock.scene);
+     }
++
++    if (_shader) {
++      if (network) {
++        GeomPropRegistry()[_shader] = CollectGeomPropDefaults(network);
++      }
++      else {
++        GeomPropRegistry().erase(_shader);
++      }
++    }
+   }
+ 
+   *dirtyBits = DirtyBits::Clean;
+@@ -4741,6 +4824,7 @@ void HdCyclesMaterial::Finalize(HdRenderParam *renderParam)
+   const bool keep_nodes = static_cast<const HdCyclesSession *>(renderParam)->keep_nodes;
+ 
+   _nodes.clear();
++  GeomPropRegistry().erase(_shader);
+ 
+   if (!keep_nodes) {
+     lock.scene->delete_node(_shader);
+diff --git a/src/hydra/material.h b/src/hydra/material.h
+index 83866759..eb06d5fa 100644
+--- a/src/hydra/material.h
++++ b/src/hydra/material.h
+@@ -7,6 +7,7 @@
+ 
+ #include <map>
+ #include <string>
++#include <vector>
+ #include "hydra/config.h"
+ 
+ #include "util/unique_ptr.h"
+@@ -18,6 +19,20 @@
+ 
+ HDCYCLES_NAMESPACE_OPEN_SCOPE
+ 
++/* The `default` of a `geompropvalue` a material reads: Cycles' attribute node
++ * reads 0 for a primvar the geometry lacks, MaterialX this default. Geometry
++ * sets it as an object attribute, which Cycles reads only where the geometry
++ * has no attribute of that name (K-90). */
++struct HdCyclesGeomPropDefault {
++  std::string name;
++  int components = 0;
++  float value[4] = {0.0f, 0.0f, 0.0f, 0.0f};
++};
++
++/* The defaults of the material whose shader is `shader`; read and written
++ * under the scene lock. */
++const std::vector<HdCyclesGeomPropDefault> &HdCyclesGeomPropDefaults(const CCL_NS::Shader *shader);
++
+ class HdCyclesMaterial final : public PXR_NS::HdMaterial {
+  public:
+   HdCyclesMaterial(const PXR_NS::SdfPath &sprimId);

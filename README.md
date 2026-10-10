@@ -190,7 +190,7 @@ The ones a user meets first:
   by the mapping table, 110 by expanding a nodegraph (the library's own, or
   one the delegate ships for nodes the library writes in GLSL only), 44 by
   rewriting (`extract`, `swizzle`, `transformmatrix`, a 1.38 thin film); of
-  the 806 that route, 669 keep every input when rendered
+  the 806 that route, 679 keep every input when rendered
   (`tools/mtlx_inputs.py`), and 80 are
   value-checked against the MaterialX definition (`tools/bench_mtlx.py`).
   Out: the matrix nodes other than a constant `transformmatrix`, `time`/`frame`,

@@ -974,6 +974,18 @@ Karma. Kept: lobe multipliers, shadow colour and `shadow:enable` are not
 carried on the tube (logged); its normalization uses the light's own size,
 not a scaled one.
 
+### K-90 geompropvalue read 0 for a missing primvar, not its default — confirmed — **fixed** (0131)
+MaterialX's `geompropvalue` returns its `default` input where the geometry
+has no primvar of that name, and Karma does; Cycles' attribute node reads 0.
+The material now records the non-zero defaults of its `geompropvalue` nodes,
+and each object of a geometry using that material gets them as object
+attributes, which Cycles reads only where the geometry has no attribute of
+that name - an instance's own primvar wins as well. `bench_mtlx.py`
+`geompropvalue_default`. Kept: a default changed on a live material reaches
+the objects at their next transform, instancer or binding change;
+`mtlx_karma.py`'s quads author an empty `geomprop`, which names nothing to
+fall back for, and still differ.
+
 ## C. Houdini side
 
 ### K-40 `op:` textures fail under husk — confirmed — **fixed** (0126)

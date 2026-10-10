@@ -289,6 +289,14 @@ CASES = [
         "mesh": 'float3[] primvars:dir = [(0.7,0.1,0.4), (0.7,0.1,0.4), '
                 '(0.7,0.1,0.4), (0.7,0.1,0.4)] (interpolation = "vertex")',
     }),
+    # A primvar the mesh lacks reads the node's `default`, as in MaterialX
+    # and Karma; Cycles' attribute node read 0 (K-90).
+    ("geompropvalue_default", [
+        'uniform token info:id = "ND_geompropvalue_color3"',
+        'string inputs:geomprop = "missing"',
+        "color3f inputs:default = (0.6, 0.3, 0.15)",
+        "color3f outputs:out",
+    ], (0.6, 0.3, 0.15), {}),
     # nprlib NG_facingratio_float: |dot(V, N)|, 1 where the plane faces the
     # camera. The plane spans 4 units at 6 units from a perspective camera, so
     # the ratio falls to 0.905 at the corners; averaged over the plane and

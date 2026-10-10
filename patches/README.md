@@ -160,6 +160,7 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0128` | hydra: alpha d'une couleur calculée (jumeaux float des nœuds color4, K-17) ; `weight` des BSDF appliqué par un multiply (K-88) ; `geompropvalue` couleur et vecteur lus en entier |
 | `0129` | hydra: lumière cylindre rendue par un tube maillé émissif (émission vers l'extérieur seulement, radiance dans le shader) au lieu d'un rectangle à une face (K-89) |
 | `0130` | hydra: aperçu viewport d'un matériau Cycles à travers les mix (entrées `a`/`b`, côté favorisé par le facteur), `math`/`vector_math`, mix de constantes calculés ; commentaires du traducteur en anglais (K-42) |
+| `0131` | hydra: `default` de `geompropvalue` posé en attribut d'objet, lu là où la géométrie n'a pas la primvar (K-90) |
 
 ---
 

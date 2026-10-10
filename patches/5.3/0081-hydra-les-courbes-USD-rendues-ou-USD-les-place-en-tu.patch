@@ -1,7 +1,7 @@
 From f396c303de3458d572f307b980ec104d60b265f4 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 21:52:48 +0200
-Subject: [PATCH 081/130] hydra: les courbes USD rendues ou USD les place, en
+Subject: [PATCH 081/131] hydra: les courbes USD rendues ou USD les place, en
  tubes, et le reglage Curve Shape
 
 Cycles lit toute courbe comme une Catmull-Rom passant par toutes ses cles,
