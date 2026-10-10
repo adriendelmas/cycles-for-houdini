@@ -165,6 +165,7 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0133` | hydra: rugosité anisotrope d'un `dielectric_bsdf` réfléchissant (principled : `anisotropic`, `anisotropic_rotation`, tangente) (K-91) |
 | `0134` | hydra: `anisotropic_vdf` : `scattering` en couleur du scatter_volume (densité 1), `absorption` en absorption_vdf ajoutée ; l'ancienne traduction lisait un `albedo` inexistant (K-92) |
 | `0135` | hydra: `layer` = dessus + base·(1−F) au lieu d'un mix qui comptait le Fresnel du dessus deux fois ; F à l'IOR du diélectrique du dessus (K-09) |
+| `0136` | hydra: relecture complète du délégué — alpha d'une couleur constante perdu sur un nœud Hydra (K-93), `base_weight` câblé d'OpenPBR compté deux fois (K-94), trois maillages malformés qui plantaient husk : primvar trop longue, pli de longueur 0, sous-ensemble hors bornes (K-95), lecture d'un dictionnaire Python libéré dans la capture COP (K-96) ; l'IOR d'un vernis pondéré atteint son `layer` |
 
 ---
 

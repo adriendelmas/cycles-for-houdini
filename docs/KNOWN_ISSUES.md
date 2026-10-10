@@ -1030,6 +1030,48 @@ density 1, and the absorption an `absorption_vdf` added beside it
 as Beer-Lambert says; scattering alone renders as Cycles' native scatter
 volume with the same coefficient, in the same scene.
 
+### K-93 The alpha of a constant colour4 was lost on a network node — confirmed — **fixed** (0136)
+Found by the full code review of 2026-10-10. `RouteConstantAlpha` and the
+value branch of `RouteComputedAlpha` replace the wire from a `separate4`'s
+`outa` by the alpha as a value on the reader. A node that came from Hydra
+writes its parameters back only when flagged edited (0128), and these two
+passes never flagged it: the wire went, the value never arrived, and the
+reader kept Cycles' own default - a `mix_color3` mixing by an alpha of 0.25
+rendered at 0.5. Readers made by an expansion (the compositing nodegraphs,
+which is what the benches exercised) were not affected. Both passes flag the
+node now (`bench_mtlx.py`, `alpha_constant_reader`).
+
+### K-94 OpenPBR's wired base_weight weighed the base twice — confirmed — **fixed** (0136)
+`FoldSurfaceBase` moves OpenPBR's `base_weight` into the helper that computes
+the base colour and sets the surface's own to 1. It erased the surface's
+connection to do so - and over Hydra's own connections an erased key is not
+a removed one: the overlay fell through to the original wire, which reached
+the principled's `basew` helper as well. A base of 0.8 at a wired weight of
+0.5 rendered 0.2 instead of 0.4; a weight authored as a value was right. The
+connection is now emptied, which hides the original (the trap K-88 had
+already met for `weight`). `bench_mtlx.py`, `openpbr_weight_wired`.
+
+### K-95 Three malformed meshes crashed husk — confirmed — **fixed** (0136)
+Found by reading, confirmed by `tests/scenes/bad_*.usda`:
+- a constant primvar authored as a long array (`color3f[]
+  primvars:displayColor` of sixty-four values, constant interpolation), or
+  any primvar longer than the elements it is on, was copied whole into an
+  attribute sized for the geometry - a heap overrun, a segmentation fault in
+  two runs out of three. `ApplyPrimvars` copies what fits and warns;
+- crease lengths under 2 (`creaseLengths = [0, 1]`) counted as -1 edges,
+  wrapped the total and asked for all the memory (exit 150, every run);
+- a GeomSubset naming a face past the mesh wrote past the shader table (no
+  crash seen in three runs; a heap write all the same). A uniform primvar
+  shorter than the faces read past its end the same way.
+Also guarded: negative curve indices, and a prototype left with no instance
+reading `_instances[0]`.
+
+### K-96 The COP capture read a freed Python dictionary — confirmed — **fixed** (0136)
+`Capture` (houdini_cop.cpp) released the dictionary holding the COP's pixels
+and read `_gpu` from it afterwards, for the log line. CPython keeps the
+memory on a free list, so it read the right value by luck; it is read before
+the release now.
+
 ## C. Houdini side
 
 ### K-40 `op:` textures fail under husk — confirmed — **fixed** (0126)

@@ -357,6 +357,31 @@ CASES = [
         "token outputs:out",
     ], mx_mix(BLUE, RED, 0.25), {"terminal": "surface",
                                   "extra": [matte("s1", RED), matte("s2", BLUE)]}),
+    # The alpha of a constant colour4, read by a node of the network itself
+    # (not one made by an expansion): the value replacing the wire was never
+    # written back and the mix kept Cycles' 0.5 (K-93).
+    ("alpha_constant_reader", [
+        'uniform token info:id = "ND_mix_color3"',
+        "color3f inputs:bg = %s" % rgb(RED),
+        "color3f inputs:fg = %s" % rgb(BLUE),
+        "float inputs:mix.connect = </world/Materials/M/sep.outputs:outa>",
+        "color3f outputs:out",
+    ], mx_mix(RED, BLUE, 0.25), {"extra": [shader("sep", [
+        'uniform token info:id = "ND_separate4_color4"',
+        "color4f inputs:in = (0, 0, 0, 0.25)",
+        "float outputs:outr", "float outputs:outg", "float outputs:outb", "float outputs:outa"])]}),
+    # OpenPBR's base_weight wired: folded into the base colour, its own wire
+    # had to go, and an erased key let it through - the base was weighed
+    # twice, 0.2 for 0.4 (K-94). A matte OpenPBR at base 0.8 and weight 0.5.
+    ("openpbr_weight_wired", [
+        'uniform token info:id = "ND_open_pbr_surface_surfaceshader"',
+        "color3f inputs:base_color = (0.8, 0.8, 0.8)",
+        "float inputs:specular_weight = 0",
+        "float inputs:base_weight.connect = </world/Materials/M/w.outputs:out>",
+        "token outputs:out",
+    ], (0.4, 0.4, 0.4), {"terminal": "surface", "tol": 0.03, "extra": [shader("w", [
+        'uniform token info:id = "ND_constant_float"', "float inputs:value = 0.5",
+        "float outputs:out"])]}),
     # Colour and vector variants of the scalar operators (phase 3). Each input
     # is coloured, so a translation that collapses to grey cannot pass.
     # Formulas from stdlib_genglsl_impl.mtlx / stdlib_ng.mtlx.

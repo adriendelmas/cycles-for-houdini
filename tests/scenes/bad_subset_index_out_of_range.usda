@@ -1,0 +1,46 @@
+#usda 1.0
+# Robustness: a GeomSubset naming faces the mesh does not have, and a negative one (tools/bench_robust.py).
+(
+    defaultPrim = "world"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+def Xform "world"
+{
+    def Camera "camera"
+    {
+        float focalLength = 50
+        float horizontalAperture = 36
+        float verticalAperture = 24
+        matrix4d xformOp:transform = ( (1,0,0,0), (0,1,0,0), (0,0,1,0), (0, 0, 5, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+    def DistantLight "sun"
+    {
+        float inputs:intensity = 3
+        bool inputs:normalize = 1
+    }
+    def Mesh "m"
+    {
+        int[] faceVertexCounts = [4, 4]
+        int[] faceVertexIndices = [0, 1, 2, 3, 4, 5, 6, 7]
+        point3f[] points = [(-3,-3,0), (0,-3,0), (0,3,0), (-3,3,0), (0,-3,0), (3,-3,0), (3,3,0), (0,3,0)]
+        uniform token subdivisionScheme = "none"
+        def GeomSubset "bad" (prepend apiSchemas = ["MaterialBindingAPI"])
+        {
+            uniform token elementType = "face"
+            int[] indices = [1, 1000, 123456, -5]
+            rel material:binding = </world/Mat>
+        }
+    }
+    def Material "Mat"
+    {
+        token outputs:mtlx:surface.connect = </world/Mat/s.outputs:out>
+        def Shader "s"
+        {
+            uniform token info:id = "ND_surface_unlit"
+            color3f inputs:emission_color = (1, 0, 0)
+            token outputs:out
+        }
+    }
+}

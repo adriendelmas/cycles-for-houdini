@@ -1,0 +1,33 @@
+#usda 1.0
+# Robustness: crease lengths of 0 and 1, which have no edge (tools/bench_robust.py).
+(
+    defaultPrim = "world"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+def Xform "world"
+{
+    def Camera "camera"
+    {
+        float focalLength = 50
+        float horizontalAperture = 36
+        float verticalAperture = 24
+        matrix4d xformOp:transform = ( (1,0,0,0), (0,1,0,0), (0,0,1,0), (0, 0, 5, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+    def DistantLight "sun"
+    {
+        float inputs:intensity = 3
+        bool inputs:normalize = 1
+    }
+    def Mesh "m"
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(-1,-1,0), (1,-1,0), (1,1,0), (-1,1,0)]
+        uniform token subdivisionScheme = "catmullClark"
+        int[] creaseIndices = [0, 1]
+        int[] creaseLengths = [0, 1]
+        float[] creaseSharpnesses = [5, 5]
+    }
+}

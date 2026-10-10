@@ -1,7 +1,7 @@
 From 66157e37d4de5390f1000e12b53e5d931394f8f8 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 22:52:44 +0200
-Subject: [PATCH 085/135] hydra: huit cles par segment de courbe cubique, pour
+Subject: [PATCH 085/136] hydra: huit cles par segment de courbe cubique, pour
  suivre la forme
 
 Une arche de Bezier echantillonnee a trois cles par segment sortait en

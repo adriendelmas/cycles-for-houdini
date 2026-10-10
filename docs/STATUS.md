@@ -2498,3 +2498,19 @@ natif de Cycles).
 0135 (2026-10-10, nuit) : `layer` (un vernis sur une base) comptait le Fresnel
 du vernis deux fois, qui perdait son reflet, et ignorait son IOR. Maintenant
 dessus + base·(1−F), F à l'IOR du vernis : 1,03 à 1,10 de Karma.
+
+0136 (2026-10-10, soir) : relecture complète des 19 000 lignes du délégué
+(C++ et Python), à sa demande, sur Fable. Quatre bugs confirmés par des
+scènes puis corrigés : l'alpha d'une couleur constante lu par un nœud du
+réseau tombait au défaut de Cycles (K-93) ; le `base_weight` câblé d'un
+OpenPBR pesait deux fois (K-94) ; trois maillages malformés plantaient husk,
+dont une primvar constante écrite en tableau, un cas banal (K-95) ; la
+capture d'un COP lisait un dictionnaire Python déjà libéré (K-96). Au
+passage : l'IOR d'un vernis à poids ≠ 1 atteint son `layer`, les indices de
+courbes négatifs et un prototype sans instance sont gardés. Quatre scènes
+`bad_*` et deux cas `bench_mtlx` de plus. Non confirmés, notés pour plus
+tard : une caméra échantillonnée à des instants irréguliers dans l'obturateur
+serait floutée de travers (la géométrie, elle, échantillonne à pas réguliers)
+; une édition de matériau qui change la structure du graphe (un poids qui
+passe de 1 à 0,5, un `transmission` qui s'allume) sans passer par
+`DirtyResource` laisserait l'ancien graphe avec une erreur dans le log.

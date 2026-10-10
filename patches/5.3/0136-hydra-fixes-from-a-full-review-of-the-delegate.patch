@@ -1,0 +1,223 @@
+From 6027b7f78079d0acfdc705536e59468d45deb73b Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Sat, 10 Oct 2026 18:38:09 +0200
+Subject: [PATCH 136/136] hydra: fixes from a full review of the delegate
+
+Read end to end (19k lines, C++ and Python) and checked by scenes:
+
+- mtlx_expand: the alpha of a constant colour4 routed as a value onto a
+  node from Hydra was never written back (the node was not flagged edited),
+  the reader kept Cycles' default; both alpha routes flag it (K-93).
+- mtlx_expand: OpenPBR's wired base_weight erased its connection, which the
+  overlay let through, and the base was weighed twice; emptied instead
+  (K-94). FoldLayerIor runs before FoldClosureWeight so a weighted coat
+  still hands its IOR to its layer.
+- util: ApplyPrimvars copied the whole primvar into an attribute sized by
+  the geometry - a constant primvar authored as a long array overran the
+  heap and crashed husk; copies what fits, warns (K-95).
+- mesh: crease lengths under 2 wrapped the crease count (all memory asked
+  for); GeomSubset faces past the mesh wrote past the shader table; a
+  uniform primvar shorter than the faces read past its end (K-95).
+- curves: negative curve indices read before the array.
+- geometry: a prototype left with no instance no longer reads _instances[0].
+- houdini_cop: Capture read `_gpu` from the Python dictionary after
+  releasing it (K-96).
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ src/hydra/curves.cpp      | 13 ++++++++-----
+ src/hydra/geometry.inl    |  2 +-
+ src/hydra/houdini_cop.cpp |  5 +++--
+ src/hydra/mesh.cpp        | 17 ++++++++++++++---
+ src/hydra/mtlx_expand.cpp | 14 ++++++++++++--
+ src/hydra/util.cpp        | 15 ++++++++++++++-
+ 6 files changed, 52 insertions(+), 14 deletions(-)
+
+diff --git a/src/hydra/curves.cpp b/src/hydra/curves.cpp
+index b6621402..a9954fd3 100644
+--- a/src/hydra/curves.cpp
++++ b/src/hydra/curves.cpp
+@@ -412,8 +412,9 @@ void HdCyclesCurves::PopulateTopology(HdSceneDelegate *sceneDelegate)
+     std::vector<int> idx(n);
+     for (int k = 0; k < n; ++k) {
+       const size_t at = controlOffset + k;
++      /* A negative index read before the array; it reads its first point. */
+       idx[k] = curveIndices.empty() ? int(at) :
+-                                      (at < curveIndices.size() ? curveIndices[at] : 0);
++               (at < curveIndices.size() ? std::max(curveIndices[at], 0) : 0);
+     }
+     controlOffset += n;
+ 
+@@ -564,10 +565,12 @@ void HdCyclesCurves::PopulateTopology(HdSceneDelegate *sceneDelegate)
+     keyCounts.push_back(int(_vertexWeights.size() - keysBefore));
+     varyingOffset += varyingCount;
+   }
+-  _numControlPoints = curveIndices.empty() ? controlOffset :
+-                                             size_t(*std::max_element(curveIndices.begin(),
+-                                                                      curveIndices.end())) +
+-                                                 1;
++  _numControlPoints = curveIndices.empty() ?
++                          controlOffset :
++                          size_t(std::max(*std::max_element(curveIndices.begin(),
++                                                            curveIndices.end()),
++                                          0)) +
++                              1;
+   _numVarying = varyingOffset;
+ 
+   size_t numKeys = 0;
+diff --git a/src/hydra/geometry.inl b/src/hydra/geometry.inl
+index 45bb6af1..fc152c52 100644
+--- a/src/hydra/geometry.inl
++++ b/src/hydra/geometry.inl
+@@ -150,7 +150,7 @@ void HdCyclesGeometry<Base, CyclesBase>::Sync(HdSceneDelegate *sceneDelegate,
+     _geom->set_used_shaders(usedShaders);
+   }
+ 
+-  if (HdChangeTracker::IsPrimIdDirty(*dirtyBits, id)) {
++  if (HdChangeTracker::IsPrimIdDirty(*dirtyBits, id) && !_instances.empty()) {
+     // This needs to be corrected in the AOV
+     _instances[0]->set_pass_id(Base::GetPrimId() + 1);
+   }
+diff --git a/src/hydra/houdini_cop.cpp b/src/hydra/houdini_cop.cpp
+index ca8fe11b..ca28bcfa 100644
+--- a/src/hydra/houdini_cop.cpp
++++ b/src/hydra/houdini_cop.cpp
+@@ -311,11 +311,12 @@ CopPixelsPtr Capture(const std::string &opPath)
+    * now share the same convention. */
+   std::memcpy(pixels->data.data(), raw, expected);
+ 
+-  Py_DECREF(locals);
+-
++  /* Read before the dictionary goes: it was read after, from freed memory. */
+   PyObject *const onGpu = PyDict_GetItemString(locals, "_gpu");
+   const bool wasOnGpu = onGpu != nullptr && PyObject_IsTrue(onGpu);
+ 
++  Py_DECREF(locals);
++
+   LOG_INFO << "Read Houdini COP " << opPath << " (" << width << "x" << height << ", "
+            << channels << " channel(s), cook " << cookCount << ") into memory"
+            << (wasOnGpu ? "; its layer was on the device, where Copernicus keeps it." : ".");
+diff --git a/src/hydra/mesh.cpp b/src/hydra/mesh.cpp
+index b67afac2..f3270389 100644
+--- a/src/hydra/mesh.cpp
++++ b/src/hydra/mesh.cpp
+@@ -39,6 +39,10 @@ VtValue ComputeTriangulatedUniformPrimvar(VtValue value, const VtIntArray &primi
+   for (size_t i = 0; i < primitiveParams.size(); ++i) {
+     const int faceIndex = HdMeshUtil::DecodeFaceIndexFromCoarseFaceParam(primitiveParams[i]);
+ 
++    /* A uniform primvar shorter than the faces read past its end. */
++    if (faceIndex < 0 || size_t(faceIndex) >= input.size()) {
++      return VtValue();
++    }
+     output.push_back(input[faceIndex]);
+   }
+ 
+@@ -665,7 +669,11 @@ void HdCyclesMesh::PopulateTopology(HdSceneDelegate *sceneDelegate)
+       }
+ 
+       for (const int face : geomSubset.indices) {
+-        faceShaders[face] = shader;
++        /* A subset naming a face the mesh does not have wrote past the
++         * table. */
++        if (face >= 0 && size_t(face) < faceShaders.size()) {
++          faceShaders[face] = shader;
++        }
+       }
+     }
+ 
+@@ -826,7 +834,9 @@ void HdCyclesMesh::PopulateTopology(HdSceneDelegate *sceneDelegate)
+     if (!creaseLengths.empty()) {
+       size_t numCreases = 0;
+       for (const int creaseLength : creaseLengths) {
+-        numCreases += creaseLength - 1;
++        /* A length under two has no edge; counted as -1 it wrapped the
++         * total and the reservation below asked for all the memory. */
++        numCreases += size_t(std::max(creaseLength - 1, 0));
+       }
+ 
+       _geom->reserve_subd_creases(numCreases);
+@@ -888,7 +898,8 @@ void HdCyclesMesh::PopulateTopology(HdSceneDelegate *sceneDelegate)
+      * in the device memory, where nobody thinks to look. */
+     LOG_INFO << "Subdivision " << GetId().GetText() << ": dicing rate " << dicingRate
+              << " px, max level " << maxLevel << ".";
+-    _geom->set_subd_objecttoworld(_instances[0]->get_tfm());
++    _geom->set_subd_objecttoworld(_instances.empty() ? transform_identity() :
++                                                       _instances[0]->get_tfm());
+   }
+ }
+ 
+diff --git a/src/hydra/mtlx_expand.cpp b/src/hydra/mtlx_expand.cpp
+index 61b871eb..8362e36f 100644
+--- a/src/hydra/mtlx_expand.cpp
++++ b/src/hydra/mtlx_expand.cpp
+@@ -1007,6 +1007,10 @@ bool RouteConstantAlpha(Network &net)
+         });
+         if (list.size() != before) {
+           other.params[input] = VtValue(alpha);
++          /* A node from Hydra writes its parameters back only when told:
++           * left unsaid, the wire went and the value never came, and the
++           * reader kept Cycles' default. */
++          other.paramsEdited = true;
+           any = true;
+         }
+       }
+@@ -1276,6 +1280,7 @@ bool RouteComputedAlpha(Network &net, const mx::DocumentPtr &library)
+         });
+         if (list.size() != before) {
+           other.params[input] = VtValue(alpha.value);
++          other.paramsEdited = true;
+         }
+       }
+     }
+@@ -1635,7 +1640,10 @@ bool FoldSurfaceBase(Network &net)
+     net.nodes[helperName] = std::move(helper);
+     surface.conns[kBaseColor] = {Conn{helperName, kOut}};
+     if (model->weightFolded) {
+-      surface.conns.erase(kBaseWeight);
++      /* Emptied, not erased: over Hydra's own connections an erased key
++       * let the original wire through, and a wired base_weight weighed the
++       * base twice - once in the helper, once on the principled. */
++      surface.conns[kBaseWeight].clear();
+       AddParams(surface, {{kBaseWeight, VtValue(1.0f)}});
+     }
+     any = true;
+@@ -1752,10 +1760,12 @@ HdMaterialNetworkSchema ExpandMaterialXNodegraphs(HdMaterialNetworkSchema networ
+ 
+   net.changed |= FoldThinFilm(net);
+   net.changed |= FoldSurfaceBase(net);
++  /* Before the weights: a weighted coat gets a multiply between it and its
++   * layer, behind which the layer would no longer see the dielectric's IOR. */
++  net.changed |= FoldLayerIor(net);
+   net.changed |= FoldClosureWeight(net, library);
+   net.changed |= FoldAnisotropy(net);
+   net.changed |= FoldVdfAbsorption(net);
+-  net.changed |= FoldLayerIor(net);
+ 
+   /* Expanded nodes bring in nodes that may expand in turn. */
+   for (int pass = 0; pass < 8; ++pass) {
+diff --git a/src/hydra/util.cpp b/src/hydra/util.cpp
+index 64b612ac..1c72eb54 100644
+--- a/src/hydra/util.cpp
++++ b/src/hydra/util.cpp
+@@ -345,7 +345,20 @@ void ApplyPrimvars(AttributeSet &attributes,
+   Attribute *const attr = attributes.add(name, attrType, elem);
+   attr->std = std;
+ 
+-  assert(size == attr->data_sizeof() * attr->size);
++  /* The attribute holds one value per element; the primvar may carry more
++   * or fewer. More overran the buffer - a constant displayColor authored as
++   * an array of sixty-four took husk down - so only what fits is copied,
++   * and a short array leaves the rest at zero. */
++  const size_t capacity = attr->data_sizeof() * size_t(attr->size);
++  if (size != capacity) {
++    TF_WARN("Primvar '%s': %zu values where the geometry has %d elements",
++            name.c_str(),
++            size / std::max<size_t>(attr->data_sizeof(), 1),
++            attr->size);
++    if (size > capacity) {
++      size = capacity;
++    }
++  }
+   std::memcpy(attr->data_for_write(), data, size);
+ }
+ 
