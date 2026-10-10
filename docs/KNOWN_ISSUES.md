@@ -909,6 +909,34 @@ in Cycles 5.3 it only paces the shadow rays through the volume),
 velocity field's weight in motion blur). Cycles 5.3 has no volume clipping
 any more. `bench_settings.py`, `volume_hidden_camera`.
 
+### K-87 Light multipliers between 0 and 1, shadow colour and shadow:enable = 0 — confirmed — **fixed** (0127)
+Cycles scales a light as a whole. The delegate turned a lobe off for a
+`diffuse` or `specular` multiplier of 0 and rendered anything between as 1;
+`shadow:color` was only logged. Worse, `shadow:enable = 0` left shadows
+half dark (0.35 of Karma's 0.49 on a diffuse floor, 0.21 of 0.73 on a metal):
+a light without shadows still took part in multiple importance sampling,
+and a BSDF ray stopped by the occluder carried its share of the weight away.
+
+A light is now split over twins - copies of the light and its object, every
+socket copied: one per lobe group (diffuse and volume; glossy and
+transmission) at that lobe's multiplier, merged when the two are equal, and
+for a shadow colour c each of those twice, with shadows at 1 - c and without
+at c, so lit areas get the whole light and shadowed ones c of it. When the
+camera sees the light, a camera-only twin shows it at full strength. BSDF
+rays stop at the first light they meet whatever lobes it serves, so of these
+coplanar parts one alone can be hit, the first with shadows; the others,
+and every part without shadows, are reached by light sampling alone.
+Measured with `bench_light_split.py` against Karma: diffuse and specular
+multipliers of 0.5, both, 0, a shadow colour with and without a specular
+multiplier, shadows off - lit and shadowed, diffuse and metal, 8 cases alike.
+Two traps on the way: `Node::set_value` takes an array over from its source
+(the copied light lost its shader), and coplanar lights with MIS hide each
+other from BSDF rays.
+
+Kept: a dome is the scene's one background and keeps the 0-or-1 switch;
+light filters have no Cycles counterpart. Each twin is one more light to
+sample, so such a light costs up to five lights' worth of noise.
+
 ## C. Houdini side
 
 ### K-40 `op:` textures fail under husk — confirmed — **fixed** (0126)
@@ -1058,9 +1086,10 @@ one renders differently from Karma, and that is expected.
 - **Cylinder light**: Cycles has no cylinder light; it is a rectangle,
   one-sided, normalized like the tube (0.95-1.07 of Karma across the floor,
   `bench_lights.py`).
-- **`shadow:color`, light filters, `occlusion`**: no Cycles equivalent.
-  `shadow:color` is reported unsupported in the log (0093); light filters
-  are dropped; UsdPreviewSurface's `occlusion` is ignored.
+- **Light filters, `occlusion`**: no Cycles equivalent. Light filters
+  are dropped; UsdPreviewSurface's `occlusion` is ignored. (`shadow:color`
+  and the lobe multipliers are carried by splitting the light, K-87; on a
+  dome only 0 and 1.)
 - **MaterialX time, frame and matrix nodes**: no node in Cycles' graph
   carries a matrix or the current time; those nodedefs are left out. A time
   baked as a constant would need every material rebuilt each frame, which

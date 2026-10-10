@@ -271,6 +271,24 @@ CASES = [
         "mesh": 'color3f[] primvars:displayColor = [(0.2,0.6,0.9), (0.2,0.6,0.9), '
                 '(0.2,0.6,0.9), (0.2,0.6,0.9)] (interpolation = "vertex")',
     }),
+    # `geompropvalue` of a colour or a vector reads the primvar whole; it gave
+    # its average as a float.
+    ("geompropvalue_color3", [
+        'uniform token info:id = "ND_geompropvalue_color3"',
+        'string inputs:geomprop = "tint"',
+        "color3f outputs:out",
+    ], (0.2, 0.6, 0.9), {
+        "mesh": 'color3f[] primvars:tint = [(0.2,0.6,0.9), (0.2,0.6,0.9), '
+                '(0.2,0.6,0.9), (0.2,0.6,0.9)] (interpolation = "vertex")',
+    }),
+    ("geompropvalue_vector3", [
+        'uniform token info:id = "ND_geompropvalue_vector3"',
+        'string inputs:geomprop = "dir"',
+        "float3 outputs:out",
+    ], (0.7, 0.1, 0.4), {
+        "mesh": 'float3[] primvars:dir = [(0.7,0.1,0.4), (0.7,0.1,0.4), '
+                '(0.7,0.1,0.4), (0.7,0.1,0.4)] (interpolation = "vertex")',
+    }),
     # nprlib NG_facingratio_float: |dot(V, N)|, 1 where the plane faces the
     # camera. The plane spans 4 units at 6 units from a perspective camera, so
     # the ratio falls to 0.905 at the corners; averaged over the plane and
@@ -306,6 +324,23 @@ CASES = [
         "token outputs:out",
     ], scale3((0.8, 0.4, 0.2), 0.5), {"terminal": "bsdf",
                                        "extra": [diffuse("d1", (0.8, 0.4, 0.2))]}),
+    # A BSDF's own `weight` scales it (K-88): it was dropped, the lobe whole.
+    ("closure_weight", [
+        'uniform token info:id = "ND_oren_nayar_diffuse_bsdf"',
+        "color3f inputs:color = (0.8, 0.4, 0.2)",
+        "float inputs:roughness = 0",
+        "float inputs:weight = 0.5",
+        "token outputs:out",
+    ], scale3((0.8, 0.4, 0.2), 0.5), {"terminal": "bsdf"}),
+    ("closure_weight_wired", [
+        'uniform token info:id = "ND_oren_nayar_diffuse_bsdf"',
+        "color3f inputs:color = (0.8, 0.4, 0.2)",
+        "float inputs:roughness = 0",
+        "float inputs:weight.connect = </world/Materials/M/w.outputs:out>",
+        "token outputs:out",
+    ], scale3((0.8, 0.4, 0.2), 0.25), {"terminal": "bsdf", "extra": [shader("w", [
+        'uniform token info:id = "ND_constant_float"', "float inputs:value = 0.25",
+        "float outputs:out"])]}),
     ("surface_mix", [
         'uniform token info:id = "ND_mix_surfaceshader"',
         "token inputs:fg.connect = </world/Materials/M/s1.outputs:out>",
@@ -598,6 +633,25 @@ IMAGE4 = shader("img", ['uniform token info:id = "ND_image_color4"',
                         "asset inputs:file = @flat.exr@", "color4f outputs:out"])
 
 
+PLACE2D = ['uniform token info:id = "ND_place2d_vector2"',
+           "float2 inputs:texcoord = (0.6, 0.3)", "float2 inputs:pivot = (0.4, 0.5)",
+           "float2 inputs:scale = (2, 1.5)", "float inputs:rotate = 30",
+           "float2 inputs:offset = (0.1, -0.05)", "float2 outputs:out"]
+
+
+def mx_place2d(uv, pivot, scale, degrees, offset, order):
+    # stdlib_ng NG_place2d_vector2: SRT (0) scales, rotates, then offsets;
+    # TRS (1) offsets, rotates, then scales - both about the pivot.
+    p = (uv[0] - pivot[0], uv[1] - pivot[1])
+    if order == 0:
+        p = mx_rotate2d((p[0] / scale[0], p[1] / scale[1]), degrees)
+        p = (p[0] - offset[0], p[1] - offset[1])
+    else:
+        p = mx_rotate2d((p[0] - offset[0], p[1] - offset[1]), degrees)
+        p = (p[0] / scale[0], p[1] / scale[1])
+    return (p[0] + pivot[0], p[1] + pivot[1])
+
+
 def mx_rotate2d(v, degrees):
     # stdlib/genglsl/mx_rotate_vector2.glsl
     a = math.radians(degrees)
@@ -737,6 +791,48 @@ CASES += [
         'uniform token info:id = "ND_separate4_color4"',
         "color4f inputs:in.connect = </world/Materials/M/img.outputs:out>",
         "float outputs:outr", "float outputs:outg", "float outputs:outb", "float outputs:outa"])]}),
+    # The alpha of a computed colour4: each colour4 node on the way gets a
+    # float twin (K-17). The image's alpha is 0.6.
+    ("alpha_mix", [
+        'uniform token info:id = "ND_multiply_float"',
+        "float inputs:in1.connect = </world/Materials/M/sep.outputs:outa>",
+        "float inputs:in2 = 1",
+        "float outputs:out",
+    ], (0.3, 0.3, 0.3), {"extra": [IMAGE4, shader("mix", [
+        'uniform token info:id = "ND_mix_color4"',
+        "color4f inputs:fg.connect = </world/Materials/M/img.outputs:out>",
+        "color4f inputs:bg = (0, 0, 0, 0.2)",
+        "float inputs:mix = 0.25",
+        "color4f outputs:out"]), shader("sep", [
+        'uniform token info:id = "ND_separate4_color4"',
+        "color4f inputs:in.connect = </world/Materials/M/mix.outputs:out>",
+        "float outputs:outr", "float outputs:outg", "float outputs:outb", "float outputs:outa"])]}),
+    ("alpha_multiply_by_float", [
+        'uniform token info:id = "ND_multiply_float"',
+        "float inputs:in1.connect = </world/Materials/M/sep.outputs:outa>",
+        "float inputs:in2 = 1",
+        "float outputs:out",
+    ], (0.3, 0.3, 0.3), {"extra": [IMAGE4, shader("mul", [
+        'uniform token info:id = "ND_multiply_color4FA"',
+        "color4f inputs:in1.connect = </world/Materials/M/img.outputs:out>",
+        "float inputs:in2 = 0.5",
+        "color4f outputs:out"]), shader("sep", [
+        'uniform token info:id = "ND_separate4_color4"',
+        "color4f inputs:in.connect = </world/Materials/M/mul.outputs:out>",
+        "float outputs:outr", "float outputs:outg", "float outputs:outb", "float outputs:outa"])]}),
+    ("alpha_add_values", [
+        'uniform token info:id = "ND_multiply_float"',
+        "float inputs:in1.connect = </world/Materials/M/sep.outputs:outa>",
+        "float inputs:in2 = 1",
+        "float outputs:out",
+    ], (0.35, 0.35, 0.35), {"extra": [shader("add", [
+        'uniform token info:id = "ND_add_color4"',
+        "color4f inputs:in1 = (0.5, 0.5, 0.5, 0.1)",
+        "color4f inputs:in2 = (0.5, 0.5, 0.5, 0.25)",
+        "color4f outputs:out"]), shader("sep", [
+        'uniform token info:id = "ND_separate4_color4"',
+        "color4f inputs:in.connect = </world/Materials/M/add.outputs:out>",
+        "float outputs:outr", "float outputs:outg", "float outputs:outb", "float outputs:outa"])]}),
     # rotate2d / rotate3d: degrees, and v' = v * M (mx_rotate_vector2/3.glsl).
     ("rotate2d_x", [
         'uniform token info:id = "ND_extract_vector2"',
@@ -754,6 +850,21 @@ CASES += [
     ], (mx_rotate2d((0.2, 0.5), 30)[1],) * 3, {"extra": [shader("rot", [
         'uniform token info:id = "ND_rotate2d_vector2"',
         "float2 inputs:in = (0.2, 0.5)", "float inputs:amount = 30", "float2 outputs:out"])]}),
+    # place2d, both operation orders, with a pivot (stdlib_ng NG_place2d_vector2).
+    ("place2d_srt", [
+        'uniform token info:id = "ND_extract_vector2"',
+        "float2 inputs:in.connect = </world/Materials/M/pl.outputs:out>",
+        "int inputs:index = 0",
+        "float outputs:out",
+    ], (mx_place2d((0.6, 0.3), (0.4, 0.5), (2, 1.5), 30, (0.1, -0.05), 0)[0],) * 3,
+        {"extra": [shader("pl", PLACE2D + ["int inputs:operationorder = 0"])]}),
+    ("place2d_trs", [
+        'uniform token info:id = "ND_extract_vector2"',
+        "float2 inputs:in.connect = </world/Materials/M/pl.outputs:out>",
+        "int inputs:index = 1",
+        "float outputs:out",
+    ], (mx_place2d((0.6, 0.3), (0.4, 0.5), (2, 1.5), 30, (0.1, -0.05), 1)[1],) * 3,
+        {"extra": [shader("pl", PLACE2D + ["int inputs:operationorder = 1"])]}),
     ("rotate3d", [
         'uniform token info:id = "ND_rotate3d_vector3"',
         "float3 inputs:in = (0.2, 0.5, 0.1)", "float inputs:amount = 30",

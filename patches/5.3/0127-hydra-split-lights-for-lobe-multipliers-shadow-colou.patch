@@ -1,0 +1,431 @@
+From a06f0744976e3e6e0928e4ca1f3e2d7ac917048f Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Sat, 10 Oct 2026 08:19:59 +0200
+Subject: [PATCH 127/127] hydra: split lights for lobe multipliers, shadow
+ colour and shadowless lights
+
+Cycles scales a light as a whole. A light whose diffuse and specular
+multipliers differ, or that has a shadow colour, is now split over twins -
+copies of the light and its object: one per lobe group at that lobe's
+multiplier, and for a shadow colour c each with shadows at 1 - c and
+without at c. A camera-only twin shows a visible light at full strength.
+
+BSDF rays stop at the first light they hit, so of coplanar parts only the
+first with shadows takes part in MIS; the others, and any light without
+shadows, are reached by light sampling alone. That also fixes
+shadow:enable = 0, whose shadows stayed half dark (K-87).
+
+Sockets are copied by value: Node::set_value takes an array over from its
+source, which left the original light without its shader.
+---
+ src/hydra/light.cpp | 295 +++++++++++++++++++++++++++++++++++---------
+ src/hydra/light.h   |  23 ++++
+ 2 files changed, 262 insertions(+), 56 deletions(-)
+
+diff --git a/src/hydra/light.cpp b/src/hydra/light.cpp
+index 517d302c..ed9daa74 100644
+--- a/src/hydra/light.cpp
++++ b/src/hydra/light.cpp
+@@ -125,47 +125,27 @@ void HdCyclesLight::Sync(HdSceneDelegate *sceneDelegate,
+ 
+     if (auto ds = GetTypedDataSource<bool>(lightDs, _tokens->visibleInPrimaryRay)) {
+       if (ds->GetTypedValue(0.0f)) {
+-        _object->set_visibility(_object->get_visibility() | PATH_RAY_VISIBILITY_CAMERA);
++        _baseVisibility |= PATH_RAY_VISIBILITY_CAMERA;
+       }
+       else {
+-        _object->set_visibility(_object->get_visibility() & ~PATH_RAY_VISIBILITY_CAMERA);
++        _baseVisibility &= ~PATH_RAY_VISIBILITY_CAMERA;
+       }
+     }
+ 
+-    if (auto ds = GetTypedDataSource<bool>(lightDs, HdLightTokens->shadowEnable)) {
+-      _light->set_cast_shadow(ds->GetTypedValue(0.0f));
++    {
++      auto ds = GetTypedDataSource<bool>(lightDs, HdLightTokens->shadowEnable);
++      _castShadow = ds ? ds->GetTypedValue(0.0f) : true;
+     }
+ 
+-    /* UsdLux's diffuse and specular multipliers. Cycles cannot scale a light
+-     * per lobe, but it can leave a lobe out: 0 does that, 1 keeps it, and
+-     * anything between is kept whole - said in the log, not guessed. They
+-     * were ignored, so a light set to 0 specular still drew highlights. */
++    /* UsdLux's diffuse and specular multipliers and shadow colour, which
++     * SyncSplit carries. They were ignored, so a light set to 0 specular
++     * still drew highlights. */
+     {
+-      uint visibility = _object->get_visibility() | PATH_RAY_VISIBILITY_DIFFUSE |
+-                        PATH_RAY_VISIBILITY_GLOSSY | PATH_RAY_VISIBILITY_TRANSMIT;
+-      const float diffuse = GetTypedValue<float>(lightDs, HdLightTokens->diffuse, 1.0f);
+-      const float specular = GetTypedValue<float>(lightDs, HdLightTokens->specular, 1.0f);
+-      if (diffuse == 0.0f) {
+-        visibility &= ~PATH_RAY_VISIBILITY_DIFFUSE;
+-      }
+-      if (specular == 0.0f) {
+-        visibility &= ~(PATH_RAY_VISIBILITY_GLOSSY | PATH_RAY_VISIBILITY_TRANSMIT);
+-      }
+-      _object->set_visibility(visibility);
+-      for (const auto &[name, value] : {std::make_pair("diffuse", diffuse),
+-                                        std::make_pair("specular", specular)})
+-      {
+-        if (value != 0.0f && value != 1.0f) {
+-          LOG_WARNING << "Light " << GetId().GetString() << ": " << name << " multiplier "
+-                      << value << " is rendered as 1; Cycles can only turn a lobe off.";
+-        }
+-      }
++      _diffuse = GetTypedValue<float>(lightDs, HdLightTokens->diffuse, 1.0f);
++      _specular = GetTypedValue<float>(lightDs, HdLightTokens->specular, 1.0f);
+       const GfVec3f shadowColor = GetTypedValue<GfVec3f>(
+           lightDs, HdLightTokens->shadowColor, GfVec3f(0.0f));
+-      if (shadowColor != GfVec3f(0.0f)) {
+-        LOG_WARNING << "Light " << GetId().GetString()
+-                    << ": shadow:color is not supported by Cycles; shadows stay black.";
+-      }
++      _shadowColor = make_float3(shadowColor[0], shadowColor[1], shadowColor[2]);
+     }
+ 
+     if (_lightType == HdPrimTypeTokens->distantLight) {
+@@ -247,6 +227,7 @@ void HdCyclesLight::Sync(HdSceneDelegate *sceneDelegate,
+       strength = zero_float3();
+     }
+ 
++    _strength = strength;
+     _light->set_strength(strength);
+     _light->set_is_enabled(visible);
+ 
+@@ -261,6 +242,8 @@ void HdCyclesLight::Sync(HdSceneDelegate *sceneDelegate,
+       if (auto ds = GetTypedDataSource<TfToken>(lightDs, HdTokens->shadowLink)) {
+         shadowLink = ds->GetTypedValue(0.0f);
+       }
++      _lightLink = lightLink;
++      _shadowLink = shadowLink;
+       static_cast<HdCyclesSession *>(renderParam)->SetLightLinks(_object, lightLink, shadowLink);
+     }
+ 
+@@ -300,6 +283,8 @@ void HdCyclesLight::Sync(HdSceneDelegate *sceneDelegate,
+     PopulateShaderGraph(lightDs);
+   }
+ 
++  SyncSplit(lock.scene, renderParam);
++
+   if (_light->is_modified()) {
+     _light->tag_update(lock.scene);
+   }
+@@ -630,6 +615,7 @@ void HdCyclesLight::Finalize(HdRenderParam *renderParam)
+   const SceneLock lock(renderParam);
+   const bool keep_nodes = static_cast<const HdCyclesSession *>(renderParam)->keep_nodes;
+   static_cast<HdCyclesSession *>(renderParam)->ForgetObject(_object);
++  DeleteTwins(lock.scene, renderParam, 0);
+ 
+   if (!keep_nodes) {
+     /* Delete the object before the light, since the object references the light. */
+@@ -652,28 +638,7 @@ void HdCyclesLight::Initialize(HdRenderParam *renderParam)
+   _object = lock.scene->create_node<Object>();
+   _object->name = GetId().GetString();
+ 
+-  if (_lightType == HdPrimTypeTokens->domeLight) {
+-    _light = lock.scene->create_node<BackgroundLight>();
+-  }
+-  else if (_lightType == HdPrimTypeTokens->distantLight) {
+-    _light = lock.scene->create_node<SunLight>();
+-  }
+-  else if (_lightType == HdPrimTypeTokens->diskLight) {
+-    _light = lock.scene->create_node<AreaLight>();
+-    static_cast<AreaLight *>(_light)->set_ellipse(true);
+-  }
+-  else if (_lightType == HdPrimTypeTokens->rectLight ||
+-           _lightType == HdPrimTypeTokens->cylinderLight)
+-  {
+-    _light = lock.scene->create_node<AreaLight>();
+-    static_cast<AreaLight *>(_light)->set_ellipse(false);
+-  }
+-  else if (_lightType == HdPrimTypeTokens->sphereLight) {
+-    /* We can't know in advance if this is spot light or point light, so we set to derived class
+-     * SpotLight and change the type later. */
+-    _light = lock.scene->create_node<SpotLight>();
+-  }
+-
++  _light = CreateLight(lock.scene);
+   _light->set_use_mis(true);
+   _light->name = GetId().GetString();
+ 
+@@ -682,9 +647,10 @@ void HdCyclesLight::Initialize(HdRenderParam *renderParam)
+   /* A light's own shape stays out of camera rays unless asked for; a dome is
+    * the background, which the camera sees unless it is hidden from it - the
+    * session reads this bit to make the film transparent. */
+-  _object->set_visibility(_lightType == HdPrimTypeTokens->domeLight ?
+-                              PATH_RAY_VISIBILITY_ALL :
+-                              PATH_RAY_VISIBILITY_ALL & ~PATH_RAY_VISIBILITY_CAMERA);
++  _baseVisibility = _lightType == HdPrimTypeTokens->domeLight ?
++                        PATH_RAY_VISIBILITY_ALL :
++                        PATH_RAY_VISIBILITY_ALL & ~PATH_RAY_VISIBILITY_CAMERA;
++  _object->set_visibility(_baseVisibility);
+ 
+   Shader *const shader = lock.scene->create_node<Shader>();
+   array<Node *> used_shaders;
+@@ -695,4 +661,221 @@ void HdCyclesLight::Initialize(HdRenderParam *renderParam)
+   PopulateShaderGraph(HdContainerDataSourceHandle());
+ }
+ 
++namespace {
++
++/* Every socket of `from` onto `to`. Node::set_value would do, but it takes an
++ * array over from its source: the light it copied lost its shader. */
++void CopySockets(Node *to, const Node &from)
++{
++  for (const SocketType &socket : from.type->inputs) {
++    switch (socket.type) {
++      case SocketType::BOOLEAN_ARRAY: {
++        array<bool> value = from.get_bool_array(socket);
++        to->set(socket, value);
++        break;
++      }
++      case SocketType::INT_ARRAY: {
++        array<int> value = from.get_int_array(socket);
++        to->set(socket, value);
++        break;
++      }
++      case SocketType::FLOAT_ARRAY: {
++        array<float> value = from.get_float_array(socket);
++        to->set(socket, value);
++        break;
++      }
++      case SocketType::POINT2_ARRAY: {
++        array<float2> value = from.get_float2_array(socket);
++        to->set(socket, value);
++        break;
++      }
++      case SocketType::COLOR_ARRAY:
++      case SocketType::VECTOR_ARRAY:
++      case SocketType::POINT_ARRAY:
++      case SocketType::NORMAL_ARRAY: {
++        array<packed_float3> value = from.get_float3_array(socket);
++        to->set(socket, value);
++        break;
++      }
++      case SocketType::STRING_ARRAY: {
++        array<ustring> value = from.get_string_array(socket);
++        to->set(socket, value);
++        break;
++      }
++      case SocketType::TRANSFORM_ARRAY: {
++        array<Transform> value = from.get_transform_array(socket);
++        to->set(socket, value);
++        break;
++      }
++      case SocketType::NODE_ARRAY: {
++        array<Node *> value = from.get_node_array(socket);
++        to->set(socket, value);
++        break;
++      }
++      default:
++        to->set_value(socket, from, socket);
++        break;
++    }
++  }
++}
++
++}  // namespace
++
++Light *HdCyclesLight::CreateLight(Scene *scene) const
++{
++  if (_lightType == HdPrimTypeTokens->domeLight) {
++    return scene->create_node<BackgroundLight>();
++  }
++  if (_lightType == HdPrimTypeTokens->distantLight) {
++    return scene->create_node<SunLight>();
++  }
++  if (_lightType == HdPrimTypeTokens->diskLight) {
++    AreaLight *const light = scene->create_node<AreaLight>();
++    light->set_ellipse(true);
++    return light;
++  }
++  if (_lightType == HdPrimTypeTokens->rectLight ||
++      _lightType == HdPrimTypeTokens->cylinderLight)
++  {
++    AreaLight *const light = scene->create_node<AreaLight>();
++    light->set_ellipse(false);
++    return light;
++  }
++  /* A sphere light: we can't know in advance if this is spot light or point
++   * light, so we set to derived class SpotLight and change the type later. */
++  return scene->create_node<SpotLight>();
++}
++
++/* Cycles scales a light as a whole, but can keep a lobe from seeing it and a
++ * light from casting shadows. So a light whose diffuse and specular
++ * multipliers differ, or that has a shadow colour, becomes several: one per
++ * lobe group at that lobe's multiplier, and for a shadow colour c each of
++ * those twice - with shadows at 1 - c, without at c, so lit areas get the
++ * whole light and shadowed ones c of it. The camera, when it sees the light,
++ * sees one copy at full strength. The primary light is the first part; twins
++ * copy every socket of it and of its object. A dome is the scene's
++ * background, of which Cycles has one: it keeps the 0-or-1 lobe switch. */
++void HdCyclesLight::SyncSplit(Scene *scene, HdRenderParam *renderParam)
++{
++  struct Part {
++    uint visibility;
++    float3 factor;
++    bool shadow;
++    /* Whether BSDF rays can hit it (MIS); else light sampling alone reaches it. */
++    bool mis;
++  };
++  const uint diffuseLobes = PATH_RAY_VISIBILITY_DIFFUSE | PATH_RAY_VISIBILITY_VOLUME_SCATTER;
++  const uint specularLobes = PATH_RAY_VISIBILITY_GLOSSY | PATH_RAY_VISIBILITY_TRANSMIT;
++  const uint lobes = diffuseLobes | specularLobes;
++  const uint other = _baseVisibility & ~(lobes | PATH_RAY_VISIBILITY_CAMERA);
++  const bool dome = _lightType == HdPrimTypeTokens->domeLight;
++
++  std::vector<std::pair<uint, float>> lobeGroups;
++  if (_diffuse == _specular) {
++    lobeGroups.emplace_back(lobes, _diffuse);
++  }
++  else {
++    lobeGroups.emplace_back(diffuseLobes, _diffuse);
++    lobeGroups.emplace_back(specularLobes, _specular);
++  }
++  const bool shadowColored = _castShadow && !is_zero(_shadowColor) && !dome;
++
++  std::vector<Part> parts;
++  for (const auto &[visibility, multiplier] : lobeGroups) {
++    if (multiplier == 0.0f) {
++      continue;
++    }
++    if (shadowColored) {
++      parts.push_back({visibility, multiplier * (one_float3() - _shadowColor), true, false});
++      parts.push_back({visibility, multiplier * _shadowColor, false, false});
++    }
++    else {
++      parts.push_back({visibility, make_float3(multiplier), _castShadow, false});
++    }
++  }
++
++  if (dome) {
++    /* One background: the lobes it reaches, at full strength. */
++    uint visibility = _baseVisibility & ~lobes;
++    for (const Part &part : parts) {
++      visibility |= _baseVisibility & part.visibility;
++    }
++    for (const float value : {_diffuse, _specular}) {
++      if (value != 0.0f && value != 1.0f) {
++        LOG_WARNING << "Light " << GetId().GetString() << ": multiplier " << value
++                    << " on a dome is rendered as 1; Cycles can only turn a lobe off there.";
++      }
++    }
++    parts = {{visibility, one_float3(), _castShadow, true}};
++  }
++  else {
++    /* BSDF rays stop at the first light they hit, whatever lobes it serves,
++     * so of parts lying on top of each other one alone can be hit: the first
++     * with shadows. A part without shadows cannot be at all - a BSDF ray
++     * meeting an occluder on its way would take its share of the MIS weight
++     * along: it is why shadow:enable = 0 left shadows half dark. */
++    bool hittable = false;
++    for (Part &part : parts) {
++      part.visibility = (part.visibility & _baseVisibility) | other;
++      part.mis = part.shadow && !hittable;
++      hittable |= part.mis;
++    }
++    const bool camera = (_baseVisibility & PATH_RAY_VISIBILITY_CAMERA) != 0;
++    if (parts.size() == 1 && parts[0].factor == one_float3() && parts[0].mis) {
++      parts[0].visibility |= camera ? PATH_RAY_VISIBILITY_CAMERA : 0u;
++    }
++    else if (camera || parts.empty()) {
++      /* Seen by the camera at full strength, or reaching nothing at all. */
++      parts.push_back(
++          {camera ? uint(PATH_RAY_VISIBILITY_CAMERA) : 0u, one_float3(), false, false});
++    }
++  }
++
++  DeleteTwins(scene, renderParam, parts.size() - 1);
++  while (_twins.size() < parts.size() - 1) {
++    Object *const object = scene->create_node<Object>();
++    Light *const light = CreateLight(scene);
++    object->name = _object->name;
++    light->name = _light->name;
++    _twins.emplace_back(object, light);
++  }
++
++  _light->set_strength(_strength * parts[0].factor);
++  _light->set_cast_shadow(parts[0].shadow);
++  _light->set_use_mis(parts[0].mis);
++  _object->set_visibility(parts[0].visibility);
++
++  auto *const session = static_cast<HdCyclesSession *>(renderParam);
++  for (size_t i = 0; i < _twins.size(); ++i) {
++    auto [object, light] = _twins[i];
++    CopySockets(light, *_light);
++    CopySockets(object, *_object);
++    object->set_geometry(light);
++    object->set_random_id(hash_uint2(hash_string(_light->name.c_str()), uint(i + 1)));
++    light->set_strength(_strength * parts[i + 1].factor);
++    light->set_cast_shadow(parts[i + 1].shadow);
++    light->set_use_mis(parts[i + 1].mis);
++    object->set_visibility(parts[i + 1].visibility);
++    session->SetLightLinks(object, _lightLink, _shadowLink);
++    if (light->is_modified()) {
++      light->tag_update(scene);
++    }
++    object->tag_update(scene);
++  }
++}
++
++void HdCyclesLight::DeleteTwins(Scene *scene, HdRenderParam *renderParam, const size_t keep)
++{
++  auto *const session = static_cast<HdCyclesSession *>(renderParam);
++  while (_twins.size() > keep) {
++    auto [object, light] = _twins.back();
++    _twins.pop_back();
++    session->ForgetObject(object);
++    if (!session->keep_nodes) {
++      scene->delete_node(object);
++      scene->delete_node(light);
++    }
++  }
++}
++
+ HDCYCLES_NAMESPACE_CLOSE_SCOPE
+diff --git a/src/hydra/light.h b/src/hydra/light.h
+index d1af926b..3d78327b 100644
+--- a/src/hydra/light.h
++++ b/src/hydra/light.h
+@@ -10,6 +10,11 @@
+ #include <pxr/imaging/hd/dataSource.h>
+ #include <pxr/imaging/hd/light.h>
+ 
++#include "util/types.h"
++
++#include <utility>
++#include <vector>
++
+ HDCYCLES_NAMESPACE_OPEN_SCOPE
+ 
+ class HdCyclesLight final : public PXR_NS::HdLight {
+@@ -30,9 +35,27 @@ class HdCyclesLight final : public PXR_NS::HdLight {
+ 
+   void PopulateShaderGraph(const PXR_NS::HdContainerDataSourceHandle &lightContainer);
+ 
++  CCL_NS::Light *CreateLight(CCL_NS::Scene *scene) const;
++  void SyncSplit(CCL_NS::Scene *scene, PXR_NS::HdRenderParam *renderParam);
++  void DeleteTwins(CCL_NS::Scene *scene, PXR_NS::HdRenderParam *renderParam, size_t keep);
++
+   CCL_NS::Object *_object = nullptr;
+   CCL_NS::Light *_light = nullptr;
+   PXR_NS::TfToken _lightType;
++
++  /* What one Cycles light cannot carry - per-lobe multipliers other than 0
++   * and 1, a shadow colour - is split over twins: copies of the light, each
++   * seen by some lobes, with or without shadows, at a share of the strength
++   * (K-87). Read by Sync, applied by SyncSplit. */
++  std::vector<std::pair<CCL_NS::Object *, CCL_NS::Light *>> _twins;
++  CCL_NS::float3 _strength = CCL_NS::make_float3(1.0f, 1.0f, 1.0f);
++  CCL_NS::uint _baseVisibility = 0;
++  float _diffuse = 1.0f;
++  float _specular = 1.0f;
++  CCL_NS::float3 _shadowColor = CCL_NS::make_float3(0.0f, 0.0f, 0.0f);
++  bool _castShadow = true;
++  PXR_NS::TfToken _lightLink;
++  PXR_NS::TfToken _shadowLink;
+ };
+ 
+ HDCYCLES_NAMESPACE_CLOSE_SCOPE

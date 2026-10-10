@@ -2450,3 +2450,10 @@ le flou de bouger de la caméra suit déjà tous les échantillons de la scène
 dans l'obturateur (cas `camera` et `camera_bounce` ajoutés à bench_motion),
 et l'affichage direct dans le viewport marche sous le viewport Vulkan de
 Houdini 22, qui donne toujours un Hgi OpenGL aux délégués.
+
+0127 (2026-10-10, nuit) : les multiplicateurs `diffuse`/`specular` d'une
+lumière et sa `shadow:color` sont rendus comme Karma : la lumière est
+répartie sur des copies (une par groupe de lobes, avec et sans ombre). Au
+passage, `shadow:enable = 0` laissait les ombres à moitié noires (le MIS
+d'une lumière sans ombre) ; corrigé. 8 cas sur 8 identiques à Karma
+(`bench_light_split.py`).

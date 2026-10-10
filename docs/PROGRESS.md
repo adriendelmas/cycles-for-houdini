@@ -47,7 +47,8 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | Dome and rect light textures | ✅ | `bench_dome.py`, `bench_rect.py` | Dome in USD's lat-long orientation and `poleAxis` (K-67, 0111); rect texture no longer mirrored (K-68, 0112) |
 | `visibleInPrimaryRay`, `shadowEnable` | ✅ | upstream | |
 | Light linking, shadow linking | ✅ | `bench_settings.py` | Hydra's light linking scene index → Cycles light and shadow sets (K-24, 0089); no light filters |
-| `shadow:color`, `diffuse`/`specular` multipliers, light filters | ❌ | code read | |
+| `shadow:color`, `diffuse`/`specular` multipliers, `shadow:enable` | ✅ | `bench_light_split.py` 8/8 vs Karma | The light is split over twins (K-87, 0127); a dome keeps 0 or 1 |
+| Light filters | ❌ | code read | No Cycles counterpart |
 | Dome `textureFormat` | ⏸ | Karma, 2026-10-09 | Lat-long only. Not done on purpose: Karma itself reads `mirroredBall` and `angular` maps as lat-long (measured), so there is no reference for their orientation, which the HDRShop pages USD cites leave ambiguous |
 | Camera: perspective, ortho, DoF, apertures, lens shift, aspect conform | ✅ | `bench_camera.py` 7/7 vs Karma | |
 | Camera exposure | ✅ | `bench_camera.py` | Times the render settings' film exposure (K-71, 0114) |
