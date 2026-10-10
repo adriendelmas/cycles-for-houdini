@@ -1,0 +1,79 @@
+From f6a1673f6d53bbab279af8746bcde8e18f071490 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Sat, 10 Oct 2026 11:12:00 +0200
+Subject: [PATCH 133/133] hydra: anisotropic roughness on a reflecting
+ dielectric_bsdf
+
+A dielectric_bsdf in scatter mode R is a principled in Cycles, whose
+specular has the metallic BSDF's anisotropy and rotation: the two alphas
+are folded the same way (K-91), mapped to `anisotropic` and
+`anisotropic_rotation`, with MaterialX's UV tangent. A clear coat's
+highlight stretches as Karma's instead of staying round. Glass and
+refraction have no anisotropy in Cycles and stay isotropic.
+---
+ src/hydra/material.cpp    |  4 ++++
+ src/hydra/mtlx_expand.cpp | 27 ++++++++++++++++++++++++---
+ 2 files changed, 28 insertions(+), 3 deletions(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index 0885df11..b96560d1 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -968,6 +968,10 @@ UsdToCyclesMapping MakeMtlxDielectric(const char scatterMode)
+                          {
+                              {TfToken("tint"), ustring("specular_tint")},
+                              {TfToken("roughness"), ustring("rsq:value1")},
++                             /* From the two alphas (mtlx_expand.cpp, K-91). */
++                             {TfToken("cycles_anisotropy"), ustring("anisotropic")},
++                             {TfToken("cycles_rotation"), ustring("anisotropic_rotation")},
++                             {TfToken("tangent"), ustring("tangent")},
+                              {TfToken("normal"), ustring("normal")},
+                              {TfToken("ior"), ustring("ior")},
+                              {TfToken("thinfilm_thickness"), ustring("thin_film_thickness")},
+diff --git a/src/hydra/mtlx_expand.cpp b/src/hydra/mtlx_expand.cpp
+index 636b9dcd..108016f5 100644
+--- a/src/hydra/mtlx_expand.cpp
++++ b/src/hydra/mtlx_expand.cpp
+@@ -1373,9 +1373,28 @@ bool FoldAnisotropy(Network &net)
+   }
+   for (const TfToken &name : names) {
+     const std::string id = net.nodes[name].typeId.GetString();
+-    if (id != "ND_conductor_bsdf" && id != "ND_generalized_schlick_bsdf") {
++    if (id != "ND_conductor_bsdf" && id != "ND_generalized_schlick_bsdf" &&
++        id != "ND_dielectric_bsdf")
++    {
+       continue;
+     }
++    if (id == "ND_dielectric_bsdf") {
++      /* Only the reflecting mode, a principled with the same anisotropy as
++       * the metal; Cycles' glass and refraction have none. */
++      const auto mode = net.nodes[name].params.find(TfToken("scatter_mode"));
++      std::string value = "R";
++      if (mode != net.nodes[name].params.end()) {
++        if (mode->second.IsHolding<std::string>()) {
++          value = mode->second.UncheckedGet<std::string>();
++        }
++        else if (mode->second.IsHolding<TfToken>()) {
++          value = mode->second.UncheckedGet<TfToken>().GetString();
++        }
++      }
++      if (value != "R") {
++        continue;
++      }
++    }
+     auto add = [&](const std::string &suffix, const char *typeId) {
+       const TfToken nodeName(Prefix(name, suffix));
+       net.nodes[nodeName].typeId = TfToken(typeId);
+@@ -1603,8 +1622,10 @@ HdMaterialNetworkSchema ExpandMaterialXNodegraphs(HdMaterialNetworkSchema networ
+           candidate = true;
+           break;
+         }
+-        /* An anisotropic metal (FoldAnisotropy). */
+-        if (id == "ND_conductor_bsdf" || id == "ND_generalized_schlick_bsdf") {
++        /* An anisotropic metal or coat (FoldAnisotropy). */
++        if (id == "ND_conductor_bsdf" || id == "ND_generalized_schlick_bsdf" ||
++            id == "ND_dielectric_bsdf")
++        {
+           candidate = true;
+           break;
+         }

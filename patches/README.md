@@ -162,6 +162,7 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0130` | hydra: aperçu viewport d'un matériau Cycles à travers les mix (entrées `a`/`b`, côté favorisé par le facteur), `math`/`vector_math`, mix de constantes calculés ; commentaires du traducteur en anglais (K-42) |
 | `0131` | hydra: `default` de `geompropvalue` posé en attribut d'objet, lu là où la géométrie n'a pas la primvar (K-90) |
 | `0132` | hydra: rugosité anisotrope des métaux (conductor, generalized_schlick) convertie vers l'anisotropie et la rotation du metallic_bsdf, tangente UV (K-91) ; un `weight` branché masqué sur le nœud d'origine |
+| `0133` | hydra: rugosité anisotrope d'un `dielectric_bsdf` réfléchissant (principled : `anisotropic`, `anisotropic_rotation`, tangente) (K-91) |
 
 ---
 

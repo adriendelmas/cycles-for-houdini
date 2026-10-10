@@ -1,7 +1,7 @@
 From 1a0dfe1009e9e56387e40df6714f726000749ce9 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 9 Oct 2026 19:46:27 +0200
-Subject: [PATCH 126/132] hydra: cook op: COP textures to files as a USD Render
+Subject: [PATCH 126/133] hydra: cook op: COP textures to files as a USD Render
  ROP saves
 
 husk, which the USD Render ROP and farms run, has no Houdini session: an

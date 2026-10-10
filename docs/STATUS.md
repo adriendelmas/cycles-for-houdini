@@ -2486,3 +2486,6 @@ son `default`, comme Karma (Cycles rendait 0).
 leur reflet comme Karma ; il était rond. Le métal de Cycles a sa propre
 formule (anisotropie de 0 à 1 le long de la tangente, plus une rotation),
 d'où un quart de tour quand l'étirement est dans l'autre sens.
+
+0133 (2026-10-10, nuit) : même chose pour un vernis (dielectric_bsdf en
+réflexion) ; le verre reste isotrope, Cycles n'a pas d'anisotropie pour lui.

@@ -1001,8 +1001,11 @@ bitangent's alpha is the larger - for a value at translation, for a wire as
 MaterialX nodes - and an unwired tangent is MaterialX's UV tangent, not
 Cycles' default radial one. After: isotropic, both directions and wired
 within 8 % of Karma's spread. Kept: Cycles caps A at 1, so alphas more than
-10 apart stretch as 10; a `dielectric_bsdf`'s anisotropy (through the
-principled) is still averaged.
+10 apart stretch as 10. 0133 does the same for a reflecting
+`dielectric_bsdf` (scatter mode R, a principled in Cycles, same formula on
+its `anisotropic` and `anisotropic_rotation`): a clear coat, 0.21 as Karma
+where it rendered 0.87. A transmitting dielectric stays isotropic: Cycles'
+glass and refraction have no anisotropy.
 
 ## C. Houdini side
 

@@ -1,7 +1,7 @@
 From c3fe901ba8365451fa3357a0d050dfd37aeb8eb5 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sat, 10 Oct 2026 10:40:11 +0200
-Subject: [PATCH 132/132] hydra: anisotropic roughness on conductor and
+Subject: [PATCH 132/133] hydra: anisotropic roughness on conductor and
  generalized Schlick
 
 MaterialX gives a metal's roughness as two alphas along the UV tangent and
