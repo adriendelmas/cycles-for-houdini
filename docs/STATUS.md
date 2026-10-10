@@ -2473,3 +2473,8 @@ le sol noir). 0,98 à 1,04 de Karma, retourné compris.
 mix : une texture mélangée n'y arrivait jamais (le traducteur cherchait une
 entrée `color1` que le nœud n'a plus) ; un mix de deux couleurs est calculé.
 Nouveau bench `bench_preview.py`, 6 cas.
+
+Vérifié en interface (ma session, port MCP 9877, `lights_live.hip`) : la
+couleur d'ombre, le multiplicateur spéculaire et le retournement du tube se
+modifient en direct dans le viewport Cycles, sans relancer le rendu ; les
+jumelles se créent et disparaissent avec eux.

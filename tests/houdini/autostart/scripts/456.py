@@ -14,7 +14,8 @@ import hou
 def _start_mcp():
     try:
         import houdinimcp
-        houdinimcp.start_server()
+        # Another port when another session's Houdini holds the default.
+        houdinimcp.start_server(port=int(os.environ.get("HDCYCLES_MCP_PORT", "9876")))
     except Exception as exc:  # the plugin is optional, never block the load
         print("houdinimcp not started:", exc)
 
