@@ -1,7 +1,7 @@
 From 3b896fdcc32f42a072fe09831b15ac88a4ecb4a8 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 9 Oct 2026 00:55:55 +0200
-Subject: [PATCH 115/129] hydra, scene: subdivision creases, corners, boundary
+Subject: [PATCH 115/130] hydra, scene: subdivision creases, corners, boundary
  rules and holes
 
 The subdivision tags were read from the prim's root, where Hydra does not

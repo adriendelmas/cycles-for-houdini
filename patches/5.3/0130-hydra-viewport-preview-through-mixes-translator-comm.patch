@@ -1,0 +1,423 @@
+From 524f6ab65f315014c3535526fc132e69a3fa8c49 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Sat, 10 Oct 2026 09:23:13 +0200
+Subject: [PATCH 130/130] hydra: viewport preview through mixes; translator
+ comments in English
+
+The preview translator followed a mix_color's `color1`, a socket the node
+no longer has: a mixed texture never reached the viewport, which showed
+the 0.8 default. Mixes now follow the side their factor favours, then the
+other; math and vector_math both operands; a mix of two constants is
+computed from the values and the Sdr defaults (K-42). The translator's
+comments, in French, are now in English like the rest of the code.
+---
+ .../husdplugins/shadertranslators/cycles.py   | 256 +++++++++++-------
+ 1 file changed, 162 insertions(+), 94 deletions(-)
+
+diff --git a/src/hydra/resources/husdplugins/shadertranslators/cycles.py b/src/hydra/resources/husdplugins/shadertranslators/cycles.py
+index 09115ba8..a2a5ecd5 100644
+--- a/src/hydra/resources/husdplugins/shadertranslators/cycles.py
++++ b/src/hydra/resources/husdplugins/shadertranslators/cycles.py
+@@ -1,21 +1,20 @@
+-"""Traducteur de shaders USD pour Cycles.
++"""USD shader translator for Cycles.
+ 
+-Il n'existe que pour une chose : porter les reglages du materiau - le
+-`Cycles Material Properties` - jusqu'a l'USD. Tout le reste est celui
+-d'Houdini, hérité tel quel.
++It exists for one thing: carrying the material's settings - the `Cycles
++Material Properties` node - through to USD. Everything else is Houdini's,
++inherited as is.
+ 
+-Le probleme, dit par SideFX dans son propre code (`husd/mtlxshadertranslator.py`) :
+-« Logically, render properties should be authored on the material primitive,
++The problem, as SideFX states it in its own code (`husd/mtlxshadertranslator.py`):
++"Logically, render properties should be authored on the material primitive,
+ but Hydra does not forward them to the render delegate. The workaround is to
+-author them on the terminal shader prim. » Ce repli existe donc, mais seulement
+-dans le traducteur MaterialX, et il suppose Karma faute de mieux
+-(`render_context = 'kma'`). Un noeud de proprietes pose dans un reseau Cycles
+-etait ainsi branche, active, et n'atteignait jamais l'USD : personne ne le
+-lisait.
+-
+-Le point d'extension est documente dans `husd/shadertranslator.py` : redefinir
+-`matchesRenderMask()` et `shaderTranslatorHelper()`, et mettre la logique dans
+-un helper derive. C'est exactement ce qui suit.
++author them on the terminal shader prim." That fallback exists, but only in
++the MaterialX translator, and it assumes Karma for want of better
++(`render_context = 'kma'`). A properties node placed in a Cycles network was
++wired, enabled, and never reached USD: nobody read it.
++
++The extension point is documented in `husd/shadertranslator.py`: override
++`matchesRenderMask()` and `shaderTranslatorHelper()`, and put the logic in a
++derived helper. That is exactly what follows.
+ """
+ 
+ from pxr import Usd
+@@ -24,19 +23,19 @@ from husd import shaderutils
+ from husd.shadertranslator import ShaderTranslator, ShaderTranslatorHelper
+ 
+ RENDER_MASK = "cycles"
+-# Le prefixe des reglages, tel que le delegate le cherche : `cycles:<socket>`
+-# sur un noeud du reseau, releve en lisant ses parametres.
++# The settings' prefix, as the delegate looks for it: `cycles:<socket>` on a
++# node of the network, read from its parameters.
+ PROPERTIES_CONNECTOR = "properties"
+-# Seuls ces terminaux portent les reglages ; un displacement partage ceux de la
+-# surface, comme chez Karma.
++# Only these terminals carry the settings; a displacement shares the
++# surface's, as with Karma.
+ PROPERTY_BEARING_TERMINALS = ("surface", "volume")
+ 
+ 
+ def _properties_node(terminal_output_name, shader_node, shader_node_output_name):
+-    """Le noeud de proprietes branche a cote du terminal, s'il y en a un.
++    """The properties node wired beside the terminal, if there is one.
+ 
+-    Repris de `_propertiesShaderNodeSibling`, au contexte de rendu pres : le
+-    notre se lit sur le noeud, et vaut `cycles`.
++    Taken from `_propertiesShaderNodeSibling`, but for the render context:
++    ours is read on the node, and is `cycles`.
+     """
+     tokens = terminal_output_name.split(":")
+     if len(tokens) < 3 or tokens[-1] not in PROPERTY_BEARING_TERMINALS:
+@@ -81,8 +80,8 @@ class CyclesShaderTranslatorHelper(ShaderTranslatorHelper):
+         if not output:
+             return
+ 
+-        # Les reglages vont sur le prim du shader terminal, faute que Hydra
+-        # transmette ceux du prim Material.
++        # The settings go on the terminal shader's prim, Hydra not forwarding
++        # those of the Material prim.
+         terminal = UsdShade.ConnectableAPI(
+             shaderutils.usdFirstConnectedOriginatorSourcePrim(output))
+         if not terminal:
+@@ -119,36 +118,34 @@ def usdShaderTranslator():
+ 
+ 
+ # ---------------------------------------------------------------------------
+-# Le shader d'apercu, pour le viewport
++# The preview shader, for the viewport
+ # ---------------------------------------------------------------------------
+ #
+-# Le viewport de Houdini ne sait pas rendre un graphe Cycles : il rend du
+-# MaterialX, qu'il compile lui-meme, et de l'`UsdPreviewSurface`. Un materiau
+-# Cycles n'etant ni l'un ni l'autre, il ressortait gris - pas de couleur, pas de
+-# texture, pas de rugosite, pas de normale.
++# Houdini's viewport cannot render a Cycles graph: it renders MaterialX, which
++# it compiles itself, and `UsdPreviewSurface`. A Cycles material being
++# neither, it came out grey - no colour, no texture, no roughness, no normal.
+ #
+-# Solaris prevoit pourtant le pont : a cote du shader propre au moteur, il
+-# ecrit un `UsdPreviewSurface` construit par un « preview shader translator ».
+-# Celui d'origine lit des etiquettes `ogl_*` posees sur les parametres du VOP ;
+-# nos noeuds sont engendres depuis le registre Sdr et n'en portent aucune, donc
+-# `usdPreviewShaderInputInfos()` rendait une liste vide et
+-# `createAndConnectUsdTerminalPreviewShader()` renoncait sans un mot. Les scenes
+-# de banc le montrent : `HoudiniHasAutoPreviewShader = 1` est bien pose sur le
+-# shader, mais aucun prim `UsdPreviewSurface` n'a jamais ete ecrit.
++# Solaris has the bridge though: beside the engine's own shader, it writes a
++# `UsdPreviewSurface` built by a "preview shader translator". The stock one
++# reads `ogl_*` tags put on the VOP's parameters; our nodes are generated from
++# the Sdr registry and carry none, so `usdPreviewShaderInputInfos()` returned
++# an empty list and `createAndConnectUsdTerminalPreviewShader()` gave up
++# without a word. The bench scenes showed it: `HoudiniHasAutoPreviewShader =
++# 1` is set on the shader, but no `UsdPreviewSurface` prim was ever written.
+ #
+-# Plutot que de tatouer des centaines de parametres engendres, on lit le graphe
+-# Cycles lui-meme, qui dit la meme chose en plus sur : `base_color` est la
+-# couleur diffuse, et si elle est branchee a un `cycles_image_texture`, on sait
+-# aussi quel fichier lire. C'est la methode du traducteur MaterialX de SideFX
+-# (`MaterialXPreviewShaderTranslatorHelper`), tenue un cran plus loin puisqu'on
+-# remonte aussi a travers un `normal_map` ou un `bump`.
++# Rather than tagging hundreds of generated parameters, the Cycles graph
++# itself is read, which says the same thing more surely: `base_color` is the
++# diffuse colour, and if it is wired to a `cycles_image_texture`, which file
++# to read is known too. It is the method of SideFX's MaterialX translator
++# (`MaterialXPreviewShaderTranslatorHelper`), taken one step further: it also
++# goes up through a `normal_map`, a `bump` or a mix (K-42).
+ 
+ from husd.previewshadertranslator import PreviewShaderTranslator as PreviewTranslatorBase
+ from husd.previewshadertranslator import PreviewShaderTranslatorHelper as PreviewHelperBase
+ from husd.previewshadertranslator import UsdShaderInputInfo
+ 
+-# Ce que chaque terminal Cycles sait dire d'un UsdPreviewSurface. La cle est
+-# l'entree du preview, la valeur le socket Cycles a lire.
++# What each Cycles terminal can tell a UsdPreviewSurface. The key is the
++# preview's input, the value the Cycles socket to read.
+ SURFACE_INPUTS = {
+     "cycles_principled_bsdf": {
+         "diffuseColor": "base_color",
+@@ -199,11 +196,10 @@ SURFACE_INPUTS = {
+     "cycles_principled_hair_bsdf": {"diffuseColor": "color", "roughness": "roughness"},
+ }
+ 
+-# Ce que vaut une entree que personne n'a touchee. Houdini n'ecrit en USD que
+-# les parametres modifies, et les defauts de Cycles ne sont pas ceux de
+-# l'UsdPreviewSurface - une base_color laissee telle quelle vaut 0,8 chez
+-# Cycles contre 0,18 pour l'apercu, soit un materiau notablement plus sombre
+-# dans le viewport que dans le rendu.
++# What an input nobody touched is worth. Houdini writes only modified
++# parameters to USD, and Cycles' defaults are not the UsdPreviewSurface's - a
++# base_color left alone is 0.8 in Cycles against 0.18 for the preview, a
++# material noticeably darker in the viewport than in the render.
+ DEFAULT_VALUES = {
+     "diffuseColor": (0.8, 0.8, 0.8),
+     "roughness": 0.5,
+@@ -212,30 +208,40 @@ DEFAULT_VALUES = {
+     "opacity": 1.0,
+ }
+ 
+-# Les metaux sont metalliques, et rien dans le graphe ne le dit autrement.
++# Metals are metallic, and nothing in the graph says otherwise.
+ FIXED_INPUTS = {
+     "cycles_metallic_bsdf": {"metallic": 1.0},
+     "cycles_glossy_bsdf": {"metallic": 1.0},
+ }
+ 
+-# Ce qui, branche sur une entree, porte en fait une image un cran plus loin.
+-# La valeur est le socket a suivre.
++# What, wired to an input, actually carries an image one step further. The
++# value lists the sockets to follow, in order.
+ IMAGE_RELAYS = {
+-    "cycles_normal_map": "color",
+-    "cycles_bump": "height",
+-    "cycles_displacement": "height",
+-    "cycles_gamma": "color",
+-    "cycles_brightness_contrast": "color",
+-    "cycles_invert": "color",
+-    "cycles_hsv": "color",
+-    "cycles_rgb_curves": "value",
+-    "cycles_vector_curves": "value",
+-    "cycles_map_range": "value",
+-    "cycles_clamp": "value",
+-    "cycles_math": "value1",
+-    "cycles_mix_color": "color1",
+-    "cycles_mix_float": "a",
+-    "cycles_separate_color": "color",
++    "cycles_normal_map": ("color",),
++    "cycles_bump": ("height",),
++    "cycles_displacement": ("height",),
++    "cycles_gamma": ("color",),
++    "cycles_brightness_contrast": ("color",),
++    "cycles_invert": ("color",),
++    "cycles_hsv": ("color",),
++    "cycles_rgb_curves": ("value",),
++    "cycles_vector_curves": ("value",),
++    "cycles_map_range": ("value",),
++    "cycles_clamp": ("value",),
++    "cycles_math": ("value1", "value2"),
++    "cycles_vector_math": ("vector1", "vector2"),
++    "cycles_separate_color": ("color",),
++}
++
++# Mixes: (factor, first, second). The side the factor favours is followed
++# first - the preview holds one image - and a mix of two constants is
++# computed. `cycles_mix_color` named its sides `color1`/`color2` once; the
++# relay followed `color1`, which no longer exists, and a mixed image never
++# reached the viewport.
++MIX_NODES = {
++    "cycles_mix_color": ("fac", "a", "b"),
++    "cycles_mix_float": ("fac", "a", "b"),
++    "cycles_mix": ("fac", "color1", "color2"),
+ }
+ 
+ IMAGE_NODES = (
+@@ -244,7 +250,7 @@ IMAGE_NODES = (
+     "cycles_mx_hextiled_image_texture",
+ )
+ 
+-# Cycles nomme le bouclage comme USD, a « periodic » pres.
++# Cycles names wrapping as USD does, but for "periodic".
+ WRAP_MODES = {
+     "periodic": "repeat",
+     "clamp": "clamp",
+@@ -254,7 +260,7 @@ WRAP_MODES = {
+ 
+ 
+ def _connected_shader(usd_input):
+-    """Le shader branche sur cette entree, s'il y en a un."""
++    """The shader wired to this input, if there is one."""
+     if not usd_input:
+         return None
+     return shaderutils.usdFirstConnectedShader(usd_input)
+@@ -264,27 +270,85 @@ def _shader_id(usd_shader):
+     return usd_shader.GetShaderId() if usd_shader else ""
+ 
+ 
++def _default(usd_shader, name):
++    """A Cycles input's default, from the Sdr registry, or None."""
++    from pxr import Sdr
++    node = Sdr.Registry().GetShaderNodeByIdentifier(_shader_id(usd_shader))
++    sdr_input = node.GetShaderInput(name) if node else None
++    return sdr_input.GetDefaultValue() if sdr_input else None
++
++
++def _mix_order(usd_shader, depth):
++    """A mix's two sides, the one its factor favours first."""
++    factor_name, first, second = MIX_NODES[_shader_id(usd_shader)]
++    factor = _constant(usd_shader, factor_name, depth)
++    if factor is None:
++        factor = 0.5
++    factor = factor[0] if isinstance(factor, tuple) else factor
++    return (second, first) if factor >= 0.5 else (first, second)
++
++
+ def _find_image(usd_shader, depth=0):
+-    """L'image au bout de la chaine, en traversant ce qui se traverse.
++    """The image at the end of the chain, going through what can be gone through.
+ 
+-    Une couleur de base branchee directement sur une texture est le cas
+-    courant ; une normale passe presque toujours par un `normal_map`, et une
+-    hauteur par un `bump`. S'arreter au premier noeud rendrait le viewport muet
+-    dans les deux cas les plus utiles.
++    A base colour wired straight to a texture is the common case; a normal
++    nearly always goes through a `normal_map`, a height through a `bump`, and
++    a texture is often mixed with another or with a colour. Stopping at the
++    first node would leave the viewport blank in the most useful cases.
+     """
+-    if usd_shader is None or depth > 4:
++    if usd_shader is None or depth > 6:
+         return None
+     shader_id = _shader_id(usd_shader)
+     if shader_id in IMAGE_NODES:
+         return usd_shader
+-    relay = IMAGE_RELAYS.get(shader_id)
+-    if relay is None:
++    if shader_id in MIX_NODES:
++        relays = _mix_order(usd_shader, depth)
++    else:
++        relays = IMAGE_RELAYS.get(shader_id, ())
++    for relay in relays:
++        found = _find_image(_connected_shader(usd_shader.GetInput(relay)), depth + 1)
++        if found is not None:
++            return found
++    return None
++
++
++def _as_tuple(value):
++    try:
++        return tuple(float(c) for c in value)
++    except TypeError:
++        return float(value)
++
++
++def _constant(usd_shader, name, depth=0):
++    """The value an input of a shader holds, when no wire varies it: its own
++    value, its Sdr default, or a mix of two constants. None otherwise."""
++    if usd_shader is None or depth > 6:
++        return None
++    usd_input = usd_shader.GetInput(name)
++    if usd_input and usd_input.HasConnectedSource():
++        upstream = _connected_shader(usd_input)
++        if _shader_id(upstream) not in MIX_NODES:
++            return None
++        factor_name, first, second = MIX_NODES[_shader_id(upstream)]
++        factor = _constant(upstream, factor_name, depth + 1)
++        a = _constant(upstream, first, depth + 1)
++        b = _constant(upstream, second, depth + 1)
++        if factor is None or a is None or b is None:
++            return None
++        factor = factor[0] if isinstance(factor, tuple) else factor
++        if isinstance(a, tuple) and isinstance(b, tuple):
++            return tuple(x + (y - x) * factor for x, y in zip(a, b))
++        if not isinstance(a, tuple) and not isinstance(b, tuple):
++            return a + (b - a) * factor
+         return None
+-    return _find_image(_connected_shader(usd_shader.GetInput(relay)), depth + 1)
++    value = usd_input.Get() if usd_input else None
++    if value is None:
++        value = _default(usd_shader, name)
++    return None if value is None else _as_tuple(value)
+ 
+ 
+ def _as_text(value):
+-    """Le nom de fichier, qu'il arrive en chaine ou en asset."""
++    """The file name, whether it comes as a string or as an asset."""
+     if value is None:
+         return None
+     path = getattr(value, "path", None)
+@@ -295,14 +359,14 @@ def _as_text(value):
+ 
+ 
+ def _fill_texture(info, usd_image, time_code):
+-    """Reporte sur l'apercu ce que la texture Cycles sait d'elle-meme."""
++    """Carries over to the preview what the Cycles texture knows of itself."""
+     filename = _as_text(_input_value(usd_image, "filename", time_code))
+     if not filename:
+         return False
+ 
+     info.myTexFile = filename
+-    # Cycles ne multiplie pas la texture par la valeur du parametre qu'elle
+-    # remplace ; l'apercu ne doit pas le faire non plus.
++    # Cycles does not multiply the texture by the value of the parameter it
++    # replaces; the preview must not either.
+     info.myTexAutoScaleFlag = False
+ 
+     extension = _input_value(usd_image, "extension", time_code)
+@@ -333,11 +397,11 @@ def _input_value(usd_shader, name, time_code):
+ 
+ 
+ class CyclesPreviewShaderTranslatorHelper(PreviewHelperBase):
+-    """Construit l'UsdPreviewSurface a partir du graphe Cycles.
++    """Builds the UsdPreviewSurface from the Cycles graph.
+ 
+-    La classe mere appelle ce crochet pour chaque entree du preview, avec
+-    l'`info` qu'elle a su tirer des etiquettes `ogl_*` - donc toujours `None`
+-    chez nous. On la fabrique alors depuis le shader Cycles lui-meme.
++    The base class calls this hook for each input of the preview, with the
++    `info` it could draw from the `ogl_*` tags - so always `None` for us. It is
++    then made from the Cycles shader itself.
+     """
+ 
+     def __init__(self, usd_stage, usd_material_path, usd_time_code):
+@@ -366,10 +430,14 @@ class CyclesPreviewShaderTranslatorHelper(PreviewHelperBase):
+         value = None
+         if usd_input and preview_input_name != "normal":
+             value = usd_input.Get(self.myUsdTimeCode)
++            if value is None and usd_input.HasConnectedSource():
++                # A mix of constants, computed; anything else varies and
++                # falls back to the default below.
++                value = _constant(usd_main_shader, socket)
+         if value is None and preview_input_name != "normal":
+             value = DEFAULT_VALUES.get(preview_input_name)
+         if preview_input_name == "emissiveColor" and value is not None:
+-            # Une couleur d'emission blanche a force zero ne s'allume pas.
++            # A white emission colour at strength zero does not glow.
+             strength = _input_value(usd_main_shader, "emission_strength", self.myUsdTimeCode)
+             if strength is None:
+                 strength = 0.0
+@@ -377,7 +445,7 @@ class CyclesPreviewShaderTranslatorHelper(PreviewHelperBase):
+ 
+         info = UsdShaderInputInfo(socket, preview_input_type, preview_input_name, value=value)
+         if preview_input_name == "normal":
+-            # Une carte de normales se lit crue et s'etale de [0,1] a [-1,1].
++            # A normal map is read raw and spread from [0,1] to [-1,1].
+             info.myTexScale = (2, 2, 2, 1)
+             info.myTexOffset = (-1, -1, -1, 0)
+             info.myTexColorSpace = "raw"
+@@ -390,10 +458,10 @@ class CyclesPreviewShaderTranslatorHelper(PreviewHelperBase):
+         return info
+ 
+     def _displacementInfo(self, preview_input_name, preview_input_type):
+-        """Le displacement ne pend pas au shader de surface mais au materiau.
++        """The displacement does not hang off the surface shader but off the material.
+ 
+-        Cycles lui donne sa propre sortie - `outputs:cycles:displacement` -, et
+-        c'est de la que le viewport doit tirer sa hauteur.
++        Cycles gives it its own output - `outputs:cycles:displacement` - and
++        that is where the viewport has to draw its height from.
+         """
+         material = self.myUsdMaterial
+         if not material:
+@@ -415,8 +483,8 @@ class CyclesPreviewShaderTranslatorHelper(PreviewHelperBase):
+             return None
+         info.myTexColorSpace = "raw"
+ 
+-        # `height` est recentre sur `midlevel` puis mis a l'echelle, comme le
+-        # fait le noeud displacement de Cycles.
++        # `height` is centred on `midlevel` then scaled, as Cycles'
++        # displacement node does.
+         scale = _input_value(source, "scale", self.myUsdTimeCode)
+         midlevel = _input_value(source, "midlevel", self.myUsdTimeCode)
+         scale = 1.0 if scale is None else float(scale)

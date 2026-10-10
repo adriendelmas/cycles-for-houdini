@@ -114,7 +114,7 @@ Three numbers, measured 2026-10-09 (after 0125) (commands in [TESTING.md](TESTIN
 **805** of 822 nodedefs are rendered - 651 through the mapping table, 110 by
 expanding a nodegraph (the library's, or one the delegate ships for nodes the
 library writes in GLSL only), 44 by rewriting or folding (`mtlx_coverage.py`);
-**666** of the 806 that route keep every input, output and node when rendered
+**669** of the 806 that route keep every input, output and node when rendered
 with all inputs authored (`mtlx_inputs.py`); **80** are verified against a
 value computed from the MaterialX definition (`bench_mtlx.py`), and the five
 surface models keep their own defaults for unauthored inputs
