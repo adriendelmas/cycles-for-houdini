@@ -2537,3 +2537,15 @@ pixels hors des bords (0 / 375 875), 0 avertissement ; bench_mtlx 92 nœuds,
 0 problème ; bench_hair 4 paires, 0 problème. Construit (cible hdCycles,
 incrémental) et testé depuis un arbre de plugin temporaire ; **pas encore
 installé** : Houdini ouvert tenait la DLL.
+
+0140 (2026-10-11, matin) : le nœud MtlX Text est devenu un sous-réseau de
+VOPs MaterialX de SideFX (le viewport ne dessine pas un nodedef custom), donc
+un NodeGraph dans l'USD. Hydra nomme ses nœuds « text/add_0 » ;
+MaterialNodeNameToSdfPath en faisait un enfant de la racine, impossible avec
+un « / » : chemin vide pour tous, nœuds fusionnés, le réseau rendait une
+constante (toutes les sorties fausses sur 100 % des pixels). Ça touchait tout
+sous-réseau de matériau Houdini, pas seulement ce nœud. Après : test_render 0
+pixel hors référence, test_lop 0, test_features ≤ 0,09 % ; bench_mtlx 93 cas
+(nouveau `nodegraph_nested`, en échec avant), 0 problème ; bench_hair 4
+paires, 0 problème. Construit et testé depuis l'arbre de plugin temporaire ;
+**pas encore installé** (Houdini ouvert).

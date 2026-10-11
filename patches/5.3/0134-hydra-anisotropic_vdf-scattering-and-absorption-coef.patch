@@ -1,7 +1,7 @@
 From 5872680fae5023527864aaf1983ac92a63cfc551 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sat, 10 Oct 2026 11:46:17 +0200
-Subject: [PATCH 134/139] hydra: anisotropic_vdf scattering and absorption
+Subject: [PATCH 134/140] hydra: anisotropic_vdf scattering and absorption
  coefficients
 
 MaterialX's anisotropic_vdf takes `absorption` and `scattering`, the

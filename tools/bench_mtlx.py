@@ -970,6 +970,34 @@ CASES += [
     ], (0.6, 0.6, 0.6), {}),
 ]
 
+# Nodes inside a NodeGraph (what a Houdini material subnet writes): Hydra names
+# them "G/a", "G/b", which once mapped to one empty path, so the two nodes
+# collapsed into one and the network fell apart (2026-10-11, MtlX Text).
+CASES += [
+    ("nodegraph_nested", [
+        'uniform token info:id = "ND_add_color3"',
+        "color3f inputs:in1.connect = </world/Materials/M/G.outputs:out>",
+        "color3f inputs:in2 = (0.1, 0.1, 0.4)",
+        "color3f outputs:out",
+    ], add3(scale3((0.5, 0.1, 0.2), 0.8), (0.1, 0.1, 0.4)), {"extra": ["""            def NodeGraph "G"
+            {
+                color3f outputs:out.connect = </world/Materials/M/G/b.outputs:out>
+                def Shader "a"
+                {
+                    uniform token info:id = "ND_constant_color3"
+                    color3f inputs:value = (0.5, 0.1, 0.2)
+                    color3f outputs:out
+                }
+                def Shader "b"
+                {
+                    uniform token info:id = "ND_multiply_color3FA"
+                    color3f inputs:in1.connect = </world/Materials/M/G/a.outputs:out>
+                    float inputs:in2 = 0.8
+                    color3f outputs:out
+                }
+            }"""]}),
+]
+
 def render(name, body, options):
     terminal = TERMINALS[options.get("terminal", "color")].replace(
         "probe.outputs:out", "probe.outputs:" + options.get("probe_out", "out")).replace(

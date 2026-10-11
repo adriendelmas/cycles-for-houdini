@@ -5,7 +5,7 @@ vivent sur une branche a nous, en commits separes par sujet. Cette serie en est
 l'export par `git format-patch`.
 
     patches/5.2/   38 correctifs, base 3b97e190 (branche release/5.2)
-    patches/5.3/   139 correctifs, base 8424ed53 (branche main)
+    patches/5.3/   140 correctifs, base 8424ed53 (branche main)
 
 `tools/bootstrap.py` fait le chemin complet -- clone, `git am`, compilation.
 A la main, sur un clone deja pose :
@@ -169,6 +169,7 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0137` | hydra: bibliothèques MaterialX d'un package lues aussi (`materialx/` sur HOUDINI_PATH, et `CYCLES_MATERIALX_SEARCH_PATH`) : un nodedef de studio défini en nodegraph (MtlX Text) se développe comme sous Karma |
 | `0138` | hydra: le développement d'un nodegraph laisse les valeurs par défaut à CompleteMaterialXDefaults, qui n'écrit que les entrées traduites (plus de `frameoffset` / `frameendaction` dans le log, deux lignes par image et par rendu) |
 | `0139` | hydra: `kma_stderiv` (ST Derivatives de Karma) traduit en dérivée nulle : le nœud n'est plus perdu avec un avertissement, le shader retombe sur sa propre largeur |
+| `0140` | hydra: un nœud dans un NodeGraph (sous-réseau de matériau Houdini), nommé « G/a » par Hydra, garde son chemin ; tous tombaient sur le chemin vide et fusionnaient, le réseau rendait une constante |
 
 ---
 
