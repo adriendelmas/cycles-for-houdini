@@ -1,0 +1,584 @@
+From 86e2eddc214248eb8507ec4c8d431f1dd8e975a6 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 8 Oct 2026 17:45:07 +0200
+Subject: [PATCH 104/141] hydra: shipped nodegraphs, constant transformmatrix,
+ F82, legacy Disney
+
+The nodes that the MaterialX library only writes in GLSL/OSL had neither a
+nodegraph to unfold nor a table entry. The delegate ships its own
+(mtlx_nodegraphs.h, transcribed from the library's GLSL): artistic_ior,
+roughness_anisotropy, roughness_dual (and through it glossiness_anisotropy),
+inside/outside float and color3. transformmatrix with a constant matrix becomes
+dot products (row vector on the left, like mx_math.glsl and USD), which unfolds
+hmtlxcomplementcolor. generalized_schlick_bsdf goes to Cycles' F82 metallic_bsdf,
+the same Hoffman model; the legacy Disney surfaces to disney_principled. Three
+table defects found by the value cases (K-59): the mix with a color factor
+averaged its factor (now mix_vector_non_uniform), and magnitude, distance,
+dotproduct were read on the vector output instead of value - black. Fixed values
+know how to set a boolean. 774 -> 789 nodedefs out of 822, 64 value cases.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/CMakeLists.txt    |   1 +
+ src/hydra/material.cpp      |  71 ++++++++++-
+ src/hydra/mtlx_expand.cpp   | 146 +++++++++++++++++++++++
+ src/hydra/mtlx_nodegraphs.h | 230 ++++++++++++++++++++++++++++++++++++
+ 4 files changed, 445 insertions(+), 3 deletions(-)
+ create mode 100644 src/hydra/mtlx_nodegraphs.h
+
+diff --git a/src/hydra/CMakeLists.txt b/src/hydra/CMakeLists.txt
+index 87db2b8b..c8e889f1 100644
+--- a/src/hydra/CMakeLists.txt
++++ b/src/hydra/CMakeLists.txt
+@@ -35,6 +35,7 @@ set(SRC_HD_CYCLES_HEADERS
+   light.h
+   material.h
+   mtlx_expand.h
++  mtlx_nodegraphs.h
+   mesh.h
+   node_util.h
+   output_driver.h
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index f76c5525..43863eac 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -408,6 +408,9 @@ namespace {
+  * dimension count - and want a number rather than a name. */
+ VtValue FixedValue(const SocketType &socket, const char *const text)
+ {
++  if (socket.type == SocketType::BOOLEAN) {
++    return VtValue(strcmp(text, "true") == 0 || strcmp(text, "1") == 0);
++  }
+   if (socket.type == SocketType::INT || socket.type == SocketType::UINT) {
+     return VtValue(int(strtol(text, nullptr, 10)));
+   }
+@@ -1564,9 +1567,17 @@ const std::vector<MtlxEntry> &MtlxTable()
+ 
+   /* Vector-only operations. */
+   static const UsdToCyclesMapping kNormalize = MakeMtlxOp("normalize", true, true);
+-  static const UsdToCyclesMapping kMagnitude = MakeMtlxOp("length", true, true);
+-  static const UsdToCyclesMapping kDistance = MakeMtlxOp("distance", true, false);
+-  static const UsdToCyclesMapping kDot = MakeMtlxOp("dot_product", true, false);
++  /* Length, distance and dot product give a float, which vector_math puts
++   * on its `value` output; read on `vector`, they came out zero
++   * (tools/bench_mtlx.py, scalar_* cases, 2026-10-08). */
++  auto scalarOut = [](const char *const mode, const bool unary) {
++    UsdToCyclesMapping m = MakeMtlxOp(mode, true, unary);
++    m.setParameterName(CyclesMaterialTokens->out, ustring("value"));
++    return m;
++  };
++  static const UsdToCyclesMapping kMagnitude = scalarOut("length", true);
++  static const UsdToCyclesMapping kDistance = scalarOut("distance", false);
++  static const UsdToCyclesMapping kDot = scalarOut("dot_product", false);
+   static const UsdToCyclesMapping kCross = MakeMtlxOp("cross_product", true, false);
+   static const UsdToCyclesMapping kReflect = MakeMtlxOp("reflect", true, false);
+   static const UsdToCyclesMapping kRefract = MakeMtlxOp("refract", true, false);
+@@ -1762,6 +1773,30 @@ const std::vector<MtlxEntry> &MtlxTable()
+     m.addHelper(kAlphaToRoughness);
+     return m;
+   }();
++  /* `generalized_schlick_bsdf` is Hoffman's F82-tint Fresnel, which is
++   * what Cycles' metallic_bsdf computes in its f82 mode: `color0` the colour
++   * at normal incidence, `color82` the tint at 82 degrees. `color90` and
++   * `exponent` stay at the model's white and 5 (their defaults), and the
++   * transmitting scatter modes are not carried. The roughness is an alpha,
++   * as on the other elementary BSDFs. */
++  static const UsdToCyclesMapping kGeneralizedSchlick = [] {
++    UsdToCyclesMapping m{"metallic_bsdf",
++                         {
++                             {TfToken("color0"), ustring("color")},
++                             {TfToken("color82"), ustring("edge_tint")},
++                             {TfToken("roughness"), ustring("rsq:value1")},
++                             {TfToken("normal"), ustring("normal")},
++                             {TfToken("tangent"), ustring("tangent")},
++                             {TfToken("thinfilm_thickness"), ustring("thin_film_thickness")},
++                             {TfToken("thinfilm_ior"), ustring("thin_film_ior")},
++                             {CyclesMaterialTokens->out, ustring("BSDF")},
++                         }};
++    m.setFixedValues({{ustring("fresnel_type"), "f82"},
++                      {ustring("color"), "1,1,1"},
++                      {ustring("edge_tint"), "1,1,1"}});
++    m.addHelper(kAlphaToRoughness);
++    return m;
++  }();
+   static const UsdToCyclesMapping kDiffuse = {
+       "diffuse_bsdf",
+       {
+@@ -2273,6 +2308,11 @@ const std::vector<MtlxEntry> &MtlxTable()
+       {"ND_standard_surface_surfaceshader", &MtlxStandardSurface},
+       {"ND_open_pbr_surface_surfaceshader", &MtlxOpenPbr},
+       {"ND_disney_principled", &MtlxDisneyPrincipled},
++      /* The two legacy Disney surfaces of Houdini's library (legacy_1_39.mtlx)
++       * carry the same inputs; the 2015 one's thin-surface, flatness,
++       * diffuse-transmission and scatter-distance inputs are dropped. */
++      {"ND_disney_brdf_2012", &MtlxDisneyPrincipled},
++      {"ND_disney_bsdf_2015", &MtlxDisneyPrincipled},
+       {"ND_gltf_pbr", &MtlxGltfPbr},
+       {"ND_displacement_vector3", &MtlxVectorDisplacement},
+       {"ND_displacement_", &MtlxDisplacement},
+@@ -2425,6 +2465,7 @@ const std::vector<MtlxEntry> &MtlxTable()
+       {"ND_measured_edf", &kEmission},
+       {"ND_generalized_schlick_edf", &kEmission},
+       {"ND_conductor_bsdf", &kConductor},
++      {"ND_generalized_schlick_bsdf", &kGeneralizedSchlick},
+       {"ND_dielectric_bsdf", &MtlxDielectricRT},
+       {"ND_oren_nayar_diffuse_bsdf", &kDiffuse},
+       {"ND_burley_diffuse_bsdf", &kDiffuse},
+@@ -2743,6 +2784,30 @@ const UsdToCyclesMapping *FindMtlxMapping(const std::string &nodeTypeId)
+     }
+   }
+ 
++  /* A mix whose factor has the type of its operands mixes channel by
++   * channel. Cycles' mix_color has a scalar factor, and a colour factor
++   * landing on it was averaged: an `artistic_ior` with edge colour
++   * (0.5, 0.8, 0.2) mixed every channel at 0.5 (tools/bench_mtlx.py,
++   * own_artistic_ior). mix_vector_non_uniform takes a vector factor; the
++   * factor is not clamped, as in MaterialX. */
++  static const UsdToCyclesMapping kMixNonUniform = [] {
++    UsdToCyclesMapping m{"mix_vector_non_uniform",
++                         {
++                             {TfToken("fg"), ustring("b")},
++                             {TfToken("bg"), ustring("a")},
++                             {TfToken("mix"), ustring("fac")},
++                             {CyclesMaterialTokens->out, ustring("result")},
++                         }};
++    m.setFixedValues({{ustring("use_clamp"), "false"}});
++    return m;
++  }();
++  if (nodeTypeId == "ND_mix_color3_color3" || nodeTypeId == "ND_mix_color4_color4" ||
++      nodeTypeId == "ND_mix_vector2_vector2" || nodeTypeId == "ND_mix_vector3_vector3" ||
++      nodeTypeId == "ND_mix_vector4_vector4")
++  {
++    return &kMixNonUniform;
++  }
++
+   if (isVector) {
+     if (const UsdToCyclesMapping *twin = FindMtlxVectorTwin(nodeTypeId)) {
+       return twin;
+diff --git a/src/hydra/mtlx_expand.cpp b/src/hydra/mtlx_expand.cpp
+index 400c20ed..d5118ade 100644
+--- a/src/hydra/mtlx_expand.cpp
++++ b/src/hydra/mtlx_expand.cpp
+@@ -3,12 +3,18 @@
+  * SPDX-License-Identifier: Apache-2.0 */
+ 
+ #include "hydra/mtlx_expand.h"
++#include "hydra/mtlx_nodegraphs.h"
+ #include "util/log.h"
+ 
+ #include <MaterialXCore/Document.h>
+ #include <MaterialXCore/Value.h>
+ #include <MaterialXFormat/Util.h>
++#include <MaterialXFormat/XmlIo.h>
+ 
++#include <pxr/base/gf/matrix3d.h>
++#include <pxr/base/gf/matrix3f.h>
++#include <pxr/base/gf/matrix4d.h>
++#include <pxr/base/gf/matrix4f.h>
+ #include <pxr/base/gf/vec2f.h>
+ #include <pxr/base/gf/vec3f.h>
+ #include <pxr/base/gf/vec4f.h>
+@@ -56,6 +62,16 @@ mx::DocumentPtr Library()
+       LOG_WARNING << "MaterialX: could not read the node library: " << e.what()
+                   << ". Nodes defined as nodegraphs will not be expanded.";
+     }
++    /* The delegate's own nodegraphs, for nodedefs the library implements in
++     * shading languages only (mtlx_nodegraphs.h). */
++    try {
++      mx::DocumentPtr own = mx::createDocument();
++      mx::readFromXmlString(own, kCyclesMaterialXNodegraphs);
++      doc->importLibrary(own);
++    }
++    catch (const std::exception &e) {
++      LOG_WARNING << "MaterialX: could not read the delegate's own nodegraphs: " << e.what();
++    }
+     LOG_INFO << "MaterialX: node library read, " << doc->getNodeDefs().size() << " nodedefs.";
+     return doc;
+   }();
+@@ -150,6 +166,27 @@ VtValue MxValue(const std::string &type, const std::string &valueString)
+     const mx::Vector2 v = value->asA<mx::Vector2>();
+     return VtValue(GfVec2f(v[0], v[1]));
+   }
++  /* MaterialX lists a matrix row by row, as USD stores it. */
++  if (type == "matrix33") {
++    const mx::Matrix33 m = value->asA<mx::Matrix33>();
++    GfMatrix3d out;
++    for (int r = 0; r < 3; ++r) {
++      for (int c = 0; c < 3; ++c) {
++        out[r][c] = m[r][c];
++      }
++    }
++    return VtValue(out);
++  }
++  if (type == "matrix44") {
++    const mx::Matrix44 m = value->asA<mx::Matrix44>();
++    GfMatrix4d out;
++    for (int r = 0; r < 4; ++r) {
++      for (int c = 0; c < 4; ++c) {
++        out[r][c] = m[r][c];
++      }
++    }
++    return VtValue(out);
++  }
+   return VtValue();
+ }
+ 
+@@ -716,6 +753,112 @@ bool ExpandSwizzle(Network &net,
+   return true;
+ }
+ 
++/* A matrix value, whatever precision Hydra carries it in, as rows of
++ * doubles; false when the value is not a matrix of that size. */
++bool MatrixRows(const VtValue &value, const int size, double rows[4][4])
++{
++  if (size == 3 && (value.IsHolding<GfMatrix3d>() || value.IsHolding<GfMatrix3f>())) {
++    const GfMatrix3d m = value.IsHolding<GfMatrix3d>() ?
++                             value.UncheckedGet<GfMatrix3d>() :
++                             GfMatrix3d(value.UncheckedGet<GfMatrix3f>());
++    for (int r = 0; r < 3; ++r) {
++      for (int c = 0; c < 3; ++c) {
++        rows[r][c] = m[r][c];
++      }
++    }
++    return true;
++  }
++  if (size == 4 && (value.IsHolding<GfMatrix4d>() || value.IsHolding<GfMatrix4f>())) {
++    const GfMatrix4d m = value.IsHolding<GfMatrix4d>() ?
++                             value.UncheckedGet<GfMatrix4d>() :
++                             GfMatrix4d(value.UncheckedGet<GfMatrix4f>());
++    for (int r = 0; r < 4; ++r) {
++      for (int c = 0; c < 4; ++c) {
++        rows[r][c] = m[r][c];
++      }
++    }
++    return true;
++  }
++  return false;
++}
++
++/* `transformmatrix` with a constant matrix: Cycles has no matrix type, but a
++ * constant matrix is only coefficients. MaterialX multiplies a row vector on
++ * the left, as USD does (stdlib/genglsl/lib/mx_math.glsl builds the GLSL
++ * matrix from the values column by column, then `m * v`), so
++ * out[i] = sum_j in[j] * M[j][i] - a dot product of the input with column i,
++ * plus the last row's term when the input was extended by a 1 (vector3 by a
++ * 4x4, vector2 by a 3x3). One dotproduct per output component, and a combine.
++ * `hmtlxcomplementcolor` converts to XYZ and back this way. A connected
++ * matrix (creatematrix, invertmatrix...) has nothing constant to read and is
++ * left alone; so is vector4, whose fourth channel the delegate drops (K-17). */
++bool ExpandTransformMatrix(Network &net,
++                           const TfToken &name,
++                           const Node &outer,
++                           const mx::NodeDefPtr &nodeDef)
++{
++  const mx::InputPtr inDef = nodeDef->getActiveInput("in");
++  const mx::InputPtr matDef = nodeDef->getActiveInput("mat");
++  if (!inDef || !matDef || outer.conns.count(TfToken("mat"))) {
++    return false;
++  }
++  const std::string inType = inDef->getType();
++  const int dim = inType == "vector2" ? 2 : inType == "vector3" ? 3 : 0;
++  const int size = matDef->getType() == "matrix33" ? 3 : matDef->getType() == "matrix44" ? 4 : 0;
++  if (dim == 0 || size == 0 || dim > size) {
++    return false;
++  }
++  const auto p = outer.params.find(TfToken("mat"));
++  const VtValue matValue = p != outer.params.end() ? p->second :
++                                                      MxValue(matDef->getType(),
++                                                              matDef->getValueString());
++  double m[4][4] = {};
++  if (!MatrixRows(matValue, size, m)) {
++    return false;
++  }
++  /* The input extended by a 1 brings in the row past its last component. */
++  const bool affine = size > dim;
++
++  const std::string dotNodedef = inType == "vector2" ? "ND_dotproduct_vector2" :
++                                                       "ND_dotproduct_vector3";
++  Node combine;
++  combine.typeId = TfToken(CombineNodedef(inType));
++  for (int i = 0; i < dim; ++i) {
++    Node dot;
++    dot.typeId = TfToken(dotNodedef);
++    BindInterface(dot, TfToken("in1"), outer, TfToken("in"), nodeDef, name, net.nodes);
++    if (dim == 2) {
++      dot.params[TfToken("in2")] = VtValue(GfVec2f(float(m[0][i]), float(m[1][i])));
++    }
++    else {
++      dot.params[TfToken("in2")] = VtValue(
++          GfVec3f(float(m[0][i]), float(m[1][i]), float(m[2][i])));
++    }
++    const TfToken dotName(Prefix(name, "dot" + std::to_string(i)));
++    net.nodes[dotName] = std::move(dot);
++    const TfToken input("in" + std::to_string(i + 1));
++    if (affine && m[dim][i] != 0.0) {
++      Node add;
++      add.typeId = TfToken("ND_add_float");
++      add.conns[TfToken("in1")] = {Conn{dotName, kOut}};
++      add.params[TfToken("in2")] = VtValue(float(m[dim][i]));
++      const TfToken addName(Prefix(name, "offset" + std::to_string(i)));
++      net.nodes[addName] = std::move(add);
++      combine.conns[input] = {Conn{addName, kOut}};
++    }
++    else {
++      combine.conns[input] = {Conn{dotName, kOut}};
++    }
++  }
++  const TfToken combineName(Prefix(name, "combine"));
++  net.nodes[combineName] = std::move(combine);
++  Redirect(net, name, {{kOut.GetString(), Conn{combineName, kOut}}});
++  net.nodes.erase(name);
++  LOG_INFO << "MaterialX: '" << outer.typeId.GetString() << "' at " << name.GetString()
++           << " expanded into dot products with its constant matrix.";
++  return true;
++}
++
+ }  // namespace
+ 
+ HdMaterialNetworkSchema CompleteMaterialXDefaults(HdMaterialNetworkSchema network,
+@@ -834,6 +977,9 @@ HdMaterialNetworkSchema ExpandMaterialXNodegraphs(HdMaterialNetworkSchema networ
+       else if (category == "extract") {
+         done = ExpandExtract(net, name, outer, nodeDef);
+       }
++      else if (category == "transformmatrix") {
++        done = ExpandTransformMatrix(net, name, outer, nodeDef);
++      }
+       else if (category == "swizzle") {
+         done = ExpandSwizzle(net, name, outer, nodeDef);
+       }
+diff --git a/src/hydra/mtlx_nodegraphs.h b/src/hydra/mtlx_nodegraphs.h
+new file mode 100644
+index 00000000..873a004d
+--- /dev/null
++++ b/src/hydra/mtlx_nodegraphs.h
+@@ -0,0 +1,230 @@
++/* SPDX-FileCopyrightText: 2026 Blender Foundation
++ *
++ * SPDX-License-Identifier: Apache-2.0 */
++
++#pragma once
++
++/* Nodegraphs the delegate adds to the MaterialX library it expands from.
++ *
++ * Some nodedefs of the library have no nodegraph - their implementations are
++ * GLSL and OSL functions - and nothing in the mapping table: Karma renders
++ * them, the delegate dropped them. Most are a few lines of arithmetic, and
++ * written here as nodegraphs of stdlib nodes the table does translate, they
++ * go through the same expansion as `switch` or `ramp4` (mtlx_expand.cpp).
++ * Each one transcribes the library's own GLSL, named above it, line for line.
++ *
++ * Kept as XML so that tools/mtlx_rules.py reads the same text (between the
++ * raw-string markers) and counts these nodedefs as expanded. */
++
++static const char *const kCyclesMaterialXNodegraphs = R"MTLX(<?xml version="1.0"?>
++<materialx version="1.39">
++
++  <!-- pbrlib/genglsl/mx_roughness_anisotropy.glsl. The anisotropic branch
++       also covers anisotropy <= 0, where the aspect is 1 and both components
++       are roughness squared. -->
++  <nodegraph name="NG_cycles_roughness_anisotropy" nodedef="ND_roughness_anisotropy">
++    <multiply name="rr" type="float">
++      <input name="in1" type="float" interfacename="roughness" />
++      <input name="in2" type="float" interfacename="roughness" />
++    </multiply>
++    <clamp name="rsq" type="float">
++      <input name="in" type="float" nodename="rr" />
++      <input name="low" type="float" value="0.00000001" />
++      <input name="high" type="float" value="1" />
++    </clamp>
++    <clamp name="aniso" type="float">
++      <input name="in" type="float" interfacename="anisotropy" />
++      <input name="low" type="float" value="0" />
++      <input name="high" type="float" value="0.98" />
++    </clamp>
++    <subtract name="oneminus" type="float">
++      <input name="in1" type="float" value="1" />
++      <input name="in2" type="float" nodename="aniso" />
++    </subtract>
++    <sqrt name="aspect" type="float">
++      <input name="in" type="float" nodename="oneminus" />
++    </sqrt>
++    <divide name="xwide" type="float">
++      <input name="in1" type="float" nodename="rsq" />
++      <input name="in2" type="float" nodename="aspect" />
++    </divide>
++    <min name="x" type="float">
++      <input name="in1" type="float" nodename="xwide" />
++      <input name="in2" type="float" value="1" />
++    </min>
++    <multiply name="y" type="float">
++      <input name="in1" type="float" nodename="rsq" />
++      <input name="in2" type="float" nodename="aspect" />
++    </multiply>
++    <combine2 name="xy" type="vector2">
++      <input name="in1" type="float" nodename="x" />
++      <input name="in2" type="float" nodename="y" />
++    </combine2>
++    <output name="out" type="vector2" nodename="xy" />
++  </nodegraph>
++
++  <!-- pbrlib/genglsl/mx_roughness_dual.glsl: a negative y takes x. -->
++  <nodegraph name="NG_cycles_roughness_dual" nodedef="ND_roughness_dual">
++    <separate2 name="split" type="multioutput">
++      <input name="in" type="vector2" interfacename="roughness" />
++    </separate2>
++    <ifgreatereq name="ry" type="float">
++      <input name="value1" type="float" nodename="split" output="outy" />
++      <input name="value2" type="float" value="0" />
++      <input name="in1" type="float" nodename="split" output="outy" />
++      <input name="in2" type="float" nodename="split" output="outx" />
++    </ifgreatereq>
++    <multiply name="xx" type="float">
++      <input name="in1" type="float" nodename="split" output="outx" />
++      <input name="in2" type="float" nodename="split" output="outx" />
++    </multiply>
++    <multiply name="yy" type="float">
++      <input name="in1" type="float" nodename="ry" />
++      <input name="in2" type="float" nodename="ry" />
++    </multiply>
++    <clamp name="x" type="float">
++      <input name="in" type="float" nodename="xx" />
++      <input name="low" type="float" value="0.00000001" />
++      <input name="high" type="float" value="1" />
++    </clamp>
++    <clamp name="y" type="float">
++      <input name="in" type="float" nodename="yy" />
++      <input name="low" type="float" value="0.00000001" />
++      <input name="high" type="float" value="1" />
++    </clamp>
++    <combine2 name="xy" type="vector2">
++      <input name="in1" type="float" nodename="x" />
++      <input name="in2" type="float" nodename="y" />
++    </combine2>
++    <output name="out" type="vector2" nodename="xy" />
++  </nodegraph>
++
++  <!-- pbrlib/genglsl/mx_artistic_ior.glsl - Gulbrandsen, "Artist Friendly
++       Metallic Fresnel", 2014: reflectivity and edge colour to a complex
++       index of refraction, per channel. -->
++  <nodegraph name="NG_cycles_artistic_ior" nodedef="ND_artistic_ior">
++    <clamp name="r" type="color3">
++      <input name="in" type="color3" interfacename="reflectivity" />
++      <input name="low" type="float" value="0" />
++      <input name="high" type="float" value="0.99" />
++    </clamp>
++    <!-- stdlib has no colour sqrt: a power of one half. -->
++    <power name="rsqrt" type="color3">
++      <input name="in1" type="color3" nodename="r" />
++      <input name="in2" type="float" value="0.5" />
++    </power>
++    <subtract name="oneminusr" type="color3">
++      <input name="in1" type="color3" value="1, 1, 1" />
++      <input name="in2" type="color3" nodename="r" />
++    </subtract>
++    <add name="oneplusr" type="color3">
++      <input name="in1" type="color3" value="1, 1, 1" />
++      <input name="in2" type="color3" nodename="r" />
++    </add>
++    <divide name="nmin" type="color3">
++      <input name="in1" type="color3" nodename="oneminusr" />
++      <input name="in2" type="color3" nodename="oneplusr" />
++    </divide>
++    <add name="oneplusrs" type="color3">
++      <input name="in1" type="color3" value="1, 1, 1" />
++      <input name="in2" type="color3" nodename="rsqrt" />
++    </add>
++    <subtract name="oneminusrs" type="color3">
++      <input name="in1" type="color3" value="1, 1, 1" />
++      <input name="in2" type="color3" nodename="rsqrt" />
++    </subtract>
++    <divide name="nmax" type="color3">
++      <input name="in1" type="color3" nodename="oneplusrs" />
++      <input name="in2" type="color3" nodename="oneminusrs" />
++    </divide>
++    <mix name="n" type="color3">
++      <input name="fg" type="color3" nodename="nmin" />
++      <input name="bg" type="color3" nodename="nmax" />
++      <input name="mix" type="color3" interfacename="edge_color" />
++    </mix>
++    <add name="np1" type="color3">
++      <input name="in1" type="color3" nodename="n" />
++      <input name="in2" type="color3" value="1, 1, 1" />
++    </add>
++    <subtract name="nm1" type="color3">
++      <input name="in1" type="color3" nodename="n" />
++      <input name="in2" type="color3" value="1, 1, 1" />
++    </subtract>
++    <multiply name="np1sq" type="color3">
++      <input name="in1" type="color3" nodename="np1" />
++      <input name="in2" type="color3" nodename="np1" />
++    </multiply>
++    <multiply name="np1sqr" type="color3">
++      <input name="in1" type="color3" nodename="np1sq" />
++      <input name="in2" type="color3" nodename="r" />
++    </multiply>
++    <multiply name="nm1sq" type="color3">
++      <input name="in1" type="color3" nodename="nm1" />
++      <input name="in2" type="color3" nodename="nm1" />
++    </multiply>
++    <subtract name="num" type="color3">
++      <input name="in1" type="color3" nodename="np1sqr" />
++      <input name="in2" type="color3" nodename="nm1sq" />
++    </subtract>
++    <divide name="k2" type="color3">
++      <input name="in1" type="color3" nodename="num" />
++      <input name="in2" type="color3" nodename="oneminusr" />
++    </divide>
++    <max name="k2pos" type="color3">
++      <input name="in1" type="color3" nodename="k2" />
++      <input name="in2" type="float" value="0" />
++    </max>
++    <power name="k" type="color3">
++      <input name="in1" type="color3" nodename="k2pos" />
++      <input name="in2" type="float" value="0.5" />
++    </power>
++    <output name="ior" type="color3" nodename="n" />
++    <output name="extinction" type="color3" nodename="k" />
++  </nodegraph>
++
++  <!-- stdlib/genglsl/stdlib_genglsl_impl.mtlx: in * mask. -->
++  <nodegraph name="NG_cycles_inside_float" nodedef="ND_inside_float">
++    <multiply name="masked" type="float">
++      <input name="in1" type="float" interfacename="in" />
++      <input name="in2" type="float" interfacename="mask" />
++    </multiply>
++    <output name="out" type="float" nodename="masked" />
++  </nodegraph>
++
++  <!-- stdlib/genglsl/stdlib_genglsl_impl.mtlx: in * (1 - mask). -->
++  <nodegraph name="NG_cycles_outside_float" nodedef="ND_outside_float">
++    <subtract name="inverse" type="float">
++      <input name="in1" type="float" value="1" />
++      <input name="in2" type="float" interfacename="mask" />
++    </subtract>
++    <multiply name="masked" type="float">
++      <input name="in1" type="float" interfacename="in" />
++      <input name="in2" type="float" nodename="inverse" />
++    </multiply>
++    <output name="out" type="float" nodename="masked" />
++  </nodegraph>
++
++  <!-- stdlib/genglsl/stdlib_genglsl_impl.mtlx: in * mask. -->
++  <nodegraph name="NG_cycles_inside_color3" nodedef="ND_inside_color3">
++    <multiply name="masked" type="color3">
++      <input name="in1" type="color3" interfacename="in" />
++      <input name="in2" type="float" interfacename="mask" />
++    </multiply>
++    <output name="out" type="color3" nodename="masked" />
++  </nodegraph>
++
++  <!-- stdlib/genglsl/stdlib_genglsl_impl.mtlx: in * (1 - mask). -->
++  <nodegraph name="NG_cycles_outside_color3" nodedef="ND_outside_color3">
++    <subtract name="inverse" type="float">
++      <input name="in1" type="float" value="1" />
++      <input name="in2" type="float" interfacename="mask" />
++    </subtract>
++    <multiply name="masked" type="color3">
++      <input name="in1" type="color3" interfacename="in" />
++      <input name="in2" type="float" nodename="inverse" />
++    </multiply>
++    <output name="out" type="color3" nodename="masked" />
++  </nodegraph>
++
++</materialx>
++)MTLX";

@@ -1,0 +1,2216 @@
+From e03be8c5087ddd09223fc2fddde6820516d4d2dc Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 8 Oct 2026 04:22:23 +0200
+Subject: [PATCH 097/141] hydra: comments and log messages in English
+
+The French comments of src/hydra and the four French log lines (Affichage, Rendu
+relance, Passe de rendu) switch to English: Display, Render restarted, Render
+pass. The project's rule is English in the code; the repository is public and
+the series is aimed upstream. A comparison of the sources without their comments
+against the previous revision shows no code change; all benches pass.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/CMakeLists.txt      |  35 ++-
+ src/hydra/curves.cpp          |   4 +-
+ src/hydra/geometry.h          |   9 +-
+ src/hydra/houdini_cop.cpp     | 178 ++++++------
+ src/hydra/houdini_cop.h       |  50 ++--
+ src/hydra/light.cpp           |  37 +--
+ src/hydra/material.cpp        | 494 +++++++++++++++++-----------------
+ src/hydra/material.h          |  30 +--
+ src/hydra/mesh.cpp            |  58 ++--
+ src/hydra/node_util.cpp       |   8 +-
+ src/hydra/plugin.cpp          |  16 +-
+ src/hydra/pointcloud.cpp      |   4 +-
+ src/hydra/render_delegate.cpp |  47 ++--
+ src/hydra/render_pass.cpp     | 122 ++++-----
+ src/hydra/render_pass.h       |   6 +-
+ src/hydra/session.h           |   9 +-
+ src/hydra/util.cpp            |  22 +-
+ src/hydra/util.h              |  21 +-
+ 18 files changed, 573 insertions(+), 577 deletions(-)
+
+diff --git a/src/hydra/CMakeLists.txt b/src/hydra/CMakeLists.txt
+index bf6c23ce..664a88d0 100644
+--- a/src/hydra/CMakeLists.txt
++++ b/src/hydra/CMakeLists.txt
+@@ -249,28 +249,27 @@ if(WITH_CYCLES_HYDRA_RENDER_DELEGATE)
+     # module it calls. Houdini picks both up from the package's HOUDINI_PATH.
+     delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources/otls" "hdcycles_flatten_op_textures.hda" "${CYCLES_INSTALL_PATH}/houdini/otls")
+     delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources" "flatten_op_textures.py" "${CYCLES_INSTALL_PATH}/houdini/python${HOUDINI_PYTHON_VERSION}libs")
+-    # Le Cycles Material Builder. Un builder n'est pas un type de noeud mais un
+-    # subnet configure, monte par un outil du menu tab: il faut donc le module
+-    # qui le monte et l'etagere qui l'appelle. Sans eux, la categorie Cycles
+-    # n'apparait pas dans le menu tab et la bibliotheque de VOP reste
+-    # inutilisable.
++    # The Cycles Material Builder. A builder is not a node type but a
++    # configured subnet, assembled by a tool of the tab menu: so it needs the
++    # module that assembles it and the shelf that calls it. Without them, the
++    # Cycles category does not appear in the tab menu and the VOP library
++    # remains unusable.
+     delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources" "cycles_builder.py" "${CYCLES_INSTALL_PATH}/houdini/scripts/python")
+-    # Le menu des espaces colorimetriques des noeuds image : la liste sort de la
+-    # configuration OCIO active, celle d'Houdini, donc elle se construit a
+-    # l'ouverture du menu plutot que d'etre figee dans le noeud.
++    # The color space menu of the image nodes: the list comes from the active
++    # OCIO configuration, Houdini's, so it is built when the menu is opened
++    # rather than frozen into the node.
+     delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources" "cycles_colorspaces.py" "${CYCLES_INSTALL_PATH}/houdini/scripts/python")
+     delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources" "CyclesTools.shelf" "${CYCLES_INSTALL_PATH}/houdini/toolbar")
+-    # Le traducteur de shaders USD pour le contexte cycles. Il n'existe que
+-    # pour porter les reglages du materiau - le Cycles Material Properties -
+-    # jusqu'a l'USD : Houdini ne fait ce repli que dans son traducteur
+-    # MaterialX, ou il suppose Karma. Le reste de la traduction reste celle
+-    # d'Houdini, heritee telle quelle.
++    # The USD shader translator for the cycles context. It only exists to
++    # carry the material's settings - the Cycles Material Properties - through
++    # to USD: Houdini only does this fallback in its MaterialX translator,
++    # where it assumes Karma. The rest of the translation remains Houdini's,
++    # inherited as is.
+     delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources/husdplugins/shadertranslators" "cycles.py" "${CYCLES_INSTALL_PATH}/houdini/husdplugins/shadertranslators")
+-    # Le choix du peripherique de rendu, dans le menu Render d'Houdini. Il ne
+-    # peut pas vivre sur un noeud - il est fige a la construction de la session,
+-    # et decrit la machine plutot que la scene - donc un menu global, une
+-    # preference utilisateur, et le pythonrc qui la relit au demarrage, avant
+-    # qu'aucun delegate ne soit cree.
++    # The choice of render device, in Houdini's Render menu. It cannot live on a
++    # node - it is frozen when the session is built, and describes the machine
++    # rather than the scene - hence a global menu, a user preference, and the
++    # pythonrc that reads it back at startup, before any delegate is created.
+     delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources" "MainMenuCommon.xml" "${CYCLES_INSTALL_PATH}/houdini")
+     delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources" "cycles_device.py" "${CYCLES_INSTALL_PATH}/houdini/scripts/python")
+     delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources" "pythonrc.py" "${CYCLES_INSTALL_PATH}/houdini/scripts")
+diff --git a/src/hydra/curves.cpp b/src/hydra/curves.cpp
+index 2bb78259..7c22d851 100644
+--- a/src/hydra/curves.cpp
++++ b/src/hydra/curves.cpp
+@@ -167,8 +167,8 @@ void HdCyclesCurves::PopulatePoints(HdSceneDelegate *sceneDelegate)
+               numKeys,
+               _geom->get_position_for_write());
+ 
+-  /* Des courbes qui se deforment - de la fourrure, une chevelure simulee -
+-   * rendaient nettes faute d'echantillons le long de l'obturateur. */
++  /* Deforming curves - fur, simulated hair - rendered sharp for lack of
++   * samples along the shutter. */
+   std::vector<VtVec3fArray> samples =
+       _motionBlur ? SampleDeformingPoints(primvars,
+                                           pointsDs,
+diff --git a/src/hydra/geometry.h b/src/hydra/geometry.h
+index 5b029c35..365198c5 100644
+--- a/src/hydra/geometry.h
++++ b/src/hydra/geometry.h
+@@ -52,16 +52,15 @@ class HdCyclesGeometry : public Base, public HdCyclesTaggedPrim {
+   CyclesBase *_geom = nullptr;
+   std::vector<CCL_NS::Object *> _instances;
+ 
+-  /* L'obturateur de ce rendu, retenu ici parce que Populate() ne voit pas le
+-   * render param et qu'il lui faut ces bornes pour echantillonner une
+-   * geometrie qui se deforme. */
++  /* This render's shutter, kept here because Populate() does not see the
++   * render param and needs these bounds to sample a deforming geometry. */
+   bool _motionBlur = false;
+   HdCyclesObjectProperties _objectProperties;
+   bool _tagVisible = true;
+   float _shutterOpen = 0.0f;
+   float _shutterClose = 0.0f;
+-  /* L'obturateur est en images, les velocites d'USD en unites par seconde :
+-   * sans la cadence, aucune des deux ne dit combien de temps dure l'autre. */
++  /* The shutter is in frames, USD's velocities in units per second: without
++   * the frame rate, neither says how long the other lasts. */
+   double _timeCodesPerSecond = 24.0;
+ 
+  private:
+diff --git a/src/hydra/houdini_cop.cpp b/src/hydra/houdini_cop.cpp
+index 5df71c54..ca8fe11b 100644
+--- a/src/hydra/houdini_cop.cpp
++++ b/src/hydra/houdini_cop.cpp
+@@ -33,9 +33,9 @@ HDCYCLES_NAMESPACE_OPEN_SCOPE
+ using namespace CCL_NS;
+ 
+ // clang-format off
+-/* La veille des COP, coupable sans recompiler. Elle interroge Houdini quatre
+- * fois par seconde au plus, et ne relit une texture que lorsque son COP a
+- * cesse de bouger - mais qui prefere garder la main peut l'eteindre. */
++/* The COP watch, switchable without recompiling. It queries Houdini at most four
++ * times a second, and only rereads a texture once its COP has stopped moving -
++ * but whoever prefers to keep control can turn it off. */
+ TF_DEFINE_ENV_SETTING(CYCLES_COP_WATCH,
+                       true,
+                       "Watch Houdini COP nodes and refresh their textures when they change");
+@@ -45,17 +45,17 @@ namespace {
+ 
+ const char *const kPrefix = "op:";
+ 
+-/* Les pixels d'un COP, une fois lus : du demi-flottant RGBA, premiere ligne en
+- * haut, ce que Cycles attend d'un chargeur. Partages entre les noeuds qui
+- * nomment le meme COP, et d'une synchronisation a l'autre tant qu'il n'a pas
+- * recuit. */
++/* The pixels of a COP, once read: RGBA half-float, first row at the top,
++ * which is what Cycles expects from a loader. Shared between the nodes that
++ * name the same COP, and from one synchronization to the next as long as it has
++ * not recooked. */
+ struct CopPixels {
+   int width = 0;
+   int height = 0;
+-  /* Ce que le COP porte vraiment. Un masque, une hauteur, une rugosite n'ont
+-   * qu'un canal ; les servir en RGBA quadruplait leur poids en memoire de
+-   * peripherique - 536 Mo au lieu de 134 pour une 8K - et autant de bande
+-   * passante a chaque echantillon. */
++  /* What the COP really carries. A mask, a height, a roughness only have one
++   * channel; serving them as RGBA quadrupled their weight in device memory -
++   * 536 MB instead of 134 for an 8K - and the same in bandwidth on every
++   * sample. */
+   int channels = 4;
+   int cookCount = -1;
+   std::vector<uint8_t> data;
+@@ -95,9 +95,9 @@ size_t CacheBudget()
+   return size_t(mb > 0 ? mb : 4096) * 1024 * 1024;
+ }
+ 
+-/* Qui se sert de quel COP. Sans ce registre, un COP qui change n'a personne a
+- * qui le dire : Solaris ignore la dependance entre un materiau et un noeud de
+- * composition. */
++/* Who uses which COP. Without this registry, a COP that changes has nobody to
++ * tell: Solaris ignores the dependency between a material and a compositing
++ * node. */
+ struct CopUser {
+   PXR_NS::SdfPath materialId;
+   Scene *scene = nullptr;
+@@ -143,8 +143,8 @@ void EvictUnused(const std::map<std::string, std::vector<CopUser>> &users,
+   }
+ }
+ 
+-/* `op:/stage/copnet/OUT[1]` nomme un plan d'un noeud. Seule la partie noeud
+- * designe quelque chose que hou.node() sait trouver. */
++/* `op:/stage/copnet/OUT[1]` names a plane of a node. Only the node part
++ * designates something that hou.node() can find. */
+ std::string NodePathOf(const std::string &opPath)
+ {
+   std::string node = opPath.substr(strlen(kPrefix));
+@@ -155,11 +155,11 @@ std::string NodePathOf(const std::string &opPath)
+   return node;
+ }
+ 
+-/* Le code que lit Houdini. Il range son resultat dans le dictionnaire qu'on lui
+- * donne plutot que d'ecrire quoi que ce soit.
++/* The code Houdini reads. It stores its result in the dictionary it is given
++ * rather than writing anything.
+  *
+- * `allBufferElements` sait rendre directement quatre canaux en demi-flottant :
+- * plus de recomposition RGBA en Python, qui coutait a elle seule 0,4 s sur une
++ * `allBufferElements` can directly return four half-float channels:
++ * no more RGBA recomposition in Python, which alone cost 0.4 s on a
+  * 4K. */
+ const char *const kCaptureCode =
+     "_ok = False\n"
+@@ -171,25 +171,25 @@ const char *const kCaptureCode =
+     "        if _l is not None:\n"
+     "            _w, _h = _l.bufferResolution()\n"
+     "            _cook = _n.cookCount()\n"
+-    /* Cycles range une image a un canal ou a quatre, pas a deux ni a trois. */
++    /* Cycles stores an image with one channel or four, not two or three. */
+     "            _c = 1 if _l.channelCount() == 1 else 4\n"
+     "            _bytes = _l.allBufferElements(hou.imageLayerStorageType.Float16, _c)\n"
+-    /* Ou vit la couche, et notre reference lachee tout de suite : les pixels
+-     * sont deja copies en memoire hote, garder une prise sur la couche ne sert
+-     * qu'a retarder sa liberation. Copernicus garde la sienne de son cote -
+-     * c'est lui qui tient la memoire video, pas nous - mais ce qui est a nous
+-     * doit partir des que possible. */
++    /* Where the layer lives, and our reference released right away: the pixels
++     * are already copied into host memory, keeping a hold on the layer only
++     * delays its release. Copernicus keeps its own on its side -
++     * it is the one holding the video memory, not us - but what is ours
++     * must go as soon as possible. */
+     "            _gpu = _l.onGPU()\n"
+     "            _l.close()\n"
+     "            _ok = True\n"
+     "except Exception as _e:\n"
+     "    _err = str(_e)\n";
+ 
+-/* L'etat du noeud, sans le faire cuire : son numero de cuisson, et surtout
+- * `needsToCook`, vrai des que l'utilisateur a touche au COP - avant meme que
+- * quoi que ce soit ne l'ait recuit. Le seul numero de cuisson ne suffirait
+- * pas : un COP qu'aucun panneau n'affiche ne recuit pas de lui-meme, et son
+- * numero ne bouge donc jamais. */
++/* The state of the node, without cooking it: its cook count, and above all
++ * `needsToCook`, true as soon as the user has touched the COP - even before
++ * anything has recooked it. The cook count alone would not be enough:
++ * a COP that no panel displays does not recook by itself, and its
++ * count therefore never moves. */
+ const char *const kStateCode = "_cook = -1\n"
+                                "_dirty = False\n"
+                                "try:\n"
+@@ -207,8 +207,8 @@ long LongFrom(PyObject *dict, const char *name)
+   return (value && PyLong_Check(value)) ? PyLong_AsLong(value) : -1;
+ }
+ 
+-/* Fait tourner un bout de Python avec `_path` pose, et rend son dictionnaire.
+- * L'appelant en extrait ce qu'il veut, puis le relache. */
++/* Runs a bit of Python with `_path` set, and returns its dictionary.
++ * The caller extracts what it wants from it, then releases it. */
+ PyObject *RunWithPath(const char *code, const std::string &nodePath)
+ {
+   PyObject *const main = PyImport_AddModule("__main__");
+@@ -238,8 +238,8 @@ PyObject *RunWithPath(const char *code, const std::string &nodePath)
+   return locals;
+ }
+ 
+-/* Lit les pixels du COP. A n'appeler que depuis le thread de synchronisation :
+- * cuire un noeud Houdini depuis un thread de travail ferait tomber l'hote. */
++/* Reads the pixels of the COP. To be called only from the synchronization thread:
++ * cooking a Houdini node from a worker thread would bring the host down. */
+ CopPixelsPtr Capture(const std::string &opPath)
+ {
+   PXR_NS::TfPyInitialize();
+@@ -255,7 +255,7 @@ CopPixelsPtr Capture(const std::string &opPath)
+   const long width = LongFrom(locals, "_w");
+   const long height = LongFrom(locals, "_h");
+   const long cookCount = LongFrom(locals, "_cook");
+-  /* Cycles range une image a un canal ou a quatre, pas a deux ni a trois. */
++  /* Cycles stores an image with one channel or four, not two or three. */
+   const long channels = (LongFrom(locals, "_c") == 1) ? 1 : 4;
+ 
+   if (ok == nullptr || !PyObject_IsTrue(ok) || bytes == nullptr || !PyBytes_Check(bytes) ||
+@@ -292,23 +292,23 @@ CopPixelsPtr Capture(const std::string &opPath)
+   pixels->cookCount = static_cast<int>(cookCount);
+   pixels->data.resize(expected);
+ 
+-  /* Aucun retournement : les deux bouts rangent deja leurs lignes du bas vers
+-   * le haut, et les retourner mettait la texture a l'envers.
++  /* No flipping: both ends already store their rows from the bottom to the
++   * top, and flipping them put the texture upside down.
+    *
+-   * Mesure du cote d'Houdini : un COP `uvmap` lu par `allBufferElements` donne
+-   * V = -0,999 sur la premiere ligne du buffer et V = +0,999 sur la derniere.
+-   * La premiere ligne est donc le **bas** de l'image.
++   * Measured on Houdini's side: a `uvmap` COP read through `allBufferElements` gives
++   * V = -0.999 on the first row of the buffer and V = +0.999 on the last.
++   * The first row is therefore the **bottom** of the image.
+    *
+-   * Mesure du cote de Cycles : son lecteur de fichiers appelle OIIO avec
+-   * `flip_y = true` par defaut (`ImageMetaData::oiio_load_pixels`), c'est-a-dire
+-   * un pas de ligne negatif partant de la derniere ligne - la ligne du haut du
+-   * fichier atterrit a la fin du buffer. La premiere ligne d'une image Cycles
+-   * est donc, elle aussi, le **bas**.
++   * Measured on Cycles' side: its file reader calls OIIO with
++   * `flip_y = true` by default (`ImageMetaData::oiio_load_pixels`), that is,
++   * a negative row stride starting from the last row - the top row of the
++   * file lands at the end of the buffer. The first row of a Cycles image
++   * is therefore also the **bottom**.
+    *
+-   * Verifie de bout en bout : un PNG rouge en haut et bleu en bas, pose sur un
+-   * plan dont v vaut 1 en haut, ressort rouge en haut (mesure : rouge a y=20,
+-   * bleu a y=44 sur un rendu de 64 pixels). Le chemin fichier et le chemin COP
+-   * partagent desormais la meme convention. */
++   * Checked end to end: a PNG that is red at the top and blue at the bottom, put on a
++   * plane whose v is 1 at the top, comes out red at the top (measured: red at y=20,
++   * blue at y=44 on a 64-pixel render). The file path and the COP path
++   * now share the same convention. */
+   std::memcpy(pixels->data.data(), raw, expected);
+ 
+   Py_DECREF(locals);
+@@ -322,7 +322,7 @@ CopPixelsPtr Capture(const std::string &opPath)
+   return pixels;
+ }
+ 
+-/* L'etat du noeud : ce qu'on garde est-il encore bon ? */
++/* The state of the node: is what we keep still good? */
+ struct CopState {
+   int cookCount = -1;
+   bool needsToCook = false;
+@@ -345,7 +345,7 @@ CopState StateOf(const std::string &opPath)
+   return state;
+ }
+ 
+-/* Le chargeur : il ne lit rien, il sert ce qui a deja ete lu. */
++/* The loader: it reads nothing, it serves what has already been read. */
+ class HoudiniCopImageLoader : public ImageLoader {
+  public:
+   HoudiniCopImageLoader(std::string opPath, CopPixelsPtr pixels)
+@@ -361,8 +361,8 @@ class HoudiniCopImageLoader : public ImageLoader {
+     metadata.height = _pixels->height;
+     metadata.channels = _pixels->channels;
+     metadata.type = (_pixels->channels == 1) ? IMAGE_DATA_TYPE_HALF : IMAGE_DATA_TYPE_HALF4;
+-    /* Un COP travaille en lineaire, comme tout ce qui sort d'Houdini : il n'y a
+-     * rien a decoder. */
++    /* A COP works in linear, like everything that comes out of Houdini: there is
++     * nothing to decode. */
+     metadata.colorspace = u_colorspace_scene_linear;
+     metadata.is_compressible_as_srgb = false;
+     return true;
+@@ -383,7 +383,7 @@ class HoudiniCopImageLoader : public ImageLoader {
+   bool equals(const ImageLoader &other) const override
+   {
+     const HoudiniCopImageLoader &o = static_cast<const HoudiniCopImageLoader &>(other);
+-    /* Meme COP et meme cuisson : la meme image. */
++    /* Same COP and same cook: the same image. */
+     return _opPath == o._opPath && _pixels->cookCount == o._pixels->cookCount;
+   }
+ 
+@@ -392,8 +392,8 @@ class HoudiniCopImageLoader : public ImageLoader {
+   CopPixelsPtr _pixels;
+ };
+ 
+-/* Poser une image sur un noeud, quelle que soit sa sorte. Rend faux si le noeud
+- * n'est pas un noeud image. */
++/* Puts an image on a node, whatever its kind. Returns false if the node
++ * is not an image node. */
+ bool SetNodeImage(Scene *scene,
+                   ShaderNode *node,
+                   const std::string &opPath,
+@@ -414,8 +414,8 @@ bool SetNodeImage(Scene *scene,
+     return false;
+   }
+ 
+-  /* Nommer l'espace ici evite qu'un `colorspace` laisse a "auto" sur le noeud
+-   * n'aille en deviner un autre : un COP travaille en lineaire. */
++  /* Naming the space here keeps a `colorspace` left on "auto" on the node
++   * from guessing another one: a COP works in linear. */
+   params.colorspace = u_colorspace_scene_linear;
+   slotNode->handle = scene->image_manager->add_image(
+       std::make_unique<HoudiniCopImageLoader>(opPath, pixels), params);
+@@ -478,23 +478,23 @@ void BindHoudiniCopImage(Scene *scene,
+     return;
+   }
+ 
+-  /* Retenir ce noeud, pour pouvoir lui reposer une image quand le COP changera.
+-   * Seulement quand la lecture a reussi : un rendu batch, ou `hou` n'existe
+-   * pas, n'a rien a surveiller. */
++  /* Remember this node, to be able to put an image back on it when the COP changes.
++   * Only when the read succeeded: a batch render, where `hou` does not
++   * exist, has nothing to watch. */
+   if (!materialId.IsEmpty()) {
+     const thread_scoped_lock lock(CacheMutex());
+     Users()[opPath].push_back(CopUser{materialId, scene, node, shader});
+   }
+ }
+ 
+-/* La veille. Houdini ne previent personne qu'un COP a change, et Solaris ne
+- * connait pas la dependance entre un materiau et un noeud de composition : sans
+- * cela, la texture reste celle du premier chargement pour toute la session.
++/* The watch. Houdini warns nobody that a COP has changed, and Solaris does not
++ * know the dependency between a material and a compositing node: without this,
++ * the texture stays the one from the first load for the whole session.
+  *
+- * On demande donc a intervalles menus si l'un des COP dont on s'est servi a
+- * besoin de recuire, et on refait l'image sur place. Salir le materiau pour que
+- * Hydra nous redemande une synchronisation a ete essaye avant : rien ne
+- * garantit que la demande revienne, et elle ne revenait pas. */
++ * So we ask at fine intervals whether any of the COPs we have used needs to
++ * recook, and we redo the image in place. Dirtying the material so that
++ * Hydra asks us for a synchronization again was tried before: nothing
++ * guarantees that the request comes back, and it did not come back. */
+ void PollHoudiniCops(Scene *scene)
+ {
+   if (scene == nullptr || !PXR_NS::TfGetEnvSetting(CYCLES_COP_WATCH)) {
+@@ -502,15 +502,15 @@ void PollHoudiniCops(Scene *scene)
+   }
+ 
+   using clock = std::chrono::steady_clock;
+-  /* Le pas du sondage. Interroger Houdini ne cuit rien et coute une poignee de
+-   * microsecondes, mais rien ne sert de le faire a chaque image. */
++  /* The polling step. Querying Houdini cooks nothing and costs a handful of
++   * microseconds, but there is no point in doing it on every frame. */
+   static const auto kPollInterval = std::chrono::milliseconds(250);
+-  /* Le temps de calme : on ne relit qu'une fois le COP immobile depuis ce
+-   * delai. Tirer un curseur ne declenche donc rien tant qu'on tire ; lacher met
+-   * a jour. */
++  /* The quiet time: we only reread once the COP has been still for this
++   * delay. Dragging a slider therefore triggers nothing while it is dragged; releasing
++   * updates. */
+   static const auto kQuietDelay = std::chrono::milliseconds(500);
+-  /* Le filet : deux relectures du meme COP ne peuvent pas se suivre de plus
+-   * pres, quoi qu'il arrive. Une 4K coute 0,3 s a relire. */
++  /* The safety net: two rereads of the same COP cannot follow each other any
++   * closer, whatever happens. A 4K takes 0.3 s to reread. */
+   static const auto kMinBetweenRefreshes = std::chrono::milliseconds(1000);
+ 
+   static clock::time_point lastPoll;
+@@ -531,10 +531,10 @@ void PollHoudiniCops(Scene *scene)
+     }
+   }
+ 
+-  /* Ce qu'on a vu au sondage precedent, et quand. On se declenche sur le
+-   * **changement** d'etat, pas sur l'etat : un COP qu'aucun panneau n'affiche
+-   * peut rester indefiniment a "doit recuire", et se declencher la-dessus
+-   * relirait ses pixels quatre fois par seconde. */
++  /* What we saw at the previous poll, and when. We trigger on the
++   * **change** of state, not on the state: a COP that no panel displays
++   * can stay indefinitely at "needs to recook", and triggering on that
++   * would reread its pixels four times a second. */
+   struct Watch {
+     CopState seen;
+     clock::time_point movedAt{};
+@@ -548,7 +548,7 @@ void PollHoudiniCops(Scene *scene)
+     const auto inserted = watches.try_emplace(path);
+     Watch &watch = inserted.first->second;
+     if (inserted.second) {
+-      /* Premier sondage de ce COP : on note son etat, sans rien conclure. */
++      /* First poll of this COP: we note its state, without concluding anything. */
+       watch.seen = state;
+       continue;
+     }
+@@ -575,12 +575,12 @@ void PollHoudiniCops(Scene *scene)
+       continue;
+     }
+ 
+-    /* Relire le COP le cuit - c'est `layer()` qui s'en charge - donc son
+-     * compteur de cuissons a avance depuis le releve d'avant. Sans reporter le
+-     * nouveau, le sondage suivant comparait l'etat d'apres a l'etat d'avant,
+-     * concluait que le COP avait bouge, et relisait une seconde fois : une 4K
+-     * de plus a lire, a reteleverser et un graphe a recompiler, pour rien, a
+-     * chaque edition. */
++    /* Rereading the COP cooks it - `layer()` takes care of that - so its
++     * cook counter has advanced since the previous reading. Without recording the
++     * new one, the next poll compared the state after to the state before,
++     * concluded that the COP had moved, and reread a second time: one more 4K
++     * to read, to upload again and a graph to recompile, for nothing, on
++     * every edit. */
+     watch.seen.cookCount = pixels->cookCount;
+     watch.seen.needsToCook = false;
+     watch.pending = false;
+@@ -598,8 +598,8 @@ void PollHoudiniCops(Scene *scene)
+           if (SetNodeImage(scene, user.node, path, pixels)) {
+             ++refreshed;
+             if (user.shader != nullptr) {
+-              /* Sans quoi le graphe ne serait pas recompile, et le noeud
+-               * garderait l'emplacement d'image qu'il avait deja. */
++              /* Without this the graph would not be recompiled, and the node
++               * would keep the image slot it already had. */
+               user.shader->tag_update(scene);
+             }
+           }
+diff --git a/src/hydra/houdini_cop.h b/src/hydra/houdini_cop.h
+index f180184c..dc775641 100644
+--- a/src/hydra/houdini_cop.h
++++ b/src/hydra/houdini_cop.h
+@@ -25,44 +25,44 @@ HDCYCLES_NAMESPACE_OPEN_SCOPE
+  * image layer refuses the path outright - both measured. The only thing that
+  * produces pixels is cooking the node.
+  *
+- * Les pixels sont pris **en memoire** et donnes a Cycles par un ImageLoader a
+- * nous, comme Blender le fait pour ses propres images. Le detour par un fichier
+- * qu'on ecrivait avant coutait, mesure sur une 4K : 0,4 s de decoupage en
+- * Python, 2,4 s d'ecriture pour 201 Mo d'EXR temporaire, 0,2 s de relecture -
+- * trois secondes par texture, et un fichier jamais reecrit de la session, donc
+- * une texture figee des qu'on retouchait le COP.
++ * The pixels are taken **in memory** and handed to Cycles by an ImageLoader of
++ * our own, the way Blender does for its own images. The detour through a file
++ * that we used to write cost, measured on a 4K: 0.4 s of slicing in
++ * Python, 2.4 s of writing for 201 MB of temporary EXR, 0.2 s of reading back -
++ * three seconds per texture, and a file never rewritten for the rest of the session, so
++ * a texture frozen as soon as the COP was touched.
+  *
+- * La lecture se fait ici, pendant la synchronisation du materiau, et jamais
+- * depuis le chargeur : celui-ci tourne sur les threads de travail de Cycles, ou
+- * cuire un noeud Houdini ferait tomber l'hote. Le chargeur ne fait que servir
+- * ce qui a deja ete lu.
++ * Reading happens here, during material synchronization, and never from the
++ * loader: the loader runs on Cycles' worker threads, where cooking a Houdini
++ * node would bring the host down. The loader only serves what has already been
++ * read.
+  *
+- * Sans effet si le chemin n'est pas un `op:`, si le noeud n'existe pas, ou hors
+- * d'une session Houdini - un rendu batch n'a pas de module `hou`, et le LOP
+- * d'aplatissement reste la pour ce cas. */
++ * No effect if the path is not an `op:`, if the node does not exist, or outside
++ * a Houdini session - a batch render has no `hou` module, and the flattening
++ * LOP remains for that case. */
+ void BindHoudiniCopImage(CCL_NS::Scene *scene,
+                          CCL_NS::ShaderNode *node,
+                          CCL_NS::Shader *shader,
+                          const PXR_NS::SdfPath &materialId);
+ 
+-/* Vrai pour un chemin `op:`. */
++/* True for an `op:` path. */
+ bool IsHoudiniCopPath(const std::string &path);
+ 
+-/* Un COP change sans que rien ne salisse le materiau : Solaris ne connait pas
+- * la dependance, et personne ne nous redemande de synchroniser. La texture
+- * restait donc celle du premier chargement.
++/* A COP changes without anything dirtying the material: Solaris does not know
++ * the dependency, and nobody asks us to synchronize again. The texture
++ * therefore stayed the one from the first load.
+  *
+- * Cette veille demande a Houdini, a cadence menue, si l'un des COP dont on
+- * s'est servi a besoin de recuire, et **refait l'image elle-meme** : elle relit
+- * les pixels et les repose sur les noeuds qui s'en servent. Passer par Hydra -
+- * salir le materiau et attendre qu'on nous redemande une synchronisation - ne
+- * suffisait pas : rien ne garantit que la demande revienne.
++ * This watch asks Houdini, at a fine cadence, whether any of the COPs we have
++ * used needs to recook, and **redoes the image itself**: it reads the pixels
++ * again and puts them back on the nodes that use them. Going through Hydra -
++ * dirtying the material and waiting for a synchronization to be requested again -
++ * was not enough: nothing guarantees that the request comes back.
+  *
+- * A appeler depuis la passe de rendu, verrou de scene tenu : elle tourne sur le
+- * fil de l'hote, seul endroit ou cuire un noeud Houdini est sur. */
++ * To be called from the render pass, with the scene lock held: it runs on the
++ * host thread, the only place where cooking a Houdini node is safe. */
+ void PollHoudiniCops(CCL_NS::Scene *scene);
+ 
+-/* Un materiau qui s'en va cesse d'etre surveille. */
++/* A material that goes away stops being watched. */
+ void ForgetHoudiniCopUser(const PXR_NS::SdfPath &materialId);
+ 
+ HDCYCLES_NAMESPACE_CLOSE_SCOPE
+diff --git a/src/hydra/light.cpp b/src/hydra/light.cpp
+index 6742245a..ac3709d6 100644
+--- a/src/hydra/light.cpp
++++ b/src/hydra/light.cpp
+@@ -90,18 +90,19 @@ void HdCyclesLight::Sync(HdSceneDelegate *sceneDelegate,
+     strength *= exp2(GetTypedValue<float>(lightDs, HdLightTokens->exposure, 0.0f));
+     strength *= GetTypedValue<float>(lightDs, HdLightTokens->intensity, 1.0f);
+ 
+-    /* De l'intensite USD au flux radiant de Cycles. Le facteur pi vaut pour les
+-     * lumieres de surface - sphere, rectangle, disque - et pour elles seules.
++    /* From USD intensity to Cycles radiant flux. The factor pi applies to
++     * area lights - sphere, rectangle, disk - and to them alone.
+      *
+-     * Mesure contre Karma, plan diffus, meme USD, intensite 1 : le facteur 4
+-     * qui trainait sur la lumiere distante la rendait quatre fois trop forte
+-     * (rapport 4,06 mesure), et le pi applique a la dome light trois fois trop
+-     * (3,20). Sans eux, les six types tombent a 1,01 de Karma - l'ecart qui
+-     * reste est celui des deux moteurs sur la meme scene, pas une unite. */
++     * Measured against Karma, diffuse plane, same USD, intensity 1: the factor
++     * 4 that lingered on the distant light made it four times too strong
++     * (ratio 4.06 measured), and the pi applied to the dome light made it
++     * three times too strong (3.20). Without them, the six types land at 1.01
++     * of Karma - the gap that remains is that of the two engines on the same
++     * scene, not a unit. */
+     if (_lightType == HdPrimTypeTokens->distantLight ||
+         _lightType == HdPrimTypeTokens->domeLight)
+     {
+-      /* L'intensite est prise telle quelle. */
++      /* The intensity is taken as is. */
+     }
+     else {
+       /* Convert from intensity to radiant flux. */
+@@ -111,11 +112,11 @@ void HdCyclesLight::Sync(HdSceneDelegate *sceneDelegate,
+     const bool normalize = GetTypedValue<bool>(lightDs, HdLightTokens->normalize, false);
+     _light->set_normalize(normalize);
+ 
+-    /* Un cylindre approxime par un rectangle : normalise, Cycles divise par
+-     * l'aire du rectangle - longueur par diametre - quand Karma divise par
+-     * celle du tube, 2 pi r l, soit pi fois plus grande. Mesure : rapport 2,98
+-     * a Karma sans cette division, 0,95 avec, c'est-a-dire le meme ecart que
+-     * le cylindre non normalise. */
++    /* A cylinder approximated by a rectangle: normalized, Cycles divides by
++     * the area of the rectangle - length by diameter - where Karma divides by
++     * that of the tube, 2 pi r l, which is pi times larger. Measured: ratio
++     * 2.98 to Karma without this division, 0.95 with it, that is, the same gap
++     * as the non-normalized cylinder. */
+     if (normalize && _lightType == HdPrimTypeTokens->cylinderLight) {
+       strength /= M_PI_F;
+     }
+@@ -188,11 +189,11 @@ void HdCyclesLight::Sync(HdSceneDelegate *sceneDelegate,
+       }
+     }
+     else if (_lightType == HdPrimTypeTokens->cylinderLight) {
+-      /* Cycles n'a pas de tube : un rectangle de la longueur du cylindre sur
+-       * son diametre, ce que fait aussi l'import USD de Blender. Un tube emet
+-       * tout autour de son axe, un rectangle d'un seul cote - l'eclairement de
+-       * face est le bon, celui de dos manque. L'axe d'un CylinderLight USD est
+-       * le X local, d'ou la longueur sur u. */
++      /* Cycles has no tube: a rectangle of the cylinder's length by its
++       * diameter, which is also what Blender's USD import does. A tube emits
++       * all around its axis, a rectangle on one side only - the illumination
++       * from the front is right, the one from behind is missing. The axis of a
++       * USD CylinderLight is the local X, hence the length on u. */
+       AreaLight *area_light = static_cast<AreaLight *>(_light);
+       if (auto ds = GetTypedDataSource<float>(lightDs, HdLightTokens->length)) {
+         area_light->set_sizeu(ds->GetTypedValue(0.0f));
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index a92a427b..36118c8c 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -106,8 +106,8 @@ class UsdToCyclesMapping {
+     return _paramMap.find(name) != _paramMap.end();
+   }
+ 
+-  /* De quoi deriver une variante d'une correspondance existante plutot que de
+-   * la recopier entiere. */
++  /* Lets a variant be derived from an existing mapping rather than copying it
++   * whole. */
+   void setParameterName(const TfToken &name, ustring target)
+   {
+     _paramMap[name] = std::move(target);
+@@ -142,10 +142,9 @@ class UsdToCyclesMapping {
+      * so "Fac" and "Factor", not "fac" on both sides. */
+     std::vector<std::pair<const char *, const char *>> wires;
+     FixedMap fixedValues;
+-    /* Quand il est rempli, la sortie du noeud principal entre dans ce socket de
+-     * l'auxiliaire, et c'est l'auxiliaire qui devient la sortie du montage :
+-     * de quoi poser un melange de fermetures apres le noeud principal plutot
+-     * qu'avant lui. */
++    /* When filled in, the main node's output goes into this socket of the
++     * helper, and the helper becomes the output of the assembly: this allows
++     * placing a closure mix after the main node rather than before it. */
+     const char *takesMainOutput = nullptr;
+     const char *mainOutputName = nullptr;
+   };
+@@ -211,7 +210,7 @@ class UsdToCyclesMapping {
+ 
+ /* An input mapped to "<helper>:<socket>" is written to that helper node. No
+  * Cycles socket name contains a colon, so the split is unambiguous. */
+-/* Les cibles d'une entree qui en pilote plusieurs, separees par ';'. */
++/* The targets of an input that drives several, separated by ';'. */
+ std::vector<std::string> SplitTargets(const std::string &mapped)
+ {
+   std::vector<std::string> targets;
+@@ -460,8 +459,8 @@ class MtlxFacOrColor : public UsdToCyclesMapping {
+  * Socket names verified against the Cycles node registry. Inputs with no
+  * Cycles counterpart are deliberately left unmapped and are ignored:
+  *  - base / specular: weights Cycles folds into other inputs,
+- *  - subsurface_color: la couleur du sous-surfacique chez Cycles est deja
+- *    `base_color`, donc l'entree MaterialX ne dit rien de plus,
++ *  - subsurface_color: the subsurface colour in Cycles is already
++ *    `base_color`, so the MaterialX input says nothing more,
+  *  - transmission_extra_roughness. */
+ UsdToCyclesMapping MakeMtlxStandardSurface();
+ 
+@@ -489,10 +488,10 @@ UsdToCyclesMapping MakeMtlxStandardSurface()
+         {TfToken("specular_anisotropy"), ustring("anisotropic")},
+         {TfToken("specular_rotation"), ustring("anisotropic_rotation")},
+         {TfToken("transmission"), ustring("transmission_weight")},
+-        /* La couleur de transmission passe par le meme socket que la diffuse
+-         * chez Cycles - `base_color` teinte les deux. Un mix commande par
+-         * `is_transmission_ray` les separe : le rayon qui traverse voit la
+-         * couleur de transmission, tous les autres la couleur de base. */
++        /* The transmission colour goes through the same socket as the diffuse
++         * one in Cycles - `base_color` tints both. A mix driven by
++         * `is_transmission_ray` separates them: the ray that passes through
++         * sees the transmission colour, all the others the base colour. */
+         {TfToken("transmission_color"), ustring("tcol:b")},
+         /* MaterialX's single dispersion slider reads as Cycles' Abbe number
+          * directly - both use it the same way (kernel/svm/closure.h divides
+@@ -534,13 +533,13 @@ UsdToCyclesMapping MakeMtlxStandardSurface()
+    * the mapping above wherever the network does author it. */
+   mapping.setFixedValues({{ustring("transmission_dispersion_scale"), "1"},
+                           {ustring("transmission_dispersion_abbe_number"), "0"},
+-                          /* Le rayon de diffusion de Cycles vaut (1, 0,2, 0,1),
+-                           * une peau ; celui de MaterialX vaut (1, 1, 1), neutre.
+-                           * Hydra ne transmet que les entrees ecrites, donc un
+-                           * reseau qui n'y touche pas heritait d'une teinte de
+-                           * chair qu'il n'avait pas demandee. Le defaut de
+-                           * MaterialX est pose ici, et la correspondance
+-                           * ci-dessus le remplace des que le reseau l'ecrit. */
++                          /* The scattering radius in Cycles is (1, 0.2, 0.1),
++                           * a skin; MaterialX's is (1, 1, 1), neutral.
++                           * Hydra only carries the inputs that are written, so a
++                           * network that does not touch it used to inherit a
++                           * flesh tint it had not asked for. MaterialX's
++                           * default is set here, and the mapping above
++                           * replaces it as soon as the network writes it. */
+                           {ustring("subsurface_radius"), "1,1,1"},
+                           /* The other inputs whose MaterialX default is not
+                            * Cycles': each one an unauthored input would
+@@ -565,16 +564,16 @@ UsdToCyclesMapping MakeMtlxStandardSurface()
+                      {{ustring("math_type"), "multiply"},
+                       {ustring("value1"), "1.0"},
+                       {ustring("value2"), "0.5"}}});
+-  /* Le mix qui separe la couleur de transmission de la couleur de base. Il est
+-   * declare en premier parce que les deux auxiliaires suivants se branchent
+-   * dessus, et que les auxiliaires sont montes dans l'ordre.
++  /* The mix that separates the transmission colour from the base colour. It is
++   * declared first because the next two helpers plug into it, and helpers are
++   * assembled in order.
+    *
+-   * Approximation assumee : Cycles teinte diffuse et transmission par le meme
+-   * `base_color`, la separation se fait donc par type de rayon plutot que par
+-   * fermeture. Un rayon qui traverse voit `transmission_color`, les autres la
+-   * couleur de base. Le defaut porte ici est celui de MaterialX, blanc, ce qui
+-   * n'est pas neutre : sans cette entree, Cycles teintait la transmission de la
+-   * couleur de base, ce que ne dit pas standard_surface. */
++   * Accepted approximation: Cycles tints diffuse and transmission with the same
++   * `base_color`, so the separation is made by ray type rather than by
++   * closure. A ray that passes through sees `transmission_color`, the others
++   * the base colour. The default carried here is MaterialX's, white, which is
++   * not neutral: without this input, Cycles tinted the transmission with the
++   * base colour, which standard_surface does not say. */
+   mapping.addHelper({"tcol",
+                      "mix_color",
+                      {{"Result", "Base Color"}},
+@@ -819,25 +818,25 @@ UsdToCyclesMapping MakeMtlxDisneyPrincipled()
+ 
+ const UsdToCyclesMapping MtlxDisneyPrincipled = MakeMtlxDisneyPrincipled();
+ 
+-/* standard_surface, variante a lobe de transmission separe.
++/* standard_surface, variant with a separate transmission lobe.
+  *
+- * Cycles teinte la transmission par `base_color` et n'a qu'une rugosite pour
+- * tous les lobes : ni `transmission_color` ni `transmission_extra_roughness`
+- * n'ont ou aller sur le principled. Un vrai lobe de verre, lui, a sa couleur
+- * et sa rugosite propres, et c'est ainsi que standard_surface est defini -
+- * la transmission y est un lobe a part.
++ * Cycles tints the transmission with `base_color` and has only one roughness
++ * for all the lobes: neither `transmission_color` nor
++ * `transmission_extra_roughness` had anywhere to go on the principled. A real
++ * glass lobe has its own colour and roughness, and that is how
++ * standard_surface is defined - the transmission is a separate lobe there.
+  *
+- * Le montage : le principled sans transmission d'un cote, un `glass_bsdf` de
+- * l'autre, meles par le poids de transmission.
++ * The assembly: the principled without transmission on one side, a
++ * `glass_bsdf` on the other, mixed by the transmission weight.
+  *
+- * ⚠️ Ce que cette variante perd : la **dispersion**, qui ne vit que sur le
+- * principled. C'est pour cela qu'elle n'est prise que lorsque le reseau ecrit
+- * l'une des deux entrees qu'elle sert - un materiau qui n'y touche pas garde
+- * le principled entier, dispersion comprise.
++ * ⚠️ What this variant loses: the **dispersion**, which lives only on the
++ * principled. That is why it is only taken when the network writes one of the
++ * two inputs it serves - a material that does not touch them keeps the whole
++ * principled, dispersion included.
+  *
+- * Le premier essai passait par un `light_path` : la couleur de transmission
+- * n'etait prise que sur les rayons deja transmis, donc pas sur la premiere
+- * traversee, celle qu'on voit. */
++ * The first attempt went through a `light_path`: the transmission colour was
++ * only taken on rays that had already been transmitted, so not on the first
++ * crossing, the one that is seen. */
+ UsdToCyclesMapping MakeMtlxStandardSurfaceGlass();
+ 
+ const UsdToCyclesMapping MtlxStandardSurfaceGlass = MakeMtlxStandardSurfaceGlass();
+@@ -846,16 +845,16 @@ UsdToCyclesMapping MakeMtlxStandardSurfaceGlass()
+ {
+   UsdToCyclesMapping mapping = MakeMtlxStandardSurface();
+ 
+-  /* Le poids de transmission commande le melange, plus le principled. */
++  /* The transmission weight drives the mix, no longer the principled. */
+   mapping.setParameterName(TfToken("transmission"), ustring("tmix:Fac"));
+   mapping.setParameterName(TfToken("transmission_color"), ustring("glass:color"));
+   mapping.setParameterName(TfToken("transmission_extra_roughness"), ustring("grough:value2"));
+-  /* La rugosite du verre est celle du speculaire, plus le supplement. */
++  /* The glass roughness is the specular one, plus the extra. */
+   mapping.setParameterName(TfToken("specular_roughness"), ustring("roughness;grough:value1"));
+   mapping.setParameterName(TfToken("specular_IOR"), ustring("ior;glass:IOR"));
+   mapping.setParameterName(TfToken("normal"), ustring("normal;glass:normal"));
+ 
+-  /* Le melange vient apres le principled : c'est lui la sortie du montage. */
++  /* The mix comes after the principled: it is the output of the assembly. */
+   mapping.addHelper({"tmix",
+                      "mix_closure",
+                      {},
+@@ -866,8 +865,8 @@ UsdToCyclesMapping MakeMtlxStandardSurfaceGlass()
+                      "glass_bsdf",
+                      {{"BSDF", "tmix:Closure2"}},
+                      {{ustring("color"), "1,1,1"}, {ustring("IOR"), "1.5"}}});
+-  /* Les deux defauts de MaterialX : une rugosite speculaire de 0,2 et pas de
+-   * supplement. */
++  /* The two MaterialX defaults: a specular roughness of 0.2 and no
++   * extra. */
+   mapping.addHelper({"grough",
+                      "math",
+                      {{"Value", "glass:Roughness"}},
+@@ -903,13 +902,13 @@ class MtlxImageTexture : public MtlxFacOrColor {
+       }
+     }
+ 
+-    /* Un noeud image de Cycles n'a que `color` et `alpha` : pas de `fac`. Le
+-     * repli de MtlxFacOrColor sur `fac` vaut pour un bruit ou une rampe, pas
+-     * ici - une image branchee sur une entree scalaire, la hauteur d'un
+-     * heighttonormal par exemple, voyait sa connexion tomber avec
+-     * "Cycles node 'image_texture' has no output 'fac'". La couleur y va, et
+-     * Cycles la ramene a un scalaire par moyenne, comme pour tout fil de
+-     * couleur atterrissant sur un socket scalaire. */
++    /* A Cycles image node has only `color` and `alpha`: no `fac`. The
++     * fallback of MtlxFacOrColor to `fac` holds for a noise or a ramp, not
++     * here - an image plugged into a scalar input, the height of a
++     * heighttonormal for example, had its connection dropped with
++     * "Cycles node 'image_texture' has no output 'fac'". The colour goes
++     * there, and Cycles brings it down to a scalar by averaging, as for any
++     * colour wire landing on a scalar socket. */
+     if (name == CyclesMaterialTokens->out) {
+       return "color";
+     }
+@@ -1100,10 +1099,10 @@ UsdToCyclesMapping MakeMtlxBlend(const char *const mode)
+   return mapping;
+ }
+ 
+-/* `convert` vers un shader de surface est le seul de la famille qui ne soit pas
+- * un passe-plat : MaterialX en fait une surface qui emet la couleur donnee. Un
+- * melange de couleurs y aurait laisse un terminal sans fermeture - signale,
+- * mais perdu. Hors table parce que le suffixe ne se lit pas par prefixe. */
++/* `convert` to a surface shader is the only one of the family that is not a
++ * pass-through: MaterialX makes it a surface that emits the given colour. A
++ * colour mix would have left a terminal with no closure there - reported, but
++ * lost. Outside the table because the suffix cannot be read by prefix. */
+ const UsdToCyclesMapping &MtlxConvertSurface()
+ {
+   static const UsdToCyclesMapping mapping = [] {
+@@ -1119,31 +1118,30 @@ const UsdToCyclesMapping &MtlxConvertSurface()
+ }
+ 
+ /* ------------------------------------------------------------------------
+- * Les cheveux, selon Chiang et al. 2016 - le modele que MaterialX et Cycles
+- * implementent l'un comme l'autre, ce qui permet une traduction exacte plutot
+- * qu'une ressemblance.
++ * Hair, after Chiang et al. 2016 - the model that MaterialX and Cycles both
++ * implement, which allows an exact translation rather than a resemblance.
+  *
+- * Une seule difference d'unites, et elle compte. La rugosite que le BSDF de
+- * MaterialX recoit (`roughness_R`) est deja convertie en variance longitudinale
+- * et en echelle azimutale - c'est le travail de `chiang_hair_roughness`, qui
+- * part d'une rugosite « artiste » beta. Le principled hair de Cycles, lui,
+- * attend beta et fait la conversion lui-meme, avec les memes polynomes au
+- * facteur sqrt(pi/8) pres, que MaterialX applique a l'usage plutot qu'a la
+- * conversion. D'ou deux regles :
++ * Only one difference in units, and it matters. The roughness that MaterialX's
++ * BSDF receives (`roughness_R`) is already converted to a longitudinal variance
++ * and an azimuthal scale - that is the job of `chiang_hair_roughness`, which
++ * starts from an « artist » roughness to beta. Cycles' principled hair, for
++ * its part, expects beta and does the conversion itself, with the same
++ * polynomials up to the factor sqrt(pi/8), which MaterialX applies at use
++ * rather than at conversion. Hence two rules:
+  *
+- * - `chiang_hair_roughness` ne convertit rien et transmet beta tel quel ;
+- * - une valeur ecrite directement sur `roughness_R` est ramenee a beta en
+- *   inversant les polynomes.
++ * - `chiang_hair_roughness` converts nothing and passes beta through as is;
++ * - a value written directly on `roughness_R` is brought back to beta by
++ *   inverting the polynomials.
+  *
+- * Les lobes TT et TRT n'ont pas de rugosite propre chez Cycles : il les derive
+- * de la principale, a v/4 et 4v - exactement ce que donnent les echelles par
+- * defaut de `chiang_hair_roughness`, 0,5 et 2 au carre. Ils sont donc recus sans
+- * avertissement, dans des auxiliaires sans sortie que Cycles elague ; une
+- * echelle modifiee, elle, se signale sur le noeud de rugosite.
++ * The TT and TRT lobes have no roughness of their own in Cycles: it derives
++ * them from the main one, at v/4 and 4v - exactly what the default scales of
++ * `chiang_hair_roughness` give, 0.5 and 2 squared. They are therefore received
++ * without a warning, in helpers with no output that Cycles prunes; a modified
++ * scale, though, is reported on the roughness node.
+  * ------------------------------------------------------------------------ */
+ 
+-/* Inverse de x -> f(x), croissante sur [0, 1]. Soixante bissections suffisent
+- * largement a la precision d'un float. */
++/* Inverse of x -> f(x), increasing on [0, 1]. Sixty bisections are more than
++ * enough for the precision of a float. */
+ template<typename F> float InvertMonotonic(const F &f, const float target)
+ {
+   float lo = 0.0f;
+@@ -1166,7 +1164,7 @@ template<typename F> float InvertMonotonic(const F &f, const float target)
+   return 0.5f * (lo + hi);
+ }
+ 
+-/* Variance longitudinale -> beta, l'inverse de `mx_chiang_hair_roughness`. */
++/* Longitudinal variance -> beta, the inverse of `mx_chiang_hair_roughness`. */
+ float ChiangLongitudinalBeta(const float variance)
+ {
+   return InvertMonotonic(
+@@ -1177,7 +1175,7 @@ float ChiangLongitudinalBeta(const float variance)
+       variance);
+ }
+ 
+-/* Echelle azimutale -> beta. */
++/* Azimuthal scale -> beta. */
+ float ChiangAzimuthalBeta(const float scale)
+ {
+   return InvertMonotonic(
+@@ -1230,21 +1228,21 @@ const UsdToCyclesMapping &MtlxChiangHairBsdf()
+                          {TfToken("cuticle_angle"), ustring("cut:value1")},
+                          {CyclesMaterialTokens->out, ustring("BSDF")},
+                      }};
+-    /* Le modele de Chiang, parametre par l'absorption : c'est ce que MaterialX
+-     * decrit. Les defauts sont ceux de MaterialX - une absorption nulle, un
+-     * cheveu blanc - et non ceux de Cycles, qui donnent un brun. */
++    /* The Chiang model, parametrised by absorption: that is what MaterialX
++     * describes. The defaults are MaterialX's - zero absorption, a white
++     * hair - and not Cycles', which give a brown. */
+     m.setFixedValues({{ustring("model"), "Chiang"},
+                       {ustring("parametrization"), "Absorption coefficient"},
+                       {ustring("absorption_coefficient"), "0,0,0"}});
+-    /* roughness_R, ramene a beta, se separe en rugosite longitudinale et
+-     * radiale. Le defaut (0,1 ; 0,1) de MaterialX, en variance, vaut ce beta. */
++    /* roughness_R, brought back to beta, is split into longitudinal and radial
++     * roughness. MaterialX's default (0.1; 0.1), in variance, equals this beta. */
+     m.addHelper({"rsep",
+                  "separate_xyz",
+                  {{"X", "Roughness"}, {"Y", "Radial Roughness"}},
+                  {{ustring("vector"), "0.320609,0.198975,0"}}});
+-    /* L'inclinaison des ecailles : MaterialX la donne dans [0, 1] et la remappe
+-     * sur [-pi/2, pi/2] ; Cycles la veut en radians. 0,5 - le defaut - ne
+-     * penche pas, alors que le defaut de Cycles penche de 2 degres. */
++    /* The tilt of the scales: MaterialX gives it in [0, 1] and remaps it
++     * to [-pi/2, pi/2]; Cycles wants it in radians. 0.5 - the default - does
++     * not tilt, whereas Cycles' default tilts by 2 degrees. */
+     m.addHelper(MathHelper("cut",
+                            "Offset",
+                            {{ustring("math_type"), "multiply_add"},
+@@ -1258,8 +1256,8 @@ const UsdToCyclesMapping &MtlxChiangHairBsdf()
+   return mapping;
+ }
+ 
+-/* `chiang_hair_roughness` : transmettre beta, sans conversion - Cycles la fait.
+- * Les trois sorties portent la meme paire, TT et TRT n'etant pas lues. */
++/* `chiang_hair_roughness`: pass beta through, without conversion - Cycles does
++ * it. The three outputs carry the same pair, TT and TRT not being read. */
+ const UsdToCyclesMapping &MtlxChiangHairRoughness()
+ {
+   static const UsdToCyclesMapping mapping = [] {
+@@ -1277,15 +1275,15 @@ const UsdToCyclesMapping &MtlxChiangHairRoughness()
+   return mapping;
+ }
+ 
+-/* `chiang_hair_absorption_from_color`, la formule de MaterialX au terme pres :
++/* `chiang_hair_absorption_from_color`, MaterialX's formula, to the term:
+  *
+  *   sigma = log(clamp(color, 0.001, 1)) / b(beta_n),  absorption = sigma^2
+  *
+- * ou b est un polynome de degre 5, calcule ici par la methode de Horner en cinq
+- * multiplications accumulees. C'est d'ailleurs ce que fait Cycles en
+- * parametrisation par couleur ; le refaire en noeuds garde la rugosite
+- * azimutale propre a ce noeud, qui peut differer de celle du BSDF. Quand la
+- * couleur est constante, Cycles replie tout le calcul a la compilation. */
++ * where b is a degree-5 polynomial, computed here by Horner's method in five
++ * accumulated multiplications. This is, incidentally, what Cycles does in its
++ * colour parametrisation; redoing it in nodes keeps the azimuthal roughness
++ * specific to this node, which may differ from the BSDF's. When the colour is
++ * constant, Cycles folds the whole computation away at compile time. */
+ const UsdToCyclesMapping &MtlxChiangHairAbsorptionFromColor()
+ {
+   static const UsdToCyclesMapping mapping = [] {
+@@ -1297,7 +1295,7 @@ const UsdToCyclesMapping &MtlxChiangHairAbsorptionFromColor()
+                              {TfToken("absorption"), ustring("vector")},
+                          }};
+     m.setFixedValues({{ustring("math_type"), "multiply"}});
+-    /* sigma, entrant deux fois dans le produit final : sigma^2. */
++    /* sigma, entering twice in the final product: sigma^2. */
+     m.addHelper({"div",
+                  "vector_math",
+                  {{"Vector", "Vector1"}, {"Vector", "Vector2"}},
+@@ -1322,7 +1320,7 @@ const UsdToCyclesMapping &MtlxChiangHairAbsorptionFromColor()
+                  {{ustring("math_type"), "maximum"},
+                   {ustring("vector1"), "1,1,1"},
+                   {ustring("vector2"), "0.001,0.001,0.001"}}});
+-    /* b(beta_n) par Horner, du terme de plus haut degre vers la constante. */
++    /* b(beta_n) by Horner, from the highest-degree term down to the constant. */
+     m.addHelper(MathHelper("t4",
+                            "div:Vector2",
+                            {{ustring("math_type"), "multiply_add"},
+@@ -1354,15 +1352,15 @@ const UsdToCyclesMapping &MtlxChiangHairAbsorptionFromColor()
+   return mapping;
+ }
+ 
+-/* `deon_hair_absorption_from_melanin`, la formule de MaterialX :
++/* `deon_hair_absorption_from_melanin`, MaterialX's formula:
+  *
+  *   m = -log(max(1 - concentration, 1e-4))
+  *   absorption = max(m (1-r) (-log eumelanin) + m r (-log pheomelanin), 0)
+  *
+- * Les deux signes moins se compensent : c'est log(max(1-c, 1e-4)) fois le
+- * melange, par la rougeur, des logarithmes des deux couleurs. Les constantes de
+- * MaterialX ne sont pas celles de la parametrisation par melanine de Cycles -
+- * s'y fier aurait donne une autre teinte ; le calcul est donc refait ici. */
++ * The two minus signs cancel out: it is log(max(1-c, 1e-4)) times the mix,
++ * by redness, of the logarithms of the two colours. MaterialX's constants are
++ * not those of Cycles' melanin parametrisation - relying on it would have
++ * given another tint; the computation is therefore redone here. */
+ const UsdToCyclesMapping &MtlxDeonHairAbsorptionFromMelanin()
+ {
+   static const UsdToCyclesMapping mapping = [] {
+@@ -1396,7 +1394,7 @@ const UsdToCyclesMapping &MtlxDeonHairAbsorptionFromMelanin()
+                  "separate_xyz",
+                  {{"X", "pR:Value1"}, {"Y", "pG:Value1"}, {"Z", "pB:Value1"}},
+                  {{ustring("vector"), "0.829444,0.67032,0.349938"}}});
+-    /* log(max(1 - concentration, 1e-4)), le facteur d'echelle du melange. */
++    /* log(max(1 - concentration, 1e-4)), the scale factor of the mix. */
+     m.addHelper(MathHelper("m3", "scale:Scale", ln));
+     m.addHelper(MathHelper(
+         "m2", "m3:Value1", {{ustring("math_type"), "maximum"}, {ustring("value2"), "0.0001"}}));
+@@ -1410,10 +1408,10 @@ const UsdToCyclesMapping &MtlxDeonHairAbsorptionFromMelanin()
+   return mapping;
+ }
+ 
+-/* `surface` : le BSDF, l'EDF qui s'y ajoute, et l'opacite qui melange le tout
+- * avec du transparent. C'est par lui qu'un BSDF nu - un cheveu, un dielectrique
+- * - devient un shader de surface dans un reseau MaterialX d'Houdini. Absent de
+- * la table, il coupait le reseau entier : le terminal ne recevait rien. */
++/* `surface`: the BSDF, the EDF added to it, and the opacity that mixes the
++ * whole with a transparent. It is through it that a bare BSDF - a hair, a
++ * dielectric - becomes a surface shader in a Houdini MaterialX network. Absent
++ * from the table, it cut the whole network: the terminal received nothing. */
+ const UsdToCyclesMapping &MtlxSurface()
+ {
+   static const UsdToCyclesMapping mapping = [] {
+@@ -1827,7 +1825,7 @@ const std::vector<MtlxEntry> &MtlxTable()
+   /* Logic, as close as Cycles' math node gets. */
+   static const UsdToCyclesMapping kAnd = MakeMtlxOp("multiply", false, false);
+   static const UsdToCyclesMapping kOr = MakeMtlxOp("maximum", false, false);
+-  /* `not` : le complement a un. */
++  /* `not`: the complement to one. */
+   static const UsdToCyclesMapping kNot = [] {
+     UsdToCyclesMapping m = MakeMtlxOp("subtract", false, false);
+     m.setParameterName(TfToken("in"), ustring("value2"));
+@@ -1835,11 +1833,11 @@ const std::vector<MtlxEntry> &MtlxTable()
+     return m;
+   }();
+ 
+-  /* Le passe-plat. MaterialX pose un `dot` pour router un fil et un `convert`
+-   * pour changer de type - deux choses que Cycles fait sur le lien lui-meme.
+-   * Sans correspondance, la chaine se coupait la : un graphe venu d'un autre
+-   * logiciel, ou l'un et l'autre abondent, y perdait ses textures. Un melange
+-   * a facteur nul rend son entree telle quelle. */
++  /* The pass-through. MaterialX places a `dot` to route a wire and a `convert`
++   * to change type - two things that Cycles does on the link itself.
++   * Without a mapping, the chain was cut there: a graph coming from other
++   * software, where both abound, lost its textures there. A mix
++   * with a zero factor returns its input as is. */
+   static const UsdToCyclesMapping kPassThrough = [] {
+     UsdToCyclesMapping m{"mix_color",
+                          {
+@@ -1850,8 +1848,8 @@ const std::vector<MtlxEntry> &MtlxTable()
+     return m;
+   }();
+ 
+-  /* Le meme routage, mais sur une fermeture : un melange de couleurs la
+-   * detruirait. Une somme dont un seul terme est branche la laisse passer. */
++  /* The same routing, but on a closure: a colour mix would destroy it. A sum
++   * of which only one term is plugged lets it through. */
+   static const UsdToCyclesMapping kPassThroughClosure = {
+       "add_closure",
+       {
+@@ -1859,8 +1857,8 @@ const std::vector<MtlxEntry> &MtlxTable()
+           {CyclesMaterialTokens->out, ustring("closure")},
+       }};
+ 
+-  /* Une constante. Cycles a un noeud par type : `value` pour un scalaire,
+-   * `color` pour ce qui a trois composantes. */
++  /* A constant. Cycles has one node per type: `value` for a scalar,
++   * `color` for anything with three components. */
+   static const UsdToCyclesMapping kConstantValue = {
+       "value",
+       {
+@@ -1899,14 +1897,14 @@ const std::vector<MtlxEntry> &MtlxTable()
+     return m;
+   }();
+ 
+-  /* `contrast` : (in - pivot) x amount + pivot, ecrit en une multiplication
+-   * accumulee - in x amount + pivot x (1 - amount), qui est la meme chose. Les
+-   * auxiliaires portent les defauts de MaterialX, amount 1 et pivot 0,5, pour
+-   * qu'un reseau qui n'ecrit ni l'un ni l'autre reste neutre.
++  /* `contrast`: (in - pivot) x amount + pivot, written as an accumulated
++   * multiplication - in x amount + pivot x (1 - amount), which is the same
++   * thing. The helpers carry MaterialX's defaults, amount 1 and pivot 0.5, so
++   * that a network that writes neither stays neutral.
+    *
+-   * Il en faut deux versions : le noeud `math` de Cycles est scalaire, et une
+-   * couleur qui y entre est reduite a sa moyenne - un contraste sur une
+-   * couleur en ressortait gris. */
++   * Two versions are needed: Cycles' `math` node is scalar, and a colour
++   * entering it is reduced to its average - a contrast on a colour came out
++   * grey. */
+   auto makeContrast = [](const bool vector) {
+     const char *const node = vector ? "vector_math" : "math";
+     const char *const a = vector ? "vector1" : "value1";
+@@ -1945,9 +1943,9 @@ const std::vector<MtlxEntry> &MtlxTable()
+   static const UsdToCyclesMapping kContrast = makeContrast(false);
+   static const UsdToCyclesMapping kContrastV = makeContrast(true);
+ 
+-  /* L'image en tuiles hexagonales, que la PR Blender 158054 a apportee cote
+-   * noyau en meme temps que les bruits MaterialX. Le noeud existait donc deja,
+-   * sans que rien ne l'atteigne depuis un reseau MaterialX. */
++  /* The hex-tiled image, which Blender PR 158054 brought on the kernel side
++   * together with the MaterialX noises. The node therefore already existed,
++   * with nothing reaching it from a MaterialX network. */
+   static const MtlxImageTexture kHexTiledImage = {
+       "mx_hextiled_image_texture",
+       {
+@@ -2252,38 +2250,38 @@ const std::vector<MtlxEntry> &MtlxTable()
+       {"ND_ramptb", &kRampTB},
+       {"ND_ramp_gradient", &kGradient},
+ 
+-      /* Transformations et logique. */
++      /* Transforms and logic. */
+       {"ND_rotate2d", &kRotate2d},
+       {"ND_rotate3d", &kRotate3d},
+       {"ND_place2d", &kPlace2d},
+       {"ND_transformpoint", &kTransformPoint},
+       {"ND_transformvector", &kTransformVector},
+       {"ND_transformnormal", &kTransformNormal},
+-      /* MaterialX nomme ces deux-la `ND_logical_and` et `ND_logical_or` : les
+-       * prefixes d'avant, `ND_and_` et `ND_or_`, ne pouvaient rien attraper. */
++      /* MaterialX names these two `ND_logical_and` and `ND_logical_or`: the
++       * earlier prefixes, `ND_and_` and `ND_or_`, could not catch anything. */
+       {"ND_logical_and", &kAnd},
+       {"ND_logical_or", &kOr},
+       {"ND_logical_not", &kNot},
+ 
+-      /* Le routage et la conversion de type, que Cycles fait sur le lien. */
++      /* Routing and type conversion, which Cycles does on the link. */
+       {"ND_dot_surfaceshader", &kPassThroughClosure},
+       {"ND_dot_volumeshader", &kPassThroughClosure},
+       {"ND_dot_", &kPassThrough},
+       {"ND_convert_", &kPassThrough},
+ 
+-      /* Les constantes, un noeud Cycles par type. */
++      /* Constants, one Cycles node per type. */
+       {"ND_constant_color", &kConstantColor},
+       {"ND_constant_vector", &kConstantColor},
+       {"ND_constant_", &kConstantValue},
+ 
+-      /* Reglages colorimetriques. */
++      /* Colour adjustments. */
+       {"ND_saturate_", &kSaturate},
+       {"ND_contrast_color", &kContrastV},
+       {"ND_contrast_vector", &kContrastV},
+       {"ND_contrast_", &kContrast},
+ 
+-      /* Les cheveux et ce qui les habille, et le noeud `surface` qui fait d'un
+-       * BSDF nu un shader de surface. */
++      /* Hair and what dresses it, and the `surface` node that makes a bare
++       * BSDF into a surface shader. */
+       {"ND_chiang_hair_bsdf", &MtlxChiangHairBsdf()},
+       {"ND_chiang_hair_roughness", &MtlxChiangHairRoughness()},
+       {"ND_chiang_hair_absorption_from_color", &MtlxChiangHairAbsorptionFromColor()},
+@@ -2291,8 +2289,8 @@ const std::vector<MtlxEntry> &MtlxTable()
+       {"ND_surface", &MtlxSurface()},
+       {"ND_volume", &MtlxVolume()},
+ 
+-      /* Les images : la variante hexagonale, et la famille glTF qui nomme ses
+-       * entrees comme `image`. */
++      /* Images: the hexagonal variant, and the glTF family that names its
++       * inputs like `image`. */
+       {"ND_hextiledimage_", &kHexTiledImage},
+       {"ND_gltf_colorimage", &MtlxImage},
+       {"ND_gltf_image_color", &MtlxImage},
+@@ -2679,8 +2677,8 @@ const UsdToCyclesMapping *FindMtlxMapping(const std::string &nodeTypeId)
+     return isVector ? &kDivV : &kDiv;
+   }
+ 
+-  /* Le suffixe ne se lit pas par prefixe : `ND_convert_color3_surfaceshader`
+-   * et ses sept freres commencent comme le passe-plat et n'en sont pas un. */
++  /* The suffix cannot be read by prefix: `ND_convert_color3_surfaceshader`
++   * and its seven siblings start like the pass-through and are not one. */
+   if (nodeTypeId.starts_with("ND_convert_") && nodeTypeId.ends_with("_surfaceshader")) {
+     return &MtlxConvertSurface();
+   }
+@@ -2873,9 +2871,9 @@ void HdCyclesMaterial::Sync(HdSceneDelegate *sceneDelegate,
+ 
+     const SceneLock lock(renderParam);
+ 
+-    /* Une edition de materiau atteint bien le peripherique ici : le
+-     * `tag_update` de l'amont appelle lui-meme `tag_modified`, ce que notre
+-     * correctif sur la 5.2 devait ajouter a la main. */
++    /* A material edit does reach the device here: upstream's `tag_update`
++     * itself calls `tag_modified`, which our patch on 5.2 had to add by
++     * hand. */
+     if (network && !_nodes.empty() && !dirtyResource) {
+       UpdateParameters(network);
+       ApplyShaderSettings();
+@@ -2916,9 +2914,9 @@ void HdCyclesMaterial::Sync(HdSceneDelegate *sceneDelegate,
+        * set_graph() would not even compute the displacement hash. Ask for real
+        * displacement alongside bump when the network actually drives it.
+        *
+-       * Ce n'est qu'un defaut : un `cycles:displacement_method` explicite, pose
+-       * par un noeud de proprietes, passe apres et gagne. Blender laisse ce
+-       * choix a l'utilisateur, nous aussi. */
++       * This is only a default: an explicit `cycles:displacement_method`, set
++       * by a properties node, comes after and wins. Blender leaves this
++       * choice to the user, so do we. */
+       _shader->set_displacement_method(_hasDisplacement ? DISPLACE_BOTH : DISPLACE_BUMP);
+       ApplyShaderSettings();
+       ResolveUdimTiles();
+@@ -2932,20 +2930,20 @@ void HdCyclesMaterial::Sync(HdSceneDelegate *sceneDelegate,
+   *dirtyBits = DirtyBits::Clean;
+ }
+ 
+-/* Houdini n'ecrit pas une rampe comme un tableau. Il la decoupe en quatre
+- * parametres - un entier `<nom>` portant le nombre de cles, un `<nom>_keys` de
+- * positions, un `<nom>_values` de valeurs et un `<nom>_basis` d'interpolation -
+- * la ou Cycles attend une table plate a pas constant, celle que Blender remplit
+- * a RAMP_TABLE_SIZE entrees. Sans cette traduction, Color Ramp, RGB Curves et
+- * Vector Curves recoivent un tableau vide: leur compile() renonce des la
+- * premiere ligne et le noeud ne calcule rien du tout. */
++/* Houdini does not write a ramp as an array. It splits it into four
++ * parameters - an integer `<name>` carrying the number of keys, a `<name>_keys` of
++ * positions, a `<name>_values` of values and a `<name>_basis` of interpolation -
++ * where Cycles expects a flat table with a constant step, the one Blender fills
++ * with RAMP_TABLE_SIZE entries. Without this translation, Color Ramp, RGB Curves and
++ * Vector Curves receive an empty array: their compile() gives up on the
++ * first line and the node computes nothing at all. */
+ 
+ namespace {
+ 
+ const TfToken kRampBasisConstant("constant", TfToken::Immortal);
+ const TfToken kRampBasisCatmullRom("catmull-rom", TfToken::Immortal);
+ 
+-/* Le segment de rampe qui contient t. Les cles sont croissantes. */
++/* The ramp segment that contains t. The keys are increasing. */
+ int RampSegment(const VtFloatArray &keys, const float t)
+ {
+   int lo = 0;
+@@ -2979,8 +2977,8 @@ T SampleRamp(const Array &values, const VtFloatArray &keys, const TfToken &basis
+     return p1 + (p2 - p1) * f;
+   }
+ 
+-  /* Catmull-Rom sur les quatre cles autour du segment, les extremites
+-   * dupliquees aux bords faute de voisin. */
++  /* Catmull-Rom on the four keys around the segment, the end points
++   * duplicated at the edges for lack of a neighbour. */
+   const T p0 = values[i > 0 ? i - 1 : i];
+   const T p3 = values[i + 2 <= last ? i + 2 : last];
+   const float f2 = f * f;
+@@ -2990,9 +2988,9 @@ T SampleRamp(const Array &values, const VtFloatArray &keys, const TfToken &basis
+          0.5f;
+ }
+ 
+-/* Reassemble les rampes que porte cette network et les pose sur le noeud.
+- * Les parametres consommes sont notes: les reecrire ensuite un a un ferait
+- * atterrir le compte de cles, un entier, sur le socket tableau lui-meme. */
++/* Reassembles the ramps carried by this network and sets them on the node.
++ * The consumed parameters are noted: rewriting them one by one afterwards would
++ * land the key count, an integer, on the array socket itself. */
+ void BakeHoudiniRamps(ShaderNode *node,
+                       HdMaterialNodeParameterContainerSchema params,
+                       std::set<TfToken> &consumed)
+@@ -3081,8 +3079,8 @@ void BakeHoudiniRamps(ShaderNode *node,
+     consumed.insert(basisName);
+     consumed.insert(TfToken(base));
+ 
+-    /* Cycles renonce a compiler une rampe dont le canal alpha n'a pas la meme
+-     * taille, et la rampe d'Houdini n'en porte pas: opaque partout. */
++    /* Cycles gives up compiling a ramp whose alpha channel does not have the
++     * same size, and Houdini's ramp carries none: opaque everywhere. */
+     const SocketType *alpha = node->type->find_input(ustring(base + "_alpha"));
+     if (alpha != nullptr && alpha->type == SocketType::FLOAT_ARRAY) {
+       array<float> opaque(RAMP_TABLE_SIZE);
+@@ -3122,11 +3120,11 @@ void HdCyclesMaterial::UpdateParameters(NodeDesc &nodeDesc,
+       continue;
+     }
+ 
+-    /* Un reglage du materiau, pas du noeud. Houdini replie les parametres d'un
+-     * noeud de proprietes dans le prim Shader du terminal, prefixes du moteur -
+-     * `inputs:cycles:displacement_method` - exactement comme Karma le fait avec
+-     * ses `inputs:karma:*`. Ils decrivent le Shader entier, qui n'existe pas
+-     * encore ici : les mettre de cote, Sync les appliquera. */
++    /* A setting of the material, not of the node. Houdini folds the parameters of a
++     * properties node into the terminal's Shader prim, prefixed with the engine -
++     * `inputs:cycles:displacement_method` - exactly as Karma does with
++     * its `inputs:karma:*`. They describe the whole Shader, which does not exist
++     * yet here: set them aside, Sync will apply them. */
+     static const std::string kSettingPrefix("cycles:");
+     const std::string &paramString = paramName.GetString();
+     if (paramString.rfind(kSettingPrefix, 0) == 0) {
+@@ -3140,9 +3138,9 @@ void HdCyclesMaterial::UpdateParameters(NodeDesc &nodeDesc,
+                                        inputMapping->parameterName(paramName, nullptr, &value) :
+                                        paramName.GetString();
+ 
+-    /* Une entree MaterialX peut piloter plusieurs sockets Cycles - "a;b" -
+-     * quand une seule valeur en commande deux : le poids de sous-surface est a
+-     * la fois celui du principled et celui du melange qui teinte sa couleur. */
++    /* A MaterialX input can drive several Cycles sockets - "a;b" -
++     * when a single value commands two: the subsurface weight is both
++     * the principled's and that of the mix that tints its colour. */
+     for (const std::string &mapped : SplitTargets(mappedName)) {
+       std::string inputName = mapped;
+ 
+@@ -3170,9 +3168,9 @@ void HdCyclesMaterial::UpdateParameters(NodeDesc &nodeDesc,
+       }
+ 
+       if (!input) {
+-        /* La distinction vient de l'amont, le journal de nous : ces messages
+-         * passaient par TF_WARN, que husk avale, et l'utilisateur ne voyait
+-         * jamais qu'une valeur avait ete ignoree. */
++        /* The distinction comes from upstream, the log from us: these messages
++         * went through TF_WARN, which husk swallows, and the user never saw
++         * that a value had been ignored. */
+         if (inputMapping && inputMapping->hasParameterMapping(paramName)) {
+           /* The node path Hydra hands over is the bare node name; the material
+            * path is what tells two probes apart in a log. */
+@@ -3194,48 +3192,48 @@ void HdCyclesMaterial::UpdateParameters(NodeDesc &nodeDesc,
+   }
+ }
+ 
+-/* Les reglages du materiau, poses sur le Shader lui-meme.
++/* The settings of the material, set on the Shader itself.
+  *
+- * Le Shader est un `Node` comme un autre : ses sockets - displacement_method,
+- * volume_step_rate, emission_sampling_method, pass_id... - se cherchent dans
+- * son NodeType et s'ecrivent avec la meme machinerie que ceux d'un noeud de
+- * shading. Nommer un socket qui n'existe pas est signale plutot qu'ignore :
+- * c'est la meme regle que pour `cycles:integrator:<socket>`, un nom mal
+- * orthographie etant indiscernable d'un reglage sans effet. */
+-/* Les textures venues d'un COP d'Houdini.
++ * The Shader is a `Node` like any other: its sockets - displacement_method,
++ * volume_step_rate, emission_sampling_method, pass_id... - are looked up in
++ * its NodeType and written with the same machinery as those of a shading
++ * node. Naming a socket that does not exist is reported rather than ignored:
++ * it is the same rule as for `cycles:integrator:<socket>`, a misspelt name
++ * being indistinguishable from a setting with no effect. */
++/* The textures coming from a Houdini COP.
+  *
+- * Un `op:` n'est pas un fichier : rien n'en donne les pixels a un tiers, seul
+- * le noeud cuit les produit. Ils sont lus ici - sur le thread de
+- * synchronisation, jamais depuis le chargeur de Cycles, qui tourne sur des
+- * threads de travail ou cuire un noeud Houdini ferait tomber l'hote - et
+- * remis a Cycles en memoire, comme Blender le fait pour ses propres images.
++ * An `op:` is not a file: nothing gives its pixels to a third party, only the
++ * cooked node produces them. They are read here - on the sync thread, never
++ * from Cycles' loader, which runs on worker threads where cooking a Houdini
++ * node would bring the host down - and handed to Cycles in memory, as Blender
++ * does for its own images.
+  *
+- * Appele aussi quand seuls les parametres changent : le numero de cuisson du
+- * COP dit alors s'il faut relire, ce qui rend une retouche du COP visible sans
+- * relancer Houdini. */
+-/* Un fichier de texture qui change en cours de session.
++ * Also called when only the parameters change: the COP's cook number then
++ * says whether to read again, which makes an edit of the COP visible without
++ * restarting Houdini. */
++/* A texture file that changes during a session.
+  *
+- * `ImageTextureNode::update_images` ne demande son image au gestionnaire que
+- * si son `handle` est vide : une fois l'image chargee, ecrire un autre nom de
+- * fichier sur le socket ne la recharge pas. Le graphe rebati - un Restart
+- * Render, ou toute edition qui salit la ressource - repartait de noeuds neufs
+- * et masquait le probleme ; une edition qui ne touche qu'aux parametres, elle,
+- * gardait l'ancienne image.
++ * `ImageTextureNode::update_images` only asks the manager for its image if
++ * its `handle` is empty: once the image is loaded, writing another file name
++ * on the socket does not reload it. The rebuilt graph - a Restart
++ * Render, or any edit that dirties the resource - started again from new nodes
++ * and hid the problem; an edit that touches only the parameters, though,
++ * kept the old image.
+  *
+- * Vider le handle quand un des sockets qui decrivent l'image a change suffit :
+- * Cycles la redemande a la compilation suivante, et son gestionnaire la
+- * reconnait si c'est la meme, donc rien n'est recharge pour rien. */
+-/* Les textures UDIM.
++ * Emptying the handle when one of the sockets that describe the image has
++ * changed is enough: Cycles asks for it again at the next compilation, and its
++ * manager recognises it if it is the same, so nothing is reloaded for nothing. */
++/* UDIM textures.
+  *
+- * Cycles sait lire une serie de tuiles, mais il faut lui dire lesquelles : le
+- * socket `tiles` porte leurs numeros, et le gestionnaire d'images remplace
+- * `<UDIM>` ou `<UVTILE>` du nom de fichier par chacun d'eux. Blender remplit
+- * cette liste depuis son image ; ici personne ne le faisait, et un chemin en
+- * `<UDIM>` partait tel quel, a la recherche d'un fichier qui n'existe pas.
++ * Cycles can read a series of tiles, but it must be told which ones: the
++ * `tiles` socket carries their numbers, and the image manager replaces
++ * `<UDIM>` or `<UVTILE>` in the file name with each of them. Blender fills
++ * this list from its image; here nobody did, and a `<UDIM>` path went out
++ * as is, looking for a file that does not exist.
+  *
+- * Les tuiles se trouvent donc comme Blender les trouve : en listant le dossier.
+- * Houdini ecrit aussi `%(UDIM)d` et `%(UVTILE)d`, que Cycles ne connait pas ;
+- * ils sont ramenes aux deux jetons qu'il sait remplacer. */
++ * The tiles are therefore found the way Blender finds them: by listing the folder.
++ * Houdini also writes `%(UDIM)d` and `%(UVTILE)d`, which Cycles does not know;
++ * they are brought back to the two tokens it knows how to replace. */
+ static bool FindUdimTiles(std::string &filename, array<int> &tiles)
+ {
+   string_replace(filename, "%(UDIM)d", "<UDIM>");
+@@ -3286,7 +3284,7 @@ static bool FindUdimTiles(std::string &filename, array<int> &tiles)
+       }
+     }
+     else {
+-      /* `u1_v1` est la tuile 1001 : u compte de 1 a 10, v par dizaines. */
++      /* `u1_v1` is tile 1001: u counts from 1 to 10, v by tens. */
+       const int u = std::stoi(match[1].str());
+       const int v = std::stoi(match[2].str());
+       if (u >= 1 && u <= 10 && v >= 1) {
+@@ -3331,7 +3329,7 @@ void HdCyclesMaterial::ResolveUdimTiles()
+     if (FindUdimTiles(filename, tiles)) {
+       node->set(*filenameSocket, ustring(filename));
+     }
+-    /* Un chemin qui n'a plus de jeton doit aussi perdre ses tuiles. */
++    /* A path that no longer has a token must also lose its tiles. */
+     node->set(*tilesSocket, tiles);
+   };
+ 
+@@ -3371,9 +3369,9 @@ void HdCyclesMaterial::BindHoudiniCopImages(Scene *scene, HdSceneDelegate *scene
+ {
+ #ifdef WITH_HOUDINI_COP
+   (void)sceneDelegate;
+-  /* Repartir d'une inscription vide : un graphe rebati donne des noeuds neufs,
+-   * et garder les anciens laisserait la veille poser une image sur un noeud qui
+-   * n'existe plus. */
++  /* Start again from an empty registration: a rebuilt graph yields new nodes,
++   * and keeping the old ones would let the watch set an image on a node that
++   * no longer exists. */
+   ForgetHoudiniCopUser(GetId());
+ 
+   for (const auto &entry : _nodes) {
+@@ -3425,15 +3423,15 @@ void HdCyclesMaterial::UpdateParameters(HdMaterialNetworkSchema network)
+ 
+ namespace {
+ 
+-/* Le nom d'une sortie tel que l'USD le porte n'est pas celui que Cycles
+- * compare. `ShaderNode::output()` teste l'`ui_name` du socket - "Displacement",
+- * "Volume", "Closure" - alors que le registre Sdr publie le nom interne, en
+- * minuscules. Les deux ne coincident que pour "BSDF", d'ou une surface qui se
+- * branchait quand rien d'autre ne le faisait.
++/* The name of an output as USD carries it is not the one Cycles compares.
++ * `ShaderNode::output()` tests the socket's `ui_name` - "Displacement",
++ * "Volume", "Closure" - whereas the Sdr registry publishes the internal name, in
++ * lowercase. The two only coincide for "BSDF", hence a surface that
++ * connected when nothing else did.
+  *
+- * Chercher donc le nom interne d'abord, comme le faisaient deja les connexions
+- * entre noeuds, puis l'ui_name pour les noms que ce fichier se donne a
+- * lui-meme. */
++ * So look for the internal name first, as the connections between nodes
++ * already did, then the ui_name for the names this file gives
++ * itself. */
+ /* Whether two socket types can be linked without changing what the value
+  * means: a closure to a closure, any three-component value to another, any
+  * scalar to another. Cycles inserts the conversions itself. */
+@@ -3527,10 +3525,10 @@ void HdCyclesMaterial::UpdateConnections(NodeDesc &nodeDesc,
+     ShaderNode *const sourceNode = srcNodeIt->second.outputNode ? srcNodeIt->second.outputNode :
+                                                                   srcNodeIt->second.node;
+ 
+-    /* Une entree peut viser plusieurs sockets - "a;b" -, comme le permettait
+-     * deja une valeur. Un fil doit pouvoir en faire autant : une rugosite
+-     * azimutale branchee sur un parametre doit atteindre les cinq termes du
+-     * polynome qui en derive l'absorption, pas le premier seulement. */
++    /* An input can target several sockets - "a;b" -, as a value already
++     * could. A wire must be able to do the same: an azimuthal roughness
++     * plugged into a parameter must reach the five terms of the polynomial
++     * that derives the absorption from it, not just the first. */
+     for (const std::string &mapped : SplitTargets(mappedName)) {
+       std::string inputName = mapped;
+ 
+@@ -3633,9 +3631,9 @@ void HdCyclesMaterial::UpdateConnections(NodeDesc &nodeDesc,
+ 
+ namespace {
+ 
+-/* Le reseau demande-t-il ce que seul un lobe de transmission separe sait
+- * rendre ? Une valeur ecrite comme un fil branche comptent : Hydra ne transmet
+- * que ce que le reseau a pose, donc leur seule presence dit l'intention. */
++/* Does the network ask for what only a separate transmission lobe can
++ * render? A written value and a plugged wire both count: Hydra only passes
++ * what the network has set, so their mere presence states the intent. */
+ bool AsksForGlassLobe(HdMaterialNodeSchema nodeSchema)
+ {
+   static const TfToken kNames[] = {TfToken("transmission_color"),
+@@ -3703,11 +3701,11 @@ unique_ptr<ShaderGraph> HdCyclesMaterial::BuildShaderGraph(HdMaterialNetworkSche
+         if (!nodeDesc.mapping) {
+           nodeDesc.mapping = FindMtlxMapping(nodeTypeId);
+         }
+-        /* Le lobe de transmission separe ne se monte que pour les materiaux
+-         * qui en ont besoin : il donne sa couleur et sa rugosite propres a la
+-         * transmission, mais laisse la dispersion, qui ne vit que sur le
+-         * principled. Un materiau qui n'ecrit ni l'une ni l'autre garde donc le
+-         * principled entier. */
++        /* The separate transmission lobe is only assembled for materials
++         * that need it: it gives the transmission its own colour and roughness,
++         * but drops the dispersion, which lives only on the
++         * principled. A material that writes neither therefore keeps the
++         * whole principled. */
+         if (nodeDesc.mapping == &MtlxStandardSurface && AsksForGlassLobe(nodeSchema)) {
+           nodeDesc.mapping = &MtlxStandardSurfaceGlass;
+         }
+@@ -3743,8 +3741,8 @@ unique_ptr<ShaderGraph> HdCyclesMaterial::BuildShaderGraph(HdMaterialNetworkSche
+             }
+             nodeDesc.helperNodes[helper.name] = helperNode;
+ 
+-            /* Un auxiliaire qui vient apres le noeud principal : la sortie de
+-             * celui-ci y entre, et c'est lui que le reste du graphe lira. */
++            /* A helper that comes after the main node: the main node's output
++             * goes into it, and it is the one the rest of the graph will read. */
+             if (helper.takesMainOutput != nullptr) {
+               ShaderOutput *const mainOut = FindOutput(
+                   nodeDesc.node, helper.mainOutputName ? helper.mainOutputName : "BSDF");
+@@ -3761,9 +3759,9 @@ unique_ptr<ShaderGraph> HdCyclesMaterial::BuildShaderGraph(HdMaterialNetworkSche
+ 
+             for (const auto &wire : helper.wires) {
+               ShaderOutput *const from = helperNode->output(wire.first);
+-              /* La cible est le noeud principal, ou un autre auxiliaire quand
+-               * elle s'ecrit "nom:socket" - celui-ci doit alors avoir ete
+-               * declare avant, les auxiliaires etant montes dans l'ordre. */
++              /* The target is the main node, or another helper when
++               * it is written "name:socket" - that one must then have been
++               * declared earlier, helpers being assembled in order. */
+               const std::pair<std::string, std::string> target = SplitHelperTarget(wire.second);
+               ShaderNode *toNode = nodeDesc.node;
+               if (!target.first.empty()) {
+@@ -3829,8 +3827,8 @@ unique_ptr<ShaderGraph> HdCyclesMaterial::BuildShaderGraph(HdMaterialNetworkSche
+       continue;
+     }
+ 
+-    /* La sortie du montage, qui n'est le noeud principal que s'il n'a rien
+-     * apres lui. */
++    /* The output of the assembly, which is the main node only if nothing
++     * comes after it. */
+     ShaderNode *const node = nodeIt->second.outputNode ? nodeIt->second.outputNode :
+                                                          nodeIt->second.node;
+ 
+@@ -3886,10 +3884,10 @@ unique_ptr<ShaderGraph> HdCyclesMaterial::BuildShaderGraph(HdMaterialNetworkSche
+       }
+     }
+     if (!input) {
+-      /* Par le journal de Cycles, pas TF_RUNTIME_ERROR : husk avale les
+-       * diagnostics de Tf, et un terminal qui tombe est precisement ce qu'il
+-       * ne faut pas perdre - le materiau rend alors sans son displacement, ou
+-       * sans son volume, sans un mot. */
++      /* Through the Cycles log, not TF_RUNTIME_ERROR: husk swallows
++       * Tf diagnostics, and a terminal that drops is precisely what must
++       * not be lost - the material then renders without its displacement, or
++       * without its volume, without a word. */
+       LOG_WARNING << "No terminal input '" << (inputName ? inputName : "<null>")
+                   << "' for '" << terminalName.GetText() << "' from '"
+                   << upstreamNodePath.GetText() << "', terminal dropped.";
+@@ -3943,8 +3941,8 @@ unique_ptr<ShaderGraph> HdCyclesMaterial::BuildShaderGraph(HdMaterialNetworkSche
+     graph->dump_graph((std::string(dumpDir) + name + ".dot").c_str());
+   }
+ 
+-  /* Retenu pour Sync, qui pose la methode une fois le Shader cree : le graphe
+-   * se construit desormais avant lui. */
++  /* Kept for Sync, which sets the method once the Shader is created: the graph
++   * is now built before it. */
+   _hasDisplacement = hasDisplacement;
+   return graph;
+ }
+@@ -3952,7 +3950,7 @@ unique_ptr<ShaderGraph> HdCyclesMaterial::BuildShaderGraph(HdMaterialNetworkSche
+ void HdCyclesMaterial::Finalize(HdRenderParam *renderParam)
+ {
+ #ifdef WITH_HOUDINI_COP
+-  /* Un materiau qui s'en va cesse d'etre surveille. */
++  /* A material that goes away stops being watched. */
+   ForgetHoudiniCopUser(GetId());
+ #endif
+ 
+diff --git a/src/hydra/material.h b/src/hydra/material.h
+index 701b199b..83866759 100644
+--- a/src/hydra/material.h
++++ b/src/hydra/material.h
+@@ -39,9 +39,9 @@ class HdCyclesMaterial final : public PXR_NS::HdMaterial {
+  private:
+   struct NodeDesc {
+     CCL_NS::ShaderNode *node;
+-    /* Ce que le reste du graphe lit de ce montage. C'est `node` sauf quand un
+-     * auxiliaire vient apres lui - un melange de fermetures, par exemple - et
+-     * devient alors la vraie sortie. */
++    /* What the rest of the graph reads from this assembly. It is `node` unless an
++     * auxiliary comes after it - a closure mix, for example - and then becomes
++     * the real output. */
+     CCL_NS::ShaderNode *outputNode = nullptr;
+     /* The auxiliary nodes a composite mapping asked for, by name: some
+      * MaterialX nodes need more than one Cycles node, and some of their inputs
+@@ -63,28 +63,28 @@ class HdCyclesMaterial final : public PXR_NS::HdMaterial {
+ 
+   unique_ptr<CCL_NS::ShaderGraph> BuildShaderGraph(PXR_NS::HdMaterialNetworkSchema network);
+ 
+-  /* Le reseau pilote-t-il un displacement ? Constate en batissant le graphe,
+-   * applique quand le Shader existe. */
++  /* Does the network drive a displacement? Noted while building the graph,
++   * applied once the Shader exists. */
+   bool _hasDisplacement = false;
+ 
+-  /* Les reglages du materiau lui-meme - `cycles:<socket>` porte par un noeud
+-   * du reseau - releves en lisant les parametres, appliques sur le Shader une
+-   * fois qu'il existe. Ils ne sont pas des sockets de noeud : ils decrivent le
+-   * materiau entier, comme le panneau Settings de Blender. */
++  /* The settings of the material itself - `cycles:<socket>` carried by a node
++   * of the network - collected while reading the parameters, applied to the
++   * Shader once it exists. They are not node sockets: they describe the whole
++   * material, like Blender's Settings panel. */
+   std::map<std::string, PXR_NS::VtValue> _shaderSettings;
+ 
+   void ApplyShaderSettings();
+ 
+-  /* Un noeud image garde son image tant que son `handle` n'est pas vide :
+-   * changer son fichier ne suffit pas a la recharger. */
++  /* An image node keeps its image as long as its `handle` is not empty:
++   * changing its file is not enough to reload it. */
+   void RefreshImageHandles();
+ 
+-  /* Un chemin en `<UDIM>` ne vaut rien sans la liste de ses tuiles, que Cycles
+-   * attend sur le socket `tiles` : elle se lit dans le dossier. */
++  /* A `<UDIM>` path is worthless without the list of its tiles, which Cycles
++   * expects on the `tiles` socket: it is read from the folder. */
+   void ResolveUdimTiles();
+ 
+-  /* Les textures qui viennent d'un COP d'Houdini : leurs pixels se lisent ici,
+-   * sur le thread de synchronisation, et se donnent a Cycles en memoire. */
++  /* The textures that come from a Houdini COP: their pixels are read here,
++   * on the sync thread, and handed to Cycles in memory. */
+   void BindHoudiniCopImages(CCL_NS::Scene *scene, PXR_NS::HdSceneDelegate *sceneDelegate);
+ 
+   CCL_NS::Shader *_shader = nullptr;
+diff --git a/src/hydra/mesh.cpp b/src/hydra/mesh.cpp
+index f63e36dc..c94f261f 100644
+--- a/src/hydra/mesh.cpp
++++ b/src/hydra/mesh.cpp
+@@ -188,10 +188,10 @@ void HdCyclesMesh::PopulatePoints(HdSceneDelegate *sceneDelegate)
+   Attribute *attr_P = attributes.add(ATTR_STD_POSITION);
+   const size_t numPoints = static_cast<size_t>(_topology.GetNumPoints());
+ 
+-  /* Flou de deformation. Le flou de transformation ne couvre que ce qui bouge
+-   * en bloc : des points animes - une simulation, un deformeur - rendaient
+-   * nets. Cycles range les pas de mouvement dans l'attribut de position
+-   * lui-meme, le pas central a l'indice 0. */
++  /* Deformation blur. Transform blur only covers what moves as a whole:
++   * animated points - a simulation, a deformer - rendered sharp. Cycles
++   * stores the motion steps in the position attribute itself, the center step
++   * at index 0. */
+   const std::vector<VtVec3fArray> samples =
+       _motionBlur ? SampleDeformingPoints(primvars,
+                                           pointsDs,
+@@ -215,10 +215,10 @@ void HdCyclesMesh::PopulatePoints(HdSceneDelegate *sceneDelegate)
+                 attr_P->data_for_write<packed_float3>());
+   }
+ 
+-  /* La sauvegarde des positions non deplacees decrit celles-ci : de nouveaux
+-   * points la perimeraient, et le displacement repartirait de la pose
+-   * precedente au lieu de celle qu'on vient de poser. La jeter ici la fait
+-   * reprendre au prochain calcul. */
++  /* The saved undisplaced positions describe the previous points: new points
++   * would make them stale, and the displacement would start again from the
++   * previous pose instead of the one just set. Discarding them here makes it
++   * recompute them on the next evaluation. */
+   attributes.remove(ATTR_STD_POSITION_UNDISPLACED);
+   attributes.remove(ATTR_STD_NORMAL_UNDISPLACED);
+ 
+@@ -278,13 +278,13 @@ void HdCyclesMesh::PopulateNormals(HdSceneDelegate *sceneDelegate)
+   else if (interpolation == HdInterpolationFaceVarying) {
+     TF_VERIFY(normals.size() == static_cast<size_t>(_topology.GetNumFaceVaryings()));
+ 
+-    /* Une normale par coin, ce qu'ecrit Houdini des que la normale vit sur les
+-     * vertices plutot que sur les points -- son cas courant. Cycles sait les
+-     * porter depuis qu'existe ATTR_STD_CORNER_NORMAL, et il les interpole
+-     * toujours: l'indicateur `smooth` est alors ignore, puisque la durete d'une
+-     * arete est deja inscrite dans la difference entre les normales de ses
+-     * coins. C'est donc le maillage qui decide, arete par arete, et non un
+-     * choix impose a la piece entiere. */
++    /* One normal per corner, which is what Houdini writes as soon as the
++     * normal lives on vertices rather than on points -- its usual case. Cycles
++     * can carry them since ATTR_STD_CORNER_NORMAL exists, and it always
++     * interpolates them: the `smooth` flag is then ignored, since the hardness
++     * of an edge is already written in the difference between the normals of
++     * its corners. So it is the mesh that decides, edge by edge, and not a
++     * choice imposed on the whole piece. */
+     const VtValue triangulated = ComputeTriangulatedFaceVaryingPrimvar(
+         value, HdTypeFloatVec3, _util);
+     if (!triangulated.IsHolding<VtVec3fArray>()) {
+@@ -501,10 +501,10 @@ void HdCyclesMesh::PopulateTopology(HdSceneDelegate *sceneDelegate)
+    * A polygonal mesh with no authored normals is faceted - there is nothing to
+    * interpolate - and a subdivided one is smooth by construction.
+    *
+-   * Les normales par coin ne passent pas par ici: elles sont posees en
+-   * ATTR_STD_CORNER_NORMAL, et Cycles ignore alors cet indicateur puisque la
+-   * durete de chaque arete est deja inscrite dans les normales elles-memes.
+-   * Restent les normales par face, qui decrivent bien une facette. */
++   * Per-corner normals do not go through here: they are set as
++   * ATTR_STD_CORNER_NORMAL, and Cycles then ignores this flag since the
++   * hardness of each edge is already written in the normals themselves.
++   * What remains are the per-face normals, which do describe a facet. */
+   const HdSceneIndexPrim normalsPrim = GetPrim(sceneDelegate, GetId());
+   const HdPrimvarsSchema normalsPrimvars = HdPrimvarsSchema::GetFromParent(
+       normalsPrim.dataSource);
+@@ -514,10 +514,10 @@ void HdCyclesMesh::PopulateTopology(HdSceneDelegate *sceneDelegate)
+                                          normalsInterpolation == HdInterpolationVarying ||
+                                          normalsInterpolation == HdInterpolationConstant ||
+                                          normalsInterpolation == HdInterpolationFaceVarying;
+-  /* Les normales par coin comptent ici comme un repli. Cycles les ecarte quand
+-   * la geometrie floute sans qu'elles bougent avec elle (Mesh::add_vertex_normals) ;
+-   * l'indicateur reprend alors la main, et un lissage approche vaut mieux qu'une
+-   * facettisation franche que le maillage n'a jamais demandee. */
++  /* Per-corner normals count here as a fallback. Cycles discards them when
++   * the geometry blurs without them moving along with it (Mesh::add_vertex_normals);
++   * the flag then takes over again, and an approximate smoothing beats the
++   * blunt faceting that the mesh never asked for. */
+   const bool smooth = !flatShadingEnabled && (subdivision || haveInterpolatableNormals);
+ 
+   // Initialize lookup table from polygon face to material shader index
+@@ -699,9 +699,9 @@ void HdCyclesMesh::PopulateTopology(HdSceneDelegate *sceneDelegate)
+       }
+     }
+ 
+-    /* Le pas du decoupage vient des reglages de rendu ; sans camera de
+-     * decoupage renseignee il ne voulait rien dire, avec elle il vaut un
+-     * nombre de pixels par micropolygone. */
++    /* The dicing step comes from the render settings; without a dicing
++     * camera set it meant nothing, with one it is worth a number of pixels
++     * per micropolygon. */
+     const auto *const cyclesDelegate = static_cast<const HdCyclesDelegate *>(
+         sceneDelegate->GetRenderIndex().GetRenderDelegate());
+     const auto *const session = static_cast<HdCyclesSession *>(
+@@ -713,9 +713,9 @@ void HdCyclesMesh::PopulateTopology(HdSceneDelegate *sceneDelegate)
+     const int maxLevel = session->GetMaxSubdivisions();
+     _geom->set_subd_dicing_rate(dicingRate);
+     _geom->set_subd_max_level(maxLevel);
+-    /* Les deux nombres qui decident du cout d'une surface subdivisee. Sans eux
+-     * au journal, un maillage decoupe en millions de triangles ne se voit que
+-     * dans la memoire du peripherique, ou personne ne pense a regarder. */
++    /* The two numbers that decide the cost of a subdivided surface. Without
++     * them in the log, a mesh diced into millions of triangles only shows up
++     * in the device memory, where nobody thinks to look. */
+     LOG_INFO << "Subdivision " << GetId().GetText() << ": dicing rate " << dicingRate
+              << " px, max level " << maxLevel << ".";
+     _geom->set_subd_objecttoworld(_instances[0]->get_tfm());
+diff --git a/src/hydra/node_util.cpp b/src/hydra/node_util.cpp
+index 23cc1bc0..80df2a7a 100644
+--- a/src/hydra/node_util.cpp
++++ b/src/hydra/node_util.cpp
+@@ -153,10 +153,10 @@ template<> ustring convertToCycles<ustring>(const VtValue &value)
+     const std::string &resolved = path.GetResolvedPath();
+     std::string filename = resolved.empty() ? path.GetAssetPath() : resolved;
+ 
+-    /* Un chemin `op:` nomme un noeud de composition, pas un fichier. Il reste
+-     * tel quel sur le socket : c'est a lui que `BindHoudiniCopImage` reconnait
+-     * un COP, pour en lire les pixels une fois la synchronisation faite et les
+-     * donner a Cycles sans passer par le disque. */
++    /* An `op:` path names a compositing node, not a file. It stays as is on
++     * the socket: that is how `BindHoudiniCopImage` recognizes a COP, to read
++     * its pixels once the synchronization is done and hand them to Cycles
++     * without going through the disk. */
+ 
+     return ustring(filename);
+   }
+diff --git a/src/hydra/plugin.cpp b/src/hydra/plugin.cpp
+index 0377387b..9bf096cc 100644
+--- a/src/hydra/plugin.cpp
++++ b/src/hydra/plugin.cpp
+@@ -34,13 +34,13 @@ TF_DEFINE_ENV_SETTING(CYCLES_LOG_FILE,
+ 
+ namespace {
+ 
+-/* Le journal, quand il n'y a pas de console pour le recevoir.
++/* The log, when there is no console to receive it.
+  *
+- * Cycles ecrit sur la sortie standard, ce qui suppose un hote qui en ait une.
+- * Houdini est une application graphique : sous Windows son processus n'a pas de
+- * console, et tout ce que le delegate raconte se perd. Un moteur qui ne peut
+- * rien dire de ce qu'il fait est un moteur qu'on ne peut pas diagnostiquer -
+- * d'ou ce robinet, ouvert par `CYCLES_LOG_FILE`. */
++ * Cycles writes to standard output, which assumes a host that has one.
++ * Houdini is a graphical application: on Windows its process has no console,
++ * and everything the delegate says is lost. An engine that cannot say anything
++ * about what it is doing is an engine that cannot be diagnosed - hence this
++ * tap, opened by `CYCLES_LOG_FILE`. */
+ FILE *LogFile()
+ {
+   static FILE *file = [] {
+@@ -67,8 +67,8 @@ void LogToFile(const CCL_NS::LogLevel level,
+     return;
+   }
+   fprintf(file, "%s: %s\n", CCL_NS::log_level_to_string(level), msg);
+-  /* Vide a chaque ligne : un journal qu'on lit pendant que Houdini tourne, ou
+-   * apres qu'il a plante, ne vaut que par ce qui a deja touche le disque. */
++  /* Flushed on every line: a log read while Houdini is running, or after it
++   * has crashed, is only worth what has already reached the disk. */
+   fflush(file);
+ }
+ 
+diff --git a/src/hydra/pointcloud.cpp b/src/hydra/pointcloud.cpp
+index 0c9c9951..6747404f 100644
+--- a/src/hydra/pointcloud.cpp
++++ b/src/hydra/pointcloud.cpp
+@@ -82,8 +82,8 @@ void HdCyclesPoints::PopulatePoints(HdSceneDelegate *sceneDelegate)
+               points.size(),
+               _geom->get_position_for_write());
+ 
+-  /* Des points qui se deplacent - un nuage simule, des particules - doivent
+-   * flouter comme le fait une transform animee. */
++  /* Points that move - a simulated cloud, particles - must blur the way an
++   * animated transform does. */
+   const std::vector<VtVec3fArray> samples =
+       _motionBlur ?
+           SampleDeformingPoints(primvars,
+diff --git a/src/hydra/render_delegate.cpp b/src/hydra/render_delegate.cpp
+index 6c460293..567a9fda 100644
+--- a/src/hydra/render_delegate.cpp
++++ b/src/hydra/render_delegate.cpp
+@@ -99,20 +99,20 @@ SessionParams GetSessionParams(const HdRenderSettingsMap &settings)
+    * what separates Cycles from Karma in batch, and the interactive mode is
+    * the one the viewport needs. */
+   params.background = false;
+-  /* Pas de passes en resolution reduite, bien que ce soit le defaut de Cycles.
++  /* No reduced-resolution passes, although that is Cycles' default.
+    *
+-   * Essaye deux fois, et abandonne sur l'usage. La premiere fois le pilote
+-   * d'affichage versait le tampon reduit dans une texture pleine taille et
+-   * l'image ressortait en petit, repetee, dans le bas du viewport. La seconde,
+-   * avec l'agrandissement ecrit, le viewport rendait moins bien et moins vite
+-   * qu'avant - le mot de l'utilisateur, qui vaut mieux que le raisonnement.
++   * Tried twice, and dropped on use. The first time the display driver poured
++   * the reduced buffer into a full-size texture and the image came out small,
++   * repeated, at the bottom of the viewport. The second time, with the
++   * upscaling written, the viewport rendered worse and slower than before -
++   * the user's verdict, which is worth more than the reasoning.
+    *
+-   * Ce que le raisonnement disait, et qui reste vrai : un echantillon pleine
+-   * resolution coute trois secondes dans une scene chargee, et rien ne rend
+-   * interactif un moteur qui met trois secondes a produire son premier pixel.
+-   * Mais la vraie cause etait ailleurs - une carte graphique pleine, ou tout
+-   * finit en memoire hote et se lit par le bus. Un rendu progressif n'y aurait
+-   * rien change. */
++   * What the reasoning said, and which remains true: a full-resolution sample
++   * costs three seconds in a loaded scene, and nothing makes an engine
++   * interactive when it takes three seconds to produce its first pixel.
++   * But the real cause was elsewhere - a full graphics card, where everything
++   * ends up in host memory and is read over the bus. A progressive render
++   * would have changed nothing there. */
+   params.use_resolution_divider = false;
+ 
+   HdRenderSettingsMap::const_iterator it;
+@@ -140,8 +140,8 @@ SessionParams GetSessionParams(const HdRenderSettingsMap &settings)
+   std::transform(deviceType.begin(), deviceType.end(), deviceType.begin(), ::toupper);
+ 
+   vector<DeviceInfo> devices;
+-  /* L'amont ne retient qu'un peripherique dont le pilote convient : le filtre
+-   * vaut pour les deux chemins. */
++  /* Upstream only keeps a device whose driver is suitable: the filter applies
++   * to both paths. */
+   auto collect = [&devices](const DeviceType type) {
+     for (const DeviceInfo &info : Device::available_devices(DEVICE_MASK(type))) {
+       if (info.meets_driver_requirement) {
+@@ -533,11 +533,11 @@ HdRenderSettingDescriptorList HdCyclesDelegate::GetRenderSettingDescriptors() co
+       HdCyclesRenderSettingsTokens->threads,
+       VtValue(_renderParam->session->params.threads),
+   });
+-  /* Le pas du decoupage adaptatif des subdivisions, en pixels : combien de
+-   * pixels vaut un micropolygone. Blender en expose deux, 1 px au rendu et
+-   * 8 px dans la vue ; ici il n'y en a qu'un, mais il se change sans
+-   * recompiler. Doubler la valeur divise le nombre de micropolygones par
+-   * quatre. */
++  /* The step of the adaptive dicing of subdivisions, in pixels: how many
++   * pixels a micropolygon is worth. Blender exposes two, 1 px when rendering
++   * and 8 px in the viewport; here there is only one, but it can be changed
++   * without recompiling. Doubling the value divides the number of
++   * micropolygons by four. */
+   descriptors.push_back({
+       "Dicing Rate",
+       HdCyclesRenderSettingsTokens->dicingRate,
+@@ -611,14 +611,13 @@ void HdCyclesDelegate::SetRenderSetting(const PXR_NS::TfToken &key, const PXR_NS
+   }
+   else if (key == HdCyclesRenderSettingsTokens->dicingRate) {
+     const float rate = VtValue::Cast<float>(value).GetWithDefault(_renderParam->GetDicingRate());
+-    /* Zero ou moins ferait un decoupage infini ; le plancher est celui de
+-     * Blender. */
++    /* Zero or less would make an infinite dicing; the floor is Blender's. */
+     const float clamped = std::max(0.1f, rate);
+     if (clamped != _renderParam->GetDicingRate()) {
+       _renderParam->SetDicingRate(clamped);
+-      /* Les maillages deja synchronises portent l'ancienne valeur : la leur
+-       * reposer les marque modifies, et Cycles les redecoupe. Sans cela, le
+-       * reglage n'aurait d'effet que sur ce qui arrive apres lui. */
++      /* The meshes already synchronized carry the old value: setting theirs
++       * again marks them modified, and Cycles dices them again. Without this,
++       * the setting would only affect what arrives after it. */
+       for (Geometry *const geom : scene->geometry) {
+         if (geom->is_mesh()) {
+           Mesh *const mesh = static_cast<Mesh *>(geom);
+diff --git a/src/hydra/render_pass.cpp b/src/hydra/render_pass.cpp
+index fc7ecf57..acc2e43e 100644
+--- a/src/hydra/render_pass.cpp
++++ b/src/hydra/render_pass.cpp
+@@ -56,19 +56,19 @@ HdCyclesRenderPass::HdCyclesRenderPass(HdRenderIndex *index,
+ #endif
+   }
+ 
+-  /* Par ou les pixels remontent a l'hote, dit une fois. Les deux chemins n'ont
+-   * pas le meme prix : le pilote d'affichage ecrit dans une texture que l'hote
+-   * possede deja, l'autre relit le tampon depuis le peripherique a chaque
+-   * rafraichissement - gratuit sur processeur, une copie par-dessus le bus sur
+-   * carte graphique. C'est la premiere chose a regarder quand le viewport
+-   * repond moins bien en GPU qu'en CPU. */
++  /* Where the pixels go back up to the host, said once. The two paths do not
++   * cost the same: the display driver writes into a texture that the host already
++   * owns, the other rereads the buffer from the device on every
++   * refresh - free on a processor, a copy over the bus on a
++   * graphics card. It is the first thing to look at when the viewport
++   * responds less well on GPU than on CPU. */
+   {
+     const Hgi *const hgi = renderDelegate->GetHgi();
+-    LOG_INFO << "Affichage : "
++    LOG_INFO << "Display: "
+              << (renderDelegate->IsDisplaySupported() ?
+-                     "pilote d'affichage, la texture reste sur le peripherique" :
+-                     "driver de sortie, le tampon est relu a chaque rafraichissement")
+-             << " (Hgi : " << (hgi ? hgi->GetAPIName().GetText() : "aucun") << ").";
++                     "display driver, the texture stays on the device" :
++                     "output driver, the buffer is read back on every refresh")
++             << " (Hgi: " << (hgi ? hgi->GetAPIName().GetText() : "none") << ").";
+   }
+ }
+ 
+@@ -142,11 +142,11 @@ void HdCyclesRenderPass::_Execute(const HdRenderPassStateSharedPtr &renderPassSt
+   }
+ 
+   {
+-    /* Le chronometre de la passe. `_Execute` tourne sur le fil de l'hote : tout
+-     * ce qu'il passe ici, le viewport le passe fige. Un rendu qui « met quatre
+-     * secondes a demarrer » se lit dans ces quatre nombres, et nulle part
+-     * ailleurs - le reste du temps appartient au fil de rendu, qui lui ne bloque
+-     * personne. */
++    /* The pass timer. `_Execute` runs on the host thread: everything
++     * it spends here, the viewport spends frozen. A render that "takes four
++     * seconds to start" reads in these four numbers, and nowhere
++     * else - the rest of the time belongs to the render thread, which blocks
++     * nobody. */
+     using clock = std::chrono::steady_clock;
+     const clock::time_point tStart = clock::now();
+ 
+@@ -172,11 +172,11 @@ void HdCyclesRenderPass::_Execute(const HdRenderPassStateSharedPtr &renderPassSt
+     const clock::time_point tLocked = clock::now();
+ 
+ #ifdef WITH_HOUDINI_COP
+-    /* Un COP qui change ne salit rien : Solaris ne connait pas la dependance
+-     * entre un materiau et un noeud de composition, et sans cette veille la
+-     * texture reste celle du premier chargement. C'est ici qu'elle a sa place -
+-     * la passe tourne sur le fil de l'hote, seul endroit ou cuire un noeud
+-     * Houdini est sur, et le verrou de scene est tenu. */
++    /* A COP that changes dirties nothing: Solaris does not know the dependency
++     * between a material and a compositing node, and without this watch the
++     * texture stays the one from the first load. This is where it belongs -
++     * the pass runs on the host thread, the only place where cooking a
++     * Houdini node is safe, and the scene lock is held. */
+     PollHoudiniCops(scene);
+ #endif
+     const clock::time_point tPolled = clock::now();
+@@ -219,15 +219,15 @@ void HdCyclesRenderPass::_Execute(const HdRenderPassStateSharedPtr &renderPassSt
+     scene->camera->set_full_width(framing.dataWindow.GetWidth());
+     scene->camera->set_full_height(framing.dataWindow.GetHeight());
+ 
+-    /* Le prim camera d'un cote, les matrices de l'etat de passe de l'autre :
+-     * les deux disent la meme vue, mais l'un porte en plus la profondeur de
+-     * champ et les echantillons d'obturateur.
++    /* The camera prim on one side, the render pass state matrices on the other:
++     * both describe the same view, but the former also carries the depth of
++     * field and the shutter samples.
+      *
+-     * Ne pas les melanger. Appliquer les matrices par-dessus le prim a ete
+-     * essaye : les valeurs reconstruites depuis une projection different de
+-     * celles du prim, le noeud camera se retrouvait modifie a chaque image,
+-     * `need_reset()` etait vrai en permanence, et la session repartait de zero
+-     * a chaque passe - le rendu n'avancait plus d'un echantillon. */
++     * Do not mix them. Applying the matrices on top of the prim was tried:
++     * the values rebuilt from a projection differ from those of the prim,
++     * the camera node ended up modified on every frame, `need_reset()` was
++     * permanently true, and the session restarted from zero on every pass -
++     * the render no longer advanced by a single sample. */
+     if (const auto *const camera = static_cast<const HdCyclesCamera *>(
+             renderPassState->GetCamera()))
+     {
+@@ -242,31 +242,31 @@ void HdCyclesRenderPass::_Execute(const HdRenderPassStateSharedPtr &renderPassSt
+     }
+     const clock::time_point tCameraApplied = clock::now();
+ 
+-    /* La camera qui sert a decouper les surfaces subdivisees. Cycles la cree,
+-     * mais personne ne la renseignait : elle restait a l'identite, une surface
+-     * lui paraissait donc immense, et le decoupage partait au plafond. Un
+-     * simple grid de 980 faces sortait a 10,3 millions de triangles, 1,2 Go de
+-     * BVH et une demi-seconde de construction - a chaque edition. Elle suit
+-     * desormais la camera de rendu, comme dans Blender.
++    /* The camera used to dice the subdivided surfaces. Cycles creates it,
++     * but nobody filled it in: it stayed at identity, so a surface looked
++     * huge to it, and the dicing went through the roof. A simple grid of 980
++     * faces came out at 10.3 million triangles, 1.2 GB of BVH and half a
++     * second of build time - on every edit. It now follows the render
++     * camera, as in Blender.
+      *
+-     * `copy_value` recopie sans lever de drapeau de modification, et c'est
+-     * voulu : un maillage ne se redecoupe que sur ses propres changements, pas
+-     * a chaque deplacement de vue. */
++     * `copy_value` copies without raising a modification flag, and that is
++     * intended: a mesh is only re-diced on its own changes, not on
++     * every view movement. */
+     for (const SocketType &socket : scene->camera->type->inputs) {
+       scene->dicing_camera->copy_value(socket, *scene->camera, socket);
+     }
+ 
+-    /* Passer d'une camera a l'autre - entrer dans une camera USD, en sortir
+-     * vers la vue libre - change la source de la vue, pas forcement une valeur
+-     * du noeud camera de Cycles : le cadrage pouvait rester celui de la
+-     * precedente, et la vue ne plus repondre, jusqu'a un Restart Render fait a
+-     * la main. La bascule est donc constatee ici, et vaut remise a zero de la
+-     * session, ce que ce Restart Render faisait. */
++    /* Switching from one camera to another - entering a USD camera, leaving it
++     * for the free view - changes the source of the view, not necessarily a value
++     * of the Cycles camera node: the framing could stay that of the
++     * previous one, and the view stop responding, until a Restart Render done by
++     * hand. The switch is therefore detected here, and counts as a reset of the
++     * session, which is what that Restart Render did. */
+     const HdCamera *const cameraPrim = renderPassState->GetCamera();
+-    /* La premiere passe n'est pas une bascule : rien ne precede. Une passe de
+-     * rendu peut etre construite a neuf - c'est le cas en batch - et croire a
+-     * une bascule a chaque fois relancerait la session sans fin, sans qu'un
+-     * echantillon ne s'accumule. */
++    /* The first pass is not a switch: nothing precedes it. A render pass can
++     * be built anew - this is the case in batch - and believing in
++     * a switch every time would restart the session endlessly, without a
++     * sample ever accumulating. */
+     const bool cameraSwitched = _haveLastCamera && cameraPrim != _lastCamera;
+     _lastCamera = cameraPrim;
+     _haveLastCamera = true;
+@@ -274,23 +274,23 @@ void HdCyclesRenderPass::_Execute(const HdRenderPassStateSharedPtr &renderPassSt
+       scene->camera->tag_modified();
+     }
+ 
+-    /* La borne entre ce qui prepare la passe et ce qui relance la session : la
+-     * premiere mesure ne les separait pas, et attribuait a la camera quatre
+-     * secondes qui appartenaient a l'attente de l'echantillon en cours. */
++    /* The boundary between what prepares the pass and what restarts the session: the
++     * first measurement did not separate them, and attributed to the camera four
++     * seconds that belonged to waiting for the sample in progress. */
+     const clock::time_point tCamera = clock::now();
+ 
+     // Reset session if the session, scene, camera or AOV bindings changed
+-    /* `need_reset(false)` est le besoin de mise a jour des donnees, camera exclue. */
++    /* `need_reset(false)` is the need to update the data, camera excluded. */
+     const bool dataUpdate = scene->need_reset(false);
+     const bool cameraModified = scene->camera->is_modified();
+     if (dataUpdate || cameraModified || settingsVersion != _lastSettingsVersion || cameraSwitched) {
+-      /* Ce qui a relance le rendu. Un viewport qui ne converge jamais tient
+-       * presque toujours a une cause qui revient a chaque image, et sans ce mot
+-       * elle est invisible : la session repart, c'est tout ce qu'on voit. */
+-      LOG_INFO << "Rendu relance :" << (dataUpdate ? " scene" : "")
++      /* What restarted the render. A viewport that never converges almost
++       * always comes down to a cause that comes back on every frame, and without this word
++       * it is invisible: the session restarts, and that is all one sees. */
++      LOG_INFO << "Render restarted:" << (dataUpdate ? " scene" : "")
+                << (cameraModified ? " camera" : "")
+-               << (settingsVersion != _lastSettingsVersion ? " reglages" : "")
+-               << (cameraSwitched ? " bascule-de-camera" : "") << ".";
++               << (settingsVersion != _lastSettingsVersion ? " settings" : "")
++               << (cameraSwitched ? " camera-switch" : "") << ".";
+       _lastSettingsVersion = settingsVersion;
+ 
+       // Reset convergence state of all render buffers
+@@ -319,10 +319,10 @@ void HdCyclesRenderPass::_Execute(const HdRenderPassStateSharedPtr &renderPassSt
+     // Start Cycles render thread if not already running
+     session->start();
+ 
+-    /* Ce que la passe a coute a l'hote, quand ca se voit. Le seuil evite une
+-     * ligne par image sur un viewport qui va bien ; au-dela, chaque poste est
+-     * nomme, parce que « le rendu est lent » ne dit pas s'il attend un verrou,
+-     * un COP qui recuit, ou une session qui repart. */
++    /* What the pass cost the host, when it shows. The threshold avoids one
++     * line per frame on a viewport that is doing well; beyond it, each item is
++     * named, because "the render is slow" does not say whether it is waiting for a lock,
++     * a COP that is recooking, or a session that is restarting. */
+     const clock::time_point tEnd = clock::now();
+     const auto ms = [](const clock::time_point a, const clock::time_point b) {
+       return std::chrono::duration_cast<std::chrono::microseconds>(b - a).count() / 1000.0;
+diff --git a/src/hydra/render_pass.h b/src/hydra/render_pass.h
+index 2d2e1fcd..809cabb3 100644
+--- a/src/hydra/render_pass.h
++++ b/src/hydra/render_pass.h
+@@ -38,9 +38,9 @@ class HdCyclesRenderPass final : public PXR_NS::HdRenderPass {
+ 
+   HdCyclesSession *_renderParam;
+   unsigned int _lastSettingsVersion = 0;
+-  /* La camera de la passe precedente. Changer de camera - entrer dans une
+-   * camera USD, en sortir - ne modifie pas forcement une valeur du noeud
+-   * camera de Cycles, et la bascule passait alors inapercue. */
++  /* The camera of the previous pass. Switching camera - entering a USD
++   * camera, leaving it - does not necessarily change a value of the Cycles
++   * camera node, and the switch then went unnoticed. */
+   const PXR_NS::HdCamera *_lastCamera = nullptr;
+   bool _haveLastCamera = false;
+ };
+diff --git a/src/hydra/session.h b/src/hydra/session.h
+index e076a74c..e002efe5 100644
+--- a/src/hydra/session.h
++++ b/src/hydra/session.h
+@@ -43,10 +43,11 @@ class HdCyclesSession final : public PXR_NS::HdRenderParam {
+     _stageMetersPerUnit = stageMetersPerUnit;
+   }
+ 
+-  /* Le pas du decoupage adaptatif des subdivisions, en pixels. Blender expose
+-   * les deux : 1 px au rendu, 8 px dans la vue, soit soixante-quatre fois
+-   * moins de micropolygones pour naviguer. Range ici parce que le maillage le
+-   * lit a la synchronisation, ou seule la session est a portee. */
++  /* The step of the adaptive dicing of subdivisions, in pixels. Blender
++   * exposes both: 1 px when rendering, 8 px in the viewport, that is
++   * sixty-four times fewer micropolygons for navigating. Kept here because
++   * the mesh reads it at synchronization, where only the session is in
++   * reach. */
+   /* The deepest a subdivided mesh may be split, whatever its dicing rate
+    * asks: Blender's default, 12. */
+   int GetMaxSubdivisions() const
+diff --git a/src/hydra/util.cpp b/src/hydra/util.cpp
+index 9578b5be..64b612ac 100644
+--- a/src/hydra/util.cpp
++++ b/src/hydra/util.cpp
+@@ -34,12 +34,12 @@ HdSceneIndexPrim GetPrim(HdSceneDelegate *delegate, const SdfPath &id)
+   return si->GetPrim(id);
+ }
+ 
+-/* Les positions au temps demande, extrapolees d'un champ de vitesses.
++/* The positions at the requested time, extrapolated from a velocity field.
+  *
+- * Les velocites d'USD sont en unites par seconde, l'obturateur en images :
+- * c'est la cadence qui fait le pont. Les accelerations, si elles sont ecrites,
+- * courbent la trajectoire au second ordre - un projectile floute alors le long
+- * de son arc et non de sa corde. */
++ * USD's velocities are in units per second, the shutter in frames: the frame
++ * rate is what bridges the two. Accelerations, if they are authored, bend the
++ * trajectory to the second order - a projectile then blurs along its arc and
++ * not along its chord. */
+ static std::vector<VtVec3fArray> SampleFromVelocities(const HdPrimvarsSchema &primvars,
+                                                       const HdSampledDataSourceHandle &pointsDs,
+                                                       const float shutterOpen,
+@@ -113,9 +113,9 @@ std::vector<VtVec3fArray> SampleDeformingPoints(const HdPrimvarsSchema &primvars
+     return samples;
+   }
+ 
+-  /* USD donne la priorite aux velocites sur l'interpolation entre echantillons,
+-   * et pour une bonne raison : quand le nombre de points varie, il n'y a rien a
+-   * interpoler, et c'est alors la seule source de flou. */
++  /* USD gives velocities priority over interpolation between samples, and
++   * for a good reason: when the number of points varies, there is nothing to
++   * interpolate, and velocities are then the only source of blur. */
+   samples = SampleFromVelocities(
+       primvars, pointsDs, shutterOpen, shutterClose, steps, minPoints, timeCodesPerSecond);
+   if (!samples.empty()) {
+@@ -124,9 +124,9 @@ std::vector<VtVec3fArray> SampleDeformingPoints(const HdPrimvarsSchema &primvars
+ 
+   samples.resize(steps);
+   for (int step = 0; step < steps; ++step) {
+-    /* Les memes instants regulierement espaces que pour les transforms :
+-     * Cycles etale ses pas de mouvement lineairement sur l'obturateur, un
+-     * echantillonnage irregulier flouterait le long d'une trajectoire faussee. */
++    /* The same evenly spaced instants as for the transforms: Cycles spreads
++     * its motion steps linearly over the shutter, an irregular sampling would
++     * blur along a distorted trajectory. */
+     const float t = shutterOpen + (shutterClose - shutterOpen) * step / float(steps - 1);
+     const VtValue sampled = pointsDs->GetValue(t);
+     if (!sampled.IsHolding<VtVec3fArray>()) {
+diff --git a/src/hydra/util.h b/src/hydra/util.h
+index b5400cae..167c33e9 100644
+--- a/src/hydra/util.h
++++ b/src/hydra/util.h
+@@ -105,17 +105,16 @@ PXR_NS::TfToken ReadPrimvarRole(const PXR_NS::HdPrimvarsSchema &primvars,
+ PXR_NS::TfTokenVector PrimvarNamesAtInterpolation(const PXR_NS::HdPrimvarsSchema &primvars,
+                                                   PXR_NS::HdInterpolation interpolation);
+ 
+-/* Positions echantillonnees regulierement le long de l'obturateur, pour le flou
+- * de deformation.
++/* Positions sampled evenly along the shutter, for deformation blur.
+  *
+- * Deux sources, dans l'ordre qu'impose USD. Un champ de `velocities` l'emporte
+- * quand il existe : c'est le seul flou possible quand le nombre de points
+- * change d'une image a l'autre, cas ou il n'y a plus aucune correspondance a
+- * interpoler - et c'est precisement ce qu'ecrit Houdini pour une simulation.
+- * Faute de velocites, les positions sont relues a chaque instant.
++ * Two sources, in the order USD imposes. A `velocities` field wins when it
++ * exists: it is the only possible blur when the number of points changes from
++ * one frame to the next, a case where there is no correspondence left to
++ * interpolate - and that is precisely what Houdini writes for a simulation.
++ * Lacking velocities, the positions are read again at each instant.
+  *
+- * Rend un vecteur vide si rien ne bouge, ou si les echantillons ne se
+- * correspondent pas. */
++ * Returns an empty vector if nothing moves, or if the samples do not match
++ * each other. */
+ std::vector<PXR_NS::VtVec3fArray> SampleDeformingPoints(
+     const PXR_NS::HdPrimvarsSchema &primvars,
+     const PXR_NS::HdSampledDataSourceHandle &pointsDs,
+@@ -125,8 +124,8 @@ std::vector<PXR_NS::VtVec3fArray> SampleDeformingPoints(
+     size_t minPoints,
+     double timeCodesPerSecond);
+ 
+-/* Pose ces echantillons dans l'attribut de position. Cycles y range le pas
+- * central a l'indice 0 et les autres a la suite, dans l'ordre de l'obturateur. */
++/* Sets these samples in the position attribute. Cycles stores the center step
++ * there at index 0 and the others after it, in shutter order. */
+ void WriteMotionPositions(CCL_NS::Geometry *geom,
+                           CCL_NS::Attribute *attr_P,
+                           const std::vector<PXR_NS::VtVec3fArray> &samples,

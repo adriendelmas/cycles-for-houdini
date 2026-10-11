@@ -1,0 +1,135 @@
+From df0965d90e44c9c0c96bb77165b64efddebdd7fa Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 8 Oct 2026 03:16:40 +0200
+Subject: [PATCH 092/141] hydra: light groups and their passes
+
+Lights had no group, and no render variable could isolate one. A light now takes
+its group from `cycles:lightgroup`, from the `cycles:object:lightgroup` primvar,
+or from its Karma LPE tag (`karma:light:lpetag`); the dome's becomes the
+background's. A variable named or sourced `lightgroup:<group>`, or Karma's
+expression `C.*<L.'<tag>'>`, gives the combined pass of that group alone - apart
+from the one-pass-per-type rule. Measured: two lights in two groups, by both
+spellings, add up to the beauty to within one ten-thousandth.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/light.cpp   | 28 ++++++++++++++++++++++++++++
+ src/hydra/session.cpp | 38 +++++++++++++++++++++++++++++++++++++-
+ 2 files changed, 65 insertions(+), 1 deletion(-)
+
+diff --git a/src/hydra/light.cpp b/src/hydra/light.cpp
+index bdf91c69..b5ce066a 100644
+--- a/src/hydra/light.cpp
++++ b/src/hydra/light.cpp
+@@ -17,6 +17,7 @@
+ #include "util/transform.h"
+ 
+ #include <pxr/imaging/hd/lightSchema.h>
++#include <pxr/imaging/hd/primvarsSchema.h>
+ #include <pxr/imaging/hd/sceneDelegate.h>
+ #include <pxr/imaging/hd/visibilitySchema.h>
+ #include <pxr/imaging/hd/xformSchema.h>
+@@ -219,6 +220,33 @@ void HdCyclesLight::Sync(HdSceneDelegate *sceneDelegate,
+       static_cast<HdCyclesSession *>(renderParam)->SetLightLinks(_object, lightLink, shadowLink);
+     }
+ 
++    /* Its light group, for the light group passes: `cycles:lightgroup` on the
++     * light, the per-object primvar the Render Geometry Settings node writes,
++     * or Karma's LPE tag, so a light tagged for Karma's light groups lands in
++     * the Cycles group of the same name. */
++    {
++      std::string group;
++      for (const char *name : {"cycles:lightgroup", "karma:light:lpetag"}) {
++        if (auto ds = HdSampledDataSource::Cast(lightDs ? lightDs->Get(TfToken(name)) : nullptr)) {
++          const VtValue value = ds->GetValue(0.0f);
++          if (value.IsHolding<std::string>() && !value.UncheckedGet<std::string>().empty()) {
++            group = value.UncheckedGet<std::string>();
++            break;
++          }
++          if (value.IsHolding<TfToken>() && !value.UncheckedGet<TfToken>().IsEmpty()) {
++            group = value.UncheckedGet<TfToken>().GetString();
++            break;
++          }
++        }
++      }
++      const VtValue primvar = ReadPrimvar(HdPrimvarsSchema::GetFromParent(primDs),
++                                          TfToken("cycles:object:lightgroup"));
++      if (primvar.IsHolding<std::string>() && !primvar.UncheckedGet<std::string>().empty()) {
++        group = primvar.UncheckedGet<std::string>();
++      }
++      _object->set_lightgroup(ustring(group));
++    }
++
+     PopulateShaderGraph(lightDs);
+   }
+   // Need to update shader graph when transform changes in case transform was baked into it
+diff --git a/src/hydra/session.cpp b/src/hydra/session.cpp
+index cb084fc1..79ae0f1b 100644
+--- a/src/hydra/session.cpp
++++ b/src/hydra/session.cpp
+@@ -155,6 +155,26 @@ PassType CyclesPassNamed(const std::string &name)
+  * sources - a raw Cycles or Karma name, one of Karma's light path
+  * expressions, the `st` primvar. Anything else is a shader AOV named after
+  * its source, which `aov_output` nodes of that name write. */
++/* A light group pass: `lightgroup:<group>` as the name or the source, or
++ * Karma's light group expression `C.*<L.'<tag>'>`. Empty if not one. */
++std::string LightGroupOf(const std::string &name, const std::string &source)
++{
++  static const std::string prefix = "lightgroup:";
++  for (const std::string *s : {&name, &source}) {
++    if (s->rfind(prefix, 0) == 0 && s->size() > prefix.size()) {
++      return s->substr(prefix.size());
++    }
++  }
++  static const std::string open = "C.*<L.'";
++  static const std::string close = "'>";
++  if (source.rfind(open, 0) == 0 && source.size() > open.size() + close.size() &&
++      source.compare(source.size() - close.size(), close.size(), close) == 0)
++  {
++    return source.substr(open.size(), source.size() - open.size() - close.size());
++  }
++  return {};
++}
++
+ PassType ResolvePass(const HdRenderPassAovBinding &binding,
+                      std::string &passName,
+                      PassType &colorType)
+@@ -448,6 +468,8 @@ void HdCyclesSession::UpdateScene()
+        * leaves the film transparent behind it, as in Karma. Before, the
+        * flag reached the light's object, which camera rays never look at,
+        * and with a dome the film was always opaque. */
++      /* The dome's light group is the background's. */
++      scene->background->set_lightgroup(background_object->get_lightgroup());
+       const uint visibility = background_object->get_visibility();
+       scene->background->set_visibility(visibility);
+       const bool seen = (visibility & PATH_RAY_VISIBILITY_CAMERA) != 0;
+@@ -494,6 +516,18 @@ void HdCyclesSession::SyncAovBindings(const HdRenderPassAovBindingVector &aovBin
+       continue;
+     }
+ 
++    /* The light that reached the camera from one group of lights. */
++    const std::string lightgroup = LightGroupOf(
++        name, SettingString(aovBinding.aovSettings, "sourceName"));
++    if (!lightgroup.empty()) {
++      Pass *pass = scene->create_node<Pass>();
++      pass->set_type(PASS_COMBINED);
++      pass->set_lightgroup(ustring(lightgroup));
++      pass->set_mode(PassMode::NOISY);
++      pass->set_name(ustring(name));
++      continue;
++    }
++
+     /* Before, any name outside five was dropped with a warning. */
+     std::string passName;
+     PassType colorType = PASS_NONE;
+@@ -505,7 +539,9 @@ void HdCyclesSession::SyncAovBindings(const HdRenderPassAovBindingVector &aovBin
+      * layers are told apart by name and may be many. */
+     if (type != PASS_AOV_COLOR && type != PASS_AOV_VALUE) {
+       for (const Pass *pass : scene->passes) {
+-        if (pass->get_type() == type && !pass->get_name().empty()) {
++        if (pass->get_type() == type && !pass->get_name().empty() &&
++            pass->get_lightgroup().empty())
++        {
+           passName = pass->get_name().string();
+           break;
+         }

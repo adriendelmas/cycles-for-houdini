@@ -1,0 +1,41 @@
+From 6565ef994f5c68f102dc08de54c4e9e1bcb8555c Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Sun, 11 Oct 2026 04:08:59 +0200
+Subject: [PATCH 140/141] hydra: nodes inside a nested nodegraph keep their
+ path
+
+A node placed in a NodeGraph (which is what every Houdini material subnetwork
+writes) arrives from Hydra named by its path under the material, "G/a".
+MaterialNodeNameToSdfPath made it a child of the root, which a name containing
+"/" cannot be: empty path for all these nodes, which ended up merged into one
+("Graph connect: input already connected" by the hundreds) and the network
+rendered a constant. The name is now read as a relative path.
+
+Measured on the MtlX Text node as a subnetwork (1107 nodes): before, all its
+outputs wrong on 100 % of pixels; after, test_render 0 pixels off the numpy
+reference, test_lop 0, test_features at most 0.09 % (edges). bench_mtlx: 93
+cases, 0 problems (new nodegraph_nested case, failing before); bench_hair: 4
+pairs, 0 problems.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index 203dc23c..efdc6b0b 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -54,6 +54,12 @@ static SdfPath MaterialNodeNameToSdfPath(const TfToken &nodeName)
+   if (s[0] == '/' && SdfPath::IsValidPathString(s)) {
+     return SdfPath(s);
+   }
++  /* A node inside a nodegraph (a Houdini material subnet) is named by its
++   * path below the material, "graph/node": a single child name cannot hold
++   * the slash, and every such node fell on the empty path, wired into one. */
++  if (s.find('/') != std::string::npos && SdfPath::IsValidPathString(s)) {
++    return SdfPath::AbsoluteRootPath().AppendPath(SdfPath(s));
++  }
+   return SdfPath::AbsoluteRootPath().AppendChild(nodeName);
+ }
+ 

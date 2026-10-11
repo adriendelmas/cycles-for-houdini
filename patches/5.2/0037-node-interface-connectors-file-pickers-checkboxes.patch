@@ -1,0 +1,51 @@
+From 3e36db0f987411f764f131e0fb8fdd8545fa78b2 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 3 Sep 2026 00:46:00 +0200
+Subject: [PATCH 37/38] node interface: connectors, file pickers, checkboxes
+
+A connector is only emitted for a socket Cycles accepts a link on. The
+registry says so, and it matches exactly what Blender shows: on the
+principled, distribution and subsurface_method are menus, not sockets.
+Exposing them as inputs let graphs be built that would replay nowhere else.
+
+surface_mix_weight is hidden: it is the internal mix weight Cycles carries on
+every closure, which Blender never exposes since the Mix Shader node sets it.
+
+The delegate now marks file names as asset paths and booleans with a checkBox
+widget. Without these two pieces of metadata, a texture path had to be pasted
+by hand and a boolean showed as a free integer field, where only zero and one
+mean anything to Cycles.
+
+The parameter sections become groupcollapsible: a plain group makes tabs and
+throws everything left outside a folder into an Other tab, which is not
+Blender's layout.
+
+Bench replayed: 97 nodes, 0 problems, 96 change the image.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/sdr_cycles.cpp | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/src/hydra/sdr_cycles.cpp b/src/hydra/sdr_cycles.cpp
+index 102a6f73..9337f7c3 100644
+--- a/src/hydra/sdr_cycles.cpp
++++ b/src/hydra/sdr_cycles.cpp
+@@ -167,6 +167,17 @@ SdrShaderPropertyUniquePtr MakeProperty(const ccl::SocketType &socket, const boo
+   if (!socket.ui_name.empty()) {
+     metadata[SdrPropertyMetadata->Label] = socket.ui_name.c_str();
+   }
++  /* A boolean reaches USD as an integer, and nothing downstream can tell it
++   * apart from a count - a host would offer a free number field where only
++   * zero and one mean anything. Say so here. */
++  if (socket.type == ccl::SocketType::BOOLEAN) {
++    metadata[SdrPropertyMetadata->Widget] = "checkBox";
++  }
++  /* A filename is a file, not free text: hosts that know it can offer a file
++   * browser rather than asking for a path to be typed or pasted. */
++  if (socket.type == ccl::SocketType::STRING && socket.name == ccl::ustring("filename")) {
++    metadata[SdrPropertyMetadata->IsAssetIdentifier] = "1";
++  }
+   /* Only sockets Cycles marks LINKABLE may take a connection. */
+   if (!isOutput && (socket.flags & ccl::SocketType::LINKABLE) == 0) {
+     metadata[SdrPropertyMetadata->Connectable] = "0";

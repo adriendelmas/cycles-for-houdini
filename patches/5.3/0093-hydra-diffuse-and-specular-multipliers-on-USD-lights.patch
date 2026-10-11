@@ -1,0 +1,68 @@
+From 3c55d275b0383ca1954941039b091dbf628b5619 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 8 Oct 2026 03:26:55 +0200
+Subject: [PATCH 093/141] hydra: diffuse and specular multipliers on USD lights
+
+inputs:diffuse and inputs:specular were ignored: a light at 0 specular still
+drew its reflections. Cycles cannot scale a light per lobe but can exclude it
+from one: 0 removes the lobe (diffuse, or glossy and transmission), 1 keeps it,
+a value in between is rendered as 1 and the log says so. shadow:color, which
+Cycles cannot tint, is reported likewise. Measured: a sun at diffuse 0 leaves a
+diffuse sphere lit by the dome's light alone.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/light.cpp | 33 +++++++++++++++++++++++++++++++++
+ 1 file changed, 33 insertions(+)
+
+diff --git a/src/hydra/light.cpp b/src/hydra/light.cpp
+index b5ce066a..6742245a 100644
+--- a/src/hydra/light.cpp
++++ b/src/hydra/light.cpp
+@@ -14,6 +14,7 @@
+ #include "scene/shader_graph.h"
+ #include "scene/shader_nodes.h"
+ #include "util/hash.h"
++#include "util/log.h"
+ #include "util/transform.h"
+ 
+ #include <pxr/imaging/hd/lightSchema.h>
+@@ -132,6 +133,38 @@ void HdCyclesLight::Sync(HdSceneDelegate *sceneDelegate,
+       _light->set_cast_shadow(ds->GetTypedValue(0.0f));
+     }
+ 
++    /* UsdLux's diffuse and specular multipliers. Cycles cannot scale a light
++     * per lobe, but it can leave a lobe out: 0 does that, 1 keeps it, and
++     * anything between is kept whole - said in the log, not guessed. They
++     * were ignored, so a light set to 0 specular still drew highlights. */
++    {
++      uint visibility = _object->get_visibility() | PATH_RAY_VISIBILITY_DIFFUSE |
++                        PATH_RAY_VISIBILITY_GLOSSY | PATH_RAY_VISIBILITY_TRANSMIT;
++      const float diffuse = GetTypedValue<float>(lightDs, HdLightTokens->diffuse, 1.0f);
++      const float specular = GetTypedValue<float>(lightDs, HdLightTokens->specular, 1.0f);
++      if (diffuse == 0.0f) {
++        visibility &= ~PATH_RAY_VISIBILITY_DIFFUSE;
++      }
++      if (specular == 0.0f) {
++        visibility &= ~(PATH_RAY_VISIBILITY_GLOSSY | PATH_RAY_VISIBILITY_TRANSMIT);
++      }
++      _object->set_visibility(visibility);
++      for (const auto &[name, value] : {std::make_pair("diffuse", diffuse),
++                                        std::make_pair("specular", specular)})
++      {
++        if (value != 0.0f && value != 1.0f) {
++          LOG_WARNING << "Light " << GetId().GetString() << ": " << name << " multiplier "
++                      << value << " is rendered as 1; Cycles can only turn a lobe off.";
++        }
++      }
++      const GfVec3f shadowColor = GetTypedValue<GfVec3f>(
++          lightDs, HdLightTokens->shadowColor, GfVec3f(0.0f));
++      if (shadowColor != GfVec3f(0.0f)) {
++        LOG_WARNING << "Light " << GetId().GetString()
++                    << ": shadow:color is not supported by Cycles; shadows stay black.";
++      }
++    }
++
+     if (_lightType == HdPrimTypeTokens->distantLight) {
+       if (auto ds = GetTypedDataSource<float>(lightDs, HdLightTokens->angle)) {
+         static_cast<SunLight *>(_light)->set_angle(GfDegreesToRadians(ds->GetTypedValue(0.0f)));

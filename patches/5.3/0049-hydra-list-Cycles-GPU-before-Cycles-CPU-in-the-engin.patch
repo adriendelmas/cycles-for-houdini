@@ -1,0 +1,50 @@
+From b691eab11ffac897efcdcfe55129ef10dc1f2876 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 3 Sep 2026 22:47:08 +0200
+Subject: [PATCH 049/141] hydra: list Cycles GPU before Cycles CPU in the
+ engine menu
+
+Both entries already existed, but in Houdini's order for Karma - CPU on top.
+Karma has its reasons (its XPU is still young), we do not: the OptiX path is
+the one Cycles has been using for years, and it is the one every user coming
+from Blender thinks they are choosing.
+
+Measured on an RTX 3090, same scene, husk:
+
+    fixed cost alone (1 sample)      CPU 5.4 s   GPU 3.6 s
+    1024 samples at 960x720          CPU 9.1 s   GPU 4.7 s
+
+That is about four times the tracing throughput, and a shorter startup on top.
+Choosing "Cycles CPU" unintentionally, because it was listed first, therefore
+silently cost all that.
+
+For reference, on the same scene Karma starts in 6.9 s: husk's fixed cost is
+not ours, it is the host's.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/resources/UsdRenderers.json | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/hydra/resources/UsdRenderers.json b/src/hydra/resources/UsdRenderers.json
+index 7633f371..33dd2cc4 100644
+--- a/src/hydra/resources/UsdRenderers.json
++++ b/src/hydra/resources/UsdRenderers.json
+@@ -2,7 +2,7 @@
+     "HdCyclesPlugin" : {
+         "valid" : true,
+         "menulabel" : "Cycles CPU",
+-        "menupriority" : 45,
++        "menupriority" : 44,
+         "defaultpurposes" : [ "render" ],
+         "drawmodesupport" : false,
+         "needsdepth" : false,
+@@ -14,7 +14,7 @@
+     "HdCyclesPluginGPU" : {
+         "valid" : true,
+         "menulabel" : "Cycles GPU",
+-        "menupriority" : 44,
++        "menupriority" : 45,
+         "defaultpurposes" : [ "render" ],
+         "drawmodesupport" : false,
+         "needsdepth" : false,

@@ -1,0 +1,340 @@
+From cc74d5f56c61a8a3758fba69fdedf5ae253536db Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Wed, 7 Oct 2026 17:13:13 +0200
+Subject: [PATCH 078/141] hydra: MaterialX closures - mix, add, multiply,
+ volume, layer, conductor
+
+The families typed by their suffix went through the prefix table: `mix_bsdf`
+fell on the color mix, `add_edf` on scalar math, and the closure connection fell
+with a warning. They are now sorted before the table, by the nodedef suffix,
+weight C/F/V removed: mix and add to mix_closure and add_closure (fg on
+Closure2, as for colors), multiply to a mix against nothing whose factor is the
+weight; for displacementshader, a vector in Cycles, mix_vector, vector_math and
+a vector passthrough.
+
+`volume` was missing: no MaterialX volume network could reach the terminal, no
+matter its VDF. It is a sum of closures, as `surface` is a mix. `layer` was a
+fifty-fifty that halved the base; it becomes a mix weighted by a Fresnel (blend
+0.333, i.e. an IOR of 1.5), right for a dielectric layer on a base,
+approximate for the rest. `conductor_bsdf` lost its complex index and rendered
+white: it goes to metallic_bsdf as a physical conductor, ior and extinction
+passed through, MaterialX's default gold.
+
+When an output's name is not found, the first output of the same class as the
+input is taken - closure, triplet or scalar - at connections as at terminals: a
+surfaceshader arrives as `out` and lands on a principled whose closure is called
+BSDF, a glTF image as `outcolor` on a vector helper. `dielectric_bsdf` takes
+`tint` and the thin film.
+
+Measured: five closure cases on the MaterialX bench, all exact (mix, add,
+multiply and mix of surfaces to within 2 %, layer not black); mtlx_inputs goes
+from 511 to 528 nodedefs without loss, 0 outputs not found, 0 missing nodes.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp | 221 ++++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 208 insertions(+), 13 deletions(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index c94271ea..6671732d 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -1106,6 +1106,20 @@ const UsdToCyclesMapping &MtlxSurface()
+   return mapping;
+ }
+ 
++/* `volume`: the VDF and the EDF of a medium, summed into one volume closure.
++ * The counterpart of `surface` for the volume terminal; without it no
++ * MaterialX volume could reach Cycles at all, whatever its VDF. */
++const UsdToCyclesMapping &MtlxVolume()
++{
++  static const UsdToCyclesMapping mapping{"add_closure",
++                                          {
++                                              {TfToken("vdf"), ustring("closure1")},
++                                              {TfToken("edf"), ustring("closure2")},
++                                              {CyclesMaterialTokens->out, ustring("closure")},
++                                          }};
++  return mapping;
++}
++
+ /* A nodedef prefix and the mapping it resolves to. Longest prefix wins, so a
+  * specific variant can sit in front of its family. */
+ struct MtlxEntry {
+@@ -1229,11 +1243,29 @@ const std::vector<MtlxEntry> &MtlxTable()
+     m.setFixedValues({{ustring("attribute"), "displayColor"}});
+     return m;
+   }();
+-  static const UsdToCyclesMapping kLayer = {
+-      "mix_closure",
++  /* `layer` stacks `top` over `base` with vertical layering: the top goes
++   * first, and what it does not reflect reaches the base. Cycles has no such
++   * node. The nearest it offers is a mix driven by a Fresnel weight, which is
++   * what the usual stack means - a dielectric specular or a coat over a
++   * diffuse or metallic base - and an approximation for any other top. A
++   * `blend` of 0.333 is an IOR of 1.5 in layer_weight's parametrisation. The
++   * fifty-fifty mix this used to be halved every base. */
++  static const UsdToCyclesMapping kLayer = [] {
++    UsdToCyclesMapping m{"mix_closure",
++                         {
++                             {TfToken("top"), ustring("closure2")},
++                             {TfToken("base"), ustring("closure1")},
++                             {CyclesMaterialTokens->out, ustring("closure")},
++                         }};
++    m.addHelper({"fr", "layer_weight", {{"Fresnel", "Fac"}}, {{ustring("blend"), "0.333"}}});
++    return m;
++  }();
++  /* A BSDF over a VDF describes a surface and the medium behind it; Cycles
++   * keeps those on two terminals, so only the surface passes. */
++  static const UsdToCyclesMapping kLayerVdf = {
++      "add_closure",
+       {
+           {TfToken("top"), ustring("closure1")},
+-          {TfToken("base"), ustring("closure2")},
+           {CyclesMaterialTokens->out, ustring("closure")},
+       }};
+   /* `facingratio` (nprlib) is |dot(V, N)| with its defaults - `faceforward`
+@@ -1303,20 +1335,42 @@ const std::vector<MtlxEntry> &MtlxTable()
+           {TfToken("emittance"), ustring("color")},
+           {CyclesMaterialTokens->out, ustring("emission")},
+       }};
+-  static const UsdToCyclesMapping kConductor = {
+-      "glossy_bsdf",
+-      {
+-          {TfToken("roughness"), ustring("roughness")},
+-          {TfToken("normal"), ustring("normal")},
+-          {TfToken("tangent"), ustring("tangent")},
+-          {CyclesMaterialTokens->out, ustring("BSDF")},
+-      }};
++  /* `conductor_bsdf` is the physical conductor, coloured by its complex index
++   * of refraction: gold, copper and aluminium are nothing but an `ior` and an
++   * `extinction` vector. Cycles' metallic_bsdf in physical_conductor mode
++   * takes exactly those two; the glossy_bsdf this used to land on has a
++   * colour and no index, so every conductor rendered white. The defaults are
++   * MaterialX's, gold. `roughness` is a vector2 (anisotropic) and is averaged
++   * onto Cycles' scalar. */
++  static const UsdToCyclesMapping kConductor = [] {
++    UsdToCyclesMapping m{"metallic_bsdf",
++                         {
++                             {TfToken("ior"), ustring("ior")},
++                             {TfToken("extinction"), ustring("k")},
++                             {TfToken("roughness"), ustring("roughness")},
++                             {TfToken("normal"), ustring("normal")},
++                             {TfToken("tangent"), ustring("tangent")},
++                             {TfToken("thinfilm_thickness"), ustring("thin_film_thickness")},
++                             {TfToken("thinfilm_ior"), ustring("thin_film_ior")},
++                             {CyclesMaterialTokens->out, ustring("BSDF")},
++                         }};
++    m.setFixedValues({{ustring("fresnel_type"), "physical_conductor"},
++                      {ustring("ior"), "0.183,0.421,1.373"},
++                      {ustring("k"), "3.424,2.346,1.771"}});
++    return m;
++  }();
++  /* `dielectric_bsdf`: `tint` colours both lobes, as glass_bsdf's colour does.
++   * `scatter_mode` is not carried - an "R" dielectric (reflection only, the
++   * coat of a hand-built layer stack) still transmits here. */
+   static const UsdToCyclesMapping kDielectric = {
+       "glass_bsdf",
+       {
++          {TfToken("tint"), ustring("color")},
+           {TfToken("roughness"), ustring("roughness")},
+           {TfToken("normal"), ustring("normal")},
+           {TfToken("ior"), ustring("IOR")},
++          {TfToken("thinfilm_thickness"), ustring("thin_film_thickness")},
++          {TfToken("thinfilm_ior"), ustring("thin_film_ior")},
+           {CyclesMaterialTokens->out, ustring("BSDF")},
+       }};
+   static const UsdToCyclesMapping kDiffuse = {
+@@ -1855,7 +1909,6 @@ const std::vector<MtlxEntry> &MtlxTable()
+ 
+       /* Le routage et la conversion de type, que Cycles fait sur le lien. */
+       {"ND_dot_surfaceshader", &kPassThroughClosure},
+-      {"ND_dot_displacementshader", &kPassThroughClosure},
+       {"ND_dot_volumeshader", &kPassThroughClosure},
+       {"ND_dot_", &kPassThrough},
+       {"ND_convert_", &kPassThrough},
+@@ -1878,6 +1931,7 @@ const std::vector<MtlxEntry> &MtlxTable()
+       {"ND_chiang_hair_absorption_from_color", &MtlxChiangHairAbsorptionFromColor()},
+       {"ND_deon_hair_absorption_from_melanin", &MtlxDeonHairAbsorptionFromMelanin()},
+       {"ND_surface", &MtlxSurface()},
++      {"ND_volume", &MtlxVolume()},
+ 
+       /* Les images : la variante hexagonale, et la famille glTF qui nomme ses
+        * entrees comme `image`. */
+@@ -1900,6 +1954,7 @@ const std::vector<MtlxEntry> &MtlxTable()
+       /* Utilities. */
+       {"ND_bump", &kBump},
+       {"ND_heighttonormal", &kHeightToNormal},
++      {"ND_layer_vdf", &kLayerVdf},
+       {"ND_layer_", &kLayer},
+       {"ND_mix_", &MtlxMix},
+       {"ND_combine2_vector", &kCombineXYZ},
+@@ -2010,6 +2065,94 @@ const UsdToCyclesMapping *FindMtlxMapping(const std::string &nodeTypeId)
+   static const UsdToCyclesMapping kMulV = MakeMtlxOp("multiply", true, false);
+   static const UsdToCyclesMapping kDivV = MakeMtlxOp("divide", true, false);
+ 
++  /* The closure-typed families. `mix`, `add`, `multiply` and `dot` exist for
++   * BSDF, EDF, VDF, surfaceshader and volumeshader - all one closure type to
++   * Cycles - and for displacementshader, which is a vector to it. They are
++   * told apart by the nodedef's type suffix before the prefix table sees
++   * them: left to it, a `mix_bsdf` fell on the colour mix and the closure
++   * connection was dropped. The suffix may carry a weight type (`_bsdfC`,
++   * `_displacementshaderV`), stripped first. */
++  static const UsdToCyclesMapping kMixClosure = {
++      "mix_closure",
++      {
++          {TfToken("fg"), ustring("closure2")},
++          {TfToken("bg"), ustring("closure1")},
++          {TfToken("mix"), ustring("fac")},
++          {CyclesMaterialTokens->out, ustring("closure")},
++      }};
++  static const UsdToCyclesMapping kAddClosure = {
++      "add_closure",
++      {
++          {TfToken("in1"), ustring("closure1")},
++          {TfToken("in2"), ustring("closure2")},
++          {CyclesMaterialTokens->out, ustring("closure")},
++      }};
++  /* `multiply` scales a closure by a weight: a mix against nothing, the weight
++   * as factor. A colour weight is averaged, Cycles having one weight per
++   * closure. */
++  static const UsdToCyclesMapping kScaleClosure = [] {
++    UsdToCyclesMapping m{"mix_closure",
++                         {
++                             {TfToken("in1"), ustring("closure2")},
++                             {TfToken("in2"), ustring("fac")},
++                             {CyclesMaterialTokens->out, ustring("closure")},
++                         }};
++    m.setFixedValues({{ustring("fac"), "1"}});
++    return m;
++  }();
++  static const UsdToCyclesMapping kMixVector = {
++      "mix_vector",
++      {
++          {TfToken("fg"), ustring("b")},
++          {TfToken("bg"), ustring("a")},
++          {TfToken("mix"), ustring("fac")},
++          {CyclesMaterialTokens->out, ustring("result")},
++      }};
++  static const UsdToCyclesMapping kScaleVector = [] {
++    UsdToCyclesMapping m{"vector_math",
++                         {
++                             {TfToken("in1"), ustring("vector1")},
++                             {TfToken("in2"), ustring("scale")},
++                             {CyclesMaterialTokens->out, ustring("vector")},
++                         }};
++    m.setFixedValues({{ustring("math_type"), "scale"}});
++    return m;
++  }();
++  static const UsdToCyclesMapping kPassVector = [] {
++    UsdToCyclesMapping m{"mix_vector",
++                         {
++                             {TfToken("in"), ustring("a")},
++                             {CyclesMaterialTokens->out, ustring("result")},
++                         }};
++    m.setFixedValues({{ustring("fac"), "0"}});
++    return m;
++  }();
++  {
++    std::string base = nodeTypeId;
++    const char last = base.empty() ? 0 : base.back();
++    if (last == 'C' || last == 'F' || last == 'V') {
++      base.pop_back();
++    }
++    const bool closureTyped = base.ends_with("_bsdf") || base.ends_with("_edf") ||
++                              base.ends_with("_vdf") || base.ends_with("_surfaceshader") ||
++                              base.ends_with("_volumeshader");
++    const bool vectorShader = base.ends_with("_displacementshader");
++    if (closureTyped || vectorShader) {
++      if (nodeTypeId.starts_with("ND_mix_")) {
++        return closureTyped ? &kMixClosure : &kMixVector;
++      }
++      if (nodeTypeId.starts_with("ND_add_")) {
++        return closureTyped ? &kAddClosure : &kAddV;
++      }
++      if (nodeTypeId.starts_with("ND_multiply_")) {
++        return closureTyped ? &kScaleClosure : (last == 'V' ? &kMulV : &kScaleVector);
++      }
++      if (vectorShader && nodeTypeId.starts_with("ND_dot_")) {
++        return &kPassVector;
++      }
++    }
++  }
++
+   if (nodeTypeId.starts_with("ND_add_")) {
+     return isVector ? &kAddV : &kAdd;
+   }
+@@ -2725,6 +2868,32 @@ namespace {
+  * Chercher donc le nom interne d'abord, comme le faisaient deja les connexions
+  * entre noeuds, puis l'ui_name pour les noms que ce fichier se donne a
+  * lui-meme. */
++/* Whether two socket types can be linked without changing what the value
++ * means: a closure to a closure, any three-component value to another, any
++ * scalar to another. Cycles inserts the conversions itself. */
++bool SameSocketClass(const SocketType::Type a, const SocketType::Type b)
++{
++  auto classOf = [](const SocketType::Type t) {
++    switch (t) {
++      case SocketType::CLOSURE:
++        return 0;
++      case SocketType::COLOR:
++      case SocketType::VECTOR:
++      case SocketType::POINT:
++      case SocketType::NORMAL:
++        return 1;
++      case SocketType::FLOAT:
++      case SocketType::INT:
++      case SocketType::UINT:
++      case SocketType::BOOLEAN:
++        return 2;
++      default:
++        return 3 + int(t);
++    }
++  };
++  return classOf(a) == classOf(b);
++}
++
+ ShaderOutput *FindOutput(ShaderNode *node, const std::string &name)
+ {
+   for (ShaderOutput *out : node->outputs) {
+@@ -2848,6 +3017,20 @@ void HdCyclesMaterial::UpdateConnections(NodeDesc &nodeDesc,
+                                          outputMapping->parameterName(upstreamOutputName, input) :
+                                          upstreamOutputName.GetString();
+       ShaderOutput *output = FindOutput(sourceNode, outputName);
++      if (!output) {
++        /* The name failed; the type may not. A surface shader feeding a mix
++         * arrives as `out` and lands on a principled_bsdf whose closure is
++         * called "BSDF", or on the mix_closure that ends a glass variant,
++         * whose closure is "Closure"; a glTF image's `outcolor` lands on a
++         * vector helper. The first output of the input's own class is the one
++         * meant, as for the terminals. */
++        for (ShaderOutput *out : sourceNode->outputs) {
++          if (SameSocketClass(out->socket_type.type, input->socket_type.type)) {
++            output = out;
++            break;
++          }
++        }
++      }
+ 
+       if (!output) {
+         LOG_WARNING << "MaterialX: Cycles node '" << srcNodeIt->second.node->name.c_str()
+@@ -3113,7 +3296,19 @@ unique_ptr<ShaderGraph> HdCyclesMaterial::BuildShaderGraph(HdMaterialNetworkSche
+       continue;
+     }
+ 
+-    ShaderOutput *const output = outputName ? FindOutput(node, outputName) : nullptr;
++    ShaderOutput *output = outputName ? FindOutput(node, outputName) : nullptr;
++    if (!output) {
++      /* The name is a convention, the type is the fact. A mix of surface
++       * shaders ends in a mix_closure whose output is "Closure", not "BSDF";
++       * a displacement routed through a vector mix ends in "Result". The
++       * first output of the terminal's own type is the one meant. */
++      for (ShaderOutput *out : node->outputs) {
++        if (SameSocketClass(out->socket_type.type, input->socket_type.type)) {
++          output = out;
++          break;
++        }
++      }
++    }
+     if (!output) {
+       LOG_WARNING << "Cycles node '" << node->name.c_str() << "' at " << GetId().GetText()
+                   << upstreamNodePath.GetText() << " has no output '"

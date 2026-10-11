@@ -1,0 +1,93 @@
+From be8c24ed7af6405457545190cda09957fb0c759a Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 3 Sep 2026 19:54:38 +0200
+Subject: [PATCH 048/141] hydra: standard_surface dispersion now reaches the
+ principled bsdf
+
+Cycles just gained dispersion on its principled bsdf (0038, ported from Blender
+PR 162041), but the MaterialX translation did not pass it on yet -
+`transmission_dispersion` remained in the list of inputs without an equivalent.
+
+MaterialX has only one slider for this, which reads directly as Cycles' Abbe
+number - both divide by it the same way (kernel/svm/closure.h) and treat 0 as
+"no dispersion", the division by zero canceling the effect. Mapped as is onto
+transmission_dispersion_abbe_number.
+
+Cycles separately carries a scale factor that MaterialX does not have. Since
+the real on/off switch lies on that factor (not on the Abbe number), it is set
+to 1 so that `transmission_dispersion` is the only thing that turns dispersion
+on or off.
+
+A first version set only that factor, assuming that a network never touching
+`transmission_dispersion` would receive 0 by default - MaterialX's own default
+for this input. Wrong: Hydra only passes the parameters that are realized, and
+Cycles' default for the Abbe number is 20, not 0. Any non-zero `transmission`
+material that had never touched dispersion therefore inherited some, without
+having asked for it - a regression caught on the bench before any commit (97
+nodes compared, cycles_math and 96 others that have nothing to do with
+MaterialX changed by several percent of pixels, traced back to mxGlass in the
+shared bench scene). Fixed by also setting the Abbe number to 0 - MaterialX's
+true input default - overridden by the normal mapping as soon as the network
+actually writes it.
+
+Verified: an explicit test (transmission_dispersion=3, MaterialX material
+exported through a real Solaris Material Library) now renders visibly different
+from a variant without dispersion. The 97-node bench is again identical to the
+reference to the pixel.
+
+Side note, unrelated and not investigated: a hand-placed USD Sphere lost its
+material binding (fell back to default_surface) in one of the throwaway test
+scenarios of this investigation - to check some day, perhaps an artifact of
+bypassing Houdini's usual authoring pipeline rather than a real delegate bug.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp | 21 ++++++++++++++++++++-
+ 1 file changed, 20 insertions(+), 1 deletion(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index 4c1c0bc4..6b9bf9da 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -295,7 +295,7 @@ class MtlxFacOrColor : public UsdToCyclesMapping {
+  *  - base / specular / transmission_color: weights and tints Cycles folds into
+  *    other inputs,
+  *  - subsurface_color: Cycles derives it from base_color,
+- *  - transmission_extra_roughness, transmission_dispersion. */
++ *  - transmission_extra_roughness. */
+ UsdToCyclesMapping MakeMtlxStandardSurface();
+ 
+ const UsdToCyclesMapping MtlxStandardSurface = MakeMtlxStandardSurface();
+@@ -322,6 +322,14 @@ UsdToCyclesMapping MakeMtlxStandardSurface()
+         {TfToken("specular_anisotropy"), ustring("anisotropic")},
+         {TfToken("specular_rotation"), ustring("anisotropic_rotation")},
+         {TfToken("transmission"), ustring("transmission_weight")},
++        /* MaterialX's single dispersion slider reads as Cycles' Abbe number
++         * directly - both use it the same way (kernel/svm/closure.h divides
++         * the dispersion scale by it), and both treat 0 as "no dispersion",
++         * since dividing by zero zeroes the effect out. Cycles' own enable
++         * switch is the scale, not the Abbe number, and defaults to off; it
++         * is pinned to 1 below so the Abbe number is the only thing left to
++         * drive it, matching a slider MaterialX doesn't have. */
++        {TfToken("transmission_dispersion"), ustring("transmission_dispersion_abbe_number")},
+         {TfToken("subsurface"), ustring("subsurface_weight")},
+         {TfToken("subsurface_radius"), ustring("subsurface_radius")},
+         {TfToken("subsurface_scale"), ustring("subsurface_scale")},
+@@ -343,6 +351,17 @@ UsdToCyclesMapping MakeMtlxStandardSurface()
+         {TfToken("normal"), ustring("normal")},
+         {TfToken("tangent"), ustring("tangent")},
+     }};
++  /* MaterialX has no dispersion scale of its own, so it is pinned to 1 and
++   * `transmission_dispersion` above is left as the only thing that turns
++   * dispersion on or off. But Cycles' own Abbe number default is 20, not 0 -
++   * a network that never touches `transmission_dispersion` sends no value
++   * for it at all (Hydra only carries authored parameters), so without a
++   * matching default here every glass material would pick up dispersion it
++   * never asked for. Pinning the Abbe number to 0 alongside the scale
++   * reproduces MaterialX's own default for the input, and is overridden by
++   * the mapping above wherever the network does author it. */
++  mapping.setFixedValues({{ustring("transmission_dispersion_scale"), "1"},
++                          {ustring("transmission_dispersion_abbe_number"), "0"}});
+   /* The helper drives the level unconditionally, so it has to carry MaterialX's
+    * own default of 1 for the case where the network never writes `specular` at
+    * all - otherwise an unauthored input would be actively set to something

@@ -1,7 +1,7 @@
 From d235be08606cab2daef982221f5dbef645303e09 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 9 Oct 2026 00:23:00 +0200
-Subject: [PATCH 114/140] hydra: the camera's exposure reaches the film
+Subject: [PATCH 114/141] hydra: the camera's exposure reaches the film
 
 USD's camera exposure (log2, with ISO, time and f-stop folded by Hydra into
 a linear exposure scale) did not reach the image. The film's exposure is

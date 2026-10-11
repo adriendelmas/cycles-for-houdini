@@ -1,0 +1,555 @@
+From b8ad20daa4cc5fc5bf457a001b1b95602dbe13ae Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Sun, 11 Oct 2026 04:32:08 +0200
+Subject: [PATCH 141/141] hydra: the last French comments and docstrings in
+ English
+
+The Python resources (device menu, material builder, colour space menu,
+pythonrc), the Render menu XML and four comment blocks in Cycles' own files
+(displacement, device memory fallback, noise enum, undisplaced positions).
+No code change.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ src/device/device.cpp                     |  12 +--
+ src/hydra/resources/MainMenuCommon.xml    |  14 +--
+ src/hydra/resources/cycles_builder.py     |  85 +++++++++---------
+ src/hydra/resources/cycles_colorspaces.py |  36 ++++----
+ src/hydra/resources/cycles_device.py      | 101 +++++++++++-----------
+ src/hydra/resources/pythonrc.py           |  14 +--
+ src/scene/mesh.cpp                        |   8 +-
+ src/scene/mesh_displace.cpp               |  18 ++--
+ src/scene/shader_nodes.cpp                |   4 +-
+ 9 files changed, 144 insertions(+), 148 deletions(-)
+
+diff --git a/src/device/device.cpp b/src/device/device.cpp
+index bc632de3..ba3b0110 100644
+--- a/src/device/device.cpp
++++ b/src/device/device.cpp
+@@ -807,13 +807,13 @@ GPUDevice::Mem *GPUDevice::generic_alloc(device_memory &mem, const size_t pitch_
+       map_host_used += size;
+       status = " in host memory";
+ 
+-      /* Le repli le plus couteux du moteur, et le plus discret : chaque acces a
+-       * cette memoire traversera le bus, et le peripherique peut alors rendre
+-       * plus lentement qu'un processeur. Ne le dire qu'en journal de mise au
+-       * point, c'est le laisser passer pour une scene qui rame sans raison.
++      /* The engine's most expensive fallback, and its quietest: every access
++       * to this memory crosses the bus, and the device may then render slower
++       * than a processor. Said only in the debug log, it passes for a scene
++       * that crawls for no reason.
+        *
+-       * Une fois par session, et seulement au-dela d'un mega-octet : les petits
+-       * tampons de service ne valent pas un avertissement. */
++       * Once per session, and only above a megabyte: small service buffers
++       * are not worth a warning. */
+       static bool warned = false;
+       if (!warned && size > 1024 * 1024) {
+         warned = true;
+diff --git a/src/hydra/resources/MainMenuCommon.xml b/src/hydra/resources/MainMenuCommon.xml
+index 71ddfd16..fe97b065 100644
+--- a/src/hydra/resources/MainMenuCommon.xml
++++ b/src/hydra/resources/MainMenuCommon.xml
+@@ -1,14 +1,14 @@
+ <?xml version="1.0" encoding="UTF-8"?>
+ 
+-<!-- Le peripherique de rendu Cycles, dans le menu Render.
++<!-- The Cycles render device, in the Render menu.
+ 
+-     Il n'a pas sa place sur un noeud : le peripherique decrit la machine, pas
+-     la scene, et un .hip qui l'emporterait imposerait une RTX a qui n'en a
+-     pas. Le choix est donc global a l'installation, garde dans les preferences
+-     utilisateur, et relu au demarrage par scripts/pythonrc.py.
++     It has no place on a node: the device describes the machine, not the
++     scene, and a .hip carrying it would impose an RTX on whoever has none.
++     The choice is therefore global to the installation, kept in the user
++     preferences, and read again at startup by scripts/pythonrc.py.
+ 
+-     Houdini fusionne les MainMenuCommon.xml trouves le long du HOUDINI_PATH :
+-     nommer un id existant, ici render_menu, y ajoute nos entrees. -->
++     Houdini merges the MainMenuCommon.xml files found along HOUDINI_PATH:
++     naming an existing id, render_menu here, adds our entries to it. -->
+ 
+ <mainMenu>
+   <menuBar>
+diff --git a/src/hydra/resources/cycles_builder.py b/src/hydra/resources/cycles_builder.py
+index 490e53f3..291ae7b0 100644
+--- a/src/hydra/resources/cycles_builder.py
++++ b/src/hydra/resources/cycles_builder.py
+@@ -1,55 +1,52 @@
+-"""Le Cycles Material Builder.
+-
+-Un builder n'est pas un type de nœud : c'est un `subnet` configuré, monté par
+-un outil du menu tab. C'est ainsi que Houdini fabrique le Karma Material
+-Builder et le USD MaterialX Builder — relevé dans
+-`voptoolutils._setupMtlXBuilderSubnet`.
+-
+-Trois choses le rendent reconnaissable, et il en manquait à chaque fois une
+-dans mes tentatives précédentes :
+-
+-* `setMaterialFlag(True)` — sans lui la Material Library ne voit pas un
+-  matériau et n'exporte rien du tout ;
+-* un unique `suboutput` à trois entrées nommées `surface`/`displacement`/
+-  `volume`, dont le rôle exporté se déduit du connecteur du nœud branché sur
+-  chacune — pas du nom qu'on lui donne. Cycles n'a qu'un seul type de
+-  fermeture (un volume et un BSDF de surface sont tous deux `terminal` côté
+-  Sdr), donc `tools/build_cycles_vops.py` ment sciemment sur les quelques
+-  nœuds qui ne terminent jamais qu'un seul type de réseau — `displacement` et
+-  `vector_displacement` prennent le connecteur `displacement`,
+-  `principled_volume` et consorts prennent `atmosphere` — pour que Houdini
+-  les distingue d'un BSDF de surface, ordinairement `surface`. Sans ce
+-  mensonge ciblé, brancher l'un d'eux ici lève "Input data type does not
+-  match output for input 'suboutput'" (vérifié) ;
+-* un `tabmenumask`, qui restreint le menu tab aux nœuds Cycles pour que le
+-  réseau ne se mélange pas avec ceux d'un autre moteur.
++"""The Cycles Material Builder.
++
++A builder is not a node type: it is a configured `subnet`, set up by a tab
++menu tool. That is how Houdini makes the Karma Material Builder and the USD
++MaterialX Builder - seen in `voptoolutils._setupMtlXBuilderSubnet`.
++
++Three things make it recognisable, and each earlier attempt missed one:
++
++* `setMaterialFlag(True)` - without it the Material Library does not see a
++  material and exports nothing at all;
++* a single `suboutput` with three inputs named `surface`/`displacement`/
++  `volume`, whose exported role follows from the connector of the node wired
++  into each - not from the name given to it. Cycles has a single closure
++  type (a volume and a surface BSDF are both `terminal` on the Sdr side), so
++  `tools/build_cycles_vops.py` knowingly lies about the few nodes that only
++  ever end one kind of network - `displacement` and `vector_displacement`
++  take the `displacement` connector, `principled_volume` and its kind take
++  `atmosphere` - so that Houdini tells them apart from a surface BSDF,
++  ordinarily `surface`. Without that targeted lie, wiring one of them here
++  raises "Input data type does not match output for input 'suboutput'"
++  (verified);
++* a `tabmenumask`, which restricts the tab menu to Cycles nodes so the
++  network does not mix with another engine's.
+ """
+ 
+ import hou
+ 
+-# Le masque suit la construction de Houdini : le mot-clé du moteur, puis les
+-# utilitaires et les nœuds de subnet dont tout réseau a besoin.
++# The mask follows Houdini's own: the engine's keyword, then the utilities
++# and the subnet nodes every network needs.
+ UTILITY_NODES = "parameter constant collect null genericshader"
+ SUBNET_NODES = "subnet subnetconnector suboutput subinput"
+-# Le masque filtre par **motif de nom de type**. Un jeton comme "Cycles" ne
+-# correspond à aucun type et ne filtre rien ; `cycles_*` prend nos cent nœuds et
+-# rejette mécaniquement ceux de MaterialX et de Karma, qu'un graphe Cycles ne
+-# doit pas contenir — un shader mêlant les deux ne rendrait qu'ici, et pas à
+-# l'export vers Blender.
++# The mask filters by **type name pattern**. A token like "Cycles" matches no
++# type and filters nothing; `cycles_*` takes our hundred nodes and mechanically
++# rejects MaterialX's and Karma's, which a Cycles graph must not hold - a
++# shader mixing the two would render here only, not once exported to Blender.
+ CYCLES_TAB_MASK = "cycles_* {} {}".format(UTILITY_NODES, SUBNET_NODES)
+ 
+ RENDER_CONTEXT = "cycles"
+ 
+-# Les trois sorties d'un matériau Cycles, comme dans Blender - un seul
+-# `suboutput`, une entrée par terminal - plus les réglages du matériau, qui
+-# n'en sont pas une : `properties` ne termine aucun réseau, Houdini replie les
+-# paramètres du nœud branché là dans le prim Shader du terminal, préfixés
+-# `cycles:`. C'est l'entrée qu'a aussi le builder de Karma.
++# The three outputs of a Cycles material, as in Blender - one `suboutput`, one
++# input per terminal - plus the material's settings, which are not one:
++# `properties` ends no network, Houdini folds the parameters of the node wired
++# there into the terminal's Shader prim, prefixed `cycles:`. Karma's builder
++# has the same input.
+ TERMINALS = ("surface", "displacement", "volume", "properties")
+ 
+ 
+ def _add_subnet_parms(subnet, folder_label):
+-    """Le masque du menu tab et le contexte de rendu, dans un dossier repliable."""
++    """The tab menu mask and the render context, in a collapsible folder."""
+     parms = subnet.parmTemplateGroup()
+ 
+     mask = hou.properties.parmTemplate("op", "tabmenumask")
+@@ -72,7 +69,7 @@ def _add_subnet_parms(subnet, folder_label):
+ 
+ 
+ def setup(subnet, folder_label="Cycles Material Builder"):
+-    """Configure un subnet déjà créé en builder Cycles."""
++    """Configure an already created subnet as a Cycles builder."""
+     _add_subnet_parms(subnet, folder_label)
+ 
+     inputs = subnet.node("subinput1")
+@@ -93,20 +90,20 @@ def setup(subnet, folder_label="Cycles Material Builder"):
+     for index, name in enumerate(TERMINALS):
+         outputs.parm("name%d" % (index + 1)).set(name)
+ 
+-    # Les réglages du matériau, posés d'emblée comme chez Karma : le nœud est
+-    # inerte tant qu'aucune case n'est cochée, et le trouver déjà là vaut mieux
+-    # que d'avoir à deviner qu'il existe.
++    # The material's settings, placed from the start as Karma does: the node
++    # is inert while no box is ticked, and finding it already there beats
++    # having to guess it exists.
+     properties = subnet.createNode("cycles_material_properties", "material_properties")
+     properties.setPosition(hou.Vector2(-0.2883, -3.8721))
+     outputs.setInput(TERMINALS.index("properties"), properties, 0)
+ 
+-    # Sans ce drapeau la Material Library ne reconnaît pas un matériau.
++    # Without this flag the Material Library does not recognise a material.
+     subnet.setMaterialFlag(True)
+     return subnet
+ 
+ 
+ def create(kwargs, name="cyclesmaterial"):
+-    """Point d'entrée de l'outil du menu tab."""
++    """Entry point of the tab menu tool."""
+     import voptoolutils
+     subnet = voptoolutils.genericTool(kwargs, "subnet", name)
+     return setup(subnet)
+diff --git a/src/hydra/resources/cycles_colorspaces.py b/src/hydra/resources/cycles_colorspaces.py
+index b1cad23d..a4fe3a65 100644
+--- a/src/hydra/resources/cycles_colorspaces.py
++++ b/src/hydra/resources/cycles_colorspaces.py
+@@ -1,23 +1,23 @@
+-"""Les espaces colorimétriques que Cycles accepte, pour le menu des nœuds image.
++"""The colour spaces Cycles accepts, for the menu of the image nodes.
+ 
+-Cycles résout le nom d'un espace dans **la configuration OCIO active** — celle
+-que pointe `$OCIO`, donc celle d'Houdini — sauf pour cinq noms qu'il traite
+-lui-même. D'où ce menu : la liste dépend de la configuration, elle ne peut pas
+-être figée dans le nœud.
++Cycles resolves a space's name in **the active OCIO configuration** - the one
++`$OCIO` points at, so Houdini's - except for five names it handles itself.
++Hence this menu: the list depends on the configuration and cannot be frozen
++in the node.
+ 
+-Le menu reste **modifiable à la main** (`menureplace`) : un nom que la
+-configuration connaît sans qu'il apparaisse ici — un alias, une entrée ajoutée
+-après coup — doit rester saisissable.
++The menu stays **editable by hand** (`menureplace`): a name the configuration
++knows without it appearing here - an alias, an entry added afterwards - must
++remain typeable.
+ 
+-⚠️ La chaîne vide est le « auto » de Cycles : il demande alors à OCIO l'espace
+-que le fichier annonce (`oiio:ColorSpace`, souvent `sRGB`). Une configuration
+-ACES ne définit aucun espace portant ce nom-là — le sien s'appelle
+-`sRGB Encoded Rec.709 (sRGB)` — et Cycles retombe alors sur le linéaire sans
+-un mot : une texture 8 bits n'est pas décodée. C'est l'anomalie A21, et c'est
+-précisément pour cela qu'on veut pouvoir choisir.
++Warning: the empty string is Cycles' "auto": it then asks OCIO for the space
++the file announces (`oiio:ColorSpace`, often `sRGB`). An ACES configuration
++defines no space by that name - its own is called `sRGB Encoded Rec.709
++(sRGB)` - and Cycles then falls back to linear without a word: an 8-bit
++texture is not decoded. That is anomaly A21, and exactly why one wants to be
++able to choose.
+ """
+ 
+-# Les cinq noms que Cycles traite sans OCIO (`src/util/colorspace.cpp`).
++# The five names Cycles handles without OCIO (`src/util/colorspace.cpp`).
+ BUILTIN = (
+     ("", "Auto (from the file)"),
+     ("__builtin_srgb", "sRGB (built-in)"),
+@@ -28,7 +28,7 @@ BUILTIN = (
+ 
+ 
+ def config_colorspaces():
+-    """Les espaces de la configuration OCIO active, alias compris."""
++    """The spaces of the active OCIO configuration, aliases included."""
+     try:
+         import PyOpenColorIO as OCIO
+     except ImportError:
+@@ -51,12 +51,12 @@ def config_colorspaces():
+         for alias in space.getAliases():
+             if alias not in seen:
+                 seen.add(alias)
+-                entries.append((alias, "%s   (alias de %s)" % (alias, name)))
++                entries.append((alias, "%s   (alias of %s)" % (alias, name)))
+     return entries
+ 
+ 
+ def menu():
+-    """Jetons et libellés à plat, ce qu'attend un bloc `menureplace`."""
++    """Tokens and labels, flat, as a `menureplace` block expects."""
+     flat = []
+     for token, label in list(BUILTIN) + config_colorspaces():
+         flat.append(token)
+diff --git a/src/hydra/resources/cycles_device.py b/src/hydra/resources/cycles_device.py
+index 75cf6b49..07cfe771 100644
+--- a/src/hydra/resources/cycles_device.py
++++ b/src/hydra/resources/cycles_device.py
+@@ -1,28 +1,27 @@
+-"""Le peripherique de rendu Cycles, choisi depuis Houdini.
+-
+-Le peripherique est fige a la construction de la session : ni un reglage
+-`cycles:device` authore sur un prim RenderSettings -- husk ne le transmet
+-jamais -- ni un parametre de noeud n'arrivent a temps. Les deux seuls leviers
+-qui marchent sont l'entree du menu des moteurs (Cycles CPU / Cycles GPU) et la
+-variable d'environnement `CYCLES_DEVICE`, lue par le plugin au moment ou il
+-cree le delegate.
+-
+-Ce module manoeuvre la seconde depuis Houdini. Le choix est **global a
+-l'installation, pas au fichier** : il ne se range pas dans le .hip mais dans
+-`$HOUDINI_USER_PREF_DIR/cycles_device.pref`, ou `pythonrc.py` le relit au
+-demarrage suivant. C'est bien ce qu'on veut d'un reglage qui decrit la machine
+--- la carte qu'elle porte, ou son absence -- et non la scene : un .hip passe
+-d'une machine a l'autre, le peripherique non.
+-
+-Deux ecritures pour une seule variable : `os.environ`, que suit tout processus
+-lance par Python, et `hou.putenv`, qui remplit la table d'environnement
+-d'Houdini -- celle dont herite le husk qu'il lance lui-meme, et celle que lisent
+-les expressions. Mesure faite sous hython : les deux atteignent le `getenv` de
+-ucrtbase, celui-la meme que lit `TfGetenv` dans le plugin.
+-
+-Changer de peripherique demande de reconstruire la session : le menu bascule
+-donc le viewport sur un autre moteur et revient, ce qui detruit le delegate et
+-en cree un neuf. Un rendu batch, lui, part d'un husk neuf a chaque fois.
++"""The Cycles render device, chosen from Houdini.
++
++The device is fixed when the session is built: neither a `cycles:device`
++setting authored on a RenderSettings prim - husk never forwards it - nor a
++node parameter arrives in time. The only two levers that work are the entry
++of the renderer menu (Cycles CPU / Cycles GPU) and the environment variable
++`CYCLES_DEVICE`, read by the plugin when it creates the delegate.
++
++This module drives the second one from Houdini. The choice is **global to the
++installation, not to the file**: it does not go into the .hip but into
++`$HOUDINI_USER_PREF_DIR/cycles_device.pref`, where `pythonrc.py` reads it
++back at the next startup. That is what one wants of a setting that describes
++the machine - the card it carries, or its absence - and not the scene: a .hip
++travels from one machine to another, the device does not.
++
++Two writes for one variable: `os.environ`, which every process started by
++Python follows, and `hou.putenv`, which fills Houdini's environment table -
++the one inherited by the husk it starts itself, and the one expressions read.
++Measured under hython: both reach ucrtbase's `getenv`, the very one `TfGetenv`
++reads in the plugin.
++
++Changing the device needs the session rebuilt: the menu therefore switches
++the viewport to another engine and back, which destroys the delegate and
++creates a new one. A batch render starts from a fresh husk every time.
+ """
+ 
+ import os
+@@ -33,9 +32,9 @@ import hou
+ ENV_VAR = "CYCLES_DEVICE"
+ PREF_FILE = "cycles_device.pref"
+ 
+-# Les chaines que `Device::type_from_string` accepte, plus "GPU", que le plugin
+-# resout vers le premier backend que la machine offre (OptiX, CUDA, HIP,
+-# oneAPI, Metal). La valeur vide laisse decider l'entree du menu des moteurs.
++# The strings `Device::type_from_string` accepts, plus "GPU", which the plugin
++# resolves to the first backend the machine offers (OptiX, CUDA, HIP, oneAPI,
++# Metal). The empty value lets the renderer menu entry decide.
+ DEVICES = [
+     ("", "Default (renderer entry)"),
+     ("GPU", "GPU (best available)"),
+@@ -48,20 +47,20 @@ DEVICES = [
+ if sys.platform == "darwin":
+     DEVICES.append(("METAL", "Metal"))
+ 
+-# Rien ici ne verifie qu'un peripherique existe : c'est Cycles qui le fait, et
+-# il retombe sur le CPU en le disant dans son log. Presenter une liste filtree
+-# demanderait d'enumerer les peripheriques hors du process de rendu, ce que la
+-# bibliotheque ne propose pas depuis Python.
++# Nothing here checks that a device exists: Cycles does, and falls back on the
++# CPU saying so in its log. Showing a filtered list would need the devices
++# enumerated outside the render process, which the library does not offer
++# from Python.
+ 
+ 
+ def preference_file():
+-    """Le fichier ou le choix survit a la fermeture d'Houdini."""
++    """The file where the choice survives Houdini being closed."""
+     home = hou.text.expandString("$HOUDINI_USER_PREF_DIR")
+     return os.path.join(home, PREF_FILE)
+ 
+ 
+ def current():
+-    """Le peripherique demande, ou "" si l'entree du menu decide."""
++    """The requested device, or "" when the menu entry decides."""
+     return os.environ.get(ENV_VAR, "").strip().upper()
+ 
+ 
+@@ -69,19 +68,19 @@ def label_for(device):
+     for token, label in DEVICES:
+         if token == device:
+             return label
+-    # Un CYCLES_DEVICE pose a la main, hors de notre liste : le montrer tel quel
+-    # plutot que de faire comme s'il n'existait pas.
++    # A CYCLES_DEVICE set by hand, outside our list: show it as it is rather
++    # than pretend it does not exist.
+     return device
+ 
+ 
+ def apply_device(device):
+-    """Poser la variable dans les deux environnements, sans rien enregistrer."""
++    """Set the variable in both environments, without saving anything."""
+     device = (device or "").strip().upper()
+     if device:
+         os.environ[ENV_VAR] = device
+     else:
+         os.environ.pop(ENV_VAR, None)
+-    # Une chaine vide vaut absence pour le plugin, qui teste `empty()`.
++    # An empty string counts as absent for the plugin, which tests `empty()`.
+     hou.putenv(ENV_VAR, device)
+     return device
+ 
+@@ -102,11 +101,11 @@ def save(device):
+ 
+ 
+ def restore():
+-    """Relire le choix enregistre. Appele par pythonrc.py au demarrage.
++    """Read the saved choice back. Called by pythonrc.py at startup.
+ 
+-    Un `CYCLES_DEVICE` deja pose dans l'environnement -- par un package, un
+-    script de ferme, un shell -- gagne : il vient de plus loin que nous et
+-    l'ecraser en silence serait le pire des deux mondes.
++    A `CYCLES_DEVICE` already set in the environment - by a package, a farm
++    script, a shell - wins: it comes from further away than we do, and
++    silently overwriting it would be the worst of both worlds.
+     """
+     if os.environ.get(ENV_VAR, "").strip():
+         return current()
+@@ -119,11 +118,11 @@ def restore():
+ 
+ 
+ def restart_viewports():
+-    """Reconstruire les delegates Cycles vivants, et dire lesquels.
++    """Rebuild the live Cycles delegates, and say which.
+ 
+-    Basculer sur un autre moteur puis revenir detruit le delegate et en fait
+-    creer un neuf, ce qui est le seul moment ou `CYCLES_DEVICE` est relu.
+-    `restartRenderer()` ne suffit pas : il rebatit la scene, pas la session.
++    Switching to another engine and back destroys the delegate and has a new
++    one created, which is the only moment `CYCLES_DEVICE` is read again.
++    `restartRenderer()` is not enough: it rebuilds the scene, not the session.
+     """
+     if not hou.isUIAvailable():
+         return []
+@@ -142,8 +141,8 @@ def restart_viewports():
+         others = [name for name in available if name != renderer]
+         if not others:
+             continue
+-        # Houdini GL de preference : il ne construit pas de session de rendu,
+-        # donc l'aller-retour ne coute rien.
++        # Houdini GL by preference: it builds no render session, so the round
++        # trip costs nothing.
+         detour = next((name for name in others if "houdini" in name.lower()), others[0])
+         tab.setHydraRenderer(detour)
+         tab.setHydraRenderer(renderer)
+@@ -152,7 +151,7 @@ def restart_viewports():
+ 
+ 
+ def set_device(device):
+-    """Choisir un peripherique : le poser, l'enregistrer, relancer les rendus."""
++    """Choose a device: set it, save it, restart the renders."""
+     device = apply_device(device)
+     save(device)
+     restarted = restart_viewports()
+@@ -168,7 +167,7 @@ def set_device(device):
+ 
+ 
+ def menu_contents():
+-    """Jetons et libelles, a plat, pour le scriptMenuStripDynamic du menu."""
++    """Tokens and labels, flat, for the menu's scriptMenuStripDynamic."""
+     device = current()
+     known = [token for token, _ in DEVICES]
+     entries = list(DEVICES)
+@@ -177,7 +176,7 @@ def menu_contents():
+ 
+     contents = []
+     for token, label in entries:
+-        # Un scriptMenuStripDynamic n'a pas de coche : le libelle la porte.
++        # A scriptMenuStripDynamic has no tick mark: the label carries it.
+         contents.append(token)
+         contents.append(("✓ " if token == device else "    ") + label)
+     return contents
+diff --git a/src/hydra/resources/pythonrc.py b/src/hydra/resources/pythonrc.py
+index 0b72fe9d..40571a44 100644
+--- a/src/hydra/resources/pythonrc.py
++++ b/src/hydra/resources/pythonrc.py
+@@ -1,18 +1,18 @@
+-"""Relire le peripherique de rendu Cycles au demarrage d'Houdini.
++"""Read the Cycles render device back when Houdini starts.
+ 
+-Houdini execute le pythonrc.py de chaque entree du HOUDINI_PATH au demarrage de
+-son interpreteur, avant qu'aucun delegate ne soit cree -- c'est le seul moment
+-qui vaille, puisque le plugin lit CYCLES_DEVICE quand il construit la session.
++Houdini runs the pythonrc.py of every HOUDINI_PATH entry when its interpreter
++starts, before any delegate is created - the only moment that counts, since
++the plugin reads CYCLES_DEVICE when it builds the session.
+ 
+-Rien ici ne doit pouvoir empecher Houdini de demarrer : ce fichier est charge
+-pour tout le monde, y compris hython et les fermes de rendu.
++Nothing here may keep Houdini from starting: this file is loaded for everyone,
++hython and render farms included.
+ """
+ 
+ try:
+     import cycles_device
+ 
+     cycles_device.restore()
+-except Exception:  # noqa: BLE001 - un demarrage d'Houdini vaut mieux qu'un log
++except Exception:  # noqa: BLE001 - a Houdini that starts is worth more than a log
+     import traceback
+ 
+     traceback.print_exc()
+diff --git a/src/scene/mesh.cpp b/src/scene/mesh.cpp
+index bcd67359..c2cb1813 100644
+--- a/src/scene/mesh.cpp
++++ b/src/scene/mesh.cpp
+@@ -766,10 +766,10 @@ void Mesh::add_vertex_normals()
+ 
+ void Mesh::add_undisplaced(Scene *scene)
+ {
+-  /* Egalement des que le maillage porte un vrai deplacement, meme si aucun
+-   * shader ne demande la position non deplacee : c'est d'elle que repart
+-   * read_shader_output, faute de quoi un second calcul de displacement
+-   * s'ajouterait au premier. */
++  /* Also as soon as the mesh carries a true displacement, even when no
++   * shader asks for the undisplaced position: read_shader_output starts
++   * again from it, failing which a second displacement computation would
++   * add itself to the first. */
+   if ((need_attribute(scene, ATTR_STD_POSITION_UNDISPLACED) || has_true_displacement()) &&
+       !attributes.find(ATTR_STD_POSITION_UNDISPLACED))
+   {
+diff --git a/src/scene/mesh_displace.cpp b/src/scene/mesh_displace.cpp
+index 227d1588..9fcb5995 100644
+--- a/src/scene/mesh_displace.cpp
++++ b/src/scene/mesh_displace.cpp
+@@ -93,15 +93,15 @@ static void read_shader_output(const Scene *scene,
+   packed_float3 *mesh_verts = mesh->get_position_for_write();
+   const int num_verts = mesh->num_verts();
+ 
+-  /* Repartir des positions non deplacees quand on les a. L'offset s'ajoute a
+-   * la position courante : redeplacer un maillage deja deplace l'ajoute une
+-   * seconde fois. Cycles compte sur l'hote pour reposer les positions avant
+-   * chaque nouveau calcul - c'est ce que fait Blender en re-exportant le
+-   * maillage - mais un hote qui ne touche qu'au shader n'a aucune raison de le
+-   * faire, et la modification du displacement marque elle-meme la position
+-   * comme modifiee (geometry.cpp), donc le calcul est bien relance. La
+-   * sauvegarde ci-dessous, prise juste avant le premier deplacement, rend
+-   * l'operation idempotente. */
++  /* Start again from the undisplaced positions when they are there. The
++   * offset is added to the current position: displacing an already displaced
++   * mesh adds it a second time. Cycles relies on the host to reset the
++   * positions before each new computation - Blender does, by exporting the
++   * mesh again - but a host that only touches the shader has no reason to,
++   * and a change of the displacement itself marks the position as modified
++   * (geometry.cpp), so the computation does run again. The copy below,
++   * taken just before the first displacement, makes the operation
++   * idempotent. */
+   if (const Attribute *attr_undisplaced = mesh->attributes.find(ATTR_STD_POSITION_UNDISPLACED)) {
+     const packed_float3 *undisplaced = attr_undisplaced->data<packed_float3>();
+     const size_t num_undisplaced = attr_undisplaced->buffer_size(mesh, ATTR_PRIM_GEOMETRY) /
+diff --git a/src/scene/shader_nodes.cpp b/src/scene/shader_nodes.cpp
+index e9a0d67a..42a541b8 100644
+--- a/src/scene/shader_nodes.cpp
++++ b/src/scene/shader_nodes.cpp
+@@ -1546,8 +1546,8 @@ NODE_DEFINE(MxNoiseTextureNode)
+   SOCKET_ENUM(dimensions, "Dimensions", dimensions_enum, 3);
+ 
+   static NodeEnum noise_type_enum;
+-  /* Les valeurs suivent NodeMxNoiseType, qui vit dans le kernel : le code de
+-   * scene ne l'inclut pas, et n'a pas a le faire. */
++  /* The values follow NodeMxNoiseType, which lives in the kernel: the scene
++   * code does not include it, and has no reason to. */
+   noise_type_enum.insert("perlin", 0);
+   noise_type_enum.insert("fractal", 1);
+   noise_type_enum.insert("cell", 2);

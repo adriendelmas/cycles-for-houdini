@@ -1,0 +1,257 @@
+From 87ced1009dbec8a1b2387bf76540c9d421d3834e Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Wed, 9 Sep 2026 23:49:11 +0200
+Subject: [PATCH 071/141] hydra: tools to measure a laggy viewport, and a log
+ that goes somewhere
+
+Reported: Karma renders instantly when the view moves, Cycles takes four to five
+seconds. A clarification from the user redirected the diagnosis: the CPU is
+**barely** more responsive than the GPU, so the cause is common to both devices
+- it is not the return of the pixels from the card.
+
+What the measurement ruled out, on four frames with an animated camera: the mesh
+is only synchronized once, `tri_verts` / `optix blas` / `svm_nodes` are only
+allocated once, and the first sample arrives ~0.5 s after a camera change. The
+delay therefore lives in the interactive path, which husk does not go through.
+
+Hence a stopwatch in `_Execute`, which runs on the host's thread - everything it
+spends there, the viewport spends frozen. Four named items: wait for the scene
+lock, COP watch, camera and AOV, session restart. Nothing as long as the total
+stays under 50 ms. Added to this are the way the pixels go back up to the host
+with the name of the Hgi received, and the cause of each restart.
+
+`CYCLES_LOG_FILE` diverts the log to a file. Cycles writes to standard output,
+which assumes a host that has one: Houdini is a graphical application and its
+process has no console under Windows, so everything was lost. The hook already
+existed upstream - `log_init` takes a log function - it was plugged into
+nothing.
+
+A defect found along the way, in the COP watch: re-reading a COP cooks it,
+`layer()` takes care of that, and the state noted was that from **before** the
+read. The next poll compared the state after to the one before, concluded the COP
+had moved, and re-read a second time: one more 4K to read on the host's thread,
+to re-upload, and a graph to recompile, for nothing, on every edit.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/houdini_cop.cpp | 10 +++++++
+ src/hydra/plugin.cpp      | 51 +++++++++++++++++++++++++++++++++
+ src/hydra/render_pass.cpp | 60 ++++++++++++++++++++++++++++++++++++++-
+ 3 files changed, 120 insertions(+), 1 deletion(-)
+
+diff --git a/src/hydra/houdini_cop.cpp b/src/hydra/houdini_cop.cpp
+index c0f29529..5c9d1119 100644
+--- a/src/hydra/houdini_cop.cpp
++++ b/src/hydra/houdini_cop.cpp
+@@ -500,6 +500,16 @@ void PollHoudiniCops(Scene *scene)
+       continue;
+     }
+ 
++    /* Relire le COP le cuit - c'est `layer()` qui s'en charge - donc son
++     * compteur de cuissons a avance depuis le releve d'avant. Sans reporter le
++     * nouveau, le sondage suivant comparait l'etat d'apres a l'etat d'avant,
++     * concluait que le COP avait bouge, et relisait une seconde fois : une 4K
++     * de plus a lire, a reteleverser et un graphe a recompiler, pour rien, a
++     * chaque edition. */
++    watch.seen.cookCount = pixels->cookCount;
++    watch.seen.needsToCook = false;
++    watch.pending = false;
++
+     int refreshed = 0;
+     {
+       const thread_scoped_lock lock(CacheMutex());
+diff --git a/src/hydra/plugin.cpp b/src/hydra/plugin.cpp
+index b6ea7571..a0755e9d 100644
+--- a/src/hydra/plugin.cpp
++++ b/src/hydra/plugin.cpp
+@@ -6,8 +6,11 @@
+ #include "hydra/plugin.h"
+ #include "hydra/render_delegate.h"
+ #include "util/log.h"
++#include "util/log.h"
+ #include "util/path.h"
+ 
++#include <cstdio>
++
+ #include <pxr/base/arch/fileSystem.h>
+ #include <pxr/base/plug/plugin.h>
+ #include <pxr/base/plug/thisPlugin.h>
+@@ -19,6 +22,51 @@ PXR_NAMESPACE_OPEN_SCOPE
+ 
+ TF_DEFINE_ENV_SETTING(CYCLES_LOGGING, false, "Enable Cycles logging")
+ TF_DEFINE_ENV_SETTING(CYCLES_LOGGING_LEVEL, "warning", "Cycles logging level")
++TF_DEFINE_ENV_SETTING(CYCLES_LOG_FILE,
++                      "",
++                      "Write the Cycles log to this file rather than to the console")
++
++namespace {
++
++/* Le journal, quand il n'y a pas de console pour le recevoir.
++ *
++ * Cycles ecrit sur la sortie standard, ce qui suppose un hote qui en ait une.
++ * Houdini est une application graphique : sous Windows son processus n'a pas de
++ * console, et tout ce que le delegate raconte se perd. Un moteur qui ne peut
++ * rien dire de ce qu'il fait est un moteur qu'on ne peut pas diagnostiquer -
++ * d'ou ce robinet, ouvert par `CYCLES_LOG_FILE`. */
++FILE *LogFile()
++{
++  static FILE *file = [] {
++    const std::string path = TfGetEnvSetting(CYCLES_LOG_FILE);
++    if (path.empty()) {
++      return static_cast<FILE *>(nullptr);
++    }
++    FILE *const opened = PXR_NS::ArchOpenFile(path.c_str(), "w");
++    if (opened == nullptr) {
++      TF_WARN("Could not open '%s' for the Cycles log; logging to the console.", path.c_str());
++    }
++    return opened;
++  }();
++  return file;
++}
++
++void LogToFile(const CCL_NS::LogLevel level,
++               const char * /*file_line*/,
++               const char * /*func*/,
++               const char *msg)
++{
++  FILE *const file = LogFile();
++  if (file == nullptr) {
++    return;
++  }
++  fprintf(file, "%s: %s\n", CCL_NS::log_level_to_string(level), msg);
++  /* Vide a chaque ligne : un journal qu'on lit pendant que Houdini tourne, ou
++   * apres qu'il a plante, ne vaut que par ce qui a deja touche le disque. */
++  fflush(file);
++}
++
++}  // namespace
+ 
+ HdCyclesPlugin::HdCyclesPlugin()
+ {
+@@ -29,6 +77,9 @@ HdCyclesPlugin::HdCyclesPlugin()
+ 
+   if (TfGetEnvSetting(CYCLES_LOGGING)) {
+     CCL_NS::log_level_set(TfGetEnvSetting(CYCLES_LOGGING_LEVEL));
++    if (LogFile() != nullptr) {
++      CCL_NS::log_init(&LogToFile);
++    }
+   }
+ }
+ 
+diff --git a/src/hydra/render_pass.cpp b/src/hydra/render_pass.cpp
+index afa85f07..c02122f2 100644
+--- a/src/hydra/render_pass.cpp
++++ b/src/hydra/render_pass.cpp
+@@ -23,6 +23,11 @@
+ #include "scene/scene.h"
+ 
+ #include "session/session.h"
++#include "util/log.h"
++
++#include <chrono>
++
++#include <pxr/imaging/hgi/hgi.h>
+ 
+ #include <pxr/imaging/hd/renderPassState.h>
+ 
+@@ -47,6 +52,21 @@ HdCyclesRenderPass::HdCyclesRenderPass(HdRenderIndex *index,
+         make_unique<HdCyclesDisplayDriver>(renderParam, renderDelegate->GetHgi()));
+ #endif
+   }
++
++  /* Par ou les pixels remontent a l'hote, dit une fois. Les deux chemins n'ont
++   * pas le meme prix : le pilote d'affichage ecrit dans une texture que l'hote
++   * possede deja, l'autre relit le tampon depuis le peripherique a chaque
++   * rafraichissement - gratuit sur processeur, une copie par-dessus le bus sur
++   * carte graphique. C'est la premiere chose a regarder quand le viewport
++   * repond moins bien en GPU qu'en CPU. */
++  {
++    const Hgi *const hgi = renderDelegate->GetHgi();
++    LOG_INFO << "Affichage : "
++             << (renderDelegate->IsDisplaySupported() ?
++                     "pilote d'affichage, la texture reste sur le peripherique" :
++                     "driver de sortie, le tampon est relu a chaque rafraichissement")
++             << " (Hgi : " << (hgi ? hgi->GetAPIName().GetText() : "aucun") << ").";
++  }
+ }
+ 
+ HdCyclesRenderPass::~HdCyclesRenderPass()
+@@ -89,12 +109,21 @@ void HdCyclesRenderPass::_Execute(const HdRenderPassStateSharedPtr &renderPassSt
+   }
+ 
+   {
++    /* Le chronometre de la passe. `_Execute` tourne sur le fil de l'hote : tout
++     * ce qu'il passe ici, le viewport le passe fige. Un rendu qui « met quatre
++     * secondes a demarrer » se lit dans ces quatre nombres, et nulle part
++     * ailleurs - le reste du temps appartient au fil de rendu, qui lui ne bloque
++     * personne. */
++    using clock = std::chrono::steady_clock;
++    const clock::time_point tStart = clock::now();
++
+     /* Take the lock rather than trying it. A failed try_lock used to skip the
+      * session reset below with no retry, which silently dropped the edit: a
+      * batch render re-executes everything every frame and papers over it, but
+      * an interactive session may only execute once per change, and the change
+      * then never reached the renderer. */
+     scene->mutex.lock();
++    const clock::time_point tLocked = clock::now();
+ 
+ #ifdef WITH_HOUDINI_COP
+     /* Un COP qui change ne salit rien : Solaris ne connait pas la dependance
+@@ -104,6 +133,7 @@ void HdCyclesRenderPass::_Execute(const HdRenderPassStateSharedPtr &renderPassSt
+      * Houdini est sur, et le verrou de scene est tenu. */
+     PollHoudiniCops(scene);
+ #endif
++    const clock::time_point tPolled = clock::now();
+     auto *const renderDelegate = static_cast<HdCyclesDelegate *>(
+         GetRenderIndex()->GetRenderDelegate());
+ 
+@@ -196,7 +226,17 @@ void HdCyclesRenderPass::_Execute(const HdRenderPassStateSharedPtr &renderPassSt
+     }
+ 
+     // Reset session if the session, scene, camera or AOV bindings changed
+-    if (scene->need_reset() || settingsVersion != _lastSettingsVersion || cameraSwitched) {
++    /* `need_reset(false)` est le besoin de mise a jour des donnees, camera exclue. */
++    const bool dataUpdate = scene->need_reset(false);
++    const bool cameraModified = scene->camera->is_modified();
++    if (dataUpdate || cameraModified || settingsVersion != _lastSettingsVersion || cameraSwitched) {
++      /* Ce qui a relance le rendu. Un viewport qui ne converge jamais tient
++       * presque toujours a une cause qui revient a chaque image, et sans ce mot
++       * elle est invisible : la session repart, c'est tout ce qu'on voit. */
++      LOG_INFO << "Rendu relance :" << (dataUpdate ? " scene" : "")
++               << (cameraModified ? " camera" : "")
++               << (settingsVersion != _lastSettingsVersion ? " reglages" : "")
++               << (cameraSwitched ? " bascule-de-camera" : "") << ".";
+       _lastSettingsVersion = settingsVersion;
+ 
+       // Reset convergence state of all render buffers
+@@ -218,11 +258,29 @@ void HdCyclesRenderPass::_Execute(const HdRenderPassStateSharedPtr &renderPassSt
+ 
+       session->reset(session->params, buffer_params);
+     }
++    const clock::time_point tReset = clock::now();
+ 
+     scene->mutex.unlock();
+ 
+     // Start Cycles render thread if not already running
+     session->start();
++
++    /* Ce que la passe a coute a l'hote, quand ca se voit. Le seuil evite une
++     * ligne par image sur un viewport qui va bien ; au-dela, chaque poste est
++     * nomme, parce que « le rendu est lent » ne dit pas s'il attend un verrou,
++     * un COP qui recuit, ou une session qui repart. */
++    const clock::time_point tEnd = clock::now();
++    const auto ms = [](const clock::time_point a, const clock::time_point b) {
++      return std::chrono::duration_cast<std::chrono::microseconds>(b - a).count() / 1000.0;
++    };
++    const double total = ms(tStart, tEnd);
++    if (total >= 50.0) {
++      LOG_INFO << "Passe de rendu : " << total << " ms sur le fil de l'hote ("
++               << "verrou " << ms(tStart, tLocked) << ", "
++               << "veille COP " << ms(tLocked, tPolled) << ", "
++               << "camera et AOV " << ms(tPolled, tReset) << ", "
++               << "relance " << ms(tReset, tEnd) << ").";
++    }
+   }
+ 
+   session->draw();

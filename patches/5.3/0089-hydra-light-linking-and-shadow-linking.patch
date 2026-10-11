@@ -1,0 +1,348 @@
+From 6eebb4e1fe1a32dc01ced67a14e31248d654a685 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 8 Oct 2026 00:50:49 +0200
+Subject: [PATCH 089/141] hydra: light linking and shadow linking
+
+Nothing read the lights' lightLink and shadowLink collections: every light lit
+everything, every shadow fell. Hydra's light linking scene index is registered
+for Cycles; it sets a link category on each light and, on each prim, the list of
+categories that include it. The session turns them into Cycles sets: one receiver
+set per distinct combination of linked categories (set 0 for prims that have
+none, which a linked light leaves aside), and for each light the mask of the sets
+it reaches - all of them when it links nothing. Shadows likewise, with the
+blocker sets. Recomputed when a category or a link changes; deleted objects are
+forgotten.
+
+Measured: a light linked to only one of two spheres leaves the other to the
+dome's light alone; a sphere excluded from the shadowLink no longer casts a
+shadow. The old DLL fails both.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/geometry.inl |  24 ++++++++-
+ src/hydra/light.cpp    |  15 ++++++
+ src/hydra/plugin.cpp   |  41 ++++++++++++++++
+ src/hydra/session.cpp  | 109 +++++++++++++++++++++++++++++++++++++++++
+ src/hydra/session.h    |  12 +++++
+ 5 files changed, 200 insertions(+), 1 deletion(-)
+
+diff --git a/src/hydra/geometry.inl b/src/hydra/geometry.inl
+index f64d0c56..6ee57fc6 100644
+--- a/src/hydra/geometry.inl
++++ b/src/hydra/geometry.inl
+@@ -8,6 +8,8 @@
+ #include "hydra/material.h"
+ #include "hydra/session.h"
+ #include "hydra/util.h"
++
++#include <pxr/imaging/hd/categoriesSchema.h>
+ #include "scene/geometry.h"
+ #include "scene/object.h"
+ #include "scene/scene.h"
+@@ -46,7 +48,7 @@ HdDirtyBits HdCyclesGeometry<Base, CyclesBase>::GetInitialDirtyBitsMask() const
+ {
+   return HdChangeTracker::DirtyPrimID | HdChangeTracker::DirtyTransform |
+          HdChangeTracker::DirtyMaterialId | HdChangeTracker::DirtyVisibility |
+-         HdChangeTracker::DirtyInstancer;
++         HdChangeTracker::DirtyInstancer | HdChangeTracker::DirtyCategories;
+ }
+ 
+ template<typename Base, typename CyclesBase>
+@@ -224,6 +226,7 @@ void HdCyclesGeometry<Base, CyclesBase>::Sync(HdSceneDelegate *sceneDelegate,
+ 
+     // Resize instance list
+     for (size_t i = newSize; i < oldSize; ++i) {
++      static_cast<HdCyclesSession *>(renderParam)->ForgetObject(_instances[i]);
+       lock.scene->delete_node(_instances[i]);
+     }
+     _instances.resize(newSize);
+@@ -320,6 +323,21 @@ void HdCyclesGeometry<Base, CyclesBase>::Sync(HdSceneDelegate *sceneDelegate,
+     }
+   }
+ 
++  /* The light-linking categories this prim is in (session.h). */
++  if ((*dirtyBits & HdChangeTracker::DirtyCategories) ||
++      HdChangeTracker::IsInstancerDirty(*dirtyBits, id))
++  {
++    std::vector<TfToken> categories;
++    if (auto ds = HdCategoriesSchema::GetFromParent(primDs).GetIncludedCategoryNames(); !ds.empty())
++    {
++      categories.assign(ds.begin(), ds.end());
++    }
++    auto *const session = static_cast<HdCyclesSession *>(renderParam);
++    for (Object *instance : _instances) {
++      session->SetObjectCategories(instance, categories);
++    }
++  }
++
+   // Must happen after material ID update, so that attribute decisions can be made
+   // based on it (e.g. check whether an attribute is actually needed)
+   bool rebuild = false;
+@@ -346,6 +364,10 @@ void HdCyclesGeometry<Base, CyclesBase>::Finalize(HdRenderParam *renderParam)
+   const SceneLock lock(renderParam);
+   const bool keep_nodes = static_cast<const HdCyclesSession *>(renderParam)->keep_nodes;
+ 
++  for (Object *instance : _instances) {
++    static_cast<HdCyclesSession *>(renderParam)->ForgetObject(instance);
++  }
++
+   /* Delete the instances before the geometry, since the objects reference the geometry. */
+   if (!keep_nodes) {
+     lock.scene->delete_nodes(set<Object *>(_instances.begin(), _instances.end()));
+diff --git a/src/hydra/light.cpp b/src/hydra/light.cpp
+index 1d6f6282..bdf91c69 100644
+--- a/src/hydra/light.cpp
++++ b/src/hydra/light.cpp
+@@ -205,6 +205,20 @@ void HdCyclesLight::Sync(HdSceneDelegate *sceneDelegate,
+     _light->set_strength(strength);
+     _light->set_is_enabled(visible);
+ 
++    /* Its light and shadow link categories, set by Hydra's light linking
++     * scene index from the light's collections; empty when it links all. */
++    {
++      TfToken lightLink;
++      TfToken shadowLink;
++      if (auto ds = GetTypedDataSource<TfToken>(lightDs, HdTokens->lightLink)) {
++        lightLink = ds->GetTypedValue(0.0f);
++      }
++      if (auto ds = GetTypedDataSource<TfToken>(lightDs, HdTokens->shadowLink)) {
++        shadowLink = ds->GetTypedValue(0.0f);
++      }
++      static_cast<HdCyclesSession *>(renderParam)->SetLightLinks(_object, lightLink, shadowLink);
++    }
++
+     PopulateShaderGraph(lightDs);
+   }
+   // Need to update shader graph when transform changes in case transform was baked into it
+@@ -390,6 +404,7 @@ void HdCyclesLight::Finalize(HdRenderParam *renderParam)
+ 
+   const SceneLock lock(renderParam);
+   const bool keep_nodes = static_cast<const HdCyclesSession *>(renderParam)->keep_nodes;
++  static_cast<HdCyclesSession *>(renderParam)->ForgetObject(_object);
+ 
+   if (!keep_nodes) {
+     /* Delete the object before the light, since the object references the light. */
+diff --git a/src/hydra/plugin.cpp b/src/hydra/plugin.cpp
+index 9d683ddd..0377387b 100644
+--- a/src/hydra/plugin.cpp
++++ b/src/hydra/plugin.cpp
+@@ -18,8 +18,11 @@
+ #include <pxr/base/tf/envSetting.h>
+ #include <pxr/base/tf/getenv.h>
+ #include <pxr/imaging/hd/rendererPluginRegistry.h>
++#include <pxr/imaging/hd/retainedDataSource.h>
+ #include <pxr/imaging/hd/sceneIndexPlugin.h>
+ #include <pxr/imaging/hd/sceneIndexPluginRegistry.h>
++#include <pxr/imaging/hd/tokens.h>
++#include <pxr/imaging/hdsi/lightLinkingSceneIndex.h>
+ 
+ PXR_NAMESPACE_OPEN_SCOPE
+ 
+@@ -169,6 +172,44 @@ TF_REGISTRY_FUNCTION(HdSceneIndexPlugin)
+         0,
+         HdSceneIndexPluginRegistry::InsertionOrderAtStart);
+   }
++
++  /* Light linking: Hydra's scene index turns each light's `lightLink` and
++   * `shadowLink` collections into a category on the light and the list of
++   * categories on each prim, which the delegate turns into Cycles light and
++   * shadow sets. Without it nothing reached the delegate. */
++  const VtArray<TfToken> lightTypes = {HdPrimTypeTokens->sphereLight,
++                                       HdPrimTypeTokens->rectLight,
++                                       HdPrimTypeTokens->diskLight,
++                                       HdPrimTypeTokens->cylinderLight,
++                                       HdPrimTypeTokens->distantLight,
++                                       HdPrimTypeTokens->domeLight};
++  const VtArray<TfToken> geometryTypes = {HdPrimTypeTokens->mesh,
++                                          HdPrimTypeTokens->basisCurves,
++                                          HdPrimTypeTokens->points,
++                                          HdPrimTypeTokens->volume,
++                                          HdPrimTypeTokens->sphere,
++                                          HdPrimTypeTokens->cube,
++                                          HdPrimTypeTokens->cylinder,
++                                          HdPrimTypeTokens->cone,
++                                          HdPrimTypeTokens->capsule,
++                                          HdPrimTypeTokens->plane};
++  const HdContainerDataSourceHandle linkingArgs = HdRetainedContainerDataSource::New(
++      HdsiLightLinkingSceneIndexTokens->lightPrimTypes,
++      HdRetainedTypedSampledDataSource<VtArray<TfToken>>::New(lightTypes),
++      HdsiLightLinkingSceneIndexTokens->geometryPrimTypes,
++      HdRetainedTypedSampledDataSource<VtArray<TfToken>>::New(geometryTypes));
++  for (const char *displayName : {"Cycles CPU", "Cycles GPU"}) {
++    HdSceneIndexPluginRegistry::GetInstance().RegisterSceneIndexForRenderer(
++        displayName,
++        [](const std::string & /*renderInstanceId*/,
++           const HdSceneIndexBaseRefPtr &inputScene,
++           const HdContainerDataSourceHandle &args) -> HdSceneIndexBaseRefPtr {
++          return HdsiLightLinkingSceneIndex::New(inputScene, args);
++        },
++        linkingArgs,
++        0,
++        HdSceneIndexPluginRegistry::InsertionOrderAtEnd);
++  }
+ }
+ 
+ PXR_NAMESPACE_CLOSE_SCOPE
+diff --git a/src/hydra/session.cpp b/src/hydra/session.cpp
+index 3020a01d..cb084fc1 100644
+--- a/src/hydra/session.cpp
++++ b/src/hydra/session.cpp
+@@ -21,8 +21,10 @@
+ 
+ #include <pxr/imaging/hd/renderBuffer.h>
+ 
++#include <algorithm>
+ #include <cctype>
+ #include <cstring>
++#include <set>
+ 
+ HDCYCLES_NAMESPACE_OPEN_SCOPE
+ 
+@@ -293,10 +295,117 @@ HdCyclesSession::~HdCyclesSession()
+   }
+ }
+ 
++void HdCyclesSession::SetObjectCategories(Object *object, std::vector<TfToken> categories)
++{
++  std::sort(categories.begin(), categories.end());
++  auto &current = _objectCategories[object];
++  if (current != categories) {
++    current = std::move(categories);
++    _lightLinkingDirty = true;
++  }
++}
++
++void HdCyclesSession::SetLightLinks(Object *light, TfToken lightLink, TfToken shadowLink)
++{
++  auto &current = _lightLinks[light];
++  if (current.first != lightLink || current.second != shadowLink) {
++    current = {lightLink, shadowLink};
++    _lightLinkingDirty = true;
++  }
++}
++
++void HdCyclesSession::ForgetObject(Object *object)
++{
++  _lightLinkingDirty |= _objectCategories.erase(object) + _lightLinks.erase(object) > 0;
++}
++
++/* Hydra links a light to the prims of a category; Cycles to sets. A receiver
++ * belongs to one light set, the one of its combination of linked categories,
++ * and a light lists the sets it reaches: all of them when it links nothing,
++ * else the sets whose combination holds its category. Set 0 is the prims in
++ * no linked category, which a linked light leaves out. Shadows work the same
++ * way with blocker sets. */
++void HdCyclesSession::UpdateLightLinking(Scene *scene)
++{
++  _lightLinkingDirty = false;
++
++  for (const bool shadow : {false, true}) {
++    std::set<TfToken> linked;
++    for (const auto &entry : _lightLinks) {
++      const TfToken &link = shadow ? entry.second.second : entry.second.first;
++      if (!link.IsEmpty()) {
++        linked.insert(link);
++      }
++    }
++
++    /* The sets: one per distinct combination of linked categories. */
++    std::map<std::vector<TfToken>, int> sets;
++    std::map<Object *, int> setOf;
++    for (const auto &[object, categories] : _objectCategories) {
++      std::vector<TfToken> key;
++      for (const TfToken &category : categories) {
++        if (linked.count(category)) {
++          key.push_back(category);
++        }
++      }
++      int index = 0;
++      if (!key.empty()) {
++        const auto it = sets.find(key);
++        if (it != sets.end()) {
++          index = it->second;
++        }
++        else if (int(sets.size()) + 1 < LIGHT_LINK_SET_MAX) {
++          index = int(sets.size()) + 1;
++          sets.emplace(key, index);
++        }
++        else {
++          LOG_WARNING << "More than " << LIGHT_LINK_SET_MAX - 1
++                      << " combinations of linked lights; the rest are lit by every light.";
++        }
++      }
++      setOf[object] = index;
++    }
++
++    for (const auto &[object, index] : setOf) {
++      if (shadow) {
++        object->set_blocker_shadow_set(index);
++      }
++      else {
++        object->set_receiver_light_set(index);
++      }
++      object->tag_update(scene);
++    }
++
++    for (const auto &[light, links] : _lightLinks) {
++      const TfToken &link = shadow ? links.second : links.first;
++      uint64_t mask = LIGHT_LINK_MASK_ALL;
++      if (!link.IsEmpty()) {
++        mask = 0;
++        for (const auto &[key, index] : sets) {
++          if (std::find(key.begin(), key.end(), link) != key.end()) {
++            mask |= uint64_t(1) << index;
++          }
++        }
++      }
++      if (shadow) {
++        light->set_shadow_set_membership(mask);
++      }
++      else {
++        light->set_light_set_membership(mask);
++      }
++      light->tag_update(scene);
++    }
++  }
++}
++
+ void HdCyclesSession::UpdateScene()
+ {
+   Scene *const scene = session->scene.get();
+ 
++  if (_lightLinkingDirty) {
++    UpdateLightLinking(scene);
++  }
++
+   // Update background depending on presence of a background light
+   if (scene->light_manager->need_update() || _backgroundDirty) {
+     _backgroundDirty = false;
+diff --git a/src/hydra/session.h b/src/hydra/session.h
+index 849af29e..483ea10c 100644
+--- a/src/hydra/session.h
++++ b/src/hydra/session.h
+@@ -193,6 +193,14 @@ class HdCyclesSession final : public PXR_NS::HdRenderParam {
+     return !_disableMotionBlur && !_instantaneousShutter && _shutterClose > _shutterOpen;
+   }
+ 
++  /* Light linking. Geometry reports the categories each of its objects is
++   * in, lights the category of their light and shadow links (Hydra's light
++   * linking scene index computes both from the lights' collections);
++   * UpdateScene() turns them into Cycles light and shadow sets. */
++  void SetObjectCategories(CCL_NS::Object *object, std::vector<PXR_NS::TfToken> categories);
++  void SetLightLinks(CCL_NS::Object *light, PXR_NS::TfToken lightLink, PXR_NS::TfToken shadowLink);
++  void ForgetObject(CCL_NS::Object *object);
++
+   /* Film transparency the render settings ask for, overriding the default
+    * (transparent unless a dome light is seen by the camera). */
+   void SetTransparentOverride(const int transparent)
+@@ -237,6 +245,10 @@ class HdCyclesSession final : public PXR_NS::HdRenderParam {
+   std::map<CCL_NS::Hair *, bool> _curveIsCubic;
+   float _shutterOpen = 0.0f;
+   float _shutterClose = 0.0f;
++  std::map<CCL_NS::Object *, std::vector<PXR_NS::TfToken>> _objectCategories;
++  std::map<CCL_NS::Object *, std::pair<PXR_NS::TfToken, PXR_NS::TfToken>> _lightLinks;
++  bool _lightLinkingDirty = false;
++  void UpdateLightLinking(CCL_NS::Scene *scene);
+   int _transparentOverride = -1; /* -1: not set, 0 or 1 */
+   bool _backgroundDirty = false;
+   bool _disableMotionBlur = false;

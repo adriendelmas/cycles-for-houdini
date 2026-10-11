@@ -1,0 +1,56 @@
+From 8ce55bea246914578e5a3e35abfa2116c3057a44 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Wed, 7 Oct 2026 16:46:27 +0200
+Subject: [PATCH 075/141] hydra: float3 primvars were copied at the wrong
+ stride, and read as garbage
+
+ApplyPrimvars widened each GfVec3f into a float3 - sixteen bytes, the padded
+type - before copying the array into the Cycles attribute. But
+Attribute::data_sizeof() returns sizeof(packed_float3), twelve bytes, since
+Cycles stores its attributes in a compact type: the copy ran at the wrong
+stride and overran the buffer by four bytes per element. Every per-vertex color
+or vector read back by a shader was noise: a constant displayColor (0.2 0.6 0.9)
+came out (0.47 0.38 0.47), through the native attribute node as well as through
+geomcolor.
+
+A GfVec3f is exactly twelve bytes: the array is copied as is. Measured after the
+fix: (0.200 0.600 0.900) on the MaterialX bench.
+
+Upstream bug, present as is in Cycles' delegate.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ src/hydra/util.cpp | 19 ++++++++++---------
+ 1 file changed, 10 insertions(+), 9 deletions(-)
+
+diff --git a/src/hydra/util.cpp b/src/hydra/util.cpp
+index 51e2a28a..8db6e004 100644
+--- a/src/hydra/util.cpp
++++ b/src/hydra/util.cpp
+@@ -264,16 +264,17 @@ void ApplyPrimvars(AttributeSet &attributes,
+         value = std::move(valueConverted);
+       }
+       else {
++        /* A vector attribute is stored packed - Attribute::data_sizeof()
++         * returns sizeof(packed_float3), twelve bytes - which is exactly a
++         * GfVec3f, so the array is copied as it is. This used to widen every
++         * element to the padded sixteen-byte float3 first, from the days when
++         * Cycles stored attributes that way: the copy then ran at the wrong
++         * stride and past the end of the buffer, and every per-vertex colour or
++         * vector a shader read back was garbage. A constant (0.2, 0.6, 0.9)
++         * displayColor came out as (0.47, 0.38, 0.47). */
++        static_assert(sizeof(GfVec3f) == sizeof(packed_float3));
+         attrType = CCL_NS::TypeVector;
+-        size = valueData.size() * sizeof(float3);
+-        // The Cycles "float3" data type is padded to "float4", so need to convert the array
+-        VtArray<float3> valueConverted;
+-        valueConverted.reserve(valueData.size());
+-        for (const GfVec3f &vec : valueData) {
+-          valueConverted.push_back(make_float3(vec[0], vec[1], vec[2]));
+-        }
+-        data = valueConverted.data();
+-        value = std::move(valueConverted);
++        size = valueData.size() * sizeof(packed_float3);
+       }
+       break;
+     }

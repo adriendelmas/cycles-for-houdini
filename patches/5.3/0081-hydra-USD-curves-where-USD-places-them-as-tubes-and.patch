@@ -1,0 +1,811 @@
+From f396c303de3458d572f307b980ec104d60b265f4 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Wed, 7 Oct 2026 21:52:48 +0200
+Subject: [PATCH 081/141] hydra: USD curves where USD places them, as tubes,
+ and Curve Shape
+
+Cycles reads every curve as a Catmull-Rom passing through all its keys, or as a
+polyline. The delegate passed it the USD points as they were: a Bezier passed
+through its control points, a B-spline went all the way to its end points, a
+periodic curve stayed open, an indexed curve read its points in array order, and
+`varying` widths were ignored. Each curve is now resampled into keys that Cycles
+reads the same way: each key is a weighted sum of at most four USD points
+(Bezier and B-spline evaluated, Catmull-Rom without its tangent points, periodic
+closed, pinned up to its ends), applied to the points, the motion samples, the
+widths and the primvars; `varying` values are interpolated between the two
+nearest. The common case - open non-indexed polylines - still copies the arrays
+as they are.
+
+The delegate rendered every curve as a ribbon, a flat strip turned toward the
+camera. By default a linear curve is now an exact thick polyline, a cubic a round
+tube; the cycles:curve_shape setting (auto, thick, ribbon) changes without
+recompiling and redoes the curves already synchronized. Points (pointcloud) read
+`varying` widths as per-point widths.
+
+tools/bench_curves.py, on the repo side, guards the five cases.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/curves.cpp                          | 380 ++++++++++++++++--
+ src/hydra/curves.h                            |  23 ++
+ src/hydra/pointcloud.cpp                      |   4 +-
+ src/hydra/render_delegate.cpp                 |  28 ++
+ src/hydra/render_delegate.h                   |   2 +-
+ .../resources/HdCyclesPluginGPU_Global.ds     |  27 ++
+ src/hydra/resources/HdCyclesPlugin_Global.ds  |  27 ++
+ src/hydra/session.cpp                         |  12 +
+ src/hydra/session.h                           |  39 ++
+ 9 files changed, 510 insertions(+), 32 deletions(-)
+
+diff --git a/src/hydra/curves.cpp b/src/hydra/curves.cpp
+index 7f40d2b5..a8be9749 100644
+--- a/src/hydra/curves.cpp
++++ b/src/hydra/curves.cpp
+@@ -3,12 +3,17 @@
+  *
+  * SPDX-License-Identifier: Apache-2.0 */
+ 
++#include <algorithm>
++#include <cmath>
+ #include <vector>
+ 
+ #include "hydra/curves.h"
+ #include "hydra/geometry.inl"
++#include "hydra/render_delegate.h"
++#include "hydra/session.h"
+ #include "hydra/util.h"
+ #include "scene/hair.h"
++#include "util/log.h"
+ #include "util/types_float3.h"
+ 
+ #include <pxr/imaging/hd/basisCurvesSchema.h>
+@@ -16,6 +21,67 @@
+ 
+ HDCYCLES_NAMESPACE_OPEN_SCOPE
+ 
++namespace {
++
++/* Each key a weighted sum of input elements. */
++template<typename T, typename W> VtArray<T> ApplyWeights(const VtArray<T> &in, const W &weights)
++{
++  VtArray<T> out(weights.size());
++  for (size_t k = 0; k < weights.size(); ++k) {
++    T sum = in[weights[k].index[0]] * weights[k].weight[0];
++    for (int i = 1; i < weights[k].count; ++i) {
++      sum += in[weights[k].index[i]] * weights[k].weight[i];
++    }
++    out[k] = sum;
++  }
++  return out;
++}
++
++/* A primvar array, resampled to the Cycles keys. Returns an empty value when
++ * the array does not have the size the topology expects. */
++template<typename W>
++VtValue ApplyWeights(const VtValue &value, const W &weights, const size_t expected)
++{
++  if (value.GetArraySize() != expected) {
++    return VtValue();
++  }
++  if (value.IsHolding<VtFloatArray>()) {
++    return VtValue(ApplyWeights(value.UncheckedGet<VtFloatArray>(), weights));
++  }
++  if (value.IsHolding<VtVec2fArray>()) {
++    return VtValue(ApplyWeights(value.UncheckedGet<VtVec2fArray>(), weights));
++  }
++  if (value.IsHolding<VtVec3fArray>()) {
++    return VtValue(ApplyWeights(value.UncheckedGet<VtVec3fArray>(), weights));
++  }
++  if (value.IsHolding<VtVec4fArray>()) {
++    return VtValue(ApplyWeights(value.UncheckedGet<VtVec4fArray>(), weights));
++  }
++  return VtValue();
++}
++
++/* Cubic basis functions, at parameter t of a segment. */
++void BezierWeights(const float t, float w[4])
++{
++  const float s = 1.0f - t;
++  w[0] = s * s * s;
++  w[1] = 3.0f * t * s * s;
++  w[2] = 3.0f * t * t * s;
++  w[3] = t * t * t;
++}
++
++void BsplineWeights(const float t, float w[4])
++{
++  const float t2 = t * t;
++  const float t3 = t2 * t;
++  w[0] = (1.0f - 3.0f * t + 3.0f * t2 - t3) / 6.0f;
++  w[1] = (4.0f - 6.0f * t2 + 3.0f * t3) / 6.0f;
++  w[2] = (1.0f + 3.0f * t + 3.0f * t2 - 3.0f * t3) / 6.0f;
++  w[3] = t3 / 6.0f;
++}
++
++}  // namespace
++
+ HdCyclesCurves::HdCyclesCurves(const SdfPath &rprimId) : HdCyclesGeometry(rprimId) {}
+ 
+ HdCyclesCurves::~HdCyclesCurves() = default;
+@@ -75,7 +141,19 @@ void HdCyclesCurves::PopulatePoints(HdSceneDelegate *sceneDelegate)
+     return;
+   }
+ 
+-  const auto &points = value.UncheckedGet<VtVec3fArray>();
++  VtVec3fArray points = value.UncheckedGet<VtVec3fArray>();
++  const bool resample = !_vertexWeights.empty();
++  if (resample) {
++    if (points.size() < _numControlPoints) {
++      TF_WARN("Curves %s have %zu points where the topology needs %zu",
++              GetId().GetText(),
++              points.size(),
++              _numControlPoints);
++      return;
++    }
++    points.resize(_numControlPoints);
++    points = ApplyWeights(points, _vertexWeights);
++  }
+ 
+   TF_VERIFY(points.size() >= _geom->num_keys());
+ 
+@@ -88,16 +166,21 @@ void HdCyclesCurves::PopulatePoints(HdSceneDelegate *sceneDelegate)
+ 
+   /* Des courbes qui se deforment - de la fourrure, une chevelure simulee -
+    * rendaient nettes faute d'echantillons le long de l'obturateur. */
+-  const std::vector<VtVec3fArray> samples =
+-      _motionBlur ?
+-          SampleDeformingPoints(primvars,
+-                                pointsDs,
+-                                _shutterOpen,
+-                                _shutterClose,
+-                                kMotionSteps,
+-                                numKeys,
+-                                _timeCodesPerSecond) :
+-          std::vector<VtVec3fArray>();
++  std::vector<VtVec3fArray> samples =
++      _motionBlur ? SampleDeformingPoints(primvars,
++                                          pointsDs,
++                                          _shutterOpen,
++                                          _shutterClose,
++                                          kMotionSteps,
++                                          resample ? _numControlPoints : numKeys,
++                                          _timeCodesPerSecond) :
++                    std::vector<VtVec3fArray>();
++  if (resample) {
++    for (VtVec3fArray &sample : samples) {
++      sample.resize(_numControlPoints);
++      sample = ApplyWeights(sample, _vertexWeights);
++    }
++  }
+ 
+   Attribute *attr_P = _geom->attributes.find(ATTR_STD_POSITION);
+   if (attr_P == nullptr) {
+@@ -124,25 +207,45 @@ void HdCyclesCurves::PopulateWidths(HdSceneDelegate *sceneDelegate)
+     return;
+   }
+ 
+-  const auto &widths = value.UncheckedGet<VtFloatArray>();
++  VtFloatArray widths = value.UncheckedGet<VtFloatArray>();
+   float *radius = _geom->get_radius_for_write();
++  const size_t numKeys = _geom->num_keys();
+ 
+   if (interpolation == HdInterpolationConstant) {
+     TF_VERIFY(widths.size() == 1);
+-
+-    const float constantRadius = widths[0] * 0.5f;
+-
+-    for (size_t i = 0; i < _geom->num_keys(); ++i) {
++    const float constantRadius = widths.empty() ? 0.0f : widths[0] * 0.5f;
++    for (size_t i = 0; i < numKeys; ++i) {
+       radius[i] = constantRadius;
+     }
++    return;
+   }
+-  else if (interpolation == HdInterpolationVertex) {
+-    TF_VERIFY(widths.size() == _geom->num_keys());
+ 
+-    for (size_t i = 0; i < _geom->num_keys(); ++i) {
+-      radius[i] = widths[i] * 0.5f;
++  /* `vertex` widths sit on the control points and resample with them;
++   * `varying` ones sit on the segment ends - one per key for a linear curve,
++   * one per segment boundary for a cubic one - and were not read at all, which
++   * left the radius of a USD cubic curve uninitialised. */
++  if (interpolation == HdInterpolationVertex && !_vertexWeights.empty()) {
++    const VtValue resampled = ApplyWeights(VtValue(widths), _vertexWeights, _numControlPoints);
++    widths = resampled.IsEmpty() ? VtFloatArray() : resampled.UncheckedGet<VtFloatArray>();
++  }
++  else if (interpolation == HdInterpolationVarying) {
++    if (!_varyingWeights.empty()) {
++      const VtValue resampled = ApplyWeights(VtValue(widths), _varyingWeights, _numVarying);
++      widths = resampled.IsEmpty() ? VtFloatArray() : resampled.UncheckedGet<VtFloatArray>();
+     }
+   }
++  else if (interpolation != HdInterpolationVertex) {
++    TF_WARN("Unsupported widths interpolation on %s", GetId().GetText());
++    return;
++  }
++
++  if (widths.size() != numKeys) {
++    TF_WARN("Widths for %s have %zu values, expected %zu", GetId().GetText(), widths.size(), numKeys);
++    return;
++  }
++  for (size_t i = 0; i < numKeys; ++i) {
++    radius[i] = widths[i] * 0.5f;
++  }
+ }
+ 
+ void HdCyclesCurves::PopulatePrimvars(HdSceneDelegate *sceneDelegate)
+@@ -166,7 +269,7 @@ void HdCyclesCurves::PopulatePrimvars(HdSceneDelegate *sceneDelegate)
+         continue;
+       }
+ 
+-      const VtValue value = ReadPrimvar(primvars, primvarName);
++      VtValue value = ReadPrimvar(primvars, primvarName);
+       if (value.IsEmpty()) {
+         continue;
+       }
+@@ -199,6 +302,20 @@ void HdCyclesCurves::PopulatePrimvars(HdSceneDelegate *sceneDelegate)
+       if ((std != ATTR_STD_NONE && _geom->need_attribute(scene, std)) ||
+           _geom->need_attribute(scene, name))
+       {
++        /* Per-key data follows the keys when they are resampled. */
++        if (interpolation.first == HdInterpolationVertex && !_vertexWeights.empty()) {
++          value = ApplyWeights(value, _vertexWeights, _numControlPoints);
++        }
++        else if (interpolation.first == HdInterpolationVarying && !_varyingWeights.empty()) {
++          value = ApplyWeights(value, _varyingWeights, _numVarying);
++        }
++        if (value.IsEmpty()) {
++          TF_WARN("Primvar '%s' on %s does not match the curve topology",
++                  primvarName.GetText(),
++                  GetId().GetText());
++          continue;
++        }
++
+         AttributeElement elem = interpolation.second;
+         if (std == ATTR_STD_VERTEX_NORMAL) {
+           elem = ATTR_ELEMENT_CURVE_KEY_NORMAL;
+@@ -238,20 +355,213 @@ void HdCyclesCurves::PopulateTopology(HdSceneDelegate *sceneDelegate)
+   if (auto ds = topoSchema.GetCurveIndices()) {
+     curveIndices = ds->GetTypedValue(0.0f);
+   }
+-  const HdBasisCurvesTopology topology(
+-      curveType, curveBasis, curveWrap, curveVertexCounts, curveIndices);
+ 
+-  _geom->resize_curves(topology.GetNumCurves(), topology.CalculateNeededNumberOfControlPoints());
++  const bool cubic = curveType == HdTokens->cubic;
++  const bool periodic = curveWrap == HdTokens->periodic;
++  const bool pinned = curveWrap == HdTokens->pinned;
++
++  /* The shape: a USD linear curve is a polyline, which Cycles renders
++   * exactly as a thick linear curve; a cubic one a round tube. Ribbons - flat
++   * strips facing the camera, cheaper - only when the render settings ask
++   * for them. Upstream rendered every curve as a ribbon. */
++  {
++    const auto *const cyclesDelegate = static_cast<const HdCyclesDelegate *>(
++        sceneDelegate->GetRenderIndex().GetRenderDelegate());
++    auto *const session = static_cast<HdCyclesSession *>(cyclesDelegate->GetRenderParam());
++    session->SetCurveIsCubic(_geom, cubic);
++    _geom->curve_shape = CurveShapeType(session->CurveShapeFor(cubic));
++  }
+ 
+-  const VtIntArray vertCounts = topology.GetCurveVertexCounts();
++  /* Every curve becomes a list of Cycles keys, each one a weighted sum of
++   * the curve's control points. */
++  _vertexWeights.clear();
++  _varyingWeights.clear();
++  _numControlPoints = 0;
++  _numVarying = 0;
++
++  const bool identity = !cubic && !periodic && curveIndices.empty();
++  std::vector<int> keyCounts;
++  keyCounts.reserve(curveVertexCounts.size());
++
++  size_t controlOffset = 0;
++  size_t varyingOffset = 0;
++  for (const int n : curveVertexCounts) {
++    /* The control points of this curve, as indices into the points array. */
++    std::vector<int> idx(n);
++    for (int k = 0; k < n; ++k) {
++      const size_t at = controlOffset + k;
++      idx[k] = curveIndices.empty() ? int(at) :
++                                      (at < curveIndices.size() ? curveIndices[at] : 0);
++    }
++    controlOffset += n;
++
++    const size_t keysBefore = _vertexWeights.size();
++    /* Varying values per curve, and how each new key reads them: a key at
++     * parameter u in [0, 1] along the curve blends the two nearest. */
++    int segments = 0;
++    int varyingCount = n;
++    auto addKey = [&](const int count, const int *index, const float *weight, float u) {
++      KeyWeights kw;
++      kw.count = count;
++      for (int i = 0; i < count; ++i) {
++        kw.index[i] = index[i];
++        kw.weight[i] = weight[i];
++      }
++      _vertexWeights.push_back(kw);
++
++      KeyWeights vw;
++      const float span = periodic ? float(varyingCount) : float(std::max(varyingCount - 1, 1));
++      const float x = u * span;
++      int i0 = int(std::floor(x));
++      float f = x - float(i0);
++      if (!periodic && i0 >= varyingCount - 1) {
++        i0 = std::max(varyingCount - 2, 0);
++        f = varyingCount > 1 ? 1.0f : 0.0f;
++      }
++      const int i1 = periodic ? (i0 + 1) % std::max(varyingCount, 1) :
++                                std::min(i0 + 1, varyingCount - 1);
++      vw.count = 2;
++      vw.index[0] = int(varyingOffset) + (periodic ? i0 % std::max(varyingCount, 1) : i0);
++      vw.index[1] = int(varyingOffset) + i1;
++      vw.weight[0] = 1.0f - f;
++      vw.weight[1] = f;
++      _varyingWeights.push_back(vw);
++    };
++    auto addPoint = [&](const int k, const float u) {
++      const float one = 1.0f;
++      addKey(1, &idx[k], &one, u);
++    };
++
++    if (!cubic || n < 4) {
++      /* A polyline, or a cubic curve too short to have a segment. */
++      segments = periodic ? n : std::max(n - 1, 1);
++      varyingCount = n;
++      for (int k = 0; k < n; ++k) {
++        addPoint(k, float(k) / float(segments));
++      }
++      if (periodic && n > 0) {
++        addPoint(0, 1.0f);
++      }
++    }
++    else if (curveBasis == HdTokens->bezier) {
++      segments = periodic ? n / 3 : (n - 1) / 3;
++      varyingCount = periodic ? segments : segments + 1;
++      const float ts[3] = {0.0f, 1.0f / 3.0f, 2.0f / 3.0f};
++      for (int s = 0; s < segments; ++s) {
++        int cp[4];
++        for (int j = 0; j < 4; ++j) {
++          cp[j] = idx[(3 * s + j) % n];
++        }
++        for (const float t : ts) {
++          float w[4];
++          BezierWeights(t, w);
++          addKey(4, cp, w, (float(s) + t) / float(segments));
++        }
++      }
++      if (periodic) {
++        addPoint(0, 1.0f);
++      }
++      else {
++        addPoint(3 * segments, 1.0f);
++      }
++    }
++    else if (curveBasis == HdTokens->bspline) {
++      /* Two samples per segment, the B-spline evaluated where it is: it does
++       * not pass through its control points. Pinned curves start and end on
++       * their first and last point. */
++      segments = periodic ? n : n - 3;
++      varyingCount = periodic ? segments : segments + 1;
++      if (pinned) {
++        addPoint(0, 0.0f);
++      }
++      for (int s = 0; s < segments; ++s) {
++        int cp[4];
++        for (int j = 0; j < 4; ++j) {
++          cp[j] = idx[(s + j) % n];
++        }
++        for (const float t : {0.0f, 0.5f}) {
++          float w[4];
++          BsplineWeights(t, w);
++          addKey(4, cp, w, (float(s) + t) / float(segments));
++        }
++      }
++      if (periodic) {
++        int cp[4];
++        for (int j = 0; j < 4; ++j) {
++          cp[j] = idx[j % n];
++        }
++        float w[4];
++        BsplineWeights(0.0f, w);
++        addKey(4, cp, w, 1.0f);
++      }
++      else {
++        int cp[4];
++        for (int j = 0; j < 4; ++j) {
++          cp[j] = idx[n - 4 + j];
++        }
++        float w[4];
++        BsplineWeights(1.0f, w);
++        addKey(4, cp, w, 1.0f);
++        if (pinned) {
++          addPoint(n - 1, 1.0f);
++        }
++      }
++    }
++    else {
++      /* Catmull-Rom. USD's passes through every point but the first and the
++       * last of an open curve, which only steer the end tangents; Cycles'
++       * passes through every key. Pinned curves pass through all of them. */
++      if (periodic) {
++        segments = n;
++        varyingCount = n;
++        for (int k = 0; k < n; ++k) {
++          addPoint(k, float(k) / float(segments));
++        }
++        addPoint(0, 1.0f);
++      }
++      else if (pinned) {
++        segments = n - 1;
++        varyingCount = n;
++        for (int k = 0; k < n; ++k) {
++          addPoint(k, float(k) / float(segments));
++        }
++      }
++      else {
++        segments = n - 3;
++        varyingCount = segments + 1;
++        for (int k = 1; k <= n - 2; ++k) {
++          addPoint(k, float(k - 1) / float(segments));
++        }
++      }
++    }
+ 
+-  int *curve_first_key = _geom->get_curve_first_key().data();
++    keyCounts.push_back(int(_vertexWeights.size() - keysBefore));
++    varyingOffset += varyingCount;
++  }
++  _numControlPoints = curveIndices.empty() ? controlOffset :
++                                             size_t(*std::max_element(curveIndices.begin(),
++                                                                      curveIndices.end())) +
++                                                 1;
++  _numVarying = varyingOffset;
++
++  size_t numKeys = 0;
++  for (const int count : keyCounts) {
++    numKeys += count;
++  }
+ 
+-  for (int curve = 0, key = 0; curve < topology.GetNumCurves(); ++curve) {
+-    // Always reference shader at index zero, which is the primitive material
+-    curve_first_key[curve] = key;
++  if (identity) {
++    /* Open, non-indexed polylines: the arrays go across as they are. */
++    _vertexWeights.clear();
++    _varyingWeights.clear();
++  }
+ 
+-    key += vertCounts[curve];
++  _geom->resize_curves(keyCounts.size(), numKeys);
++
++  int *curve_first_key = _geom->get_curve_first_key().data();
++  for (size_t curve = 0, key = 0; curve < keyCounts.size(); ++curve) {
++    // Always reference shader at index zero, which is the primitive material
++    curve_first_key[curve] = int(key);
++    key += keyCounts[curve];
+   }
+ 
+   std::ranges::fill(_geom->get_curve_shader(), 0);
+@@ -260,4 +570,14 @@ void HdCyclesCurves::PopulateTopology(HdSceneDelegate *sceneDelegate)
+   _geom->tag_curve_shader_modified();
+ }
+ 
++void HdCyclesCurves::Finalize(PXR_NS::HdRenderParam *renderParam)
++{
++  if (_geom) {
++    static_cast<HdCyclesSession *>(renderParam)->SetCurveIsCubic(_geom, false, true);
++  }
++  _vertexWeights.clear();
++  _varyingWeights.clear();
++  HdCyclesGeometry<PXR_NS::HdBasisCurves, Hair>::Finalize(renderParam);
++}
++
+ HDCYCLES_NAMESPACE_CLOSE_SCOPE
+diff --git a/src/hydra/curves.h b/src/hydra/curves.h
+index 84e71687..89b52b6e 100644
+--- a/src/hydra/curves.h
++++ b/src/hydra/curves.h
+@@ -10,6 +10,8 @@
+ 
+ #include <pxr/imaging/hd/basisCurves.h>
+ 
++#include <vector>
++
+ HDCYCLES_NAMESPACE_OPEN_SCOPE
+ 
+ class HdCyclesCurves final : public HdCyclesGeometry<PXR_NS::HdBasisCurves, CCL_NS::Hair> {
+@@ -19,6 +21,8 @@ class HdCyclesCurves final : public HdCyclesGeometry<PXR_NS::HdBasisCurves, CCL_
+ 
+   PXR_NS::HdDirtyBits GetInitialDirtyBitsMask() const override;
+ 
++  void Finalize(PXR_NS::HdRenderParam *renderParam) override;
++
+  private:
+   PXR_NS::HdDirtyBits _PropagateDirtyBits(PXR_NS::HdDirtyBits bits) const override;
+ 
+@@ -32,6 +36,25 @@ class HdCyclesCurves final : public HdCyclesGeometry<PXR_NS::HdBasisCurves, CCL_
+   void PopulatePrimvars(PXR_NS::HdSceneDelegate *sceneDelegate);
+ 
+   void PopulateTopology(PXR_NS::HdSceneDelegate *sceneDelegate);
++
++  /* Cycles evaluates every curve as a Catmull-Rom spline through all of its
++   * keys, or as a polyline. USD curves come in four bases, open, closed or
++   * pinned, and may index their points: anything but an open, non-indexed
++   * curve is resampled into keys Cycles reads the same way. Each Cycles key
++   * is a weighted sum of up to four USD control points (`vertex` data) and a
++   * blend of two `varying` values. Empty when the curve needs nothing - the
++   * fast path copies the arrays as they are. */
++  struct KeyWeights {
++    int count = 0;
++    int index[4] = {0, 0, 0, 0};
++    float weight[4] = {0.0f, 0.0f, 0.0f, 0.0f};
++  };
++  std::vector<KeyWeights> _vertexWeights;
++  std::vector<KeyWeights> _varyingWeights;
++  /* The number of USD control points and varying values the topology
++   * expects, to check the arrays that arrive against. */
++  size_t _numControlPoints = 0;
++  size_t _numVarying = 0;
+ };
+ 
+ HDCYCLES_NAMESPACE_CLOSE_SCOPE
+diff --git a/src/hydra/pointcloud.cpp b/src/hydra/pointcloud.cpp
+index 4517c2dd..0c9c9951 100644
+--- a/src/hydra/pointcloud.cpp
++++ b/src/hydra/pointcloud.cpp
+@@ -132,7 +132,9 @@ void HdCyclesPoints::PopulateWidths(HdSceneDelegate *sceneDelegate)
+       radius[i] = constantRadius;
+     }
+   }
+-  else if (interpolation == HdInterpolationVertex) {
++  /* On points, `varying` and `vertex` are the same thing: one value each. A
++   * varying width used to be skipped and left the radius unset. */
++  else if (interpolation == HdInterpolationVertex || interpolation == HdInterpolationVarying) {
+     TF_VERIFY(widths.size() == _geom->num_points());
+ 
+     for (size_t i = 0; i < _geom->num_points(); ++i) {
+diff --git a/src/hydra/render_delegate.cpp b/src/hydra/render_delegate.cpp
+index dfd7f278..a5c93270 100644
+--- a/src/hydra/render_delegate.cpp
++++ b/src/hydra/render_delegate.cpp
+@@ -19,6 +19,7 @@
+ #include "hydra/render_pass.h"
+ #include "hydra/session.h"
+ #include "hydra/volume.h"
++#include "scene/hair.h"
+ #include "scene/integrator.h"
+ #include "scene/mesh.h"
+ #include "scene/scene.h"
+@@ -495,6 +496,11 @@ HdRenderSettingDescriptorList HdCyclesDelegate::GetRenderSettingDescriptors() co
+       HdCyclesRenderSettingsTokens->dicingRate,
+       VtValue(_renderParam->GetDicingRate()),
+   });
++  descriptors.push_back({
++      "Curve Shape",
++      HdCyclesRenderSettingsTokens->curveShape,
++      VtValue(_renderParam->GetCurveShape()),
++  });
+   descriptors.push_back({
+       "Time Limit",
+       HdCyclesRenderSettingsTokens->timeLimit,
+@@ -561,6 +567,25 @@ void HdCyclesDelegate::SetRenderSetting(const PXR_NS::TfToken &key, const PXR_NS
+       ++_settingsVersion;
+     }
+   }
++  else if (key == HdCyclesRenderSettingsTokens->curveShape) {
++    std::string shape = VtValue::Cast<std::string>(value).GetWithDefault(std::string());
++    if (shape.empty() && value.IsHolding<TfToken>()) {
++      shape = value.UncheckedGet<TfToken>().GetString();
++    }
++    if (shape != "auto" && shape != "thick" && shape != "ribbon") {
++      LOG_WARNING << "Unknown curve shape '" << shape << "'; expected auto, thick or ribbon.";
++    }
++    else if (shape != _renderParam->GetCurveShape()) {
++      _renderParam->SetCurveShape(shape);
++      /* Curves already synced keep the shape they were built with unless
++       * they are told: reshape them, the way the dicing rate re-dices. */
++      for (const auto &entry : _renderParam->GetCurvesSynced()) {
++        entry.first->curve_shape = CurveShapeType(_renderParam->CurveShapeFor(entry.second));
++        entry.first->tag_update(scene, true);
++      }
++      ++_settingsVersion;
++    }
++  }
+   else if (key == HdCyclesRenderSettingsTokens->sampleOffset) {
+     session->params.sample_subset_offset = VtValue::Cast<int>(value).GetWithDefault(
+         session->params.sample_subset_offset);
+@@ -654,6 +679,9 @@ VtValue HdCyclesDelegate::GetRenderSetting(const TfToken &key) const
+   if (key == HdCyclesRenderSettingsTokens->dicingRate) {
+     return VtValue(_renderParam->GetDicingRate());
+   }
++  if (key == HdCyclesRenderSettingsTokens->curveShape) {
++    return VtValue(_renderParam->GetCurveShape());
++  }
+   if (key == HdCyclesRenderSettingsTokens->threads) {
+     return VtValue(session->params.threads);
+   }
+diff --git a/src/hydra/render_delegate.h b/src/hydra/render_delegate.h
+index c88eb46c..4ebb4601 100644
+--- a/src/hydra/render_delegate.h
++++ b/src/hydra/render_delegate.h
+@@ -20,7 +20,7 @@ HDCYCLES_NAMESPACE_OPEN_SCOPE
+     ((timeLimit, "cycles:time_limit")) \
+     ((samples, "cycles:samples")) \
+     ((sampleOffset, "cycles:sample_offset")) \
+-    ((dicingRate, "cycles:dicing_rate"))     ((shutterOpen, "shutter:open"))     ((shutterClose, "shutter:close"))     (disableMotionBlur)     (instantaneousShutter)
++    ((dicingRate, "cycles:dicing_rate"))     ((curveShape, "cycles:curve_shape"))     ((shutterOpen, "shutter:open"))     ((shutterClose, "shutter:close"))     (disableMotionBlur)     (instantaneousShutter)
+ // clang-format on
+ 
+ TF_DECLARE_PUBLIC_TOKENS(HdCyclesRenderSettingsTokens, HD_CYCLES_RENDER_SETTINGS_TOKENS);
+diff --git a/src/hydra/resources/HdCyclesPluginGPU_Global.ds b/src/hydra/resources/HdCyclesPluginGPU_Global.ds
+index 328f0c41..258b56f5 100644
+--- a/src/hydra/resources/HdCyclesPluginGPU_Global.ds
++++ b/src/hydra/resources/HdCyclesPluginGPU_Global.ds
+@@ -125,6 +125,33 @@
+         parmtag { "usdvaluetype" "float" }
+         disablewhen  R"({ xn__cyclesdicing_rate_control_shb == block } { xn__cyclesdicing_rate_control_shb == none })"
+     }
++    parm {
++        name    "xn__cyclescurve_shape_control_shb"
++        label   "Curve Shape"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'string')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__cyclescurve_shape_r3a"
++        label   "Curve Shape"
++        type    string
++        size    1
++        default { "auto" }
++        menu {
++            "auto" "Auto (linear as polylines, cubic as tubes)"
++            "thick" "Thick (round tubes)"
++            "ribbon" "Ribbon (flat, camera facing)"
++        }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "string" }
++        disablewhen  R"({ xn__cyclescurve_shape_control_shb == block } { xn__cyclescurve_shape_control_shb == none })"
++    }
+     }
+     groupcollapsible {
+         name "cycles_sampling"
+diff --git a/src/hydra/resources/HdCyclesPlugin_Global.ds b/src/hydra/resources/HdCyclesPlugin_Global.ds
+index 328f0c41..258b56f5 100644
+--- a/src/hydra/resources/HdCyclesPlugin_Global.ds
++++ b/src/hydra/resources/HdCyclesPlugin_Global.ds
+@@ -125,6 +125,33 @@
+         parmtag { "usdvaluetype" "float" }
+         disablewhen  R"({ xn__cyclesdicing_rate_control_shb == block } { xn__cyclesdicing_rate_control_shb == none })"
+     }
++    parm {
++        name    "xn__cyclescurve_shape_control_shb"
++        label   "Curve Shape"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'string')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__cyclescurve_shape_r3a"
++        label   "Curve Shape"
++        type    string
++        size    1
++        default { "auto" }
++        menu {
++            "auto" "Auto (linear as polylines, cubic as tubes)"
++            "thick" "Thick (round tubes)"
++            "ribbon" "Ribbon (flat, camera facing)"
++        }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "string" }
++        disablewhen  R"({ xn__cyclescurve_shape_control_shb == block } { xn__cyclescurve_shape_control_shb == none })"
++    }
+     }
+     groupcollapsible {
+         name "cycles_sampling"
+diff --git a/src/hydra/session.cpp b/src/hydra/session.cpp
+index 50248a1b..ce8aedff 100644
+--- a/src/hydra/session.cpp
++++ b/src/hydra/session.cpp
+@@ -9,6 +9,7 @@
+ // Have to include shader.h before background.h so that 'set_shader' uses the correct 'set'
+ // overload taking a 'Node *', rather than the one taking a 'bool'
+ #include "scene/background.h"
++#include "scene/hair.h"
+ #include "scene/light.h"
+ #include "scene/shader_graph.h"
+ #include "scene/shader_nodes.h"
+@@ -154,6 +155,17 @@ void HdCyclesSession::UpdateScene()
+   }
+ }
+ 
++int HdCyclesSession::CurveShapeFor(const bool cubic) const
++{
++  if (_curveShape == "ribbon") {
++    return CURVE_RIBBON;
++  }
++  if (_curveShape == "thick") {
++    return CURVE_THICK;
++  }
++  return cubic ? CURVE_THICK : CURVE_THICK_LINEAR;
++}
++
+ void HdCyclesSession::SyncAovBindings(const HdRenderPassAovBindingVector &aovBindings)
+ {
+   Scene *const scene = session->scene.get();
+diff --git a/src/hydra/session.h b/src/hydra/session.h
+index 406f0f53..851de05e 100644
+--- a/src/hydra/session.h
++++ b/src/hydra/session.h
+@@ -8,6 +8,9 @@
+ #include "hydra/config.h"
+ #include "util/thread.h"
+ 
++#include <map>
++#include <string>
++
+ #include <pxr/imaging/hd/renderDelegate.h>
+ 
+ HDCYCLES_NAMESPACE_OPEN_SCOPE
+@@ -54,6 +57,40 @@ class HdCyclesSession final : public PXR_NS::HdRenderParam {
+     _dicingRate = dicingRate;
+   }
+ 
++  /* How curves are drawn: "auto" (the default) renders a USD linear curve as
++   * an exact thick polyline and a cubic one as a round tube; "thick" makes
++   * both tubes, "ribbon" flat strips facing the camera - the cheapest, and
++   * what upstream rendered every curve as. */
++  const std::string &GetCurveShape() const
++  {
++    return _curveShape;
++  }
++
++  void SetCurveShape(const std::string &shape)
++  {
++    _curveShape = shape;
++  }
++
++  /* The Cycles shape for a curve of this kind under the current setting. */
++  int CurveShapeFor(bool cubic) const;
++
++  /* What each Hair came from, so that a change of the setting can reshape the
++   * curves already synced. `erase` forgets one. */
++  void SetCurveIsCubic(CCL_NS::Hair *hair, bool cubic, bool erase = false)
++  {
++    if (erase) {
++      _curveIsCubic.erase(hair);
++    }
++    else {
++      _curveIsCubic[hair] = cubic;
++    }
++  }
++
++  const std::map<CCL_NS::Hair *, bool> &GetCurvesSynced() const
++  {
++    return _curveIsCubic;
++  }
++
+   PXR_NS::HdRenderPassAovBinding GetDisplayAovBinding() const
+   {
+     return _displayAovBinding;
+@@ -111,6 +148,8 @@ class HdCyclesSession final : public PXR_NS::HdRenderParam {
+   const bool _ownCyclesSession;
+   double _stageMetersPerUnit = 0.01;
+   float _dicingRate = 1.0f;
++  std::string _curveShape = "auto";
++  std::map<CCL_NS::Hair *, bool> _curveIsCubic;
+   float _shutterOpen = 0.0f;
+   float _shutterClose = 0.0f;
+   bool _motionBlurEnabled = true;

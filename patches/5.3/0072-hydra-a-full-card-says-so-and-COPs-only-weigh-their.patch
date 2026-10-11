@@ -1,0 +1,204 @@
+From ec2c8d139095bc8baa5ad2116a9f21305293db09 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 10 Sep 2026 14:40:15 +0200
+Subject: [PATCH 072/141] hydra: a full card says so, and COPs only weigh
+ their channels
+
+Reported: Cycles GPU slower than Cycles CPU, on an RTX 3090. The debug log
+explained it: a 1.5 KB buffer no longer fit in device memory, and everything -
+textures, geometry, SVM nodes - had gone to host memory, read over the bus.
+nvidia-smi: 115 MB free out of 24,576 with Houdini open, 23,774 MB closed.
+Copernicus keeps its layers on the GPU (`onGPU` confirms it) and fills the card
+before Cycles builds its scene.
+
+This fallback is the most expensive in the engine and the most discreet: it was
+only written at debug level. It now announces itself, once per session, with the
+free and the total.
+
+On the COP side, two things of ours:
+- a roughness, a height, a mask have only one channel, and we served them as
+  RGBA. In 8K: 512 MB instead of 128, and four times the bandwidth;
+- the reference to the layer is released as soon as the copy is made, rather
+  than at garbage collection, and the log says whether the layer lived on the
+  GPU.
+
+Progressive rendering (`use_resolution_divider`) was tried twice and discarded
+on usage; the comment keeps the reason, so as not to replay it.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/device/device.cpp         | 18 ++++++++++++++++++
+ src/hydra/houdini_cop.cpp     | 34 ++++++++++++++++++++++++++++------
+ src/hydra/render_delegate.cpp | 14 ++++++++++++++
+ src/hydra/render_pass.cpp     | 10 ++++++++--
+ 4 files changed, 68 insertions(+), 8 deletions(-)
+
+diff --git a/src/device/device.cpp b/src/device/device.cpp
+index ae6e285c..bc632de3 100644
+--- a/src/device/device.cpp
++++ b/src/device/device.cpp
+@@ -806,6 +806,24 @@ GPUDevice::Mem *GPUDevice::generic_alloc(device_memory &mem, const size_t pitch_
+       device_pointer = shared_to_device_pointer(shared_pointer);
+       map_host_used += size;
+       status = " in host memory";
++
++      /* Le repli le plus couteux du moteur, et le plus discret : chaque acces a
++       * cette memoire traversera le bus, et le peripherique peut alors rendre
++       * plus lentement qu'un processeur. Ne le dire qu'en journal de mise au
++       * point, c'est le laisser passer pour une scene qui rame sans raison.
++       *
++       * Une fois par session, et seulement au-dela d'un mega-octet : les petits
++       * tampons de service ne valent pas un avertissement. */
++      static bool warned = false;
++      if (!warned && size > 1024 * 1024) {
++        warned = true;
++        LOG_WARNING << "Not enough device memory: " << string_human_readable_size(size) << " of '"
++                    << mem.name_ << "' went to host memory, read over the bus. " << "Only "
++                    << string_human_readable_size(free) << " of "
++                    << string_human_readable_size(total)
++                    << " was free. Rendering will be much slower, and may be slower than on the "
++                    << "CPU. Free device memory before rendering, or reduce texture sizes.";
++      }
+     }
+   }
+ 
+diff --git a/src/hydra/houdini_cop.cpp b/src/hydra/houdini_cop.cpp
+index 5c9d1119..0e202ec9 100644
+--- a/src/hydra/houdini_cop.cpp
++++ b/src/hydra/houdini_cop.cpp
+@@ -52,6 +52,11 @@ const char *const kPrefix = "op:";
+ struct CopPixels {
+   int width = 0;
+   int height = 0;
++  /* Ce que le COP porte vraiment. Un masque, une hauteur, une rugosite n'ont
++   * qu'un canal ; les servir en RGBA quadruplait leur poids en memoire de
++   * peripherique - 536 Mo au lieu de 134 pour une 8K - et autant de bande
++   * passante a chaque echantillon. */
++  int channels = 4;
+   int cookCount = -1;
+   std::vector<uint8_t> data;
+ };
+@@ -114,7 +119,16 @@ const char *const kCaptureCode =
+     "        if _l is not None:\n"
+     "            _w, _h = _l.bufferResolution()\n"
+     "            _cook = _n.cookCount()\n"
+-    "            _bytes = _l.allBufferElements(hou.imageLayerStorageType.Float16, 4)\n"
++    /* Cycles range une image a un canal ou a quatre, pas a deux ni a trois. */
++    "            _c = 1 if _l.channelCount() == 1 else 4\n"
++    "            _bytes = _l.allBufferElements(hou.imageLayerStorageType.Float16, _c)\n"
++    /* Ou vit la couche, et notre reference lachee tout de suite : les pixels
++     * sont deja copies en memoire hote, garder une prise sur la couche ne sert
++     * qu'a retarder sa liberation. Copernicus garde la sienne de son cote -
++     * c'est lui qui tient la memoire video, pas nous - mais ce qui est a nous
++     * doit partir des que possible. */
++    "            _gpu = _l.onGPU()\n"
++    "            _l.close()\n"
+     "            _ok = True\n"
+     "except Exception as _e:\n"
+     "    _err = str(_e)\n";
+@@ -189,6 +203,8 @@ CopPixelsPtr Capture(const std::string &opPath)
+   const long width = LongFrom(locals, "_w");
+   const long height = LongFrom(locals, "_h");
+   const long cookCount = LongFrom(locals, "_cook");
++  /* Cycles range une image a un canal ou a quatre, pas a deux ni a trois. */
++  const long channels = (LongFrom(locals, "_c") == 1) ? 1 : 4;
+ 
+   if (ok == nullptr || !PyObject_IsTrue(ok) || bytes == nullptr || !PyBytes_Check(bytes) ||
+       width <= 0 || height <= 0)
+@@ -207,7 +223,8 @@ CopPixelsPtr Capture(const std::string &opPath)
+   Py_ssize_t size = 0;
+   PyBytes_AsStringAndSize(bytes, &raw, &size);
+ 
+-  const size_t rowBytes = static_cast<size_t>(width) * 4 * sizeof(uint16_t);
++  const size_t rowBytes = static_cast<size_t>(width) * static_cast<size_t>(channels) *
++                          sizeof(uint16_t);
+   const size_t expected = rowBytes * static_cast<size_t>(height);
+   if (raw == nullptr || static_cast<size_t>(size) != expected) {
+     LOG_WARNING << "Houdini COP " << opPath << " gave " << size << " bytes where " << expected
+@@ -219,6 +236,7 @@ CopPixelsPtr Capture(const std::string &opPath)
+   auto pixels = std::make_shared<CopPixels>();
+   pixels->width = static_cast<int>(width);
+   pixels->height = static_cast<int>(height);
++  pixels->channels = static_cast<int>(channels);
+   pixels->cookCount = static_cast<int>(cookCount);
+   pixels->data.resize(expected);
+ 
+@@ -243,8 +261,12 @@ CopPixelsPtr Capture(const std::string &opPath)
+ 
+   Py_DECREF(locals);
+ 
+-  LOG_INFO << "Read Houdini COP " << opPath << " (" << width << "x" << height << ", cook "
+-           << cookCount << ") into memory.";
++  PyObject *const onGpu = PyDict_GetItemString(locals, "_gpu");
++  const bool wasOnGpu = onGpu != nullptr && PyObject_IsTrue(onGpu);
++
++  LOG_INFO << "Read Houdini COP " << opPath << " (" << width << "x" << height << ", "
++           << channels << " channel(s), cook " << cookCount << ") into memory"
++           << (wasOnGpu ? "; its layer was on the device, where Copernicus keeps it." : ".");
+   return pixels;
+ }
+ 
+@@ -285,8 +307,8 @@ class HoudiniCopImageLoader : public ImageLoader {
+   {
+     metadata.width = _pixels->width;
+     metadata.height = _pixels->height;
+-    metadata.channels = 4;
+-    metadata.type = IMAGE_DATA_TYPE_HALF4;
++    metadata.channels = _pixels->channels;
++    metadata.type = (_pixels->channels == 1) ? IMAGE_DATA_TYPE_HALF : IMAGE_DATA_TYPE_HALF4;
+     /* Un COP travaille en lineaire, comme tout ce qui sort d'Houdini : il n'y a
+      * rien a decoder. */
+     metadata.colorspace = u_colorspace_scene_linear;
+diff --git a/src/hydra/render_delegate.cpp b/src/hydra/render_delegate.cpp
+index eadf44f7..dfd7f278 100644
+--- a/src/hydra/render_delegate.cpp
++++ b/src/hydra/render_delegate.cpp
+@@ -88,6 +88,20 @@ SessionParams GetSessionParams(const HdRenderSettingsMap &settings)
+   SessionParams params;
+   params.threads = 0;
+   params.background = false;
++  /* Pas de passes en resolution reduite, bien que ce soit le defaut de Cycles.
++   *
++   * Essaye deux fois, et abandonne sur l'usage. La premiere fois le pilote
++   * d'affichage versait le tampon reduit dans une texture pleine taille et
++   * l'image ressortait en petit, repetee, dans le bas du viewport. La seconde,
++   * avec l'agrandissement ecrit, le viewport rendait moins bien et moins vite
++   * qu'avant - le mot de l'utilisateur, qui vaut mieux que le raisonnement.
++   *
++   * Ce que le raisonnement disait, et qui reste vrai : un echantillon pleine
++   * resolution coute trois secondes dans une scene chargee, et rien ne rend
++   * interactif un moteur qui met trois secondes a produire son premier pixel.
++   * Mais la vraie cause etait ailleurs - une carte graphique pleine, ou tout
++   * finit en memoire hote et se lit par le bus. Un rendu progressif n'y aurait
++   * rien change. */
+   params.use_resolution_divider = false;
+ 
+   HdRenderSettingsMap::const_iterator it;
+diff --git a/src/hydra/render_pass.cpp b/src/hydra/render_pass.cpp
+index c02122f2..1af4213f 100644
+--- a/src/hydra/render_pass.cpp
++++ b/src/hydra/render_pass.cpp
+@@ -225,6 +225,11 @@ void HdCyclesRenderPass::_Execute(const HdRenderPassStateSharedPtr &renderPassSt
+       scene->camera->tag_modified();
+     }
+ 
++    /* La borne entre ce qui prepare la passe et ce qui relance la session : la
++     * premiere mesure ne les separait pas, et attribuait a la camera quatre
++     * secondes qui appartenaient a l'attente de l'echantillon en cours. */
++    const clock::time_point tCamera = clock::now();
++
+     // Reset session if the session, scene, camera or AOV bindings changed
+     /* `need_reset(false)` est le besoin de mise a jour des donnees, camera exclue. */
+     const bool dataUpdate = scene->need_reset(false);
+@@ -278,8 +283,9 @@ void HdCyclesRenderPass::_Execute(const HdRenderPassStateSharedPtr &renderPassSt
+       LOG_INFO << "Passe de rendu : " << total << " ms sur le fil de l'hote ("
+                << "verrou " << ms(tStart, tLocked) << ", "
+                << "veille COP " << ms(tLocked, tPolled) << ", "
+-               << "camera et AOV " << ms(tPolled, tReset) << ", "
+-               << "relance " << ms(tReset, tEnd) << ").";
++               << "camera et AOV " << ms(tPolled, tCamera) << ", "
++               << "relance " << ms(tCamera, tReset) << ", "
++               << "demarrage " << ms(tReset, tEnd) << ").";
+     }
+   }
+ 

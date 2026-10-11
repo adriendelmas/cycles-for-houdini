@@ -37,3 +37,12 @@ tests/displace/output/
 tests/materialx/hair/
 tests/materialx/standard_surface/*.exr
 tests/scratch/
+
+# Working notes in French, kept on the machine and not published.
+docs/STATUS.md
+docs/MATERIALX_PLAN.md
+docs/CYCLES_VOPS.md
+docs/MATERIALX_COVERAGE.md
+docs/STANDARD_SURFACE_AUDIT.md
+docs/CYCLES_53.md
+docs/ENVIRONMENT.md

@@ -161,7 +161,6 @@ upstream delegate and are candidates for contribution back to Blender.
 | [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) | numbered defects with the file and line |
 | [docs/PLAN.md](docs/PLAN.md) | the phases that take the project to its goals, each with its acceptance test |
 | [docs/TESTING.md](docs/TESTING.md) | the benches, what each proves, and the regression suite to build |
-| [docs/STATUS.md](docs/STATUS.md) | the dated journal of what was tried and measured (French) |
 
 ## Testing
 

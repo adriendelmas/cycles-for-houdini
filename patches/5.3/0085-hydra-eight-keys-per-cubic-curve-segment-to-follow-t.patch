@@ -1,0 +1,71 @@
+From 66157e37d4de5390f1000e12b53e5d931394f8f8 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Wed, 7 Oct 2026 22:52:44 +0200
+Subject: [PATCH 085/141] hydra: eight keys per cubic curve segment, to follow
+ the shape
+
+A Bezier arch sampled at three keys per segment came out as three nearly
+straight strokes: Cycles traces a Catmull-Rom through its keys, and at three per
+segment it does not follow the cubic. Its silhouette only overlapped Karma's at
+28 %. Eight keys per Bezier or B-spline segment: 89 %, the rest being the
+anti-aliasing of a four-pixel stroke. tools/bench_curves.py --karma measures it.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/curves.cpp | 17 ++++++++++++-----
+ 1 file changed, 12 insertions(+), 5 deletions(-)
+
+diff --git a/src/hydra/curves.cpp b/src/hydra/curves.cpp
+index a8be9749..2bb78259 100644
+--- a/src/hydra/curves.cpp
++++ b/src/hydra/curves.cpp
+@@ -23,6 +23,9 @@ HDCYCLES_NAMESPACE_OPEN_SCOPE
+ 
+ namespace {
+ 
++/* Keys per cubic Bezier or B-spline segment. */
++constexpr int kKeysPerCubicSegment = 8;
++
+ /* Each key a weighted sum of input elements. */
+ template<typename T, typename W> VtArray<T> ApplyWeights(const VtArray<T> &in, const W &weights)
+ {
+@@ -446,13 +449,16 @@ void HdCyclesCurves::PopulateTopology(HdSceneDelegate *sceneDelegate)
+     else if (curveBasis == HdTokens->bezier) {
+       segments = periodic ? n / 3 : (n - 1) / 3;
+       varyingCount = periodic ? segments : segments + 1;
+-      const float ts[3] = {0.0f, 1.0f / 3.0f, 2.0f / 3.0f};
++      /* Cycles draws a Catmull-Rom through the keys; with three per segment
++       * an arch came out as three near-straight strokes (28% overlap with
++       * Karma's silhouette). Eight follow the cubic. */
+       for (int s = 0; s < segments; ++s) {
+         int cp[4];
+         for (int j = 0; j < 4; ++j) {
+           cp[j] = idx[(3 * s + j) % n];
+         }
+-        for (const float t : ts) {
++        for (int k = 0; k < kKeysPerCubicSegment; ++k) {
++          const float t = float(k) / float(kKeysPerCubicSegment);
+           float w[4];
+           BezierWeights(t, w);
+           addKey(4, cp, w, (float(s) + t) / float(segments));
+@@ -466,8 +472,8 @@ void HdCyclesCurves::PopulateTopology(HdSceneDelegate *sceneDelegate)
+       }
+     }
+     else if (curveBasis == HdTokens->bspline) {
+-      /* Two samples per segment, the B-spline evaluated where it is: it does
+-       * not pass through its control points. Pinned curves start and end on
++      /* The B-spline evaluated where it is, as many keys per segment as a
++       * Bezier gets: it does not pass through its control points. Pinned curves start and end on
+        * their first and last point. */
+       segments = periodic ? n : n - 3;
+       varyingCount = periodic ? segments : segments + 1;
+@@ -479,7 +485,8 @@ void HdCyclesCurves::PopulateTopology(HdSceneDelegate *sceneDelegate)
+         for (int j = 0; j < 4; ++j) {
+           cp[j] = idx[(s + j) % n];
+         }
+-        for (const float t : {0.0f, 0.5f}) {
++        for (int k = 0; k < kKeysPerCubicSegment; ++k) {
++          const float t = float(k) / float(kKeysPerCubicSegment);
+           float w[4];
+           BsplineWeights(t, w);
+           addKey(4, cp, w, (float(s) + t) / float(segments));

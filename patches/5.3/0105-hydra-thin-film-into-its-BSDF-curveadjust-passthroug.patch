@@ -1,0 +1,233 @@
+From f983ebd85782f4319b41c7d4605308c0630e3358 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 8 Oct 2026 18:14:11 +0200
+Subject: [PATCH 105/141] hydra: thin film into its BSDF, curveadjust
+ passthrough, image alpha
+
+thin_film_bsdf (MaterialX 1.38) is stacked by layer onto a BSDF; in 1.39 the
+film is an input of the BSDFs themselves. The layer is removed and the film's
+thickness and index pass onto the base BSDF: render identical to the pixel to the
+1.39 form. curveadjust, removed from the standard in 1.39.2, has no
+implementation other than MDL, which returns its input: likewise. And the alpha
+of an image read by separate4.outa (extract 3 and swizzle a y lead to it) is
+rewired to the image node's alpha output, where the fourth channel was lost
+(K-17, its common case: a cutout to opacity). The parameters set on a node coming
+from Hydra go through a shared function, AddParams.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp    |   5 ++
+ src/hydra/mtlx_expand.cpp | 156 +++++++++++++++++++++++++++++++++++---
+ 2 files changed, 150 insertions(+), 11 deletions(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index 43863eac..81d51896 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -2392,6 +2392,11 @@ const std::vector<MtlxEntry> &MtlxTable()
+       {"ND_dot_surfaceshader", &kPassThroughClosure},
+       {"ND_dot_volumeshader", &kPassThroughClosure},
+       {"ND_dot_", &kPassThrough},
++      /* `curveadjust` was rolled back to a proposal in MaterialX 1.39.2
++       * (houdini/legacy_1_39.mtlx) and has no GLSL or OSL implementation; the
++       * library's one, in MDL (stdlib_1_6.mdl), returns its input unchanged
++       * and ignores the knots. The same here, rather than a broken wire. */
++      {"ND_curveadjust_", &kPassThrough},
+       {"ND_convert_", &kPassThrough},
+ 
+       /* Constants, one Cycles node per type. */
+diff --git a/src/hydra/mtlx_expand.cpp b/src/hydra/mtlx_expand.cpp
+index d5118ade..ed4afa40 100644
+--- a/src/hydra/mtlx_expand.cpp
++++ b/src/hydra/mtlx_expand.cpp
+@@ -859,6 +859,146 @@ bool ExpandTransformMatrix(Network &net,
+   return true;
+ }
+ 
++/* Parameters set on a node: a node Hydra handed over keeps its parameter
++ * container, overlaid with these (Write rewrites only its connections); one
++ * made here just gains them. */
++void AddParams(Node &node, const std::map<TfToken, VtValue> &added)
++{
++  for (const auto &[key, value] : added) {
++    node.params[key] = value;
++  }
++  if (node.original) {
++    const TfToken keys[] = {HdMaterialNodeSchemaTokens->parameters};
++    const HdDataSourceBaseHandle values[] = {
++        HdOverlayContainerDataSource::New(ParamsDs(added), node.originalParams)};
++    node.original = HdOverlayContainerDataSource::New(
++        HdRetainedContainerDataSource::New(1, keys, values), node.original);
++    node.originalParams = HdContainerDataSource::Cast(values[0]);
++  }
++}
++
++/* `thin_film_bsdf` (MaterialX 1.38, deprecated in 1.39) iridesces the BSDF it
++ * is layered over: `layer(top: thin_film_bsdf, base: X)`. In 1.39 the film is
++ * an input of the BSDFs themselves - `thinfilm_thickness`, `thinfilm_ior` on
++ * dielectric, conductor and generalized_schlick, which the table carries to
++ * Cycles' own thin film. So the film's thickness and index move onto the base,
++ * and the layer reads the base straight. Karma does the same upgrade. */
++bool FoldThinFilm(Network &net)
++{
++  static const TfToken kTop("top"), kBase("base");
++  const mx::DocumentPtr library = Library();
++  bool any = false;
++  std::vector<TfToken> names;
++  for (const auto &[name, node] : net.nodes) {
++    names.push_back(name);
++  }
++  for (const TfToken &name : names) {
++    const auto layer = net.nodes.find(name);
++    if (layer == net.nodes.end() || layer->second.typeId != TfToken("ND_layer_bsdf")) {
++      continue;
++    }
++    const auto top = layer->second.conns.find(kTop);
++    const auto base = layer->second.conns.find(kBase);
++    if (top == layer->second.conns.end() || top->second.empty() ||
++        base == layer->second.conns.end() || base->second.empty())
++    {
++      continue;
++    }
++    const auto film = net.nodes.find(top->second.front().upstream);
++    const auto under = net.nodes.find(base->second.front().upstream);
++    if (film == net.nodes.end() || film->second.typeId != TfToken("ND_thin_film_bsdf") ||
++        under == net.nodes.end())
++    {
++      continue;
++    }
++    const mx::NodeDefPtr filmDef = library->getNodeDef("ND_thin_film_bsdf");
++    std::map<TfToken, VtValue> added;
++    static const std::pair<const char *, const char *> kMoves[] = {
++        {"thickness", "thinfilm_thickness"}, {"ior", "thinfilm_ior"}};
++    for (const auto &[from, to] : kMoves) {
++      const TfToken src(from), dst(to);
++      if (const auto c = film->second.conns.find(src); c != film->second.conns.end()) {
++        under->second.conns[dst] = c->second;
++      }
++      else if (const auto v = film->second.params.find(src); v != film->second.params.end()) {
++        added[dst] = v->second;
++      }
++      else if (const mx::InputPtr def = filmDef ? filmDef->getActiveInput(from) : nullptr) {
++        added[dst] = MxValue(def->getType(), def->getValueString());
++      }
++    }
++    if (!added.empty()) {
++      AddParams(under->second, added);
++    }
++    const Conn baseOut = base->second.front();
++    const TfToken filmName = film->first;
++    Redirect(net, name, {{kOut.GetString(), baseOut}});
++    net.nodes.erase(name);
++    /* The film has no node of its own once folded; drop it unless something
++     * else still reads it. */
++    bool used = false;
++    for (const auto &[other, node] : net.nodes) {
++      for (const auto &[input, conns] : node.conns) {
++        for (const Conn &c : conns) {
++          used |= c.upstream == filmName;
++        }
++      }
++    }
++    for (const auto &[terminal, conn] : net.terminals) {
++      used |= conn.upstream == filmName;
++    }
++    if (!used) {
++      net.nodes.erase(filmName);
++    }
++    LOG_INFO << "MaterialX: thin film at " << filmName.GetString() << " folded into "
++             << baseOut.upstream.GetString() << ".";
++    any = true;
++  }
++  return any;
++}
++
++/* The alpha of an image (K-17, its common case). Cycles carries no fourth
++ * channel on a wire, so a `separate4` of a colour4 had nothing to give on
++ * `outa`, and an image's alpha - a cut-out read for opacity - was lost. The
++ * image node itself has an alpha output: when the separated colour comes
++ * straight from an image, every reader of `outa` reads the image's `a`
++ * instead, which the mapping names `alpha`. `extract` and `swizzle` of
++ * channel 3 come here too, rewritten into a separate first. */
++bool RouteImageAlpha(Network &net)
++{
++  static const TfToken kIn("in"), kOuta("outa"), kA("a");
++  bool any = false;
++  for (const auto &[name, node] : net.nodes) {
++    if (node.typeId != TfToken("ND_separate4_color4")) {
++      continue;
++    }
++    const auto in = node.conns.find(kIn);
++    if (in == node.conns.end() || in->second.empty()) {
++      continue;
++    }
++    const Conn source = in->second.front();
++    const auto image = net.nodes.find(source.upstream);
++    if (image == net.nodes.end()) {
++      continue;
++    }
++    const std::string &id = image->second.typeId.GetString();
++    if (id != "ND_image_color4" && id != "ND_tiledimage_color4") {
++      continue;
++    }
++    for (auto &[otherName, other] : net.nodes) {
++      for (auto &[input, list] : other.conns) {
++        for (Conn &conn : list) {
++          if (conn.upstream == name && conn.output == kOuta) {
++            conn = Conn{source.upstream, kA};
++            any = true;
++          }
++        }
++      }
++    }
++  }
++  return any;
++}
++
+ }  // namespace
+ 
+ HdMaterialNetworkSchema CompleteMaterialXDefaults(HdMaterialNetworkSchema network,
+@@ -907,16 +1047,7 @@ HdMaterialNetworkSchema CompleteMaterialXDefaults(HdMaterialNetworkSchema networ
+     if (added.empty()) {
+       continue;
+     }
+-    /* A node Hydra handed over keeps its parameter container, overlaid with
+-     * the defaults; one made here just gains them. */
+-    node.params.insert(added.begin(), added.end());
+-    if (node.original) {
+-      const TfToken keys[] = {HdMaterialNodeSchemaTokens->parameters};
+-      const HdDataSourceBaseHandle values[] = {
+-          HdOverlayContainerDataSource::New(node.originalParams, ParamsDs(added))};
+-      node.original = HdOverlayContainerDataSource::New(
+-          HdRetainedContainerDataSource::New(1, keys, values), node.original);
+-    }
++    AddParams(node, added);
+     net.changed = true;
+   }
+   return net.changed ? Write(net) : network;
+@@ -933,7 +1064,7 @@ HdMaterialNetworkSchema ExpandMaterialXNodegraphs(HdMaterialNetworkSchema networ
+     for (const TfToken &name : nodes.GetNames()) {
+       if (auto ds = nodes.Get(name).GetNodeIdentifier()) {
+         const std::string id = ds->GetTypedValue(0.0f).GetString();
+-        if (id.rfind("ND_", 0) == 0 && !translatable(id)) {
++        if ((id.rfind("ND_", 0) == 0 && !translatable(id)) || id == "ND_separate4_color4") {
+           candidate = true;
+           break;
+         }
+@@ -947,6 +1078,8 @@ HdMaterialNetworkSchema ExpandMaterialXNodegraphs(HdMaterialNetworkSchema networ
+   const mx::DocumentPtr library = Library();
+   Network net = Read(network);
+ 
++  net.changed |= FoldThinFilm(net);
++
+   /* Expanded nodes bring in nodes that may expand in turn. */
+   for (int pass = 0; pass < 8; ++pass) {
+     bool any = false;
+@@ -990,6 +1123,7 @@ HdMaterialNetworkSchema ExpandMaterialXNodegraphs(HdMaterialNetworkSchema networ
+       break;
+     }
+   }
++  net.changed |= RouteImageAlpha(net);
+ 
+   return net.changed ? Write(net) : network;
+ }

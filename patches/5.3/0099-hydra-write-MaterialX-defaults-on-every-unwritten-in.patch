@@ -1,0 +1,157 @@
+From c1a573b382a629ebf5f950d6c1d720b83d0baa7d Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 8 Oct 2026 05:40:14 +0200
+Subject: [PATCH 099/141] hydra: write MaterialX defaults on every unwritten
+ input
+
+Hydra only passes what Houdini wrote, and Houdini only writes what the user
+touched: an input left at its MaterialX default arrived at the delegate as
+nothing, and the Cycles node kept its own - absval of nothing read 0.5, the math
+node's default, where MaterialX says 0; modulo divided by 0.5 instead of 1; power
+raised to 0.5 instead of 1. tools/mtlx_pinned.py renders each value nodedef with
+its defaults written and unwritten: 57 of the 677 differed. Before translation,
+every unwritten MaterialX input now receives the default of its nodedef, read
+from the library, for only the inputs that the translation accepts; geometric
+defaults stay with the Cycles node. After: 677 out of 677 identical, the 49 value
+cases and the five surfaces unchanged.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp    | 15 ++++++++++
+ src/hydra/mtlx_expand.cpp | 61 +++++++++++++++++++++++++++++++++++++++
+ src/hydra/mtlx_expand.h   | 19 ++++++++++++
+ 3 files changed, 95 insertions(+)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index b7ab4a66..2f4529ba 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -2922,6 +2922,21 @@ void HdCyclesMaterial::Sync(HdSceneDelegate *sceneDelegate,
+         const UsdToCyclesMapping *mapping = FindMtlxMapping(nodeTypeId);
+         return mapping != nullptr && NodeType::find(mapping->nodeType()) != nullptr;
+       });
++      /* Then every MaterialX input left unwritten takes its nodedef's
++       * default, so that no Cycles default stands in for a MaterialX one. */
++      network = CompleteMaterialXDefaults(
++          network, [](const std::string &nodeTypeId, const std::string &input) {
++            const UsdToCyclesMapping *mapping = FindMtlxMapping(nodeTypeId);
++            if (mapping == nullptr) {
++              return false;
++            }
++            const TfToken name(input);
++            if (mapping->hasParameterMapping(name)) {
++              return true;
++            }
++            const NodeType *type = NodeType::find(mapping->nodeType());
++            return type != nullptr && type->find_input(ustring(input)) != nullptr;
++          });
+     }
+ 
+     const SceneLock lock(renderParam);
+diff --git a/src/hydra/mtlx_expand.cpp b/src/hydra/mtlx_expand.cpp
+index 5ae499c5..400c20ed 100644
+--- a/src/hydra/mtlx_expand.cpp
++++ b/src/hydra/mtlx_expand.cpp
+@@ -718,6 +718,67 @@ bool ExpandSwizzle(Network &net,
+ 
+ }  // namespace
+ 
++HdMaterialNetworkSchema CompleteMaterialXDefaults(HdMaterialNetworkSchema network,
++                                                  const HdCyclesInputAccepted &accepted)
++{
++  bool candidate = false;
++  {
++    HdMaterialNodeContainerSchema nodes = network.GetNodes();
++    for (const TfToken &name : nodes.GetNames()) {
++      if (auto ds = nodes.Get(name).GetNodeIdentifier()) {
++        if (ds->GetTypedValue(0.0f).GetString().rfind("ND_", 0) == 0) {
++          candidate = true;
++          break;
++        }
++      }
++    }
++  }
++  if (!candidate) {
++    return network;
++  }
++
++  const mx::DocumentPtr library = Library();
++  Network net = Read(network);
++  for (auto &[name, node] : net.nodes) {
++    const std::string id = node.typeId.GetString();
++    if (id.rfind("ND_", 0) != 0) {
++      continue;
++    }
++    const mx::NodeDefPtr nodeDef = library->getNodeDef(id);
++    if (!nodeDef) {
++      continue;
++    }
++    std::map<TfToken, VtValue> added;
++    for (const mx::InputPtr &def : nodeDef->getActiveInputs()) {
++      const TfToken input(def->getName());
++      if (node.params.count(input) || node.conns.count(input) || def->getValueString().empty() ||
++          !def->getDefaultGeomPropString().empty() || !accepted(id, def->getName()))
++      {
++        continue;
++      }
++      const VtValue value = MxValue(def->getType(), def->getValueString());
++      if (!value.IsEmpty()) {
++        added[input] = value;
++      }
++    }
++    if (added.empty()) {
++      continue;
++    }
++    /* A node Hydra handed over keeps its parameter container, overlaid with
++     * the defaults; one made here just gains them. */
++    node.params.insert(added.begin(), added.end());
++    if (node.original) {
++      const TfToken keys[] = {HdMaterialNodeSchemaTokens->parameters};
++      const HdDataSourceBaseHandle values[] = {
++          HdOverlayContainerDataSource::New(node.originalParams, ParamsDs(added))};
++      node.original = HdOverlayContainerDataSource::New(
++          HdRetainedContainerDataSource::New(1, keys, values), node.original);
++    }
++    net.changed = true;
++  }
++  return net.changed ? Write(net) : network;
++}
++
+ HdMaterialNetworkSchema ExpandMaterialXNodegraphs(HdMaterialNetworkSchema network,
+                                                   const HdCyclesNodeTranslatable &translatable)
+ {
+diff --git a/src/hydra/mtlx_expand.h b/src/hydra/mtlx_expand.h
+index f1d36715..dba0a7ed 100644
+--- a/src/hydra/mtlx_expand.h
++++ b/src/hydra/mtlx_expand.h
+@@ -16,6 +16,11 @@ HDCYCLES_NAMESPACE_OPEN_SCOPE
+ /* Whether the delegate turns a node of this identifier into Cycles nodes. */
+ using HdCyclesNodeTranslatable = std::function<bool(const std::string &nodeTypeId)>;
+ 
++/* Whether the delegate's translation of this node has somewhere to put this
++ * input - a mapped socket, or a socket of that name on the Cycles node. */
++using HdCyclesInputAccepted =
++    std::function<bool(const std::string &nodeTypeId, const std::string &input)>;
++
+ /* Expands, in a Hydra material network, the MaterialX nodes the delegate has
+  * no translation for but whose nodedef the MaterialX library defines as a
+  * nodegraph of simpler nodes - `switch` is ten `ifgreater`, `ramp4` three
+@@ -31,4 +36,18 @@ using HdCyclesNodeTranslatable = std::function<bool(const std::string &nodeTypeI
+ PXR_NS::HdMaterialNetworkSchema ExpandMaterialXNodegraphs(
+     PXR_NS::HdMaterialNetworkSchema network, const HdCyclesNodeTranslatable &translatable);
+ 
++/* Authors, on every MaterialX node of the network, each input the network
++ * leaves unwritten with the value its nodedef gives it. Hydra forwards only
++ * what Houdini authored and Houdini authors only what the user touched, so
++ * an input left at its MaterialX default reached the delegate as nothing,
++ * and the Cycles node kept its own default - `absval` of nothing read 0.5,
++ * the math node's value, where MaterialX says 0; `modulo` divided by 0.5
++ * instead of 1. Fifty-seven of 677 value nodedefs rendered differently with
++ * their defaults written and unwritten (tools/mtlx_pinned.py, 2026-10-08).
++ * Only inputs the translation accepts are written, so the log does not
++ * fill with inputs no mapping holds; geometric defaults (a texcoord left
++ * unset reads UV0) are left to the Cycles node, which does the same. */
++PXR_NS::HdMaterialNetworkSchema CompleteMaterialXDefaults(
++    PXR_NS::HdMaterialNetworkSchema network, const HdCyclesInputAccepted &accepted);
++
+ HDCYCLES_NAMESPACE_CLOSE_SCOPE

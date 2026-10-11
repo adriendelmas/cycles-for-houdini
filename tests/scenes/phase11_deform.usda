@@ -47,9 +47,8 @@ def Xform "world"
     }
 
 
-    # cube QUI SE DEFORME : les points sont echantillonnes dans le temps, la
-    # transform ne bouge pas. Rien d'autre que le flou de deformation ne peut
-    # l'etaler.
+    # a DEFORMING cube: the points are sampled over time, the transform does
+    # not move. Nothing but deformation blur can smear it.
     def Mesh "deforming"
     {
         int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]

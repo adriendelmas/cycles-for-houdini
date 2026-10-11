@@ -1,0 +1,30 @@
+From 416c0757afd145aaa1a2ad3cd94b689de64c5b34 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Wed, 7 Oct 2026 16:49:20 +0200
+Subject: [PATCH 077/141] hydra: the ResolveUdimTiles declaration was missing
+ from the series
+
+material.cpp defines it and calls it from the UDIM tiles fix, but material.h was
+never committed: the working tree compiled, a series replayed by bootstrap.py
+would not have compiled.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ src/hydra/material.h | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/hydra/material.h b/src/hydra/material.h
+index b6f8f0b6..701b199b 100644
+--- a/src/hydra/material.h
++++ b/src/hydra/material.h
+@@ -79,6 +79,10 @@ class HdCyclesMaterial final : public PXR_NS::HdMaterial {
+    * changer son fichier ne suffit pas a la recharger. */
+   void RefreshImageHandles();
+ 
++  /* Un chemin en `<UDIM>` ne vaut rien sans la liste de ses tuiles, que Cycles
++   * attend sur le socket `tiles` : elle se lit dans le dossier. */
++  void ResolveUdimTiles();
++
+   /* Les textures qui viennent d'un COP d'Houdini : leurs pixels se lisent ici,
+    * sur le thread de synchronisation, et se donnent a Cycles en memoire. */
+   void BindHoudiniCopImages(CCL_NS::Scene *scene, PXR_NS::HdSceneDelegate *sceneDelegate);

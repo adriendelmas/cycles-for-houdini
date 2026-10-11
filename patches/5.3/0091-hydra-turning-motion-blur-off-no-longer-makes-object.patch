@@ -1,0 +1,62 @@
+From b1ff3fa735a01e477131408f92b752fbb4e795f9 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 8 Oct 2026 02:59:29 +0200
+Subject: [PATCH 091/141] hydra: turning motion blur off no longer makes
+ objects vanish
+
+In the viewport, disabling the blur made the animated object disappear until the
+render was restarted: objects kept their motion samples while the scene no
+longer expected any. The resynchronization of prims, requested until now when
+the blur came back, is also requested when it goes away. Observed by the user in
+Houdini (tests/houdini/motion_toggle.hip).
+
+Cycles' batch mode under husk is measured and discarded: 13.2 s versus 13.6 s
+over five pairs, within the gap between two renders, images identical bit for
+bit. The session stays interactive.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/render_delegate.cpp |  5 +++++
+ src/hydra/session.h           | 12 +++++++++---
+ 2 files changed, 14 insertions(+), 3 deletions(-)
+
+diff --git a/src/hydra/render_delegate.cpp b/src/hydra/render_delegate.cpp
+index 21e283b2..5a7404aa 100644
+--- a/src/hydra/render_delegate.cpp
++++ b/src/hydra/render_delegate.cpp
+@@ -90,6 +90,11 @@ SessionParams GetSessionParams(const HdRenderSettingsMap &settings)
+ {
+   SessionParams params;
+   params.threads = 0;
++  /* Interactive even under husk. Cycles' background mode was measured on
++   * 2026-10-08 (smoke.usda, 1920x1080, five pairs): 13.2 s against 13.6 s,
++   * inside the 1.5 s spread between runs, bit-identical images. It is not
++   * what separates Cycles from Karma in batch, and the interactive mode is
++   * the one the viewport needs. */
+   params.background = false;
+   /* Pas de passes en resolution reduite, bien que ce soit le defaut de Cycles.
+    *
+diff --git a/src/hydra/session.h b/src/hydra/session.h
+index 483ea10c..e076a74c 100644
+--- a/src/hydra/session.h
++++ b/src/hydra/session.h
+@@ -213,10 +213,16 @@ class HdCyclesSession final : public PXR_NS::HdRenderParam {
+    * now ask for get synced again. */
+   void CheckMotionResync()
+   {
+-    if (_everSynced && IsMotionBlurEnabled() &&
+-        (!_syncedMotion || _shutterOpen != _syncedShutterOpen ||
+-         _shutterClose != _syncedShutterClose))
++    if (!_everSynced) {
++      return;
++    }
++    if (IsMotionBlurEnabled() ? (!_syncedMotion || _shutterOpen != _syncedShutterOpen ||
++                                 _shutterClose != _syncedShutterClose) :
++                                _syncedMotion)
+     {
++      /* Turning blur off counts too: objects keep their motion samples and
++       * the scene stops expecting them, and they vanished from the render
++       * until it was restarted. */
+       _motionResyncNeeded = true;
+     }
+   }

@@ -1,0 +1,55 @@
+From 509079f59361b0b04a55df20d2096737e1c8cc7b Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Wed, 9 Sep 2026 17:24:38 +0200
+Subject: [PATCH 066/141] hydra: give Cycles the camera used to dice
+ subdivisions
+
+Cycles creates a `dicing_camera` and nobody filled it in: it stayed at identity,
+so a subdivided surface looked immense to it, and the adaptive dicing went to the
+ceiling.
+
+Measured on a user scene, a 980-face grid in `catmullClark`:
+
+|  | before | after |
+|---|---|---|
+| triangle index | 236 MB | 12.2 MB |
+| OptiX BLAS | 1.22 GB | 64 MB |
+| BVH construction | 0.552 s | 0.220 s |
+
+That is ten million triangles where half a million suffice, and an image
+identical to the pixel before and after. The price was paid on every edit, not
+only at load time.
+
+`copy_value` copies without raising a modification flag, and that is intended: a
+mesh is only re-diced on its own changes, not on every view movement.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/hydra/render_pass.cpp | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/src/hydra/render_pass.cpp b/src/hydra/render_pass.cpp
+index ef6329de..afa85f07 100644
+--- a/src/hydra/render_pass.cpp
++++ b/src/hydra/render_pass.cpp
+@@ -163,6 +163,20 @@ void HdCyclesRenderPass::_Execute(const HdRenderPassStateSharedPtr &renderPassSt
+                                           scene->camera);
+     }
+ 
++    /* La camera qui sert a decouper les surfaces subdivisees. Cycles la cree,
++     * mais personne ne la renseignait : elle restait a l'identite, une surface
++     * lui paraissait donc immense, et le decoupage partait au plafond. Un
++     * simple grid de 980 faces sortait a 10,3 millions de triangles, 1,2 Go de
++     * BVH et une demi-seconde de construction - a chaque edition. Elle suit
++     * desormais la camera de rendu, comme dans Blender.
++     *
++     * `copy_value` recopie sans lever de drapeau de modification, et c'est
++     * voulu : un maillage ne se redecoupe que sur ses propres changements, pas
++     * a chaque deplacement de vue. */
++    for (const SocketType &socket : scene->camera->type->inputs) {
++      scene->dicing_camera->copy_value(socket, *scene->camera, socket);
++    }
++
+     /* Passer d'une camera a l'autre - entrer dans une camera USD, en sortir
+      * vers la vue libre - change la source de la vue, pas forcement une valeur
+      * du noeud camera de Cycles : le cadrage pouvait rester celui de la

@@ -14,17 +14,11 @@ Start here. Each file answers one question; none repeats another.
 
 ## Reference and history
 
-These predate the map above and stay as written. They are in French.
-
-| File | What it holds |
-|---|---|
-| [STATUS.md](STATUS.md) | The chronological journal, phase 0 to 33: what was tried, measured and decided, in order. It is the record, not the current state - read PROGRESS.md for that. |
-| [MATERIALX_COVERAGE.md](MATERIALX_COVERAGE.md) | The MaterialX coverage count and what it leaves out. Its headline number counts prefix matches, not correct translations - see TESTING.md. |
-| [MATERIALX_PLAN.md](MATERIALX_PLAN.md) | The node-by-node checklist of the MaterialX work, with verification notes. |
-| [STANDARD_SURFACE_AUDIT.md](STANDARD_SURFACE_AUDIT.md) | `standard_surface` input by input, measured at render time. |
-| [CYCLES_53.md](CYCLES_53.md) | Running Cycles 5.2 and 5.3 side by side. |
-| [CYCLES_VOPS.md](CYCLES_VOPS.md) | Inventory of the generated VOP library. |
-| [ENVIRONMENT.md](ENVIRONMENT.md) | The build machine: toolchain and library versions. |
+The dated working journal (`STATUS.md`), the MaterialX checklist and
+coverage notes, the `standard_surface` audit, the 5.2/5.3 side-by-side notes,
+the VOP inventory and the build-machine record are kept on the development
+machine, in French, and are not published: PROGRESS.md, KNOWN_ISSUES.md and
+TESTING.md carry what they established.
 
 The patch series has its own notes in [`../patches/README.md`](../patches/README.md), one entry per patch, with the bug each one fixes. The test tree is described in [`../tests/README.md`](../tests/README.md): which folder holds scenes, which holds references, and which a script writes into.
 

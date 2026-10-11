@@ -1,32 +1,37 @@
-# Correctifs apportes a Cycles
+# Patches applied to Cycles
 
-Cycles n'est pas recopie ici : il a son propre depot, et nos modifications y
-vivent sur une branche a nous, en commits separes par sujet. Cette serie en est
-l'export par `git format-patch`.
+Cycles is not copied here: it has its own repository, and our changes live
+there on a branch of ours, as commits separated by topic. This series is its
+export through `git format-patch`.
 
-    patches/5.2/   38 correctifs, base 3b97e190 (branche release/5.2)
-    patches/5.3/   140 correctifs, base 8424ed53 (branche main)
+    patches/5.2/   38 patches, base 3b97e190 (branch release/5.2)
+    patches/5.3/   141 patches, base 8424ed53 (branch main)
 
-`tools/bootstrap.py` fait le chemin complet -- clone, `git am`, compilation.
-A la main, sur un clone deja pose :
+`tools/bootstrap.py` does the whole path -- clone, `git am`, build. By hand, on
+a clone that is already in place:
 
     cd external/cycles-53 && git am ../../patches/5.3/*.patch
 
-Regenerer la serie apres une nouvelle modification :
+Regenerate the series after a new change:
 
     cd external/cycles-53 && git format-patch --no-signature -o ../../patches/5.3 8424ed53..HEAD
+    python tools/patch_messages.py
 
-Les deux series different peu. Le passage a la 5.3 a rejoue 37 correctifs sur
-38 : `hydra: never leave a Shader without a graph` n'a plus lieu d'etre, l'amont
-ayant resolu le probleme de son cote. S'y ajoutent la dispersion, reprise de la
-PR Blender 162041, et le retrait des sauvegardes d'HDA du suivi. **La
-numerotation a donc glisse d'un cran** a partir du cinquieme : les notes plus
-bas suivent celle de la 5.2.
+The second step rewrites, in the patch files, the headers of the commits whose
+message was written in French (`tools/patch_messages.json`); the worktree's
+history itself is left alone.
 
-La plupart de ces correctifs sont independants d'Houdini et de cette machine --
-**autant de candidats a une contribution amont chez Blender**.
+The two series differ little. The move to 5.3 replayed 37 patches out of 38:
+`hydra: never leave a Shader without a graph` is no longer needed, upstream
+having solved the problem on its side. To that are added dispersion, taken from
+Blender PR 162041, and the removal of HDA backups from tracking. **The
+numbering has therefore shifted by one** from the fifth on: the notes below
+follow that of 5.2.
 
-## Serie 5.3
+Most of these patches are independent of Houdini and of this machine --
+**so many candidates for an upstream contribution to Blender**.
+
+## Series 5.3
 
 | | |
 |---|---|
@@ -65,317 +70,313 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0033` | hydra: do not write a parameter that carries no value |
 | `0034` | hydra: shade a mesh flat unless its normals say otherwise, and refresh the UsdPreviewSurface names |
 | `0035` | hydra: an empty string default crashed the Sdr parser |
-| `0036` | interface des noeuds: connecteurs, selecteurs de fichier, cases a cocher |
-| `0037` | cases a cocher, section Base, et un fil ignore ne l'est plus en silence |
-| `0038` | dispersion sur le principled bsdf, reprise de la PR blender 162041 |
-| `0039` | otls: ne plus suivre les sauvegardes automatiques d'Houdini |
-| `0040` | hydra: une rampe d'Houdini remplit enfin la table que Cycles attend |
-| `0041` | hydra: flou de deformation pour les points animes |
-| `0042` | le Cycles Material Builder n'etait dans aucun depot |
-| `0043` | hydra: flou par velocite, pour la geometrie dont le nombre de points varie |
-| `0044` | hydra: les normales par coin, au lieu de facetter ce qui ne l'est pas |
-| `0045` | hydra: rejeter une valeur d'enum hors registre plutot que de la transmettre telle quelle |
-| `0046` | kernel: Random Walk (Legacy) manquait dans la table de saut des fermetures |
-| `0047` | hydra: un seul terminal a trois entrees, plutot que trois connecteurs qui se contredisent |
-| `0048` | hydra: la dispersion du MaterialX standard_surface, vers le principled bsdf qui la porte enfin |
-| `0049` | hydra: presenter Cycles GPU avant Cycles CPU dans le menu des moteurs |
-| `0050` | hydra: rendre le display driver et le choix du peripherique utilisables |
-| `0051` | hydra: choisir le peripherique de rendu depuis le menu d'Houdini |
-| `0052` | hydra: les terminaux dont la sortie ne s'appelle pas BSDF n'etaient jamais branches |
-| `0053` | hydra: les reglages du materiau, dans un noeud plutot que nulle part |
-| `0054` | scene: le displacement s'ajoutait a lui-meme a chaque edition du materiau |
-| `0055` | hydra: choisir l'espace colorimetrique d'une texture dans un menu |
-| `0056` | hydra: aligner les lumieres sur Karma, et rendre les lumieres cylindriques |
-| `0057` | hydra: la couleur de transmission et celle de sous-surface, enfin traduites |
-| `0058` | hydra: une texture venue d'un COP sortait retournee |
-| `0059` | hydra: les textures d'un COP passent par la memoire, plus par un fichier |
-| `0060` | hydra: surveiller les COP, que personne ne signale comme changes |
-| `0061` | hydra: un frein sur la veille des COP, et de quoi la couper |
-| `0062` | hydra: une texture qui change, et une camera dont on sort |
-| `0063` | hydra: la veille des COP repose l'image elle-meme |
-| `0064` | hydra: une image branchee sur une entree scalaire, et la couleur de sous-surface retiree |
-| `0065` | hydra: un lobe de transmission a lui, pour la couleur et la rugosite que MaterialX lui donne |
-| `0066` | hydra: donner a Cycles la camera qui sert a decouper les subdivisions |
-| `0067` | hydra: un shader d'apercu pour les materiaux Cycles, sinon le viewport reste gris |
-| `0068` | hydra: le passe-plat MaterialX, deux entrees mortes, et six familles de plus |
-| `0069` | hydra: ne plus retourner l'image d'un COP, les deux bouts la rangent deja pareil |
-| `0070` | hydra: le taux de decoupage des subdivisions, dans les reglages de rendu |
-| `0071` | hydra: de quoi mesurer un viewport qui traine, et un journal qui arrive quelque part |
-| `0072` | hydra: une carte pleine qui se dit, et des COP qui ne pesent que leurs canaux |
-| `0073` | hydra: les cheveux MaterialX, et le noeud surface qui coupait tout |
-| `0074` | hydra: crediter Ben Houston a la tete de la traduction MaterialX |
-| `0075` | hydra: les primvars float3 etaient copies au mauvais pas, et lus en vrac |
-| `0076` | hydra: mix, les fondus, saturate, facingratio, viewdirection et geomcolor, exacts |
-| `0077` | hydra: la declaration de ResolveUdimTiles manquait a la serie |
-| `0078` | hydra: les fermetures MaterialX - mix, add, multiply, volume, layer, conductor |
-| `0079` | hydra: les variantes couleur et vecteur des operateurs MaterialX, et trois operateurs scalaires faux |
-| `0080` | hydra: OpenPBR, glTF et Disney traduits, les defauts de chaque surface, UsdUVTexture par canal, kma |
-| `0081` | hydra: les courbes USD rendues ou USD les place, en tubes, et le reglage Curve Shape |
-| `0082` | hydra: les instances floues, leurs primvars par instance, et les primvars constants scalaires |
-| `0083` | hydra: les surfaces implicites USD rendues, en maillages fins |
-| `0084` | hydra: un maillage Catmull-Clark subdivise sans attendre l'indice d'affichage |
-| `0085` | hydra: huit cles par segment de courbe cubique, pour suivre la forme |
-| `0086` | hydra: le flou qui revient, les champs de volume d'Houdini, et le film transparent |
-| `0087` | hydra: les passes de rendu - lumieres, LPE de Karma, cryptomatte, AOV de shader |
-| `0088` | hydra: les proprietes par objet - visibilite par rayon, holdout, shadow catcher |
-| `0089` | hydra: le light linking et le shadow linking |
-| `0090` | hydra: un prim dont le render tag n'est plus dessine disparait du rendu |
-| `0091` | hydra: couper le flou de mouvement ne fait plus disparaitre les objets |
-| `0092` | hydra: les light groups et leurs passes |
-| `0093` | hydra: les multiplicateurs diffuse et specular des lumieres USD |
-| `0094` | hydra: le manifeste de la cryptomatte dans les metadonnees de l'image |
-| `0095` | hydra: l'emission combinee et les vecteurs de mouvement de Karma |
-| `0096` | hydra: la passe ne bloque plus l'interface, et le cache des COP se vide |
-| `0097` | hydra: commentaires et messages de journal en anglais |
-| `0098` | hydra: les nodegraphs MaterialX deplies, extract et swizzle reecrits, vector2 converti |
-| `0099` | hydra: les defauts MaterialX ecrits sur toute entree non ecrite |
-| `0100` | hydra: le journal `CYCLES_LOG_FILE` horodate chaque ligne (secondes depuis la premiere) |
-| `0101` | hydra: le lobe de verre de standard_surface choisi sur la transmission (cablee ou > 0), plus sur la presence de `transmission_color`, que 0099 ecrit partout |
-| `0102` | hydra: les tailles des normales, des points et des largeurs verifiees avant lecture (K-57, plus de segfault sur un attribut illisible) |
-| `0103` | hydra: rugosite des BSDF elementaires prise comme alpha (racine carree), dielectric_bsdf selon scatter_mode - R principled, T refraction, RT verre (K-58) |
-| `0104` | hydra: nodegraphs livres par le delegue (artistic_ior, roughness_*, inside/outside), transformmatrix a matrice constante, generalized_schlick en F82, Disney legacy ; mix a facteur couleur, magnitude/distance/dotproduct corriges (K-59) |
-| `0105` | hydra: thin_film_bsdf replie sur le BSDF de son layer, curveadjust en passe-plat, l'alpha d'une image lue par separate4/extract/swizzle (K-17) |
-| `0106` | hydra: position, normale et tangente selon leur `space` - normale objet par defaut, position monde sur demande (K-18) |
-| `0107` | hydra: absorption_vdf en coefficient (couleur = 1 - absorption), subsurface a l'echelle 1 et avec son anisotropie, AO par maxdistance (K-14) ; surface_unlit traduit (K-60) |
-| `0108` | hydra: douze traductions corrigees par comparaison a Karma - rotate en degres, tangente UV, vector2 sans 3e composante, combine2 color4, comparaisons booleennes, burn/dodge sans bornes, ramp_gradient deplie (K-61) ; heighttonormal encode en espace tangent (K-12) ; emission a l'intensite 1, generalized_schlick_edf transmet sa base |
-| `0109` | hydra: couleur de base des surfaces calculee avant traduction - sous-surface et assombrissement du vernis d'OpenPBR, sous-surface et gamma du vernis de standard_surface ; alpha glTF selon alpha_mode (K-63) ; tiledimage, images glTF, latlongimage et place2d depuis leurs nodegraphs, image_float sur son premier canal (K-64) |
-| `0110` | hydra: UsdPreviewSurface selon useSpecularWorkflow (F0 = specularColor, ignore en workflow metallique) et opacityThreshold (detourage) (K-65) ; espace couleur des textures lu dans le champ Hydra et resolu dans la config OCIO active, images en `auto` par defaut, wrapS/wrapT traduits (K-66) |
-| `0111` | hydra: texture du dome orientee selon la convention lat-long d'OpenEXR (pole +Y, longitude 0 vers +Z) et `poleAxis` de DomeLight_1 via `domeOffset` (K-67) |
-| `0112` | hydra: texture des rect lights lue en (1 - u, v), coin min en (+X, +Y) comme le veut USD (K-68) ; douceur du cone des spots convertie de l'angle (USD) au cosinus (Cycles), cone de 90 degres par defaut, `shaping:focus` et `focusTint` dans le shader de la lumiere (K-69) |
-| `0113` | hydra: profils IES lus selon la direction d'emission dans le repere de la lumiere, en candelas comme USD, `normalize` (moyenne du profil, `IESFile::mean_intensity`) et `angleScale` (K-70) |
-| `0114` | hydra: exposition de la camera (echelle lineaire de Hydra) multipliee a celle des render settings sur le film (K-71) |
-| `0115` | hydra + scene: tags de subdivision lus dans le conteneur du mesh (plis, coins), acuite USD / 10, coins sans plis, regles de bord et face-varying, trous non decoupes (`Mesh::subd_hole`), coins effaces par `Mesh::clear` (K-72) |
-| `0116` | hydra: coordonnees de texture par sommet passees par coin (l'espace tangent mikktspace les lit par coin) - normal maps justes le long de v et sur des UV en miroir (K-73) |
-| `0117` | hydra: largeur 1 par defaut (celle de Hydra) pour les points et courbes sans `widths` (K-74) ; `displacement` de UsdPreviewSurface par un noeud displacement de Cycles (K-75) |
-| `0118` | hydra: maillages subdivises `leftHanded` (ceux de Houdini) retournes pour Cycles, coins de chaque face inverses et primvars par coin permutees (K-76) |
-| `0119` | hydra: sous husk, cadrage reconstruit depuis `resolution`, `dataWindowNDC` et `pixelAspectRatio` - camera sur la fenetre d'affichage, tampon place par full_x/full_y, fenetre conformee a largeur x pixel aspect (K-77) |
-| `0120` | hydra: `disableDepthOfField` des render settings respecte (et ouverture refermee a fStop 0), `aspectRatioConformPolicy` applique sous husk (K-78) |
-| `0121` | hydra: `displayOpacity` constant des prims sans materiau -> alpha de l'objet, lue par la surface par defaut (melange transparent) (K-79) |
-| `0122` | hydra: la surface par defaut lit `displayColor` comme attribut (par sommet, face, coin), gris 0,8 en repli par instance (K-80) |
-| `0123` | hydra: flou de mouvement reactive en direct - chaque geometrie reechantillonne ses transformations sur l'obturateur sans passer par Hydra, dont le marquage ne resynchronisait rien dans le viewport de Houdini (K-81) ; topologie de maillage verifiee a la lecture, compteurs incoherents ecartes (plantage intermittent, K-82) |
-| `0124` | hydra: UsdUVTexture dont le fichier est introuvable -> `fallback` (noir par defaut) au lieu du magenta de Cycles (K-83) |
-| `0125` | hydra: nodegraphs pour la composition alpha (over, in, out, mask, matte, disjointover, premult, unpremult) et hextilednormalmap, alpha d'une constante color4 transmise a `outa` (K-84) ; volumes : primvars lues, `cycles:volume:step_size/object_space/velocity_scale` (K-85) |
-| `0126` | hydra: processeur de sortie `hdcycles_cookcoptextures`, ajouté à chaque nouveau USD Render ROP, qui cuit les textures `op:` (COP) en EXR à côté de l'USD écrit, pour husk et les fermes (K-40) |
-| `0127` | hydra: lumière répartie sur des jumelles pour les multiplicateurs `diffuse`/`specular` entre 0 et 1 et `shadow:color` ; une lumière sans ombre n'est plus touchée par les rayons BSDF (ombres à moitié noires avec `shadow:enable = 0`) (K-87) |
-| `0128` | hydra: alpha d'une couleur calculée (jumeaux float des nœuds color4, K-17) ; `weight` des BSDF appliqué par un multiply (K-88) ; `geompropvalue` couleur et vecteur lus en entier |
-| `0129` | hydra: lumière cylindre rendue par un tube maillé émissif (émission vers l'extérieur seulement, radiance dans le shader) au lieu d'un rectangle à une face (K-89) |
-| `0130` | hydra: aperçu viewport d'un matériau Cycles à travers les mix (entrées `a`/`b`, côté favorisé par le facteur), `math`/`vector_math`, mix de constantes calculés ; commentaires du traducteur en anglais (K-42) |
-| `0131` | hydra: `default` de `geompropvalue` posé en attribut d'objet, lu là où la géométrie n'a pas la primvar (K-90) |
-| `0132` | hydra: rugosité anisotrope des métaux (conductor, generalized_schlick) convertie vers l'anisotropie et la rotation du metallic_bsdf, tangente UV (K-91) ; un `weight` branché masqué sur le nœud d'origine |
-| `0133` | hydra: rugosité anisotrope d'un `dielectric_bsdf` réfléchissant (principled : `anisotropic`, `anisotropic_rotation`, tangente) (K-91) |
-| `0134` | hydra: `anisotropic_vdf` : `scattering` en couleur du scatter_volume (densité 1), `absorption` en absorption_vdf ajoutée ; l'ancienne traduction lisait un `albedo` inexistant (K-92) |
-| `0135` | hydra: `layer` = dessus + base·(1−F) au lieu d'un mix qui comptait le Fresnel du dessus deux fois ; F à l'IOR du diélectrique du dessus (K-09) |
-| `0136` | hydra: relecture complète du délégué — alpha d'une couleur constante perdu sur un nœud Hydra (K-93), `base_weight` câblé d'OpenPBR compté deux fois (K-94), trois maillages malformés qui plantaient husk : primvar trop longue, pli de longueur 0, sous-ensemble hors bornes (K-95), lecture d'un dictionnaire Python libéré dans la capture COP (K-96) ; l'IOR d'un vernis pondéré atteint son `layer` |
-| `0137` | hydra: bibliothèques MaterialX d'un package lues aussi (`materialx/` sur HOUDINI_PATH, et `CYCLES_MATERIALX_SEARCH_PATH`) : un nodedef de studio défini en nodegraph (MtlX Text) se développe comme sous Karma |
-| `0138` | hydra: le développement d'un nodegraph laisse les valeurs par défaut à CompleteMaterialXDefaults, qui n'écrit que les entrées traduites (plus de `frameoffset` / `frameendaction` dans le log, deux lignes par image et par rendu) |
-| `0139` | hydra: `kma_stderiv` (ST Derivatives de Karma) traduit en dérivée nulle : le nœud n'est plus perdu avec un avertissement, le shader retombe sur sa propre largeur |
-| `0140` | hydra: un nœud dans un NodeGraph (sous-réseau de matériau Houdini), nommé « G/a » par Hydra, garde son chemin ; tous tombaient sur le chemin vide et fusionnaient, le réseau rendait une constante |
+| `0036` | node interface: connectors, file pickers, checkboxes |
+| `0037` | checkboxes, Base section, and an ignored wire is no longer ignored silently |
+| `0038` | dispersion on the principled bsdf, taken from Blender PR 162041 |
+| `0039` | otls: stop tracking Houdini's automatic backups |
+| `0040` | hydra: a Houdini ramp finally fills the table that Cycles expects |
+| `0041` | hydra: deformation blur for animated points |
+| `0042` | the Cycles Material Builder was in no repository |
+| `0043` | hydra: velocity blur, for geometry whose point count varies |
+| `0044` | hydra: per-corner normals, instead of faceting what is not faceted |
+| `0045` | hydra: reject an enum value that is not in the registry rather than passing it through as is |
+| `0046` | kernel: Random Walk (Legacy) was missing from the closure jump table |
+| `0047` | hydra: a single terminal with three inputs, rather than three connectors that contradict each other |
+| `0048` | hydra: the dispersion of MaterialX standard_surface, to the principled bsdf that finally carries it |
+| `0049` | hydra: list Cycles GPU before Cycles CPU in the engine menu |
+| `0050` | hydra: make the display driver and the device choice usable |
+| `0051` | hydra: choose the render device from Houdini's menu |
+| `0052` | hydra: terminals whose output is not named BSDF were never connected |
+| `0053` | hydra: the material settings, in a node rather than nowhere |
+| `0054` | scene: displacement was adding itself to itself on every material edit |
+| `0055` | hydra: choose a texture's color space from a menu |
+| `0056` | hydra: align the lights with Karma, and render cylinder lights |
+| `0057` | hydra: the transmission color and the subsurface color, finally translated |
+| `0058` | hydra: a texture coming from a COP came out flipped |
+| `0059` | hydra: COP textures go through memory, no longer through a file |
+| `0060` | hydra: watch the COPs, which nobody reports as changed |
+| `0061` | hydra: a brake on COP watching, and a way to switch it off |
+| `0062` | hydra: a texture that changes, and leaving a camera |
+| `0063` | hydra: COP watching puts the image itself back |
+| `0064` | hydra: an image wired into a scalar input, and the subsurface color removed |
+| `0065` | hydra: a transmission lobe of its own, for the color and roughness that MaterialX gives it |
+| `0066` | hydra: give Cycles the camera that is used to split subdivisions |
+| `0067` | hydra: a preview shader for Cycles materials, otherwise the viewport stays gray |
+| `0068` | hydra: the MaterialX pass-through, two dead inputs, and six more families |
+| `0069` | hydra: stop flipping a COP's image, both ends already store it the same way |
+| `0070` | hydra: the subdivision split rate, in the render settings |
+| `0071` | hydra: a way to measure a viewport that lags, and a log that goes somewhere |
+| `0072` | hydra: a full graphics card that says so, and COPs that weigh only their channels |
+| `0073` | hydra: MaterialX hair, and the surface node that cut everything |
+| `0074` | hydra: credit Ben Houston at the head of the MaterialX translation |
+| `0075` | hydra: float3 primvars were copied at the wrong stride, and read in bulk |
+| `0076` | hydra: mix, the dissolves, saturate, facingratio, viewdirection and geomcolor, made exact |
+| `0077` | hydra: the ResolveUdimTiles declaration was missing from the series |
+| `0078` | hydra: the MaterialX closures - mix, add, multiply, volume, layer, conductor |
+| `0079` | hydra: the color and vector variants of the MaterialX operators, and three wrong scalar operators |
+| `0080` | hydra: OpenPBR, glTF and Disney translated, the defaults of each surface, UsdUVTexture per channel, kma |
+| `0081` | hydra: USD curves rendered where USD puts them, as tubes, and the Curve Shape setting |
+| `0082` | hydra: blurred instances, their per-instance primvars, and scalar constant primvars |
+| `0083` | hydra: USD implicit surfaces rendered, as fine meshes |
+| `0084` | hydra: a Catmull-Clark mesh subdivided without waiting for the display hint |
+| `0085` | hydra: eight keys per cubic curve segment, to follow the shape |
+| `0086` | hydra: the blur that comes back, Houdini's volume fields, and the transparent film |
+| `0087` | hydra: render passes - lights, Karma LPEs, cryptomatte, shader AOVs |
+| `0088` | hydra: per-object properties - per-ray visibility, holdout, shadow catcher |
+| `0089` | hydra: light linking and shadow linking |
+| `0090` | hydra: a prim whose render tag is no longer drawn disappears from the render |
+| `0091` | hydra: turning off motion blur no longer makes objects disappear |
+| `0092` | hydra: light groups and their passes |
+| `0093` | hydra: the diffuse and specular multipliers of USD lights |
+| `0094` | hydra: the cryptomatte manifest in the image metadata |
+| `0095` | hydra: combined emission and Karma's motion vectors |
+| `0096` | hydra: the pass no longer blocks the interface, and the COP cache empties |
+| `0097` | hydra: comments and log messages in English |
+| `0098` | hydra: flattened MaterialX nodegraphs, extract and swizzle rewritten, vector2 converted |
+| `0099` | hydra: the MaterialX defaults written on every input that was not written |
+| `0100` | hydra: the `CYCLES_LOG_FILE` log timestamps every line (seconds since the first) |
+| `0101` | hydra: the glass lobe of standard_surface chosen on the transmission (wired or > 0), no longer on the presence of `transmission_color`, which 0099 writes everywhere |
+| `0102` | hydra: sizes of normals, points and widths checked before reading (K-57, no more segfault on an unreadable attribute) |
+| `0103` | hydra: roughness of elementary BSDFs taken as alpha (square root), dielectric_bsdf according to scatter_mode - R principled, T refraction, RT glass (K-58) |
+| `0104` | hydra: nodegraphs shipped by the delegate (artistic_ior, roughness_*, inside/outside), transformmatrix with a constant matrix, generalized_schlick as F82, legacy Disney; mix with a color factor, magnitude/distance/dotproduct fixed (K-59) |
+| `0105` | hydra: thin_film_bsdf folded back onto the BSDF of its layer, curveadjust as a pass-through, the alpha of an image read by separate4/extract/swizzle (K-17) |
+| `0106` | hydra: position, normal and tangent according to their `space` - object normal by default, world position on request (K-18) |
+| `0107` | hydra: absorption_vdf as a coefficient (color = 1 - absorption), subsurface at scale 1 and with its anisotropy, AO by maxdistance (K-14); surface_unlit translated (K-60) |
+| `0108` | hydra: twelve translations fixed by comparison with Karma - rotate in degrees, UV tangent, vector2 without a 3rd component, combine2 color4, boolean comparisons, burn/dodge without bounds, ramp_gradient flattened (K-61); heighttonormal encoded in tangent space (K-12); emission at intensity 1, generalized_schlick_edf passes its base through |
+| `0109` | hydra: base color of the surfaces computed before translation - subsurface and coat darkening of OpenPBR, subsurface and coat gamma of standard_surface; glTF alpha according to alpha_mode (K-63); tiledimage, glTF images, latlongimage and place2d from their nodegraphs, image_float on its first channel (K-64) |
+| `0110` | hydra: UsdPreviewSurface according to useSpecularWorkflow (F0 = specularColor, ignored in the metallic workflow) and opacityThreshold (cutout) (K-65); texture color space read from the Hydra field and resolved in the active OCIO config, images in `auto` by default, wrapS/wrapT translated (K-66) |
+| `0111` | hydra: dome texture oriented according to the OpenEXR lat-long convention (pole +Y, longitude 0 toward +Z) and `poleAxis` of DomeLight_1 through `domeOffset` (K-67) |
+| `0112` | hydra: rect light texture read at (1 - u, v), min corner at (+X, +Y) as USD requires (K-68); spot cone softness converted from the angle (USD) to the cosine (Cycles), 90-degree cone by default, `shaping:focus` and `focusTint` in the light's shader (K-69) |
+| `0113` | hydra: IES profiles read according to the emission direction in the light's frame, in candelas like USD, `normalize` (mean of the profile, `IESFile::mean_intensity`) and `angleScale` (K-70) |
+| `0114` | hydra: camera exposure (Hydra's linear scale) multiplied with that of the render settings on the film (K-71) |
+| `0115` | hydra + scene: subdivision tags read from the mesh's container (creases, corners), USD sharpness / 10, corners without creases, boundary and face-varying rules, holes not subdivided (`Mesh::subd_hole`), corners cleared by `Mesh::clear` (K-72) |
+| `0116` | hydra: per-vertex texture coordinates passed per corner (the mikktspace tangent space reads them per corner) - correct normal maps along v and on mirrored UVs (K-73) |
+| `0117` | hydra: default width 1 (Hydra's) for points and curves without `widths` (K-74); `displacement` of UsdPreviewSurface through a Cycles displacement node (K-75) |
+| `0118` | hydra: `leftHanded` subdivided meshes (Houdini's) flipped for Cycles, corners of each face reversed and per-corner primvars permuted (K-76) |
+| `0119` | hydra: under husk, framing rebuilt from `resolution`, `dataWindowNDC` and `pixelAspectRatio` - camera on the display window, buffer placed by full_x/full_y, window conformed to width x pixel aspect (K-77) |
+| `0120` | hydra: `disableDepthOfField` of the render settings honored (and aperture closed at fStop 0), `aspectRatioConformPolicy` applied under husk (K-78) |
+| `0121` | hydra: constant `displayOpacity` of prims without a material -> object alpha, read by the default surface (transparent mix) (K-79) |
+| `0122` | hydra: the default surface reads `displayColor` as an attribute (per vertex, face, corner), 0.8 gray as the per-instance fallback (K-80) |
+| `0123` | hydra: motion blur re-enabled live - each geometry resamples its transforms over the shutter without going through Hydra, whose marking resynced nothing in Houdini's viewport (K-81); mesh topology checked on read, inconsistent counts discarded (intermittent crash, K-82) |
+| `0124` | hydra: UsdUVTexture whose file cannot be found -> `fallback` (black by default) instead of Cycles' magenta (K-83) |
+| `0125` | hydra: nodegraphs for alpha compositing (over, in, out, mask, matte, disjointover, premult, unpremult) and hextilednormalmap, alpha of a constant color4 passed to `outa` (K-84); volumes: primvars read, `cycles:volume:step_size/object_space/velocity_scale` (K-85) |
+| `0126` | hydra: output processor `hdcycles_cookcoptextures`, added to every new USD Render ROP, which bakes the `op:` (COP) textures to EXR next to the written USD, for husk and render farms (K-40) |
+| `0127` | hydra: light split into twin lights for the `diffuse`/`specular` multipliers between 0 and 1 and `shadow:color`; a light without shadow is no longer hit by BSDF rays (half-black shadows with `shadow:enable = 0`) (K-87) |
+| `0128` | hydra: alpha of a computed color (float twins of the color4 nodes, K-17); BSDF `weight` applied by a multiply (K-88); color and vector `geompropvalue` read in full |
+| `0129` | hydra: cylinder light rendered by an emissive mesh tube (emission outward only, radiance in the shader) instead of a single-sided rectangle (K-89) |
+| `0130` | hydra: viewport preview of a Cycles material through the mixes (`a`/`b` inputs, side favored by the factor), `math`/`vector_math`, mixes of constants computed; translator comments in English (K-42) |
+| `0131` | hydra: `default` of `geompropvalue` set as an object attribute, read where the geometry does not have the primvar (K-90) |
+| `0132` | hydra: anisotropic roughness of metals (conductor, generalized_schlick) converted to the anisotropy and rotation of the metallic_bsdf, UV tangent (K-91); a wired `weight` hidden on the original node |
+| `0133` | hydra: anisotropic roughness of a reflective `dielectric_bsdf` (principled: `anisotropic`, `anisotropic_rotation`, tangent) (K-91) |
+| `0134` | hydra: `anisotropic_vdf`: `scattering` as the color of the scatter_volume (density 1), `absorption` as an added absorption_vdf; the old translation read a nonexistent `albedo` (K-92) |
+| `0135` | hydra: `layer` = top + base*(1-F) instead of a mix that counted the Fresnel of the top twice; F at the IOR of the top dielectric (K-09) |
+| `0136` | hydra: full review of the delegate - alpha of a constant color lost on a Hydra node (K-93), wired OpenPBR `base_weight` counted twice (K-94), three malformed meshes that crashed husk: primvar too long, crease of length 0, out-of-bounds subset (K-95), read of a freed Python dictionary in the COP capture (K-96); the IOR of a weighted coat reaches its `layer` |
+| `0137` | hydra: MaterialX libraries of a package also read (`materialx/` on HOUDINI_PATH, and `CYCLES_MATERIALX_SEARCH_PATH`): a studio nodedef defined as a nodegraph (MtlX Text) expands as it does under Karma |
+| `0138` | hydra: the expansion of a nodegraph leaves the default values to CompleteMaterialXDefaults, which writes only the translated inputs (no more `frameoffset` / `frameendaction` in the log, two lines per frame and per render) |
+| `0139` | hydra: `kma_stderiv` (Karma's ST Derivatives) translated as a zero derivative: the node is no longer lost with a warning, the shader falls back on its own width |
+| `0140` | hydra: a node in a NodeGraph (Houdini material subnetwork), named "G/a" by Hydra, keeps its path; all of them fell onto the empty path and merged, so the network rendered a constant |
+| `0141` | hydra: the last French comments and docstrings in English (Python resources, Render menu, four comment blocks in Cycles); no code change |
 
 ---
 
-## 0001 — cmake : librairies USD manquantes pour le build Houdini
+## 0001 - cmake: missing USD libraries for the Houdini build
 
-`FindUSDHoudini.cmake` ne listait pas `hdsi`, dont `src/hydra/file_reader.cpp` a
-besoin pour `HdSiExtComputationPrimvarPruningSceneIndex`. Résultat : `LNK2019`
-au link de l'exécutable standalone, et donc échec de la cible `install` — alors
-même que `hdCycles.dll` se construisait correctement. `sdr` est requis par le
-plugin de registre de nœuds (0005). Houdini fournit les deux.
+`FindUSDHoudini.cmake` did not list `hdsi`, which `src/hydra/file_reader.cpp`
+needs for `HdSiExtComputationPrimvarPruningSceneIndex`. Result: `LNK2019` when
+linking the standalone executable, and so a failure of the `install` target --
+even though `hdCycles.dll` built correctly. `sdr` is required by the node
+registry plugin (0005). Houdini provides both.
 
-## 0002 — hydra : accepter les conventions de nommage d'AOV d'Houdini
+## 0002 - hydra: accept Houdini's AOV naming conventions
 
-husk transmet le `driver:parameters:aov:husk:name` d'un `UsdRenderVar` comme
-**nom d'AOV Hydra**, et non un token `HdAovTokens` standard. Houdini nomme la
-beauty `"C"` : un render var authoré normalement dans Solaris arrivait donc non
-mappé, son binding était écarté, et le render pass se retrouvait **sans aucun
-binding**. Or `IsConverged()` itère sur cette liste — vide, elle retourne vrai
-immédiatement, et husk écrivait une frame vierge.
+husk passes the `driver:parameters:aov:husk:name` of a `UsdRenderVar` as the
+**Hydra AOV name**, not as a standard `HdAovTokens` token. Houdini names the
+beauty `"C"`: a render var authored normally in Solaris therefore arrived
+unmapped, its binding was discarded, and the render pass ended up with **no
+binding at all**. But `IsConverged()` iterates over that list -- empty, it
+returns true immediately, and husk wrote a blank frame.
 
-Symptôme : **image noire, sans erreur ni avertissement**, pour toute scène
-Solaris normalement configurée.
+Symptom: **black image, with no error or warning**, for any normally configured
+Solaris scene.
 
-## 0003 — hydra : appliquer les primvars constants à toutes les instances
+## 0003 - hydra: apply constant primvars to all instances
 
-Un `displayColor` d'interpolation constante décrit le prim entier, donc toutes
-ses instances. L'index `_instances[0]` était codé en dur : avec un
-`PointInstancer`, seule la première instance recevait la couleur du prototype,
-les autres retombaient sur la couleur par défaut du shader.
+A constant-interpolation `displayColor` describes the whole prim, and so all of
+its instances. The `_instances[0]` index was hard-coded: with a
+`PointInstancer`, only the first instance received the prototype's color, and
+the others fell back to the shader's default color.
 
-## 0004 — hydra : ne jamais laisser un Shader sans graphe
+## 0004 - hydra: never leave a Shader without a graph
 
-**Crash de l'application hôte.** `Shader::tag_update()` lit `graph->output()`
-sans vérification, mais `HdCyclesMaterial` n'assigne un graphe qu'une fois une
-network de matériau lue avec succès. Un matériau dont la network est illisible
-par le delegate — un matériau MaterialX, par exemple — partait dans la branche
-d'erreur, et le shader fraîchement créé atteignait `tag_update()` avec un
-`graph` nul.
+**Host application crash.** `Shader::tag_update()` reads `graph->output()`
+without checking, but `HdCyclesMaterial` only assigns a graph once a material
+network has been read successfully. A material whose network is unreadable by
+the delegate -- a MaterialX material, for example -- went down the error branch,
+and the freshly created shader reached `tag_update()` with a null `graph`.
 
-Conséquence : la simple présence d'un tel matériau dans le stage faisait
-segfaulter husk, que le matériau soit lié à une géométrie ou non.
+Consequence: the mere presence of such a material in the stage made husk
+segfault, whether or not the material was bound to any geometry.
 
-## 0005 — hydra : publier les nœuds Cycles dans le registre de shaders USD
+## 0005 - hydra: publish the Cycles nodes in the USD shader registry
 
-Couple discovery + parser Sdr qui énumère `NodeType::type_names()` **au
-runtime** et publie chaque nœud `SHADER` sous l'identifiant `cycles_<nom>` —
-celui que la traduction de matériaux du delegate accepte déjà. Lire le registre
-au runtime plutôt que générer des définitions à l'avance garantit que le jeu de
-nœuds exposé suit exactement la version de Cycles liée.
+A discovery + Sdr parser pair that enumerates `NodeType::type_names()` **at
+runtime** and publishes every `SHADER` node under the identifier
+`cycles_<name>` -- the one that the delegate's material translation already
+accepts. Reading the registry at runtime rather than generating definitions in
+advance guarantees that the set of exposed nodes follows exactly the linked
+Cycles version.
 
-Enregistré dans la DLL `hdCycles` existante pour ne pas dupliquer les libs
-statiques Cycles ni leur registre de nœuds dans le process.
+Registered in the existing `hdCycles` DLL so as not to duplicate the static
+Cycles libs or their node registry in the process.
 
-Piège : un résultat de découverte publié avec un `SdrVersion()` vide est
-parsable par identifiant mais **absent de l'énumération** du registre. Il faut
+Pitfall: a discovery result published with an empty `SdrVersion()` can be parsed
+by identifier but is **absent from the registry's enumeration**. It needs
 `SdrVersion(1, 0).GetAsDefault()`.
 
-## 0006 — hydra : traduire les réseaux MaterialX en nœuds Cycles
+## 0006 - hydra: translate MaterialX networks to Cycles nodes
 
-Déclare `mtlx` comme contexte de rendu de matériau et remappe les identifiants
-de nodedef MaterialX vers des nœuds Cycles natifs, via la même machinerie que
-`UsdPreviewSurface`. Couvre `standard_surface`, `image`, `normalmap` et
-`texcoord`. Les noms de sockets ont été vérifiés contre le registre de nœuds
-Cycles, pas devinés.
+Declares `mtlx` as a material render context and remaps the MaterialX nodedef
+identifiers to native Cycles nodes, through the same machinery as
+`UsdPreviewSurface`. Covers `standard_surface`, `image`, `normalmap` and
+`texcoord`. The socket names were checked against the Cycles node registry, not
+guessed.
 
-Volontairement écrit en **un seul bloc auto-contenu**, supprimable d'une pièce
-le jour où Cycles comprendra MaterialX nativement.
+Deliberately written as **one self-contained block**, removable in one piece the
+day Cycles understands MaterialX natively.
 
-## 0007 — hydra : donner aux volumes non liés le shader volumétrique par défaut
+## 0007 - hydra: give unbound volumes the default volume shader
 
-Une géométrie sans matériau retombait sur `scene->default_surface` quel que
-soit son type. Or un `Volume` a besoin d'un shader portant une fermeture
-volumétrique : un volume non lié voyait sa grille **correctement chargée** — la
-texture NanoVDB est allouée et apparaît dans les statistiques mémoire — mais
-n'avait rien pour y diffuser, et rendait comme s'il n'existait pas.
+A geometry without a material fell back on `scene->default_surface` whatever its
+type. But a `Volume` needs a shader carrying a volumetric closure: an unbound
+volume had its grid **loaded correctly** -- the NanoVDB texture is allocated and
+shows up in the memory statistics -- but had nothing to scatter with, and
+rendered as if it did not exist.
 
-Symptôme trompeur : tout indique que le VDB est lu, et pourtant l'image est
-vide à cet endroit.
+Misleading symptom: everything indicates the VDB is read, and yet the image is
+empty at that spot.
 
-Correctif : choisir `default_volume` pour une géométrie de type `Volume`.
+Fix: pick `default_volume` for a `Volume` geometry.
 
-## 0008 — hydra : enregistrer le renderer auprès d'Houdini
+## 0008 - hydra: register the renderer with Houdini
 
-Ajoute un `UsdRenderers.json` (label de menu, purpose par défaut, valeurs par
-défaut de husk), installé à côté du package `cycles.json` déjà généré. Houdini
-fusionne ce fichier le long du `HOUDINI_PATH`, que le package pointe sur
-l'installation.
+Adds a `UsdRenderers.json` (menu label, default purpose, husk defaults),
+installed next to the already generated `cycles.json` package. Houdini merges
+this file along the `HOUDINI_PATH`, whether the package points at the
+installation.
 
-Ajoute aussi un avertissement quand un réglage `cycles:integrator:<socket>`
-nomme un socket inexistant. L'ignorer en silence est un piège : un nom mal
-orthographié est indiscernable d'un réglage sans effet. À noter, husk avale les
-`TF_WARN` — l'avertissement remonte dans Solaris, pas en rendu batch.
+Also adds a warning when a `cycles:integrator:<socket>` setting names a
+nonexistent socket. Ignoring it silently is a trap: a misspelled name is
+indistinguishable from a setting that has no effect. Note that husk swallows
+`TF_WARN` -- the warning shows up in Solaris, not in batch rendering.
 
-## 0009 — hydra : ne pas fabriquer un contexte GL inutilisable
+## 0009 - hydra: do not build an unusable GL context
 
-`gl_context_create()` lit deux fois le contexte GL courant du thread appelant :
-via `wglGetCurrentDC()` pour le format de pixel, et pour `wglShareLists()`.
-Sans contexte courant, il produisait un contexte ni correctement formaté ni
-partagé avec celui de l'hôte, qui échouait à la première utilisation.
+`gl_context_create()` reads the calling thread's current GL context twice: via
+`wglGetCurrentDC()` for the pixel format, and for `wglShareLists()`. With no
+current context, it produced a context that was neither correctly formatted nor
+shared with the host's, and that failed on first use.
 
-Symptôme observé dans le viewport Solaris :
-`PathTraceDisplay implementation could not begin update`, suivi d'un crash.
+Symptom observed in the Solaris viewport:
+`PathTraceDisplay implementation could not begin update`, followed by a crash.
 
-Correctif : renoncer s'il n'y a pas de contexte courant, et détruire le
-contexte si le partage échoue — `gl_context_enable()` signale alors proprement
-l'échec.
+Fix: give up if there is no current context, and destroy the context if sharing
+fails -- `gl_context_enable()` then reports the failure cleanly.
 
-Ajoute aussi un réglage d'environnement **`CYCLES_DISPLAY_DRIVER=0`** pour
-désactiver complètement le display driver. Les hôtes diffèrent sur le moment et
-le thread où un contexte GL est courant ; le rendu passe alors par l'output
-driver, plus lent à rafraîchir mais sans aucune exigence GL.
+Also adds an environment setting **`CYCLES_DISPLAY_DRIVER=0`** to disable the
+display driver completely. Hosts differ on when and on which thread a GL context
+is current; rendering then goes through the output driver, slower to refresh but
+with no GL requirement at all.
 
-## 0010 — hydra : motion blur des transforms d'objet animées
+## 0010 - hydra: motion blur of animated object transforms
 
-Seule la caméra était échantillonnée sur l'obturateur ; la géométrie lisait une
-transform unique au temps zéro, donc tout ce qui bougeait rendait net.
+Only the camera was sampled over the shutter; geometry read a single transform
+at time zero, so everything that moved rendered sharp.
 
-Trois points à ne pas rater :
+Three points not to miss:
 
-1. **L'obturateur est lu depuis les réglages de rendu**, pas depuis le prim
-   caméra — ça évite de dépendre de l'ordre de synchronisation entre sprims et
-   rprims, qui n'est pas garanti.
-2. **Les échantillons doivent être régulièrement espacés.** `Object::motion_time()`
-   répartit les étapes linéairement sur [-1, 1] ; utiliser les temps
-   d'échantillonnage que remonte USD, qui sont irréguliers, flouterait le long
-   d'une trajectoire déformée.
-3. **`Integrator::motion_blur` doit être activé.** `Scene::need_motion()` ne
-   renvoie `MOTION_BLUR` que dans ce cas — sans lui, les transforms de motion
-   sont posées mais purement ignorées.
+1. **The shutter is read from the render settings**, not from the camera prim --
+   this avoids depending on the sync order between sprims and rprims, which is
+   not guaranteed.
+2. **The samples must be evenly spaced.** `Object::motion_time()` spreads the
+   steps linearly over [-1, 1]; using the sampling times that USD reports, which
+   are irregular, would blur along a distorted trajectory.
+3. **`Integrator::motion_blur` must be enabled.** `Scene::need_motion()` only
+   returns `MOTION_BLUR` in that case -- without it, the motion transforms are
+   set but simply ignored.
 
-La transform statique est prise sur l'échantillon médian pour que le flou soit
-centré sur l'obturateur.
+The static transform is taken from the middle sample so that the blur is
+centered on the shutter.
 
-Limite connue : c'est le flou de **transformation**. Le flou de déformation
-(points animés, ou attributs `velocities` / `accelerations` façon Karma) reste
-à faire — voir A8.
+Known limit: this is **transformation** blur. Deformation blur (animated
+points, or Karma-style `velocities` / `accelerations` attributes) remains to be
+done -- see A8.
 
-## 0011 — Crash de l'hôte : verrouillage déséquilibré du display driver
+## 0011 - Host crash: unbalanced display driver locking
 
-**C'est la cause du crash observé dans le viewport Solaris.**
+**This is the cause of the crash observed in the Solaris viewport.**
 
-`gl_context_enable()` verrouille `mutex_` quand il réussit, mais retourne
-`false` **sans le verrouiller** quand aucun contexte GL utilisable n'existe.
-Deux appelants ignoraient cette valeur de retour — `flush()` et
-`graphics_interop_activate()` — et `gl_context_disable()` faisait
-`mutex_.unlock()` inconditionnellement.
+`gl_context_enable()` locks `mutex_` when it succeeds, but returns `false`
+**without locking it** when no usable GL context exists. Two callers ignored
+that return value -- `flush()` and `graphics_interop_activate()` -- and
+`gl_context_disable()` called `mutex_.unlock()` unconditionally.
 
-Déverrouiller un mutex que le thread ne possède pas est un **comportement
-indéfini**, et fait tomber l'application.
+Unlocking a mutex that the thread does not own is **undefined behavior**, and
+brings the application down.
 
-Le point clé du diagnostic : ce chemin n'est atteint que lorsque le contexte
-manque, c'est-à-dire exactement quand le driver signale
-`PathTraceDisplay implementation could not begin update`. Le message d'erreur
-et le segfault qui le suivait n'étaient pas deux problèmes, mais **un seul**.
+The key point of the diagnosis: this path is only reached when the context is
+missing, that is, exactly when the driver reports
+`PathTraceDisplay implementation could not begin update`. The error message and
+the segfault that followed it were not two problems, but **one**.
 
-Correctif en trois points :
+Fix in three points:
 
-1. Suivre la possession du verrou pour que `gl_context_disable()` ne libère que
-   ce qui a effectivement été pris — robuste quelle que soit la discipline des
-   appelants.
-2. `flush()` renonce au lieu d'émettre des appels GL sans contexte.
-3. Créer le contexte partagé **dans le constructeur** plutôt qu'au premier
-   `draw()` : `draw()` a plusieurs sorties anticipées, le thread de rendu
-   pouvait donc atteindre `update_begin()` avant qu'aucun contexte n'existe.
+1. Track lock ownership so that `gl_context_disable()` releases only what was
+   actually taken -- robust whatever the callers' discipline.
+2. `flush()` gives up instead of issuing GL calls without a context.
+3. Create the shared context **in the constructor** rather than at the first
+   `draw()`: `draw()` has several early exits, so the render thread could reach
+   `update_begin()` before any context existed.
 
-## 0012 — Créer le contexte GL partagé avant les sorties anticipées de draw()
+## 0012 - Create the shared GL context before the early exits of draw()
 
-`draw()` renonce dans trois cas — binding d'AOV d'affichage absent, dimensions
-qui ne correspondent pas, render buffer inutilisé — et `gl_context_create()`
-était placé **après** les trois. Or le thread de rendu Cycles appelle
-`update_begin()` dès le démarrage de la session : tant qu'un `draw()` n'était
-pas allé jusqu'au bout, aucun contexte n'existait et chaque frame signalait
+`draw()` gives up in three cases -- missing display AOV binding, mismatched
+dimensions, unused render buffer -- and `gl_context_create()` was placed
+**after** all three. But the Cycles render thread calls `update_begin()` as soon
+as the session starts: until a `draw()` had gone all the way through, no context
+existed and every frame reported
 `PathTraceDisplay implementation could not begin update`.
 
-`draw()` s'exécute sur le thread où l'hôte rend son contexte GL courant, seul
-endroit où un contexte partageable peut être construit. Le faire depuis le
-constructeur du display driver **ne fonctionne pas** : le render pass n'est pas
-nécessairement construit sur ce thread — vérifié en pratique, l'erreur
-persistait.
+`draw()` runs on the thread where the host makes its GL context current, the
+only place where a shareable context can be built. Doing it from the display
+driver's constructor **does not work**: the render pass is not necessarily built
+on that thread -- verified in practice, the error persisted.
 
-Sans le patch 0011, cette erreur menait au crash. Avec lui, elle n'était plus
-que du bruit ; ce patch supprime le bruit.
+Without patch 0011, this error led to the crash. With it, it was only noise;
+this patch removes the noise.
 
-## 0013 — Crash à la destruction, et display driver désactivé par défaut
+## 0013 - Crash on teardown, and display driver disabled by default
 
-Le destructeur appelait `glDeleteBuffers()` **sans contexte GL courant**. Il
-s'exécute sur le thread où l'hôte détruit le delegate — changer de renderer
-dans le viewport, par exemple — qui n'a pas de contexte à lui : l'appel partait
-dans le vide et emportait l'application. `gl_context_dispose()` avait le même
-défaut, en tentant de détruire un contexte potentiellement encore courant.
+The destructor called `glDeleteBuffers()` **without a current GL context**. It
+runs on the thread where the host destroys the delegate -- switching renderer in
+the viewport, for example -- which has no context of its own: the call went off
+into the void and took the application down with it. `gl_context_dispose()` had
+the same flaw, trying to destroy a context that was potentially still current.
 
-Correctif : rendre notre contexte courant le temps des suppressions, et le
-délier avant destruction.
+Fix: make our context current for the duration of the deletions, and unbind it
+before destroying it.
 
-**Et le display driver est désormais désactivé par défaut.** Partager le
-contexte GL de l'hôte pour blitter les tuiles dans une texture a produit
-**quatre défauts distincts** dans le viewport d'Houdini :
+**And the display driver is now disabled by default.** Sharing the host's GL
+context to blit the tiles into a texture produced **four distinct defects** in
+Houdini's viewport:
 
-1. verrouillage déséquilibré → crash (0011)
-2. contexte créé trop tard → erreur à chaque frame (0012)
-3. pixels erronés — le viewport affichait quelque chose ressemblant à une passe
-   de profondeur plutôt qu'à la beauty
-4. appels GL sans contexte à la destruction → crash (celui-ci)
+1. unbalanced locking -> crash (0011)
+2. context created too late -> error on every frame (0012)
+3. wrong pixels -- the viewport displayed something resembling a depth pass
+   rather than the beauty
+4. GL calls without a context on teardown -> crash (this one)
 
-Le chemin par l'output driver est celui qu'emploie déjà tout rendu batch, et il
-est correct sur l'ensemble de la batterie de tests. Un rafraîchissement moins
-efficace vaut mieux qu'un viewport qui affiche faux et qui tombe.
+The output driver path is the one that every batch render already uses, and it
+is correct across the whole test battery. A less efficient refresh is better
+than a viewport that displays wrong and crashes.
 
-`CYCLES_DISPLAY_DRIVER=1` permet de le réactiver pour qui veut y travailler.
+`CYCLES_DISPLAY_DRIVER=1` re-enables it for anyone who wants to work on it.

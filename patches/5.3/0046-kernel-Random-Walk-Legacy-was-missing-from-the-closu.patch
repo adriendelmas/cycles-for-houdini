@@ -1,0 +1,45 @@
+From 41a12fc75d6b1a7f2cf422611b25ebc458074b01 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 3 Sep 2026 18:20:24 +0200
+Subject: [PATCH 046/141] kernel: Random Walk (Legacy) was missing from the
+ closure skip table
+
+Found while looking for the cause of the black subsurface render:
+svm_node_closure_bsdf_skip() lists the three other BSSRDF methods -- burley,
+random_walk, random_walk_skin -- but not random_walk_legacy, which fell into the
+default case and advanced the SVM stream by sizeof(SVMNodeSimpleBsdfData)
+instead of sizeof(SVMNodeBssrdfData), several uints too short.
+
+This function is not a rare case: it is called whenever a closure has to be
+skipped rather than evaluated -- zero mix weight, volume shading pass, a
+feature mask that is neither BSDF nor emission. Choosing Random Walk (Legacy)
+and reaching one of these paths made the rest of the SVM stream read garbage.
+
+A bug independent of Houdini, in the kernel itself -- present as is on
+Blender's main branch at the time of the rebase. One-line fix: add the missing
+case to the group of the other three.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+---
+ src/kernel/svm/closure.h | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/src/kernel/svm/closure.h b/src/kernel/svm/closure.h
+index 311bcf02..dd31a2bf 100644
+--- a/src/kernel/svm/closure.h
++++ b/src/kernel/svm/closure.h
+@@ -79,7 +79,14 @@ ccl_device_inline int svm_node_closure_bsdf_skip(int offset, const uint type)
+       break;
+     case CLOSURE_BSSRDF_BURLEY_ID:
+     case CLOSURE_BSSRDF_RANDOM_WALK_ID:
++    case CLOSURE_BSSRDF_RANDOM_WALK_LEGACY_ID:
+     case CLOSURE_BSSRDF_RANDOM_WALK_SKIN_ID:
++      /* Random Walk (Legacy) was missing here: it fell to the `default` case
++       * below and advanced `offset` by sizeof(SVMNodeSimpleBsdfData), several
++       * uints short of the actual SVMNodeBssrdfData it was written with. Every
++       * skip of that closure - a zero mix weight, a volume shading pass, any
++       * feature mask that is neither BSDF nor emission - misread everything
++       * the SVM stream held after it. */
+       offset += sizeof(SVMNodeBssrdfData) / sizeof(uint);
+       break;
+     default:

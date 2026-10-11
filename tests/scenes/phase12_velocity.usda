@@ -47,9 +47,9 @@ def Xform "world"
     }
 
 
-    # cube A VELOCITE : un seul echantillon de points, et un champ de vitesses.
-    # C'est ce qu'ecrit Houdini quand le nombre de points varie, seul cas ou
-    # l'interpolation entre echantillons n'a aucun sens.
+    # a cube WITH VELOCITIES: a single points sample and a velocity field.
+    # That is what Houdini writes when the point count varies, the one case
+    # where interpolating between samples makes no sense.
     def Mesh "velocity"
     {
         int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]

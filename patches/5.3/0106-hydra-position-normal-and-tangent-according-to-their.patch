@@ -1,0 +1,97 @@
+From 8da259d692d9ee31b872207eeb8126eec9626e9d Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 8 Oct 2026 18:32:39 +0200
+Subject: [PATCH 106/141] hydra: position, normal and tangent according to
+ their space
+
+The table had a single translation per geometric lookup node, whatever its
+`space`: the normal always came out in world space, whereas the MaterialX default
+is object space, and a position asked for in world space came out in object
+space. Measured against Karma on a sphere rotated by a quarter turn: gaps of
+0.57/1.71 on the normal, 1.93/0.61 on the position. The choice is now made on
+`space` (SpaceOf): object normal through the texture_coordinate node, world
+position through the geometry node, object tangent through a vector_transform.
+Remaining gaps of 5 to 9 % (K-18).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp | 52 ++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 52 insertions(+)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index 81d51896..249cf577 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -1057,6 +1057,28 @@ const UsdToCyclesMapping MtlxNormalLookup = {"geometry",
+ const UsdToCyclesMapping MtlxTangentLookup = {"geometry",
+                                               {{CyclesMaterialTokens->out, ustring("tangent")}}};
+ 
++/* The same three lookups in the other space (K-18). `space` defaults to
++ * "object" on all three nodedefs ("model" is the same to a renderer); the
++ * table entries above are the defaults' - object position, but a world
++ * normal and tangent, which was wrong for any rotated object. Cycles has the
++ * object-space normal on the texture coordinate node and the world position
++ * on the geometry node; an object-space tangent needs a transform. Picked by
++ * SpaceOf() when the mapping is chosen. */
++const UsdToCyclesMapping MtlxPositionWorld = {"geometry",
++                                              {{CyclesMaterialTokens->out, ustring("position")}}};
++const UsdToCyclesMapping MtlxNormalObject = {"texture_coordinate",
++                                             {{CyclesMaterialTokens->out, ustring("normal")}}};
++UsdToCyclesMapping MakeMtlxTangentObject()
++{
++  UsdToCyclesMapping m{"vector_transform", {{CyclesMaterialTokens->out, ustring("vector")}}};
++  m.setFixedValues({{ustring("transform_type"), "vector"},
++                    {ustring("convert_from"), "world"},
++                    {ustring("convert_to"), "object"}});
++  m.addHelper({"geo", "geometry", {{"Tangent", "Vector"}}, {}});
++  return m;
++}
++const UsdToCyclesMapping MtlxTangentObject = MakeMtlxTangentObject();
++
+ /* MaterialX `mix` is `mix(bg, fg, mix)`: the foreground wins as `mix` goes to
+  * one (stdlib_genglsl_impl.mtlx). Cycles' mix returns `b` at a factor of one,
+  * so the foreground is `b` and the background `a`. It was the other way round
+@@ -3844,6 +3866,22 @@ namespace {
+  * CompleteMaterialXDefaults (0099) writes every unwritten input, it is on
+  * every standard_surface, and the value has to speak. A written dispersion
+  * keeps the whole principled, the only node that renders it. */
++/* The `space` of a geometric lookup; MaterialX's default, "object", when
++ * unwritten. "model" is object space to a renderer. */
++std::string SpaceOf(HdMaterialNodeSchema nodeSchema)
++{
++  const auto ds = nodeSchema.GetParameters().Get(TfToken("space")).GetValue();
++  const VtValue value = ds ? ds->GetValue(0.0f) : VtValue();
++  std::string space = "object";
++  if (value.IsHolding<TfToken>()) {
++    space = value.UncheckedGet<TfToken>().GetString();
++  }
++  else if (value.IsHolding<std::string>()) {
++    space = value.UncheckedGet<std::string>();
++  }
++  return space == "world" ? "world" : "object";
++}
++
+ std::string ScatterModeOf(HdMaterialNodeSchema nodeSchema)
+ {
+   const auto ds = nodeSchema.GetParameters().Get(TfToken("scatter_mode")).GetValue();
+@@ -3940,6 +3978,20 @@ unique_ptr<ShaderGraph> HdCyclesMaterial::BuildShaderGraph(HdMaterialNetworkSche
+         }
+         /* A dielectric reflects, transmits or both by its scatter mode, "R"
+          * when unwritten (MakeMtlxDielectric). */
++        if (nodeDesc.mapping == &MtlxPosition || nodeDesc.mapping == &MtlxNormalLookup ||
++            nodeDesc.mapping == &MtlxTangentLookup)
++        {
++          const bool world = SpaceOf(nodeSchema) == "world";
++          if (nodeDesc.mapping == &MtlxPosition && world) {
++            nodeDesc.mapping = &MtlxPositionWorld;
++          }
++          else if (nodeDesc.mapping == &MtlxNormalLookup && !world) {
++            nodeDesc.mapping = &MtlxNormalObject;
++          }
++          else if (nodeDesc.mapping == &MtlxTangentLookup && !world) {
++            nodeDesc.mapping = &MtlxTangentObject;
++          }
++        }
+         if (nodeDesc.mapping == &MtlxDielectricRT) {
+           const std::string mode = ScatterModeOf(nodeSchema);
+           nodeDesc.mapping = mode == "T" ? &MtlxDielectricT :

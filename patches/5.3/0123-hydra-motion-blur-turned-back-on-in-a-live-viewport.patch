@@ -1,7 +1,7 @@
 From a4b151aa4708540881738ca264ed0466bd7341dd Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 9 Oct 2026 18:16:59 +0200
-Subject: [PATCH 123/140] hydra: motion blur turned back on in a live viewport
+Subject: [PATCH 123/141] hydra: motion blur turned back on in a live viewport
 
 With the renderer started while disableMotionBlur was on, unticking it
 restarted the render but moving objects stayed sharp until the frame

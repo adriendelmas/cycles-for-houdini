@@ -1,0 +1,480 @@
+From a5045611f0139ef141321164cce6152a07c38eeb Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Wed, 7 Oct 2026 16:46:27 +0200
+Subject: [PATCH 076/141] hydra: mix, fades, saturate, facingratio,
+ viewdirection, geomcolor: exact
+
+Six MaterialX translations rendered wrong without anything saying so, the bench's
+expected values having been derived from the code. Measured against the
+definitions of the MaterialX library shipped with Houdini:
+
+- `mix` is mix(bg, fg, mix): fg wins when mix is one. The background was on
+  `b`, which is what Cycles renders at a factor of one. Inverted. The seven
+  compositing operators (plus, minus, difference, burn, dodge, screen, overlay)
+  had the same orientation; `plus` is bg + mix*fg, Cycles adds a + fac*b: same
+  fix.
+- `saturate` is mix(luminance(in, lumacoeffs), in, amount), with the default
+  ACEScg coefficients, not an HSV saturation factor. (0.9 0.2 0.1) at 0.2:
+  (0.49 0.35 0.33) expected, (0.90 0.76 0.74) before.
+- `facingratio` is |dot(V, N)|, one facing the camera; layer_weight Facing gives
+  zero there. Dot product of Incoming and Normal, then absolute value. 0.034
+  before, 0.966 after on the bench plane.
+- `viewdirection` runs from the camera toward the surface; Incoming in the other
+  direction. Opposite.
+- `geomcolor` named no attribute: it reads `displayColor`.
+- `UsdUVTexture.sourceColorSpace`: raw, sRGB and auto written in the names
+  Cycles knows.
+
+The translator warnings now carry the material path, the node path that Hydra
+passes being only its name: this is what lets tools/mtlx_inputs.py attribute
+them. The render pass stopwatch separates the AOVs, the camera and the dicing
+camera, to name the call next time one of these items weighs four seconds.
+
+MaterialX bench: 11 cases, 0 problems; the five that failed before pass to
+within 2 % of the MaterialX value.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp    | 269 +++++++++++++++++++++++++++++++++-----
+ src/hydra/render_pass.cpp |  20 ++-
+ 2 files changed, 250 insertions(+), 39 deletions(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index 06437830..c94271ea 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -12,7 +12,12 @@
+ #endif
+ 
+ #include "util/log.h"
++#include "util/path.h"
++#include "util/string.h"
+ 
++#include <OpenImageIO/filesystem.h>
++
++#include <regex>
+ #include <vector>
+ #include "hydra/node_util.h"
+ #include "hydra/session.h"
+@@ -249,6 +254,25 @@ class UsdToCyclesTexture : public UsdToCyclesMapping {
+ 
+         return "extension";
+       }
++
++      /* UsdUVTexture names three colour spaces; Cycles resolves anything it
++       * does not know through OCIO, where `raw` and `sRGB` may not exist (the
++       * ACES config Houdini ships has neither), and silently reads the image
++       * as linear. Spell them the way Cycles does. */
++      static const TfToken sourceColorSpace("sourceColorSpace");
++      if (name == sourceColorSpace && value->CanCast<std::string>()) {
++        const std::string space = VtValue::Cast<std::string>(*value).Get<std::string>();
++        if (space == "raw") {
++          *value = VtValue(std::string("data"));
++        }
++        else if (space == "sRGB") {
++          *value = VtValue(std::string("__builtin_srgb"));
++        }
++        else if (space == "auto") {
++          *value = VtValue(std::string());
++        }
++        return "colorspace";
++      }
+     }
+ 
+     return UsdToCyclesMapping::parameterName(name, inputConnection, value);
+@@ -646,10 +670,15 @@ const UsdToCyclesMapping MtlxNormalLookup = {"geometry",
+ const UsdToCyclesMapping MtlxTangentLookup = {"geometry",
+                                               {{CyclesMaterialTokens->out, ustring("tangent")}}};
+ 
++/* MaterialX `mix` is `mix(bg, fg, mix)`: the foreground wins as `mix` goes to
++ * one (stdlib_genglsl_impl.mtlx). Cycles' mix returns `b` at a factor of one,
++ * so the foreground is `b` and the background `a`. It was the other way round
++ * for a long time, and nothing caught it because no bench case mixed two
++ * different colours. */
+ const UsdToCyclesMapping MtlxMix = {"mix_color",
+                                     {
+-                                        {TfToken("fg"), ustring("a")},
+-                                        {TfToken("bg"), ustring("b")},
++                                        {TfToken("fg"), ustring("b")},
++                                        {TfToken("bg"), ustring("a")},
+                                         {TfToken("mix"), ustring("fac")},
+                                         {CyclesMaterialTokens->out, ustring("result")},
+                                     }};
+@@ -725,13 +754,17 @@ UsdToCyclesMapping MakeMtlxOp(const char *const mode, const bool vector, const b
+   return mapping;
+ }
+ 
+-/* Compositing operators are one mix_color node with a blend mode. */
++/* Compositing operators are one mix_color node with a blend mode.
++ *
++ * Same orientation as `mix`: MaterialX `plus` is `mix * (bg + fg) + (1 - mix) * bg`,
++ * that is `bg + mix * fg`, and Cycles' additive blend is `a + fac * b` - so
++ * the background is `a` and the foreground `b`, for all seven operators. */
+ UsdToCyclesMapping MakeMtlxBlend(const char *const mode)
+ {
+   UsdToCyclesMapping mapping{"mix_color",
+                              {
+-                                 {TfToken("fg"), ustring("a")},
+-                                 {TfToken("bg"), ustring("b")},
++                                 {TfToken("fg"), ustring("b")},
++                                 {TfToken("bg"), ustring("a")},
+                                  {TfToken("in1"), ustring("a")},
+                                  {TfToken("in2"), ustring("b")},
+                                  {TfToken("mix"), ustring("fac")},
+@@ -1187,8 +1220,15 @@ const std::vector<MtlxEntry> &MtlxTable()
+           {TfToken("geomprop"), ustring("attribute")},
+           {CyclesMaterialTokens->out, ustring("fac")},
+       }};
+-  static const UsdToCyclesMapping kGeomColor = {"attribute",
+-                                                {{CyclesMaterialTokens->out, ustring("color")}}};
++  /* `geomcolor` reads the vertex colour. The mesh stores it under the primvar
++   * name Houdini and USD give it, `displayColor`; an attribute node with no
++   * name asks Cycles for an attribute called "" and reads zero. `index` (a
++   * second colour set) has no counterpart and is reported. */
++  static const UsdToCyclesMapping kGeomColor = [] {
++    UsdToCyclesMapping m{"attribute", {{CyclesMaterialTokens->out, ustring("color")}}};
++    m.setFixedValues({{ustring("attribute"), "displayColor"}});
++    return m;
++  }();
+   static const UsdToCyclesMapping kLayer = {
+       "mix_closure",
+       {
+@@ -1196,14 +1236,35 @@ const std::vector<MtlxEntry> &MtlxTable()
+           {TfToken("base"), ustring("closure2")},
+           {CyclesMaterialTokens->out, ustring("closure")},
+       }};
+-  static const UsdToCyclesMapping kFacingRatio = {
+-      "layer_weight",
+-      {
+-          {TfToken("viewdirection"), ustring("normal")},
+-          {CyclesMaterialTokens->out, ustring("facing")},
+-      }};
+-  static const UsdToCyclesMapping kViewDirection = {
+-      "geometry", {{CyclesMaterialTokens->out, ustring("incoming")}}};
++  /* `facingratio` (nprlib) is |dot(V, N)| with its defaults - `faceforward`
++   * on, `invert` off - so it is 1 where the surface faces the camera. Cycles'
++   * layer_weight "Facing" is 0 there: the earlier mapping was upside down. The
++   * geometry node's Incoming is the unit vector towards the camera, which makes
++   * the dot product exact. `invert` and the connected `viewdirection`/`normal`
++   * inputs are not carried and are reported when authored. */
++  static const UsdToCyclesMapping kFacingRatio = [] {
++    UsdToCyclesMapping m{"math", {{CyclesMaterialTokens->out, ustring("value")}}};
++    m.setFixedValues({{ustring("math_type"), "absolute"}});
++    m.addHelper({"dot",
++                 "vector_math",
++                 {{"Value", "Value1"}},
++                 {{ustring("math_type"), "dot_product"}}});
++    m.addHelper({"geo",
++                 "geometry",
++                 {{"Incoming", "dot:Vector1"}, {"Normal", "dot:Vector2"}},
++                 {}});
++    return m;
++  }();
++  /* MaterialX's `viewdirection` runs from the camera to the surface (the
++   * HwViewDirection node emits `normalize(P - viewPosition)`); Cycles'
++   * Incoming runs the other way. Negated, in world space - `space` is not
++   * carried. */
++  static const UsdToCyclesMapping kViewDirection = [] {
++    UsdToCyclesMapping m{"vector_math", {{CyclesMaterialTokens->out, ustring("vector")}}};
++    m.setFixedValues({{ustring("math_type"), "scale"}, {ustring("scale"), "-1"}});
++    m.addHelper({"geo", "geometry", {{"Incoming", "Vector1"}}, {}});
++    return m;
++  }();
+   static const UsdToCyclesMapping kBitangent = {
+       "geometry", {{CyclesMaterialTokens->out, ustring("tangent")}}};
+ 
+@@ -1414,15 +1475,30 @@ const std::vector<MtlxEntry> &MtlxTable()
+           {CyclesMaterialTokens->out, ustring("color")},
+       }};
+ 
+-  /* `saturate`. `lumacoeffs` reste sans correspondance : le noeud de Cycles a
+-   * Rec.709 en dur, comme pour `luminance`. */
+-  static const UsdToCyclesMapping kSaturate = {
+-      "hsv",
+-      {
+-          {TfToken("in"), ustring("color")},
+-          {TfToken("amount"), ustring("saturation")},
+-          {CyclesMaterialTokens->out, ustring("color")},
+-      }};
++  /* `saturate` is MaterialX's own nodegraph, `mix(luminance(in, lumacoeffs),
++   * in, amount)` (stdlib_ng.mtlx): untouched at an amount of one, its
++   * luminance at zero. The luminance is a dot product with the coefficients,
++   * ACEScg by default (0.2722, 0.6741, 0.0537) - not the Rec.709 weights
++   * rgb_to_bw bakes in - hence a vector_math dot product, which also takes a
++   * connected `lumacoeffs`. The previous mapping scaled HSV saturation, a
++   * different curve: (0.9, 0.2, 0.1) at 0.2 came out (0.90, 0.76, 0.74) where
++   * MaterialX gives (0.49, 0.35, 0.33). */
++  static const UsdToCyclesMapping kSaturate = [] {
++    UsdToCyclesMapping m{"mix_color",
++                         {
++                             {TfToken("in"), ustring("b;luma:vector1")},
++                             {TfToken("amount"), ustring("fac")},
++                             {TfToken("lumacoeffs"), ustring("luma:vector2")},
++                             {CyclesMaterialTokens->out, ustring("result")},
++                         }};
++    m.setFixedValues({{ustring("blend_type"), "mix"}, {ustring("fac"), "1"}});
++    m.addHelper({"luma",
++                 "vector_math",
++                 {{"Value", "A"}},
++                 {{ustring("math_type"), "dot_product"},
++                  {ustring("vector2"), "0.2722287,0.6740818,0.0536895"}}});
++    return m;
++  }();
+ 
+   /* `contrast` : (in - pivot) x amount + pivot, ecrit en une multiplication
+    * accumulee - in x amount + pivot x (1 - amount), qui est la meme chose. Les
+@@ -2096,6 +2172,7 @@ void HdCyclesMaterial::Sync(HdSceneDelegate *sceneDelegate,
+     if (network && !_nodes.empty() && !dirtyResource) {
+       UpdateParameters(network);
+       ApplyShaderSettings();
++      ResolveUdimTiles();
+       RefreshImageHandles();
+       BindHoudiniCopImages(lock.scene, sceneDelegate);
+       _shader->tag_update(lock.scene);
+@@ -2135,6 +2212,7 @@ void HdCyclesMaterial::Sync(HdSceneDelegate *sceneDelegate,
+        * choix a l'utilisateur, nous aussi. */
+       _shader->set_displacement_method(_hasDisplacement ? DISPLACE_BOTH : DISPLACE_BUMP);
+       ApplyShaderSettings();
++      ResolveUdimTiles();
+       BindHoudiniCopImages(lock.scene, sceneDelegate);
+ 
+       _shader->set_graph(std::move(graph));
+@@ -2387,13 +2465,17 @@ void HdCyclesMaterial::UpdateParameters(NodeDesc &nodeDesc,
+          * passaient par TF_WARN, que husk avale, et l'utilisateur ne voyait
+          * jamais qu'une valeur avait ete ignoree. */
+         if (inputMapping && inputMapping->hasParameterMapping(paramName)) {
++          /* The node path Hydra hands over is the bare node name; the material
++           * path is what tells two probes apart in a log. */
+           LOG_WARNING << "MaterialX: input '" << paramName.GetText() << "' on node '"
+-                      << nodePath.GetText() << "' maps to Cycles input '" << inputName
+-                      << "', which '" << target->name.c_str() << "' does not have; value ignored.";
++                      << GetId().GetText() << nodePath.GetText() << "' maps to Cycles input '"
++                      << inputName << "', which '" << target->name.c_str()
++                      << "' does not have; value ignored.";
+         }
+         else {
+           LOG_WARNING << "MaterialX: no input '" << paramName.GetText() << "' on Cycles node '"
+-                      << target->name.c_str() << "', value ignored.";
++                      << target->name.c_str() << "' at " << GetId().GetText()
++                      << nodePath.GetText() << ", value ignored.";
+         }
+         continue;
+       }
+@@ -2434,6 +2516,124 @@ void HdCyclesMaterial::UpdateParameters(NodeDesc &nodeDesc,
+  * Vider le handle quand un des sockets qui decrivent l'image a change suffit :
+  * Cycles la redemande a la compilation suivante, et son gestionnaire la
+  * reconnait si c'est la meme, donc rien n'est recharge pour rien. */
++/* Les textures UDIM.
++ *
++ * Cycles sait lire une serie de tuiles, mais il faut lui dire lesquelles : le
++ * socket `tiles` porte leurs numeros, et le gestionnaire d'images remplace
++ * `<UDIM>` ou `<UVTILE>` du nom de fichier par chacun d'eux. Blender remplit
++ * cette liste depuis son image ; ici personne ne le faisait, et un chemin en
++ * `<UDIM>` partait tel quel, a la recherche d'un fichier qui n'existe pas.
++ *
++ * Les tuiles se trouvent donc comme Blender les trouve : en listant le dossier.
++ * Houdini ecrit aussi `%(UDIM)d` et `%(UVTILE)d`, que Cycles ne connait pas ;
++ * ils sont ramenes aux deux jetons qu'il sait remplacer. */
++static bool FindUdimTiles(std::string &filename, array<int> &tiles)
++{
++  string_replace(filename, "%(UDIM)d", "<UDIM>");
++  string_replace(filename, "%(UVTILE)d", "<UVTILE>");
++
++  const bool isUdim = filename.find("<UDIM>") != std::string::npos;
++  const bool isUvTile = filename.find("<UVTILE>") != std::string::npos;
++  if (!isUdim && !isUvTile) {
++    return false;
++  }
++
++  const std::string token = isUdim ? "<UDIM>" : "<UVTILE>";
++  const std::string dirname = path_dirname(filename);
++  const std::string basename = path_filename(filename);
++  const size_t at = basename.find(token);
++  if (at == std::string::npos) {
++    LOG_WARNING << "UDIM token in a directory name is not supported: " << filename;
++    return true;
++  }
++
++  auto escape = [](const std::string &text) {
++    static const std::regex special(R"([.^$|()\[\]{}*+?\\])");
++    return std::regex_replace(text, special, R"(\$&)");
++  };
++  const std::string pattern = escape(basename.substr(0, at)) +
++                              (isUdim ? R"((\d{4}))" : R"(u(\d+)_v(\d+))") +
++                              escape(basename.substr(at + token.size()));
++#ifdef _WIN32
++  const std::regex matcher(pattern, std::regex::icase);
++#else
++  const std::regex matcher(pattern);
++#endif
++
++  std::vector<std::string> entries;
++  OIIO::Filesystem::get_directory_entries(dirname.empty() ? "." : dirname, entries);
++
++  std::set<int> found;
++  for (const std::string &entry : entries) {
++    std::smatch match;
++    const std::string name = path_filename(entry);
++    if (!std::regex_match(name, match, matcher)) {
++      continue;
++    }
++    if (isUdim) {
++      const int tile = std::stoi(match[1].str());
++      if (tile >= 1001) {
++        found.insert(tile);
++      }
++    }
++    else {
++      /* `u1_v1` est la tuile 1001 : u compte de 1 a 10, v par dizaines. */
++      const int u = std::stoi(match[1].str());
++      const int v = std::stoi(match[2].str());
++      if (u >= 1 && u <= 10 && v >= 1) {
++        found.insert(1001 + (u - 1) + (v - 1) * 10);
++      }
++    }
++  }
++
++  tiles.clear();
++  for (const int tile : found) {
++    tiles.push_back_slow(tile);
++  }
++  if (tiles.empty()) {
++    LOG_WARNING << "No UDIM tile found for " << filename;
++  }
++  return true;
++}
++
++void HdCyclesMaterial::ResolveUdimTiles()
++{
++  static const ustring kFilename("filename");
++  static const ustring kTiles("tiles");
++
++  auto resolve = [](Node *node) {
++    if (node == nullptr) {
++      return;
++    }
++    const SocketType *const filenameSocket = node->type->find_input(kFilename);
++    const SocketType *const tilesSocket = node->type->find_input(kTiles);
++    if (filenameSocket == nullptr || tilesSocket == nullptr ||
++        tilesSocket->type != SocketType::INT_ARRAY)
++    {
++      return;
++    }
++
++    std::string filename = node->get_string(*filenameSocket).string();
++    if (filename.empty() || string_startswith(filename, "op:")) {
++      return;
++    }
++
++    array<int> tiles;
++    if (FindUdimTiles(filename, tiles)) {
++      node->set(*filenameSocket, ustring(filename));
++    }
++    /* Un chemin qui n'a plus de jeton doit aussi perdre ses tuiles. */
++    node->set(*tilesSocket, tiles);
++  };
++
++  for (const auto &entry : _nodes) {
++    resolve(entry.second.node);
++    for (const auto &helper : entry.second.helperNodes) {
++      resolve(helper.second);
++    }
++  }
++}
++
+ void HdCyclesMaterial::RefreshImageHandles()
+ {
+   static const ustring kImageSockets[] = {ustring("filename"),
+@@ -2632,14 +2832,14 @@ void HdCyclesMaterial::UpdateConnections(NodeDesc &nodeDesc,
+          * so that the connection no longer vanishes in silence. */
+         const SocketType *const unlinkable = target->type->find_input(ustring(inputName));
+         if (unlinkable != nullptr) {
+-          LOG_WARNING << "Cycles does not take a connection on '" << nodePath.GetText() << "."
+-                      << dstSocketName.GetText()
++          LOG_WARNING << "Cycles does not take a connection on '" << GetId().GetText()
++                      << nodePath.GetText() << "." << dstSocketName.GetText()
+                       << "': the value has to be known when the scene is built, so the link is "
+                          "ignored and the parameter's own value is used.";
+         }
+         else {
+           LOG_WARNING << "No input '" << dstSocketName.GetText() << "' on Cycles node '"
+-                      << nodePath.GetText() << "', connection dropped.";
++                      << GetId().GetText() << nodePath.GetText() << "', connection dropped.";
+         }
+         continue;
+       }
+@@ -2652,7 +2852,8 @@ void HdCyclesMaterial::UpdateConnections(NodeDesc &nodeDesc,
+       if (!output) {
+         LOG_WARNING << "MaterialX: Cycles node '" << srcNodeIt->second.node->name.c_str()
+                     << "' has no output '" << outputName << "', connection to "
+-                    << nodePath.GetText() << "." << dstSocketName.GetText() << " dropped.";
++                    << GetId().GetText() << nodePath.GetText() << "." << dstSocketName.GetText()
++                    << " dropped.";
+         continue;
+       }
+ 
+@@ -2815,7 +3016,8 @@ unique_ptr<ShaderGraph> HdCyclesMaterial::BuildShaderGraph(HdMaterialNetworkSche
+         _nodes.emplace(nodePath, nodeDesc);
+       }
+       else {
+-        LOG_WARNING << "MaterialX: no Cycles node for '" << nodeTypeId << "' at " << nodePath.GetText()
++        LOG_WARNING << "MaterialX: no Cycles node for '" << nodeTypeId << "' at "
++                    << GetId().GetText() << nodePath.GetText()
+                     << ", it will be missing from the material.";
+         continue;
+       }
+@@ -2913,7 +3115,8 @@ unique_ptr<ShaderGraph> HdCyclesMaterial::BuildShaderGraph(HdMaterialNetworkSche
+ 
+     ShaderOutput *const output = outputName ? FindOutput(node, outputName) : nullptr;
+     if (!output) {
+-      LOG_WARNING << "Cycles node '" << node->name.c_str() << "' has no output '"
++      LOG_WARNING << "Cycles node '" << node->name.c_str() << "' at " << GetId().GetText()
++                  << upstreamNodePath.GetText() << " has no output '"
+                   << (outputName ? outputName : "<null>") << "' to drive the '"
+                   << terminalName.GetText() << "' terminal, terminal dropped.";
+       continue;
+diff --git a/src/hydra/render_pass.cpp b/src/hydra/render_pass.cpp
+index 1af4213f..133d47bb 100644
+--- a/src/hydra/render_pass.cpp
++++ b/src/hydra/render_pass.cpp
+@@ -161,6 +161,8 @@ void HdCyclesRenderPass::_Execute(const HdRenderPassStateSharedPtr &renderPassSt
+       }
+     }
+ 
++    const clock::time_point tAov = clock::now();
++
+     // Update camera dimensions to the viewport size
+     CameraUtilFraming framing = renderPassState->GetFraming();
+     if (!framing.IsValid()) {
+@@ -192,6 +194,7 @@ void HdCyclesRenderPass::_Execute(const HdRenderPassStateSharedPtr &renderPassSt
+                                           renderPassState->GetClipPlanes(),
+                                           scene->camera);
+     }
++    const clock::time_point tCameraApplied = clock::now();
+ 
+     /* La camera qui sert a decouper les surfaces subdivisees. Cycles la cree,
+      * mais personne ne la renseignait : elle restait a l'identite, une surface
+@@ -280,12 +283,17 @@ void HdCyclesRenderPass::_Execute(const HdRenderPassStateSharedPtr &renderPassSt
+     };
+     const double total = ms(tStart, tEnd);
+     if (total >= 50.0) {
+-      LOG_INFO << "Passe de rendu : " << total << " ms sur le fil de l'hote ("
+-               << "verrou " << ms(tStart, tLocked) << ", "
+-               << "veille COP " << ms(tLocked, tPolled) << ", "
+-               << "camera et AOV " << ms(tPolled, tCamera) << ", "
+-               << "relance " << ms(tCamera, tReset) << ", "
+-               << "demarrage " << ms(tReset, tEnd) << ").";
++      /* The camera bucket once measured four seconds on its own, in a stretch
++       * that holds nothing heavier than a few setters; it is split three ways
++       * here so the next such reading names the call. */
++      LOG_INFO << "Render pass: " << total << " ms on the host thread ("
++               << "lock " << ms(tStart, tLocked) << ", "
++               << "COP poll " << ms(tLocked, tPolled) << ", "
++               << "AOV bindings " << ms(tPolled, tAov) << ", "
++               << "camera " << ms(tAov, tCameraApplied) << ", "
++               << "dicing camera " << ms(tCameraApplied, tCamera) << ", "
++               << "reset " << ms(tCamera, tReset) << ", "
++               << "start " << ms(tReset, tEnd) << ").";
+     }
+   }
+ 

@@ -1,0 +1,119 @@
+From 799fd963670371c7c1f615398c5f7b5c1cd3f7af Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 8 Oct 2026 03:36:58 +0200
+Subject: [PATCH 094/141] hydra: the cryptomatte manifest in the image metadata
+
+husk wrote the CryptoObjectNN layers without the keys that the cryptomatte
+standard puts in the header - layer name, hash, conversion and manifest - and
+without them Nuke finds neither the layers nor the names of what is picked in
+them. husk copies the delegate's render statistics into the metadata:
+GetRenderStats() adds there cryptomatte/<id>/name, hash, conversion and manifest
+for each active type, built under the scene lock when it is free, otherwise the
+last ones built. Measured: the hash of the manifest of /world/a, read as a
+float, is the identifier of its pixels.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/render_delegate.cpp | 58 +++++++++++++++++++++++++++++------
+ src/hydra/render_delegate.h   |  5 +++
+ 2 files changed, 54 insertions(+), 9 deletions(-)
+
+diff --git a/src/hydra/render_delegate.cpp b/src/hydra/render_delegate.cpp
+index 5a7404aa..6c460293 100644
+--- a/src/hydra/render_delegate.cpp
++++ b/src/hydra/render_delegate.cpp
+@@ -21,6 +21,9 @@
+ #include "hydra/volume.h"
+ #include "scene/background.h"
+ #include "scene/film.h"
++#include "scene/object.h"
++#include "scene/shader.h"
++#include "util/murmurhash.h"
+ #include "scene/hair.h"
+ #include "scene/integrator.h"
+ #include "scene/mesh.h"
+@@ -435,15 +438,52 @@ VtDictionary HdCyclesDelegate::GetRenderStats() const
+     status += " | " + substatus;
+   }
+ 
+-  return {{"rendererName", VtValue("Cycles")},
+-          {"rendererVersion", VtValue(GfVec3i(0, 0, 0))},
+-          {"percentDone", VtValue(floor_to_int(fractionDone * 100))},
+-          {"fractionDone", VtValue(fractionDone)},
+-          {"loadClockTime", VtValue(totalTime - renderTime)},
+-          {"peakMemory", VtValue(stats.mem_peak)},
+-          {"totalClockTime", VtValue(totalTime)},
+-          {"totalMemory", VtValue(stats.mem_used)},
+-          {"renderProgressAnnotation", VtValue(status)}};
++  VtDictionary result = {{"rendererName", VtValue("Cycles")},
++                         {"rendererVersion", VtValue(GfVec3i(0, 0, 0))},
++                         {"percentDone", VtValue(floor_to_int(fractionDone * 100))},
++                         {"fractionDone", VtValue(fractionDone)},
++                         {"loadClockTime", VtValue(totalTime - renderTime)},
++                         {"peakMemory", VtValue(stats.mem_peak)},
++                         {"totalClockTime", VtValue(totalTime)},
++                         {"totalMemory", VtValue(stats.mem_used)},
++                         {"renderProgressAnnotation", VtValue(status)}};
++
++  /* husk writes these statistics into the images' metadata, which is where
++   * the cryptomatte standard keeps a layer's name, hash and manifest -
++   * without them Nuke's Cryptomatte cannot find the layers, or name what it
++   * picks. Built under the scene lock when it is free, else the last ones. */
++  Scene *const scene = _renderParam->session->scene.get();
++  std::unique_lock<thread_mutex> lock(scene->mutex, std::try_to_lock);
++  if (lock.owns_lock()) {
++    _cryptomatteMetadata.clear();
++    const int kinds = scene->film->get_cryptomatte_passes();
++    const std::pair<CryptomatteType, const char *> layers[] = {
++        {CRYPT_OBJECT, "CryptoObject"},
++        {CRYPT_MATERIAL, "CryptoMaterial"},
++        {CRYPT_ASSET, "CryptoAsset"}};
++    for (const auto &[kind, layer] : layers) {
++      if (!(kinds & kind)) {
++        continue;
++      }
++      const std::string manifest = kind == CRYPT_OBJECT ?
++                                       scene->object_manager->get_cryptomatte_objects(scene) :
++                                   kind == CRYPT_MATERIAL ?
++                                       scene->shader_manager->get_cryptomatte_materials(scene) :
++                                       scene->object_manager->get_cryptomatte_assets(scene);
++      const std::string id = string_printf(
++                                 "%08x", util_murmur_hash3(layer, int(strlen(layer)), 0))
++                                 .substr(0, 7);
++      const std::string prefix = "cryptomatte/" + id + "/";
++      _cryptomatteMetadata[prefix + "name"] = layer;
++      _cryptomatteMetadata[prefix + "hash"] = "MurmurHash3_32";
++      _cryptomatteMetadata[prefix + "conversion"] = "uint32_to_float32";
++      _cryptomatteMetadata[prefix + "manifest"] = manifest;
++    }
++  }
++  for (const auto &[key, value] : _cryptomatteMetadata) {
++    result[key] = VtValue(value);
++  }
++  return result;
+ }
+ 
+ HdAovDescriptor HdCyclesDelegate::GetDefaultAovDescriptor(const TfToken &name) const
+diff --git a/src/hydra/render_delegate.h b/src/hydra/render_delegate.h
+index 8a357ddb..49d293f4 100644
+--- a/src/hydra/render_delegate.h
++++ b/src/hydra/render_delegate.h
+@@ -5,6 +5,9 @@
+ 
+ #pragma once
+ 
++#include <map>
++#include <string>
++
+ #include "hydra/config.h"
+ 
+ #include <pxr/imaging/hd/renderDelegate.h>
+@@ -100,6 +103,8 @@ class HdCyclesDelegate final : public PXR_NS::HdRenderDelegate {
+  private:
+   PXR_NS::Hgi *_hgi = nullptr;
+   std::unique_ptr<HdCyclesSession> _renderParam;
++  /* The cryptomatte keys GetRenderStats() last built (render_delegate.cpp). */
++  mutable std::map<std::string, std::string> _cryptomatteMetadata;
+ };
+ 
+ HDCYCLES_NAMESPACE_CLOSE_SCOPE

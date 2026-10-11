@@ -28,7 +28,7 @@ def Xform "world"
         uniform token subdivisionScheme = "none"
     }
 
-    # --- subdivision Catmull-Clark : un cube doit devenir une sphere lisse ---
+    # --- Catmull-Clark subdivision: a cube must become a smooth sphere ---
     def Mesh "subdivcube" (
         prepend apiSchemas = ["MaterialBindingAPI"]
     )
@@ -43,7 +43,7 @@ def Xform "world"
         uniform token[] xformOpOrder = ["xformOp:transform"]
     }
 
-    # --- meme cube sans subdivision, pour comparaison directe ---
+    # --- the same cube without subdivision, for a direct comparison ---
     def Mesh "hardcube" (
         prepend apiSchemas = ["MaterialBindingAPI"]
     )

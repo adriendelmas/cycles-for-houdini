@@ -1,0 +1,231 @@
+From c268f9f07b15006b514035ab24097c39765ebfd7 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Wed, 7 Oct 2026 22:46:04 +0200
+Subject: [PATCH 084/141] hydra: subdivide Catmull-Clark meshes without
+ waiting for a display level
+
+The delegate only subdivided with refineLevel > 0 and took that number as the
+maximum level. That is Hydra's display complexity (husk --complexity, Solaris's
+display options), not a property of the mesh: in the viewport at low complexity,
+a subdivision surface rendered its cage, and elsewhere it capped at 3 levels
+regardless of the dicing rate. Karma subdivides without it. A catmullClark mesh
+is now always subdivided; the dicing rate decides the fineness, capped by a new
+cycles:max_subdivisions setting (12, like Blender) that changes without
+recompiling. A bilinear mesh gains nothing from it without displacement and
+keeps the old rule.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/mesh.cpp                            | 18 +++++++++----
+ src/hydra/render_delegate.cpp                 | 25 +++++++++++++++++++
+ src/hydra/render_delegate.h                   |  2 +-
+ .../resources/HdCyclesPluginGPU_Global.ds     | 22 ++++++++++++++++
+ src/hydra/resources/HdCyclesPlugin_Global.ds  | 22 ++++++++++++++++
+ src/hydra/session.h                           | 13 ++++++++++
+ 6 files changed, 96 insertions(+), 6 deletions(-)
+
+diff --git a/src/hydra/mesh.cpp b/src/hydra/mesh.cpp
+index 8e2acad3..864cd042 100644
+--- a/src/hydra/mesh.cpp
++++ b/src/hydra/mesh.cpp
+@@ -474,11 +474,17 @@ void HdCyclesMesh::PopulateTopology(HdSceneDelegate *sceneDelegate)
+   }
+   _topology.SetGeomSubsets(geomSubsetsList);
+ 
++  /* A Catmull-Clark mesh is a smooth surface whatever the viewport's display
++   * complexity says: `refineLevel` is that display hint (`husk --complexity`,
++   * Solaris' display options), not a property of the mesh, and Karma
++   * subdivides without it. How finely is the dicing rate's and the max
++   * subdivisions setting's call. A bilinear mesh only gains from dicing when
++   * it is displaced, so it keeps waiting for the hint. */
+   const TfToken subdivScheme = _topology.GetScheme();
+   if (subdivScheme == PxOsdOpenSubdivTokens->bilinear && _topology.GetRefineLevel() > 0) {
+     _geom->set_subdivision_type(Mesh::SUBDIVISION_LINEAR);
+   }
+-  else if (subdivScheme == PxOsdOpenSubdivTokens->catmullClark && _topology.GetRefineLevel() > 0) {
++  else if (subdivScheme == PxOsdOpenSubdivTokens->catmullClark) {
+     _geom->set_subdivision_type(Mesh::SUBDIVISION_CATMULL_CLARK);
+   }
+   else {
+@@ -698,15 +704,17 @@ void HdCyclesMesh::PopulateTopology(HdSceneDelegate *sceneDelegate)
+      * nombre de pixels par micropolygone. */
+     const auto *const cyclesDelegate = static_cast<const HdCyclesDelegate *>(
+         sceneDelegate->GetRenderIndex().GetRenderDelegate());
+-    const float dicingRate =
+-        static_cast<HdCyclesSession *>(cyclesDelegate->GetRenderParam())->GetDicingRate();
++    const auto *const session = static_cast<HdCyclesSession *>(
++        cyclesDelegate->GetRenderParam());
++    const float dicingRate = session->GetDicingRate();
++    const int maxLevel = session->GetMaxSubdivisions();
+     _geom->set_subd_dicing_rate(dicingRate);
+-    _geom->set_subd_max_level(_topology.GetRefineLevel());
++    _geom->set_subd_max_level(maxLevel);
+     /* Les deux nombres qui decident du cout d'une surface subdivisee. Sans eux
+      * au journal, un maillage decoupe en millions de triangles ne se voit que
+      * dans la memoire du peripherique, ou personne ne pense a regarder. */
+     LOG_INFO << "Subdivision " << GetId().GetText() << ": dicing rate " << dicingRate
+-             << " px, max level " << _topology.GetRefineLevel() << ".";
++             << " px, max level " << maxLevel << ".";
+     _geom->set_subd_objecttoworld(_instances[0]->get_tfm());
+   }
+ }
+diff --git a/src/hydra/render_delegate.cpp b/src/hydra/render_delegate.cpp
+index a5c93270..5c3d53c6 100644
+--- a/src/hydra/render_delegate.cpp
++++ b/src/hydra/render_delegate.cpp
+@@ -496,6 +496,11 @@ HdRenderSettingDescriptorList HdCyclesDelegate::GetRenderSettingDescriptors() co
+       HdCyclesRenderSettingsTokens->dicingRate,
+       VtValue(_renderParam->GetDicingRate()),
+   });
++  descriptors.push_back({
++      "Max Subdivisions",
++      HdCyclesRenderSettingsTokens->maxSubdivisions,
++      VtValue(_renderParam->GetMaxSubdivisions()),
++  });
+   descriptors.push_back({
+       "Curve Shape",
+       HdCyclesRenderSettingsTokens->curveShape,
+@@ -567,6 +572,23 @@ void HdCyclesDelegate::SetRenderSetting(const PXR_NS::TfToken &key, const PXR_NS
+       ++_settingsVersion;
+     }
+   }
++  else if (key == HdCyclesRenderSettingsTokens->maxSubdivisions) {
++    const int level = std::clamp(
++        VtValue::Cast<int>(value).GetWithDefault(_renderParam->GetMaxSubdivisions()), 0, 16);
++    if (level != _renderParam->GetMaxSubdivisions()) {
++      _renderParam->SetMaxSubdivisions(level);
++      for (Geometry *const geom : scene->geometry) {
++        if (geom->is_mesh()) {
++          Mesh *const mesh = static_cast<Mesh *>(geom);
++          if (mesh->get_subdivision_type() != Mesh::SUBDIVISION_NONE) {
++            mesh->set_subd_max_level(level);
++            mesh->tag_update(scene, true);
++          }
++        }
++      }
++      ++_settingsVersion;
++    }
++  }
+   else if (key == HdCyclesRenderSettingsTokens->curveShape) {
+     std::string shape = VtValue::Cast<std::string>(value).GetWithDefault(std::string());
+     if (shape.empty() && value.IsHolding<TfToken>()) {
+@@ -682,6 +704,9 @@ VtValue HdCyclesDelegate::GetRenderSetting(const TfToken &key) const
+   if (key == HdCyclesRenderSettingsTokens->curveShape) {
+     return VtValue(_renderParam->GetCurveShape());
+   }
++  if (key == HdCyclesRenderSettingsTokens->maxSubdivisions) {
++    return VtValue(_renderParam->GetMaxSubdivisions());
++  }
+   if (key == HdCyclesRenderSettingsTokens->threads) {
+     return VtValue(session->params.threads);
+   }
+diff --git a/src/hydra/render_delegate.h b/src/hydra/render_delegate.h
+index 4ebb4601..8a357ddb 100644
+--- a/src/hydra/render_delegate.h
++++ b/src/hydra/render_delegate.h
+@@ -20,7 +20,7 @@ HDCYCLES_NAMESPACE_OPEN_SCOPE
+     ((timeLimit, "cycles:time_limit")) \
+     ((samples, "cycles:samples")) \
+     ((sampleOffset, "cycles:sample_offset")) \
+-    ((dicingRate, "cycles:dicing_rate"))     ((curveShape, "cycles:curve_shape"))     ((shutterOpen, "shutter:open"))     ((shutterClose, "shutter:close"))     (disableMotionBlur)     (instantaneousShutter)
++    ((dicingRate, "cycles:dicing_rate"))     ((maxSubdivisions, "cycles:max_subdivisions"))     ((curveShape, "cycles:curve_shape"))     ((shutterOpen, "shutter:open"))     ((shutterClose, "shutter:close"))     (disableMotionBlur)     (instantaneousShutter)
+ // clang-format on
+ 
+ TF_DECLARE_PUBLIC_TOKENS(HdCyclesRenderSettingsTokens, HD_CYCLES_RENDER_SETTINGS_TOKENS);
+diff --git a/src/hydra/resources/HdCyclesPluginGPU_Global.ds b/src/hydra/resources/HdCyclesPluginGPU_Global.ds
+index 258b56f5..d876a63f 100644
+--- a/src/hydra/resources/HdCyclesPluginGPU_Global.ds
++++ b/src/hydra/resources/HdCyclesPluginGPU_Global.ds
+@@ -125,6 +125,28 @@
+         parmtag { "usdvaluetype" "float" }
+         disablewhen  R"({ xn__cyclesdicing_rate_control_shb == block } { xn__cyclesdicing_rate_control_shb == none })"
+     }
++    parm {
++        name    "xn__cyclesmax_subdivisions_control_xpb"
++        label   "Max Subdivisions"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'int')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__cyclesmax_subdivisions_wcb"
++        label   "Max Subdivisions"
++        type    integer
++        size    1
++        default { 12 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "int" }
++        disablewhen  R"({ xn__cyclesmax_subdivisions_control_xpb == block } { xn__cyclesmax_subdivisions_control_xpb == none })"
++    }
+     parm {
+         name    "xn__cyclescurve_shape_control_shb"
+         label   "Curve Shape"
+diff --git a/src/hydra/resources/HdCyclesPlugin_Global.ds b/src/hydra/resources/HdCyclesPlugin_Global.ds
+index 258b56f5..d876a63f 100644
+--- a/src/hydra/resources/HdCyclesPlugin_Global.ds
++++ b/src/hydra/resources/HdCyclesPlugin_Global.ds
+@@ -125,6 +125,28 @@
+         parmtag { "usdvaluetype" "float" }
+         disablewhen  R"({ xn__cyclesdicing_rate_control_shb == block } { xn__cyclesdicing_rate_control_shb == none })"
+     }
++    parm {
++        name    "xn__cyclesmax_subdivisions_control_xpb"
++        label   "Max Subdivisions"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'int')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__cyclesmax_subdivisions_wcb"
++        label   "Max Subdivisions"
++        type    integer
++        size    1
++        default { 12 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "int" }
++        disablewhen  R"({ xn__cyclesmax_subdivisions_control_xpb == block } { xn__cyclesmax_subdivisions_control_xpb == none })"
++    }
+     parm {
+         name    "xn__cyclescurve_shape_control_shb"
+         label   "Curve Shape"
+diff --git a/src/hydra/session.h b/src/hydra/session.h
+index 851de05e..864561e6 100644
+--- a/src/hydra/session.h
++++ b/src/hydra/session.h
+@@ -47,6 +47,18 @@ class HdCyclesSession final : public PXR_NS::HdRenderParam {
+    * les deux : 1 px au rendu, 8 px dans la vue, soit soixante-quatre fois
+    * moins de micropolygones pour naviguer. Range ici parce que le maillage le
+    * lit a la synchronisation, ou seule la session est a portee. */
++  /* The deepest a subdivided mesh may be split, whatever its dicing rate
++   * asks: Blender's default, 12. */
++  int GetMaxSubdivisions() const
++  {
++    return _maxSubdivisions;
++  }
++
++  void SetMaxSubdivisions(const int maxSubdivisions)
++  {
++    _maxSubdivisions = maxSubdivisions;
++  }
++
+   float GetDicingRate() const
+   {
+     return _dicingRate;
+@@ -148,6 +160,7 @@ class HdCyclesSession final : public PXR_NS::HdRenderParam {
+   const bool _ownCyclesSession;
+   double _stageMetersPerUnit = 0.01;
+   float _dicingRate = 1.0f;
++  int _maxSubdivisions = 12;
+   std::string _curveShape = "auto";
+   std::map<CCL_NS::Hair *, bool> _curveIsCubic;
+   float _shutterOpen = 0.0f;
