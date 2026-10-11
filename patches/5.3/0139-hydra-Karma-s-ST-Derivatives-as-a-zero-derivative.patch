@@ -1,0 +1,51 @@
+From c2a144263d0c03cb7c1f8c6cdcd12a397f557f6f Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Sun, 11 Oct 2026 02:38:48 +0200
+Subject: [PATCH 139/139] hydra: Karma's ST Derivatives as a zero derivative
+
+kma_stderiv (no MaterialX definition, native to Karma) appears in
+MaterialX networks made for Karma, typically to size an edge or a filter to
+the pixel. It had no translation: the node was dropped with a warning on
+every render, its consumers reading whatever default they had.
+
+Cycles' SVM has no derivative of an arbitrary input, so the node becomes a
+value node at 0 for its three outputs (derivS, derivT, derivScale): a
+shader built for it reads "no pixel size" and falls back on its own width,
+as MtlX Text falls back on its edge softness.
+
+Measured: MtlX Text renders in Cycles without the warning and matches its
+numpy reference (which has no derivative either) on every pixel away from
+edges; bench_mtlx 92 nodes, 0 problems; bench_hair 4 pairs, 0 problems.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index 8c1fce40..203dc23c 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -3008,6 +3008,22 @@ const UsdToCyclesMapping *FindMtlxVectorTwin(const std::string &nodeTypeId)
+  * node has no Cycles counterpart yet. */
+ const UsdToCyclesMapping *FindMtlxMapping(const std::string &nodeTypeId)
+ {
++  /* Karma's ST Derivatives (no MaterialX definition, native to Karma), found
++   * in MaterialX networks made for Karma - a shader that sizes an edge or a
++   * filter to the pixel. Cycles' SVM has no derivative of an arbitrary input:
++   * the outputs read 0, which such a shader takes for "no pixel size" and
++   * falls back on its own width, rather than losing the node and logging it
++   * on every render. */
++  if (nodeTypeId.starts_with("kma_stderiv_")) {
++    static const UsdToCyclesMapping kNoDerivative = {"value",
++                                                     {
++                                                         {TfToken("input"), ustring("")},
++                                                         {TfToken("derivS"), ustring("value")},
++                                                         {TfToken("derivT"), ustring("value")},
++                                                         {TfToken("derivScale"), ustring("value")},
++                                                     }};
++    return &kNoDerivative;
++  }
+   if (!nodeTypeId.starts_with("ND_")) {
+     return nullptr;
+   }

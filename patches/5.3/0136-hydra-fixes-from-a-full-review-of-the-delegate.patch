@@ -1,7 +1,7 @@
 From 6027b7f78079d0acfdc705536e59468d45deb73b Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sat, 10 Oct 2026 18:38:09 +0200
-Subject: [PATCH 136/136] hydra: fixes from a full review of the delegate
+Subject: [PATCH 136/139] hydra: fixes from a full review of the delegate
 
 Read end to end (19k lines, C++ and Python) and checked by scenes:
 

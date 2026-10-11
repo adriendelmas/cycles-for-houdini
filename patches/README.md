@@ -5,7 +5,7 @@ vivent sur une branche a nous, en commits separes par sujet. Cette serie en est
 l'export par `git format-patch`.
 
     patches/5.2/   38 correctifs, base 3b97e190 (branche release/5.2)
-    patches/5.3/   80 correctifs, base 8424ed53 (branche main)
+    patches/5.3/   139 correctifs, base 8424ed53 (branche main)
 
 `tools/bootstrap.py` fait le chemin complet -- clone, `git am`, compilation.
 A la main, sur un clone deja pose :
@@ -166,6 +166,9 @@ La plupart de ces correctifs sont independants d'Houdini et de cette machine --
 | `0134` | hydra: `anisotropic_vdf` : `scattering` en couleur du scatter_volume (densité 1), `absorption` en absorption_vdf ajoutée ; l'ancienne traduction lisait un `albedo` inexistant (K-92) |
 | `0135` | hydra: `layer` = dessus + base·(1−F) au lieu d'un mix qui comptait le Fresnel du dessus deux fois ; F à l'IOR du diélectrique du dessus (K-09) |
 | `0136` | hydra: relecture complète du délégué — alpha d'une couleur constante perdu sur un nœud Hydra (K-93), `base_weight` câblé d'OpenPBR compté deux fois (K-94), trois maillages malformés qui plantaient husk : primvar trop longue, pli de longueur 0, sous-ensemble hors bornes (K-95), lecture d'un dictionnaire Python libéré dans la capture COP (K-96) ; l'IOR d'un vernis pondéré atteint son `layer` |
+| `0137` | hydra: bibliothèques MaterialX d'un package lues aussi (`materialx/` sur HOUDINI_PATH, et `CYCLES_MATERIALX_SEARCH_PATH`) : un nodedef de studio défini en nodegraph (MtlX Text) se développe comme sous Karma |
+| `0138` | hydra: le développement d'un nodegraph laisse les valeurs par défaut à CompleteMaterialXDefaults, qui n'écrit que les entrées traduites (plus de `frameoffset` / `frameendaction` dans le log, deux lignes par image et par rendu) |
+| `0139` | hydra: `kma_stderiv` (ST Derivatives de Karma) traduit en dérivée nulle : le nœud n'est plus perdu avec un avertissement, le shader retombe sur sa propre largeur |
 
 ---
 

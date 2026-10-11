@@ -2514,3 +2514,26 @@ serait floutée de travers (la géométrie, elle, échantillonne à pas régulie
 ; une édition de matériau qui change la structure du graphe (un poids qui
 passe de 1 à 0,5, un `transmission` qui s'allume) sans passer par
 `DirtyResource` laisserait l'ancien graphe avec une erreur dans le log.
+
+0137-0139 (2026-10-11, nuit) : trois correctifs venus du nœud MtlX Text
+(`../mtlx_text`, un texte dessiné en shader MaterialX, nodegraph de 1064
+nœuds). Le nodedef vit dans un package : le délégué ne lisait que la
+bibliothèque de Houdini, donc rien ne se rendait (0137 : il lit aussi chaque
+`materialx/` de HOUDINI_PATH, comme Karma lit le `karmaNodeGraphs.json` du
+package, et `CYCLES_MATERIALX_SEARCH_PATH`). Le rendu marchait ensuite mais
+remplissait le log : 0138 laisse les valeurs par défaut du développement à
+CompleteMaterialXDefaults, qui ne garde que les entrées traduites (plus de
+`frameoffset` / `frameendaction` sur chaque image) ; 0139 traduit
+`kma_stderiv` en dérivée nulle au lieu de le perdre avec un avertissement.
+
+Deux limites de Cycles rencontrées en route, à garder en tête pour tout gros
+graphe MaterialX : une image à 4 canaux n'arrive que par sa couleur (l'alpha
+d'un `image_color4` lu par un `separate4` est perdu), et la pile SVM (255
+flottants) déborde si beaucoup de valeurs restent vivantes en même temps
+(« out of SVM stack space » : 42 primvars vector3 lues partout y suffisaient).
+
+Mesuré : MtlX Text rendu par Cycles égal à sa référence numpy sur tous les
+pixels hors des bords (0 / 375 875), 0 avertissement ; bench_mtlx 92 nœuds,
+0 problème ; bench_hair 4 paires, 0 problème. Construit (cible hdCycles,
+incrémental) et testé depuis un arbre de plugin temporaire ; **pas encore
+installé** : Houdini ouvert tenait la DLL.

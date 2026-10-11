@@ -1,0 +1,96 @@
+From 9b8902dde0ccbb33eccc34017e21e11df7f8e0a2 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Sun, 11 Oct 2026 02:38:48 +0200
+Subject: [PATCH 137/139] hydra: read custom MaterialX node libraries from
+ HOUDINI_PATH
+
+A nodedef shipped by a package - a studio's own node defined as a
+nodegraph, MtlX Text here - rendered nothing: the delegate read one
+`libraries` folder, Houdini's (or CYCLES_MATERIALX_LIBRARIES instead), so
+the node had no nodegraph to expand. Karma finds the same node through the
+karmaNodeGraphs.json the package puts on HOUDINI_PATH.
+
+The library now also loads every `materialx/` folder found on HOUDINI_PATH
+(a package's hpath is in the process environment) and every folder of
+CYCLES_MATERIALX_SEARCH_PATH, each holding `libraries/` or .mtlx files,
+imported after Houdini's.
+
+Measured: the MtlX Text node (1064 nodes, a multi-output nodegraph) renders
+in Cycles and matches its numpy reference on every pixel away from edges
+(0 of 375 875); bench_mtlx 92 nodes, 0 problems; bench_hair 4 pairs, 0
+problems.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/mtlx_expand.cpp | 58 +++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 58 insertions(+)
+
+diff --git a/src/hydra/mtlx_expand.cpp b/src/hydra/mtlx_expand.cpp
+index 8362e36f..67d716d2 100644
+--- a/src/hydra/mtlx_expand.cpp
++++ b/src/hydra/mtlx_expand.cpp
+@@ -63,6 +63,64 @@ mx::DocumentPtr Library()
+       LOG_WARNING << "MaterialX: could not read the node library: " << e.what()
+                   << ". Nodes defined as nodegraphs will not be expanded.";
+     }
++    /* Custom node libraries: a `materialx/` folder on HOUDINI_PATH, where Karma
++     * finds the matching karmaNodeGraphs.json, and every folder of
++     * CYCLES_MATERIALX_SEARCH_PATH; each holds `libraries/` or .mtlx files.
++     * Without them a nodedef from a package (a studio's own node) has no
++     * nodegraph to expand and renders nothing. */
++    {
++#ifdef _WIN32
++      const char *separators = ";";
++#else
++      const char *separators = ":;";
++#endif
++      std::vector<std::string> folders;
++      auto split = [&](const std::string &list, const std::string &suffix) {
++        size_t start = 0;
++        while (start <= list.size()) {
++          const size_t end = list.find_first_of(separators, start);
++          const std::string item = list.substr(start, end == std::string::npos ? std::string::npos : end - start);
++          if (!item.empty() && item != "&" && item[0] != '@' && item[0] != '^') {
++            folders.push_back(item + suffix);
++          }
++          if (end == std::string::npos) {
++            break;
++          }
++          start = end + 1;
++        }
++      };
++      split(TfGetenv("HOUDINI_PATH"), "/materialx");
++      split(TfGetenv("CYCLES_MATERIALX_SEARCH_PATH"), "");
++      std::set<std::string> seen;
++      if (!hfs.empty()) {
++        seen.insert(mx::FilePath(hfs + "/houdini/materialx/libraries").asString());
++      }
++      for (const std::string &folder : folders) {
++        mx::FilePath dir(folder);
++        if (!dir.isDirectory()) {
++          continue;
++        }
++        if ((dir / "libraries").isDirectory()) {
++          dir = dir / "libraries";
++        }
++        if (!seen.insert(dir.asString()).second) {
++          continue;
++        }
++        try {
++          mx::DocumentPtr custom = mx::createDocument();
++          mx::loadLibraries({}, mx::FileSearchPath(dir), custom);
++          if (!custom->getNodeDefs().empty()) {
++            doc->importLibrary(custom);
++            LOG_INFO << "MaterialX: " << custom->getNodeDefs().size() << " custom nodedefs from "
++                     << dir.asString();
++          }
++        }
++        catch (const std::exception &e) {
++          LOG_WARNING << "MaterialX: could not read the node library " << dir.asString() << ": "
++                      << e.what();
++        }
++      }
++    }
+     /* The delegate's own nodegraphs, for nodedefs the library implements in
+      * shading languages only (mtlx_nodegraphs.h). */
+     try {

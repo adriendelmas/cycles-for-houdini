@@ -26,7 +26,8 @@ where the work went.
   does not hold but the MaterialX library defines as nodegraphs - `switch`,
   `ramp4`, `hsvadjust`, `colorcorrect`, every `hmtlx*` node of Houdini - are
   expanded into their inner nodes at translation time, read from Houdini's
-  own library.
+  own library - and so are a package's own nodes, from any `materialx/`
+  folder on HOUDINI_PATH, where Karma finds them too.
 - **Copernicus COP textures read live**, without a round trip through disk.
   Under husk (a USD Render ROP, a farm) there is no node graph to cook: every
   new USD Render ROP gets the **Cook COP Textures to Files** output processor,

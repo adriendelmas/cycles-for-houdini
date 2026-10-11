@@ -1,7 +1,7 @@
 From 97c8f5bf99b04c58f7e6a491e31cd6f9a4d29f4f Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 9 Oct 2026 19:37:52 +0200
-Subject: [PATCH 125/136] hydra: alpha compositing nodes, hextilednormalmap,
+Subject: [PATCH 125/139] hydra: alpha compositing nodes, hextilednormalmap,
  volume primvars
 
 MaterialX's compositing group (over, in, out, mask, matte, disjointover,

@@ -166,6 +166,8 @@ surface models (`surface_audit.py`, K-63). On 2026-10-07 the numbers were
 | Alpha through colour4 nodes | ✅ | Float twins of the colour4 nodes on the way (K-17, 0128) |
 | Matrices, `time`/`frame` | ❌ | No Cycles equivalent (section E of KNOWN_ISSUES) |
 | `colorcorrect`, `hsvadjust`, `curveadjust`, triplanar, Houdini `hmtlx*`, 2D patterns, `blur`, `hextilednormalmap` | ✅ | Through their nodegraphs (`mtlx_coverage.py`); `hextilednormalmap` from the delegate's own (K-84) |
+| Custom nodes of a package (nodedef + nodegraph in `materialx/` on HOUDINI_PATH) | ✅ | Expanded like the library's (0137); MtlX Text matches its numpy reference, 0 warnings (0138, 0139) |
+| `kma_stderiv` (Karma ST Derivatives) | ⚠️ | Zero derivative: Cycles' SVM has no derivative of an input (0139) |
 
 ## Houdini integration
 

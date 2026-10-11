@@ -1,0 +1,52 @@
+From 502b3a68475f40644fa4a52c0b6be41482e34070 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Sun, 11 Oct 2026 02:38:48 +0200
+Subject: [PATCH 138/139] hydra: leave a nodegraph's value defaults to
+ CompleteMaterialXDefaults
+
+Expanding a nodegraph wrote every input its inner nodes left unset with
+the nodedef's default, before CompleteMaterialXDefaults - which writes the
+same defaults, but only for the inputs a mapping takes. An inner `image`
+thus sent `frameoffset` and `frameendaction` to a Cycles node that has
+neither: two log lines per image per render (dozens for MtlX Text).
+
+The expansion now binds only defaults that read a geometric property (a
+texcoord reading UV0), which need a node made there; value defaults come
+from CompleteMaterialXDefaults, unchanged in what reaches the Cycles nodes.
+
+Measured: MtlX Text renders with 0 warnings (were 13 to 40 per material);
+bench_mtlx 92 nodes, 0 problems, the exp_* (expanded) cases included;
+bench_hair 4 pairs, 0 problems.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/mtlx_expand.cpp | 14 +++++++++-----
+ 1 file changed, 9 insertions(+), 5 deletions(-)
+
+diff --git a/src/hydra/mtlx_expand.cpp b/src/hydra/mtlx_expand.cpp
+index 67d716d2..d990edbd 100644
+--- a/src/hydra/mtlx_expand.cpp
++++ b/src/hydra/mtlx_expand.cpp
+@@ -571,13 +571,17 @@ bool ExpandNodegraph(Network &net,
+         }
+       }
+     }
+-    /* Every input the nodegraph leaves unset takes the inner nodedef's own
+-     * default, authored: the mapping then receives what MaterialX means, not
+-     * what the Cycles node happens to default to - `modulo` divides by 1 in
+-     * MaterialX, by 0.5 on an untouched math node. */
++    /* An input the nodegraph leaves unset and whose nodedef reads a geometric
++     * property (a texcoord reading UV0) gets that property's node here. Value
++     * defaults are left to CompleteMaterialXDefaults, which runs on the
++     * expanded network and writes only the inputs a mapping takes: writing
++     * them all here sent an image's `frameoffset` and `frameendaction` to a
++     * Cycles node that has neither, two log lines per image per render. */
+     for (const mx::InputPtr &def : innerDef->getActiveInputs()) {
+       const TfToken innerInput(def->getName());
+-      if (inner.params.count(innerInput) || inner.conns.count(innerInput)) {
++      if (inner.params.count(innerInput) || inner.conns.count(innerInput) ||
++          def->getDefaultGeomPropString().empty())
++      {
+         continue;
+       }
+       BindDefault(inner, innerInput, def, name, made);
