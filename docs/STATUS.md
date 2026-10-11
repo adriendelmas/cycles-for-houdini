@@ -2547,5 +2547,5 @@ constante (toutes les sorties fausses sur 100 % des pixels). Ça touchait tout
 sous-réseau de matériau Houdini, pas seulement ce nœud. Après : test_render 0
 pixel hors référence, test_lop 0, test_features ≤ 0,09 % ; bench_mtlx 93 cas
 (nouveau `nodegraph_nested`, en échec avant), 0 problème ; bench_hair 4
-paires, 0 problème. Construit et testé depuis l'arbre de plugin temporaire ;
-**pas encore installé** (Houdini ouvert).
+paires, 0 problème. Installé le 2026-10-11 à 04:31 (DLL chargée renommée
+`hdCycles.dll.old-2026-10-11`) ; test_render de MtlX Text sur l'install : 0 pixel faux.
