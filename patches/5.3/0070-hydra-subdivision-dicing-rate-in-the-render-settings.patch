@@ -1,4 +1,4 @@
-From 31e205e3c168995db09d321bc21a7298b56a2581 Mon Sep 17 00:00:00 2001
+From a30dd8e0fcb2c59a618c89b74beda577534770dd Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 9 Sep 2026 22:24:33 +0200
 Subject: [PATCH 070/141] hydra: subdivision dicing rate in the render settings

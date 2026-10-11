@@ -1,4 +1,4 @@
-From df0965d90e44c9c0c96bb77165b64efddebdd7fa Mon Sep 17 00:00:00 2001
+From 9713d95aa3d239ffe3d571660efd9b3146a57563 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 03:16:40 +0200
 Subject: [PATCH 092/141] hydra: light groups and their passes

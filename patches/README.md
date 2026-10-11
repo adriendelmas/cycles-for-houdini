@@ -15,11 +15,6 @@ a clone that is already in place:
 Regenerate the series after a new change:
 
     cd external/cycles-53 && git format-patch --no-signature -o ../../patches/5.3 8424ed53..HEAD
-    python tools/patch_messages.py
-
-The second step rewrites, in the patch files, the headers of the commits whose
-message was written in French (`tools/patch_messages.json`); the worktree's
-history itself is left alone.
 
 The two series differ little. The move to 5.3 replayed 37 patches out of 38:
 `hydra: never leave a Shader without a graph` is no longer needed, upstream

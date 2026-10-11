@@ -1,4 +1,4 @@
-From a4b151aa4708540881738ca264ed0466bd7341dd Mon Sep 17 00:00:00 2001
+From fe2862d7ece8db26dde0653af4d5475bbfcc47f7 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 9 Oct 2026 18:16:59 +0200
 Subject: [PATCH 123/141] hydra: motion blur turned back on in a live viewport

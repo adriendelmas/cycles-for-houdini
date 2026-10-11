@@ -1,4 +1,4 @@
-From 5207cd12f15cc2d75241cb74b2e2a3cce2d83fc5 Mon Sep 17 00:00:00 2001
+From b204dbd031318c043c7fa365930c42f7dd648925 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 14:38:28 +0200
 Subject: [PATCH 043/141] hydra: velocity blur, for geometry whose point count

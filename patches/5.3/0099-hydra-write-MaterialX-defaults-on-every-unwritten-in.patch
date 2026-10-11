@@ -1,4 +1,4 @@
-From c1a573b382a629ebf5f950d6c1d720b83d0baa7d Mon Sep 17 00:00:00 2001
+From 9b92ef52fc1802ea6d64fdfe2541a2b91958f2bf Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 05:40:14 +0200
 Subject: [PATCH 099/141] hydra: write MaterialX defaults on every unwritten

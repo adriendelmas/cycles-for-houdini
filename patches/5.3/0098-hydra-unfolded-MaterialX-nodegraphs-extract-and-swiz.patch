@@ -1,4 +1,4 @@
-From 7d0925ea72d9eedb44e8e731d012ccd4bf136802 Mon Sep 17 00:00:00 2001
+From f47a4c7b9f118fb7c9195c8283ec4f985b818a0c Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 05:31:56 +0200
 Subject: [PATCH 098/141] hydra: unfolded MaterialX nodegraphs, extract and

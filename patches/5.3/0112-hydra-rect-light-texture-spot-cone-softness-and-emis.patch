@@ -1,4 +1,4 @@
-From 6649da27e1032a6748cbb8df06d5a261cdde126d Mon Sep 17 00:00:00 2001
+From b265d1c3dc15ba4b230a8c7a0b49496485455437 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 23:29:29 +0200
 Subject: [PATCH 112/141] hydra: rect light texture, spot cone softness and

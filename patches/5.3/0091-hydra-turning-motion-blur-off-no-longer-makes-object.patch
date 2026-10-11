@@ -1,4 +1,4 @@
-From b1ff3fa735a01e477131408f92b752fbb4e795f9 Mon Sep 17 00:00:00 2001
+From 46f3a68dbfbdd4b2a688173d6477b71062500db5 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 02:59:29 +0200
 Subject: [PATCH 091/141] hydra: turning motion blur off no longer makes

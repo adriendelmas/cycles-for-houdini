@@ -1,4 +1,4 @@
-From 37fae6a53f6433ac9207b25b2ada2d13654309a4 Mon Sep 17 00:00:00 2001
+From e79370e16d9acc7a42e65e6a5c9eb4e3dbb294b5 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 14:24:47 +0200
 Subject: [PATCH 042/141] the Cycles Material Builder was in no repository

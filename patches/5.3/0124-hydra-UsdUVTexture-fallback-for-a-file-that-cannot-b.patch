@@ -1,4 +1,4 @@
-From c0f2f2ed3b0552dd6a23ec001bedb48db0940308 Mon Sep 17 00:00:00 2001
+From 919bdcb4e08e16dc16ad3f046da0d4522eb09f35 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 9 Oct 2026 18:51:10 +0200
 Subject: [PATCH 124/141] hydra: UsdUVTexture fallback for a file that cannot

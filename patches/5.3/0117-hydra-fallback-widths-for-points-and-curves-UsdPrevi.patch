@@ -1,4 +1,4 @@
-From 57db8c73b1cb75196ed66d6dafb7e1c78f7ad643 Mon Sep 17 00:00:00 2001
+From 94950fba9032315ce5ab31de3340ca2778adc3c2 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 9 Oct 2026 02:02:02 +0200
 Subject: [PATCH 117/141] hydra: fallback widths for points and curves,

@@ -1,4 +1,4 @@
-From 048cc6f67ab514d5b69e8e5f47ae2dbc61ced0ce Mon Sep 17 00:00:00 2001
+From f0381f03a40dc8ceea6cf01fe41abd139a30f027 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 9 Oct 2026 16:48:14 +0200
 Subject: [PATCH 122/141] hydra: per-vertex displayColor on prims without a

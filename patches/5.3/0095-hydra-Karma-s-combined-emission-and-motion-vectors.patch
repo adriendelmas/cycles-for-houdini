@@ -1,4 +1,4 @@
-From 455d6653b2c31c4f9225db486e0534531b9ecb4b Mon Sep 17 00:00:00 2001
+From 8d8766264f3af7c950868e23e1b9b13591d0970a Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 03:41:04 +0200
 Subject: [PATCH 095/141] hydra: Karma's combined emission and motion vectors

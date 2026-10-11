@@ -1,4 +1,4 @@
-From e934a766142ab432b9a8fbb5b006641b9e5d2349 Mon Sep 17 00:00:00 2001
+From 8e1f194416f1ec0a88925e6ee47dedb11c09cddd Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 22:46:04 +0200
 Subject: [PATCH 083/141] hydra: USD implicit surfaces rendered, as fine meshes

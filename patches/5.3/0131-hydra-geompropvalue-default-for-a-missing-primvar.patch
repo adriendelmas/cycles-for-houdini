@@ -1,4 +1,4 @@
-From ad59f7d5ac9a0f6806fa84a30578515644948ca7 Mon Sep 17 00:00:00 2001
+From 40c1781afd14e623b20ec5d340959fadbef8dfc9 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sat, 10 Oct 2026 10:03:08 +0200
 Subject: [PATCH 131/141] hydra: geompropvalue default for a missing primvar

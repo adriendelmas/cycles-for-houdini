@@ -1,8 +1,11 @@
-From e322bb798505811fd48e2e6a093c50a03bc057eb Mon Sep 17 00:00:00 2001
+From e45c19bc65a9c76d74eff8867ff9849e96065f9a Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sat, 5 Sep 2026 01:13:51 +0200
 Subject: [PATCH 065/141] hydra: a transmission lobe of its own, for MaterialX
  color and roughness
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
 
 `transmission_color` went through a `light_path`: the color was only applied on
 rays already transmitted, so not on the first crossing, the one we see.

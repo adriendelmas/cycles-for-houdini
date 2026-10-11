@@ -1,4 +1,4 @@
-From eff52496276e0a07727bafab1ad9c666c28836f2 Mon Sep 17 00:00:00 2001
+From be02ee87d235c83aaaeacb7adde24924c934464c Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 20:14:25 +0200
 Subject: [PATCH 108/141] hydra: translations fixed by comparing with Karma

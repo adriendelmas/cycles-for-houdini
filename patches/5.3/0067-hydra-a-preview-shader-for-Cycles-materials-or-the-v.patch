@@ -1,4 +1,4 @@
-From 960037f8115acfff2e2f9f324f2b34e9f42a0e2d Mon Sep 17 00:00:00 2001
+From 3bd14cb2a09e4ff75f09fee3e6269176a7695860 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 9 Sep 2026 17:24:54 +0200
 Subject: [PATCH 067/141] hydra: a preview shader for Cycles materials, or the

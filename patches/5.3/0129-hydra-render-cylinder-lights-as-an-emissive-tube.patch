@@ -1,4 +1,4 @@
-From 49efe1a5e8349442c750b6d3af5ddc6ea1e0cece Mon Sep 17 00:00:00 2001
+From e2aa235eb3e2f9a9d728796435e225cf3da3511d Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sat, 10 Oct 2026 09:22:54 +0200
 Subject: [PATCH 129/141] hydra: render cylinder lights as an emissive tube

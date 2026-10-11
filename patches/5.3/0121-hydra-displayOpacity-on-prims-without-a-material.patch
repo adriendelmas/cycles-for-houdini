@@ -1,4 +1,4 @@
-From 081cf6c4d933c1a28153d159cb92ca6a91e676e3 Mon Sep 17 00:00:00 2001
+From e1102e6ecf0b6dbd4bffafe8dc3bc4a54948b26a Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 9 Oct 2026 16:18:38 +0200
 Subject: [PATCH 121/141] hydra: displayOpacity on prims without a material

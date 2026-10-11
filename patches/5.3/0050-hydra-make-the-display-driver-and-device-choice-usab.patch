@@ -1,4 +1,4 @@
-From 7296f68b88c471023f0b24f32b71f9f2fbd2c5a2 Mon Sep 17 00:00:00 2001
+From 9c20a06528ae70ed74eb51834b5fe358315e30bb Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 23:19:44 +0200
 Subject: [PATCH 050/141] hydra: make the display driver and device choice

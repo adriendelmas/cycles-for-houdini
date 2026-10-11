@@ -1,4 +1,4 @@
-From 57e711efb582263b44f380fdd3024252c66b2a19 Mon Sep 17 00:00:00 2001
+From 2d7ba952772a8b61dfa2d3136840696bd8aa19aa Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 9 Oct 2026 03:41:10 +0200
 Subject: [PATCH 119/141] hydra: crop windows and pixel aspect under husk

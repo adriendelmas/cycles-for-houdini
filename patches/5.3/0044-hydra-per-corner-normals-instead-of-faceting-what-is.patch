@@ -1,4 +1,4 @@
-From 0d51aeebf8118fe33ecb1769007806ae65cd3da4 Mon Sep 17 00:00:00 2001
+From 9fb74d708862ae05ea7c1ba7ce49463020998719 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 14:51:26 +0200
 Subject: [PATCH 044/141] hydra: per-corner normals, instead of faceting what

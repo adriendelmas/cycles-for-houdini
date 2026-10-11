@@ -1,4 +1,4 @@
-From 68fb30de9fa6d6ae7a1025be33a25c09d59779ba Mon Sep 17 00:00:00 2001
+From 50ddc7f56bf5527e070c86caabb31306e0500962 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 09:12:31 +0200
 Subject: [PATCH 102/141] hydra: check sizes before reading, no segfault on an

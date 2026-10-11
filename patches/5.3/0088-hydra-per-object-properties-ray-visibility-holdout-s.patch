@@ -1,4 +1,4 @@
-From 351a5324b5c4829c649a19b9379b3de21944e290 Mon Sep 17 00:00:00 2001
+From b1cf56b967f4afac77ace141ce55afac7f96306a Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 00:26:50 +0200
 Subject: [PATCH 088/141] hydra: per-object properties - ray visibility,

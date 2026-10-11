@@ -1,4 +1,4 @@
-From 6eebb4e1fe1a32dc01ced67a14e31248d654a685 Mon Sep 17 00:00:00 2001
+From 71e273d7822e8919ee099cd60920713b6b79ae9e Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 00:50:49 +0200
 Subject: [PATCH 089/141] hydra: light linking and shadow linking

@@ -1,4 +1,4 @@
-From c3fe901ba8365451fa3357a0d050dfd37aeb8eb5 Mon Sep 17 00:00:00 2001
+From 0e92aa11e6b9ff44e97546b60ce0201e2dbf37bc Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sat, 10 Oct 2026 10:40:11 +0200
 Subject: [PATCH 132/141] hydra: anisotropic roughness on conductor and

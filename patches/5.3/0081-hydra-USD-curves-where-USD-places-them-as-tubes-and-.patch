@@ -1,4 +1,4 @@
-From f396c303de3458d572f307b980ec104d60b265f4 Mon Sep 17 00:00:00 2001
+From f2427989de2ac8d1ae857626fe42bb057eff746c Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 21:52:48 +0200
 Subject: [PATCH 081/141] hydra: USD curves where USD places them, as tubes,

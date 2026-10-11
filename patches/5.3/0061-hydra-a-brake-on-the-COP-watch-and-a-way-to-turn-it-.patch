@@ -1,8 +1,8 @@
-From 472138d6786835cc7693e07d2a949d07e56b6e11 Mon Sep 17 00:00:00 2001
+From f06401c04cd0fb43f964f2a150cfd64fe7268eb1 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 4 Sep 2026 21:09:33 +0200
-Subject: [PATCH 061/141] hydra: a brake on the COP watch, and a way to turn
- it off
+Subject: [PATCH 061/141] hydra: a brake on the COP watch, and a way to turn it
+ off
 
 The watch re-read as soon as a COP declared itself as needing to cook. Dragging
 a slider could therefore have triggered a re-read every 250 ms - three tenths of

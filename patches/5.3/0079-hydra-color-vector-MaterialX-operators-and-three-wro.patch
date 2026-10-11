@@ -1,4 +1,4 @@
-From c1c014c5849701ae343222e149a4a1ddfef2d029 Mon Sep 17 00:00:00 2001
+From 66fac9a8da5707a3d2495a053a9df474c210fcce Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 17:39:22 +0200
 Subject: [PATCH 079/141] hydra: color/vector MaterialX operators, and three

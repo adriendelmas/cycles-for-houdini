@@ -1,4 +1,4 @@
-From 19a3bde5d101dfb6065a888d594d6a49aa56239b Mon Sep 17 00:00:00 2001
+From 4d63e2e60f64930407265c9d9a56880dd16f6486 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 9 Oct 2026 02:48:50 +0200
 Subject: [PATCH 118/141] hydra: left-handed subdivided meshes the right way

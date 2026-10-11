@@ -1,4 +1,4 @@
-From e537177740fc47e17528eb28b99f76b6221f8290 Mon Sep 17 00:00:00 2001
+From 2dcba9dccfdfa52f88ebd0b31d741e3ef6ae45a7 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 4 Sep 2026 16:02:52 +0200
 Subject: [PATCH 057/141] hydra: transmission and subsurface colors, finally

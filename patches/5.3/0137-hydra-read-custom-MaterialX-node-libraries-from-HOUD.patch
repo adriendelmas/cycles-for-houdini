@@ -1,4 +1,4 @@
-From 9b8902dde0ccbb33eccc34017e21e11df7f8e0a2 Mon Sep 17 00:00:00 2001
+From d6775815b8f7926bb8d242cc7b3fc9555f95eb6b Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sun, 11 Oct 2026 02:38:48 +0200
 Subject: [PATCH 137/141] hydra: read custom MaterialX node libraries from
