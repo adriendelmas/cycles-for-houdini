@@ -14,9 +14,9 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HFS = os.path.join(os.environ.get("HFS", "E:/Side Effects Software/Houdini22.0.368"), "bin")
-# Which installation to target: `install` for 5.2, `install-53` for 5.3.
-INSTALL = os.environ.get("CYCLES_INSTALL_DIR", "install")
-VERSION = "5.2" if INSTALL == "install" else "5.3"
+# Which installation to target (Cycles 5.3, installed in `install-53`).
+INSTALL = os.environ.get("CYCLES_INSTALL_DIR", "install-53")
+VERSION = "5.3"
 BENCH = os.path.join(ROOT, "tests", "nodes", VERSION)
 SCENES = os.path.join(BENCH, "scenes")
 # What the run produces; the committed references live next door in

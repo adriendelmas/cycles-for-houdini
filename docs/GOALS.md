@@ -12,6 +12,9 @@ reliability a Houdini user expects from Karma - and without forking Cycles.
   and through husk.
 - The author's own pipeline: garments and yarns built in `md_seams`, rendered
   with a renderer whose hair and thick-curve model he trusts.
+- Other Houdini artists who are handed the plugin, most of them without any
+  build experience: it has to install by copying files, on whatever GPU they
+  own (opened 2026-10-12, PLAN.md phase 9).
 - Eventually, Blender upstream: the delegate lives in Cycles' own tree, and
   most of what is fixed here is a fix to that delegate, not to Houdini.
 
@@ -39,6 +42,11 @@ named in [TESTING.md](TESTING.md):
    ROP would give them.
 6. **Nothing fails silently.** A dropped connection, an unknown node, an
    ignored setting, a device fallback - each writes one line to the log.
+7. **It installs on someone else's machine.** Two items copied into a Houdini
+   `packages` folder, no path to edit, no tool to install. GPU rendering is
+   the aim on every vendor (NVIDIA since Maxwell, AMD, Intel, Apple); a card
+   without a matching kernel falls back to the CPU and says so (6). Today only
+   NVIDIA is built, and only the RTX 30 series has been run (K-98, K-99).
 
 ## Deliberate non-goals
 

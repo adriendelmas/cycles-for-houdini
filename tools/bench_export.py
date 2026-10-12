@@ -12,13 +12,13 @@ import hou
 from pxr import Sdr
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# Which installation to target: `install` for 5.2, `install-53` for 5.3.
-INSTALL = os.environ.get("CYCLES_INSTALL_DIR", "install")
+# Which installation to target (Cycles 5.3, installed in `install-53`).
+INSTALL = os.environ.get("CYCLES_INSTALL_DIR", "install-53")
 sys.path.insert(0, os.path.join(ROOT, INSTALL, "houdini", "scripts", "python"))
 hou.hda.installFile(os.path.join(ROOT, INSTALL, "houdini", "otls", "cycles_vops.hda"))
 import cycles_builder  # noqa: E402
 
-VERSION = "5.2" if INSTALL == "install" else "5.3"
+VERSION = "5.3"
 OUT = os.path.join(ROOT, "tests", "nodes", VERSION)
 if not os.path.isdir(OUT):
     os.makedirs(OUT)

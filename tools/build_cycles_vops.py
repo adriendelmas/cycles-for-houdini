@@ -26,11 +26,11 @@ from pxr import Sdr
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-# Which installation to target. The two engines coexist - `install` for 5.2,
-# `install-53` for 5.3 - and the library must be regenerated for each one: the
-# Sdr registry it derives from is published by the built delegate, whose nodes
-# change from one version to the next.
-INSTALL = os.environ.get("CYCLES_INSTALL_DIR", "install")
+# Which installation to target: `install-53`, the Cycles 5.3 build. The library
+# must be regenerated after every build: the Sdr registry it derives from is
+# published by the built delegate, whose nodes change from one Cycles version to
+# the next.
+INSTALL = os.environ.get("CYCLES_INSTALL_DIR", "install-53")
 OTLS = os.path.join(ROOT, INSTALL, "houdini", "otls")
 LIBRARY = os.path.join(OTLS, "cycles_vops.hda")
 

@@ -18,10 +18,9 @@ import sys
 import hou
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# Which tree to target, following the same convention as the other tools:
-# `install` for 5.2, `install-53` for 5.3.
-INSTALL = os.environ.get("CYCLES_INSTALL_DIR", "install")
-CYCLES = os.path.join(ROOT, "external", "cycles-53" if INSTALL.endswith("-53") else "cycles")
+# Which tree to target, following the same convention as the other tools.
+INSTALL = os.environ.get("CYCLES_INSTALL_DIR", "install-53")
+CYCLES = os.path.join(ROOT, "external", "cycles-53")
 INTEGRATOR = os.path.join(CYCLES, "src", "scene", "integrator.cpp")
 RESOURCES = os.path.join(CYCLES, "src", "hydra", "resources")
 # Houdini looks the file up by engine name: the two menu entries, CPU and GPU,

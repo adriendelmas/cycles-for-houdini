@@ -1221,6 +1221,162 @@ published, 64 `convert_*` hidden, 99 exposed as VOPs (plus the generated
 bench (99 minus `cycles_output` and `cycles_aov_output`). STATUS.md's 161 was
 the 5.2 count.
 
+### K-97 The Houdini package carried the build prefix — confirmed — **fixed** (0142)
+`external/cycles*/src/hydra/resources/cycles.json.in` wrote
+`@CMAKE_INSTALL_PREFIX@/houdini` into `CYCLES_ROOT`, so the `cycles.json` of a
+build named the drive and user folder of the machine that built it. Copied to
+another machine it loaded nothing and said nothing. Found when someone who had
+asked for the plugin could not install it.
+
+Now `$HOUDINI_PACKAGE_PATH/CyclesForHoudini/houdini`, the folder of the package
+file being read. The layout is `packages/cycles.json` plus
+`packages/CyclesForHoudini/houdini/...`, assembled by `tools/make_dist.py`.
+Checked by copying the pair into a scratch `HOUDINI_USER_PREF_DIR` and running
+`hython` 22.0.368: `CYCLES_ROOT` resolves to the copy, `cycles_vops.hda` loads,
+`HdCyclesPlugin` and `HdCyclesPluginGPU` are listed (TESTING.md, "Checking a
+distribution"). A real render from such a copy has not been run.
+
+The copies generated before the fix (`build/.../resources/cycles.json`,
+`install*/houdini/packages/cycles.json`) keep the old path until the next
+configure and install; `make_dist.py` reads the template, not them. The user's
+own `Documents/houdini22.0/packages/cycles.json` is unrelated (it is a hand
+written switcher between `install` and `install-53`).
+
+### K-98 CUDA kernels built for one architecture — confirmed — **fixed in the build, unverified on other cards**
+`bootstrap.py` passed `sm_86` only, so `install*/houdini/lib/` held one cubin
+(3.8 MB) and the OptiX PTX. Cycles picks a kernel in
+`src/device/cuda/device_impl.cpp:264-298`: the cubin of the same major version
+with the highest minor not above the card's (an `sm_89` card runs the `sm_86`
+cubin), else the closest `compute_XX` PTX, which the driver JIT-compiles, else a
+compile on the spot that needs `nvcc` and so fails on a user's machine. A GTX
+10, an RTX 20, an A100 or an RTX 50 therefore found nothing. OptiX kernels are
+PTX and were never affected.
+
+`bootstrap.py` now defaults to `sm_50;sm_52;sm_60;sm_61;sm_70;sm_75;sm_86;sm_89;
+sm_120;compute_75` (about 35 MB). Cycles skips an architecture its toolkit
+cannot build (`sm_3x`; `sm_100`/`sm_120` need CUDA 12.8+; Maxwell to Volta need
+CUDA 12). The PTX is built with the installed CUDA, 12.9, so a card that falls
+back on it needs a recent driver; Cycles uses a CUDA 11 compiler for it when
+`CUDA11_NVCC_EXECUTABLE` is set, to keep that requirement low.
+
+Open: the development machine has one card, an RTX 3090 (`sm_86`). Nothing but
+`sm_86` has run. The existing `install-53` tree still holds the
+`sm_86` cubin only until rebuilt.
+
+### K-99 AMD, Intel and Apple GPUs are not built — confirmed — open
+Requested together with K-98 so that every user can render on GPU. The delegate
+is ready: `render_delegate.cpp:157` enumerates `OPTIX, CUDA, HIP, ONEAPI,
+METAL` and `cycles_device.py` lists them (Metal on macOS only). What is missing
+is the build, and the build cache says so: `WITH_CYCLES_DEVICE_HIP=OFF`,
+`WITH_CYCLES_HIP_BINARIES=OFF`, `WITH_CYCLES_DEVICE_ONEAPI=OFF`;
+`bootstrap.py` passes none of them.
+
+What each needs (read from `src/cmake/external_libs.cmake`, `CMakeLists.txt`
+and the kernel `CMakeLists.txt` files):
+
+- **HIP (Windows):** `WITH_CYCLES_DEVICE_HIP=ON` and `WITH_CYCLES_HIP_BINARIES=ON`,
+  with the **HIP SDK 6.0+** installed on the build machine (`find_package(HIP
+  6.0.0)`, not in Blender's `lib/windows_x64`, not installed on the
+  development machine). One `fatbin` per `gfx` target, default list `gfx900`
+  to `gfx1151`; RDNA 4 (`gfx1200`, `gfx1201`) is not in it. The runtime is
+  loaded dynamically (`WITH_HIP_DYNLOAD` is forced on), so the user needs the
+  AMD driver only. HIPRT (`WITH_CYCLES_DEVICE_HIPRT`, `lib/windows_x64/hiprt`
+  is present) is optional.
+- **oneAPI (Windows):** `WITH_CYCLES_DEVICE_ONEAPI=ON`. The compiler is already in
+  Blender's libraries (`lib/windows_x64/dpcpp`, `level-zero`). Without
+  `WITH_CYCLES_ONEAPI_BINARIES` the kernel is SPIR-V compiled by the driver at
+  first use (slow once, any Intel GPU); with it, AOT needs `ocloc` and a target
+  list (`12.55.8` Arc Alchemist, `12.70.4` Meteor Lake by default; newer
+  parts are not in it, ask `ocloc`). `sycl8.dll` and the `ur_*` DLLs are
+  already in `install*/houdini/bin` because the denoiser needs them.
+- **Metal:** `WITH_CYCLES_DEVICE_METAL` exists only under `if(APPLE)`. It needs
+  a macOS build of the whole project on a Mac with Xcode; none of that exists:
+  `bootstrap.py` hard-codes `lib/windows_x64`, MSVC and `.dll`, the Houdini and
+  USD discovery of patch 0001 is Windows-shaped, and an unsigned library is
+  likely to be blocked by Gatekeeper (not checked). The GL display driver
+  should be left off there: the output-driver path needs no GL.
+
+The real risk is in the kernel patches: 0025 (MaterialX noise and hex tiling,
+`kernel/svm/mx_*.h`), 0038 (dispersion, a dozen kernel headers) and 0046
+(`kernel/svm/closure.h`) have only ever been compiled by `nvcc` and MSVC. The
+HIP, SYCL and Metal compilers are stricter on some constructs. A compile error
+shows at once; a wrong image on a card nobody here owns will not. Testing needs
+volunteers with the hardware: `CYCLES_DEVICE=HIP` (or `ONEAPI`), then
+`bench_render.py` and `bench_diff.py`.
+
+Order proposed to the author: K-98 first, then `bootstrap.py` options
+(`--hip`, `--hip-arch`, `--oneapi`, `--oneapi-arch`), oneAPI without AOT (nothing
+to install), HIP with the SDK, Metal last. Effort estimates, not measured:
+half a day for CUDA, one to two days each for HIP and oneAPI, several days for
+Metal.
+
+### K-100 Build time grows with the number of CUDA architectures — measured — **mitigated**
+One `nvcc` run of the `sm_86` kernel, the real command, on the 128-thread
+development machine: **93 s** with `--split-compile=0` (what Cycles adds for one
+or two architectures), **458 s** without it (what a ten-architecture build gets,
+`src/kernel/device/cuda/CMakeLists.txt:62-69`, there to bound memory when
+kernels build in parallel). The Visual Studio generator puts every cubin in one
+project, so they very probably build one after another (probable, the build was
+not timed): about 76 min for ten, 16 min with the flag. The clean-clone build
+with one architecture took 14 min 20 s on 16 jobs (ENVIRONMENT.md).
+
+`bootstrap.py` now passes `-DCUDA_NVCC_FLAGS=--split-compile=0` when more than
+two architectures are built (`--no-split-compile` to drop it, for a machine with
+little memory; always passed, empty when off, so a value cached by an earlier
+run cannot double up with Cycles' own) and `--jobs` defaults to
+`os.cpu_count()` of the machine running it. A full ten-architecture build is
+expected at 25 to 30 minutes; it has not been run end to end.
+
+Not done: Ninja instead of Visual Studio would build the cubins in parallel and
+make no-op rebuilds near instant, but needs a fresh build folder, `ninja`,
+the MSVC environment, `-DCMAKE_BUILD_TYPE=Release` and a memory policy (ten
+`nvcc` at once, each wanting every thread), and has not been tried with this
+project. `WITH_COMPILER_CCACHE` (Cycles wraps `nvcc` with it) is untried on Windows.
+
+### K-101 `hdCycles.dll` embeds the source paths of its build — confirmed — open, harmless
+The `LOG_*` macros carry `__FILE__`, so the DLL holds strings such as
+`E:\WORK\...\src\hydra\render_delegate.cpp:679` (checked with a byte search of
+the shipped DLL). Nothing reads them. Removing them takes `/pathmap` (or
+`/d1trimfile`) in the delegate's CMake and a rebuild. `make_dist.py` scans text
+files for drive letters but cannot judge a binary.
+
+### K-102 The distribution has not been installed on a second machine — probable — open
+`make_dist.py` output was tested in a scratch Houdini preference folder on the
+development machine (K-97), which has every other dependency in place. A clean
+machine, with only a Houdini 22.0.x, has not been tried: missing DLLs, Visual C++
+runtimes (the install ships them in `bin/`) and the driver requirements of K-98
+are untested. Nothing rendered from the copy either.
+
+### K-103 The Cycles 5.2 build was incomplete and is retired — confirmed — **closed** (2026-10-12)
+`patches/5.2/` stopped at 38 patches (September 2026), plus the package-template
+patch of K-97 added on 2026-10-12. The 5.3 series has 142: 37 of those 38
+replayed (`0001`-`0037`), the package patch, and **104 that exist for 5.3 only**
+(`0038` to `0141`), compared by subject. The 5.2 install
+(`install/houdini/dso/usd/hdCycles.dll`) dated from 2026-09-03, the 5.3 one from
+2026-10-11. The README called 5.2 "stable" until 2026-10-12, which hid that it
+lacked the render device menu, almost all of the MaterialX work, USD curves,
+points and implicit surfaces, subdivision, motion blur on instances and
+deformation, render passes and cryptomatte, light linking, COP textures under
+husk, and the camera, crop and light-conversion fixes. The author confirmed it
+was never complete nor functional like 5.3, which he validated and tested.
+
+Decision (2026-10-12): 5.2 is removed from the published repository. Untracked
+from git and added to `.gitignore`, kept on the author's machine only:
+`patches/5.2/` (39 patches), `tests/nodes/5.2/` (its bench scenes and
+references, 211 tracked files), and, already ignored, `external/cycles`
+(branch `houdini-fixes`) and `install/`. GitHub never had a 5.2 branch (only
+`master`); the 5.2 branch is the local one in `external/cycles`. The history
+keeps the old files. `bootstrap.py` and `make_dist.py` no longer accept
+`--version 5.2`, and the tools that defaulted to the `install` folder
+(`bench_export.py`, `bench_render.py`, `bench_diff.py`, `build_cycles_vops.py`,
+`count_nodes.py`, `gen_render_properties.py`) now default to `install-53`. That
+default was a bug for anyone building 5.3: `hython tools/build_cycles_vops.py`,
+the step after `bootstrap.py`, wrote into `install/`, which a clean clone does
+not have.
+
+A README claim went with it: "the full MaterialX scene renders bit-identical
+between 5.2 and 5.3" could no longer be reproduced and was removed.
+
 ## E. Limits of Cycles itself
 
 What the delegate cannot fix, because Cycles has no counterpart or behaves

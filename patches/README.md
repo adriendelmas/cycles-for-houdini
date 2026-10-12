@@ -4,7 +4,6 @@ Cycles is not copied here: it has its own repository, and our changes live
 there on a branch of ours, as commits separated by topic. This series is its
 export through `git format-patch`.
 
-    patches/5.2/   39 patches, base 3b97e190 (branch release/5.2)
     patches/5.3/   142 patches, base 8424ed53 (branch main)
 
 `tools/bootstrap.py` does the whole path -- clone, `git am`, build. By hand, on
@@ -16,12 +15,15 @@ Regenerate the series after a new change:
 
     cd external/cycles-53 && git format-patch --no-signature -o ../../patches/5.3 8424ed53..HEAD
 
-The two series differ little. The move to 5.3 replayed 37 patches out of 38:
-`hydra: never leave a Shader without a graph` is no longer needed, upstream
-having solved the problem on its side. To that are added dispersion, taken from
-Blender PR 162041, and the removal of HDA backups from tracking. **The
-numbering has therefore shifted by one** from the fifth on: the notes below
-follow that of 5.2.
+A Cycles 5.2 series existed until 2026-10-12. It had stopped at its 38th patch
+(September 2026), so 104 of the 142 patches below never existed for it, and it
+was retired rather than ported (K-103 in `docs/KNOWN_ISSUES.md`). Its patches
+are no longer published. The numbering of the per-patch notes further down
+(`## 0001 ...`) is that of the old 5.2 series, which is one off from the 5.3
+table from the fifth patch on: 5.3 replayed 37 of those 38 (`hydra: never leave
+a Shader without a graph` is no longer needed, upstream having solved the
+problem on its side), then added dispersion, taken from Blender PR 162041, and
+the removal of HDA backups from tracking.
 
 Most of these patches are independent of Houdini and of this machine --
 **so many candidates for an upstream contribution to Blender**.
@@ -171,7 +173,7 @@ Most of these patches are independent of Houdini and of this machine --
 | `0139` | hydra: `kma_stderiv` (Karma's ST Derivatives) translated as a zero derivative: the node is no longer lost with a warning, the shader falls back on its own width |
 | `0140` | hydra: a node in a NodeGraph (Houdini material subnetwork), named "G/a" by Hydra, keeps its path; all of them fell onto the empty path and merged, so the network rendered a constant |
 | `0141` | hydra: the last French comments and docstrings in English (Python resources, Render menu, four comment blocks in Cycles); no code change |
-| `0142` | hydra: the Houdini package (`cycles.json`) finds the plugin through `$HOUDINI_PACKAGE_PATH` instead of the build prefix: no absolute path in the generated file (5.2: `0039`) |
+| `0142` | hydra: the Houdini package (`cycles.json`) finds the plugin through `$HOUDINI_PACKAGE_PATH` instead of the build prefix: no absolute path in the generated file |
 
 ---
 

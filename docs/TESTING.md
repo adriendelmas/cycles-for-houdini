@@ -231,6 +231,40 @@ every frame (`Render restarted` every frame with the same cause), or the sample
 itself slow (`Rendered 1 samples in` large). Only the first two are the
 delegate's.
 
+## Checking a distribution
+
+`tools/make_dist.py` already refuses to finish if a text file still names a
+drive letter. It cannot judge a binary: `hdCycles.dll` carries its build's
+source paths in `__FILE__` strings (K-101), harmless. To check that the folder
+loads from somewhere other than where it was built, without touching the real
+Houdini preferences, copy `cycles.json` and `CyclesForHoudini/` into a scratch
+`packages` folder and point Houdini at it:
+
+```bash
+export HOUDINI_USER_PREF_DIR="/tmp/scratch/houdini__HVER__"   # keep __HVER__
+mkdir -p /tmp/scratch/houdini22.0/packages
+cp -r dist/CyclesForHoudini-5.3/* /tmp/scratch/houdini22.0/packages/
+hython check.py
+```
+
+where `check.py` prints `hou.getenv("CYCLES_ROOT")` (it must be inside the
+scratch folder), the loaded HDAs containing `cycles`
+(`hou.hda.loadedFiles()`: `cycles_vops.hda`, `hdcycles_flatten_op_textures.hda`)
+and `[p for p in UsdImagingGL.Engine.GetRendererPlugins() if "Cycles" in p]`
+(`HdCyclesPlugin`, `HdCyclesPluginGPU`). Done on 2026-10-12 for the 5.3 zip.
+This proves the package and the plugin registration, not a render and not a
+clean machine (K-102).
+
+Two traps met while doing it: `HOUDINI_USER_PREF_DIR` must contain `__HVER__`
+or Houdini refuses it; and piping `hython` into `Select-Object -First N` in
+PowerShell kills it with exit code 1 when the pipe closes, which looks like a
+failure and is not (redirect to a file instead).
+
+To time the CUDA kernels alone, run the `nvcc` command of one cubin from
+`build/src/kernel/device/cuda/cycles_kernel_cuda.vcxproj` with and without
+`--split-compile=0` (K-100); it writes to the output path you give and needs the
+MSVC environment (`vcvars64.bat`).
+
 ## Checking a build
 
 `cmake` returns 0 when the install step failed with Houdini open. After every

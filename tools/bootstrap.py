@@ -22,12 +22,6 @@ ROOT = os.path.dirname(HERE)
 # Each version targets a specific upstream commit. A patch series only applies
 # cleanly on the base it was exported against.
 VERSIONS = {
-    "5.2": {
-        "dir": "cycles",
-        "install": "install",
-        "branch": "houdini-fixes",
-        "commit": "3b97e190c5ff1a2ed2160d879ad5bf95bea7b8ba",
-    },
     "5.3": {
         "dir": "cycles-53",
         "install": "install-53",

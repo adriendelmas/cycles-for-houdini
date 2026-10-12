@@ -193,9 +193,36 @@ stopwatch log.
 | ✅ Document the farm workflow in one place (README, COP feature; not automated) | K-40 |
 | ✅ `preview translator` scope stated in the README | K-42 |
 
+## Phase 9 — Other people's machines (opened 2026-10-12, in progress)
+
+Origin: someone asked for the plugin and could not install it. There was no
+pre-built copy, the build-from-source route assumed a developer, and the
+generated package named the author's own folder. Three follow-up requests from
+the author: make the package relocatable, make the CUDA build work on every
+NVIDIA card, and make it work on AMD, Intel and Apple GPUs.
+
+| Task | Closes |
+|---|---|
+| ✅ Package finds the plugin through `$HOUDINI_PACKAGE_PATH`; patch `0142` | K-97 |
+| ✅ `tools/make_dist.py`: assemble `cycles.json` + `CyclesForHoudini/`, optional zip, scan for drive letters | K-97 |
+| ✅ README: an install section for someone who does not build, and the new build steps | - |
+| ✅ `bootstrap.py`: CUDA kernels for `sm_50` to `sm_120` plus PTX, nvcc split compile, `--jobs` per machine | K-98, K-100 |
+| Rebuild with the new defaults and install; check `lib/` holds ten kernels; time the build | K-98, K-100 |
+| Install the zip on a machine that is not the development machine and render one scene | K-102 |
+| Publish the zip as a GitHub Release (only 5.3) | - |
+| ✅ Retire the incomplete 5.2 build: untracked, git-ignored, tools default to `install-53` (decided by the author) | K-103 |
+| `bootstrap.py --hip`, `--oneapi` options; build oneAPI without AOT, then HIP with the SDK; run the benches on real cards | K-99 |
+| macOS build with Metal: a second pipeline on a Mac | K-99 |
+| Strip build paths from the DLL (`/pathmap`) | K-101 |
+
+Done when: a Houdini 22.0.x user with an NVIDIA card of any generation since
+Maxwell, who has never built anything, installs by copying two items and renders
+on the GPU; the same on a card of each of the other vendors is the stretch goal
+and each is closed only by a render on that hardware, not by a green compile.
+
 ## What is explicitly deferred
 
-- Linux and macOS builds.
+- Linux builds. macOS, with Metal, is the last row of phase 9 and still unstarted.
 - Point Density and OSL Script nodes (absent from Cycles' registry).
 - MaterialX nodes with no Cycles equivalent: matrices, alpha compositing,
   `time`/`frame`, `blur`.

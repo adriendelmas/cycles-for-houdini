@@ -81,20 +81,19 @@ in the viewport — `CYCLES_DISPLAY_DRIVER=0` falls back to the output driver.
 
 ## Cycles versions
 
-Two engines can be installed side by side and switched with one word in the
-Houdini package file.
+One engine is maintained: Cycles 5.3, built from the series in `patches/5.3/`.
+An earlier build on Cycles 5.2 was retired on 2026-10-12: it had stopped at
+38 patches, never had most of what is described here, and its patches are no
+longer published (K-103).
 
 | | Cycles | Base commit | Notes |
 |---|---|---|---|
-| `install` | 5.2 | `3b97e190` (`release/5.2`) | stable |
-| `install-53` | 5.3 dev | `8424ed53` (`main`) | **default** — adds dispersion |
+| `install-53` | 5.3 dev | `8424ed53` (`main`) | the engine; adds dispersion |
 
 5.3 brings **dispersion** on the Principled BSDF: two sliders in the Transmission
 section, an amount and an Abbe number, from which the per-wavelength IOR is
 derived. The path only turns spectral when both weights are non-zero, so nothing
 changes for materials that do not use it.
-
-See [docs/CYCLES_53.md](docs/CYCLES_53.md) for the parallel install.
 
 ## Requirements
 
@@ -112,6 +111,17 @@ rebuild, and so will the Python 3.11 flavour.
 | GPU | CUDA 12.9 + OptiX SDK, or CPU only. Kernels for every NVIDIA generation since Maxwell (GTX 9xx) up to RTX 50xx, plus a PTX fallback |
 | Also | CMake 3.28+, git, git-lfs |
 
+## Installing a pre-built copy
+
+For someone who does not build software. A pre-built archive is made by `tools/make_dist.py` (see Building) and has not been published as a GitHub Release yet; until then it is handed over by hand.
+
+1. Check the Houdini version (*Help > About Houdini*): **22.0.x, Python 3.13**. A 22.5 or the Python 3.11 flavour will not load it, see Requirements.
+2. Unzip the archive anywhere. It holds `cycles.json` and a `CyclesForHoudini` folder.
+3. Copy **both** into `Documents\houdini22.0\packages\` (create `packages` if it is missing). Nothing in either file names a path of the machine that built them, so there is nothing to edit.
+4. Start Houdini. In Solaris, **Cycles CPU** and **Cycles GPU** appear among the renderers, and the Cycles Material Builder in the LOP tab menu. The device is chosen under *Render › Cycles Render Device*.
+
+If nothing shows up, start Houdini from a console and read the first lines: a wrong Houdini version names `pxrInternal_v0_26_5`, a misplaced package file shows nothing at all.
+
 ## Building
 
 Cycles itself is not vendored here. The build clones it at the pinned commit,
@@ -120,6 +130,8 @@ applies the patch series, and installs into `install-53/`.
 ```
 python tools/bootstrap.py --version 5.3
 ```
+
+Options worth knowing: `--cuda-arch` takes a `;`-separated list and defaults to every NVIDIA generation since Maxwell plus a PTX fallback (`--cuda-arch=` builds no CUDA kernel at all, for a CPU-only build that is much quicker); `--jobs` defaults to the number of logical processors of the machine it runs on; with more than two CUDA architectures it passes `nvcc --split-compile=0`, which `--no-split-compile` turns off if memory is short.
 
 The VOP library is not shipped: it is generated from the Sdr registry the built
 delegate publishes, so it always matches the Cycles you compiled. Generate it
@@ -141,7 +153,7 @@ It writes `dist/CyclesForHoudini-5.3/`, holding `cycles.json` and a `CyclesForHo
 
 | | |
 |---|---|
-| `patches/5.2/`, `patches/5.3/` | our changes to Cycles, one commit per subject |
+| `patches/5.3/` | our changes to Cycles, one commit per subject |
 | `tools/` | the Material Builder generator, the test benches, bootstrap |
 | `tests/` | the node bench and its references, the MaterialX scenes, the feature scenes — see [tests/README.md](tests/README.md) |
 | `docs/` | the project map — start at [docs/README.md](docs/README.md) |
@@ -170,8 +182,7 @@ warnings, for a non-black image, and for a difference against a baseline:
 hython tools/bench_export.py && python tools/bench_render.py && hython tools/bench_diff.py
 ```
 
-97 nodes pass that check against their committed reference images, and the
-full MaterialX scene renders bit-identical between 5.2 and 5.3. Two more
+97 nodes pass that check against their committed reference images. Two more
 compare with Karma, rendering the same USD with both: seventeen materials
 region by region (`hython tools/bench_agree.py`, 67 checks, floor within
 1 %), and every MaterialX node one quad each (`hython tools/mtlx_karma.py`:
@@ -202,6 +213,8 @@ The ones a user meets first:
 - A dome light's diffuse/specular multipliers are 0 or 1 (Cycles has one
   background); light filters are not supported.
 - Implicit surfaces carry no UVs.
+
+- GPU rendering is NVIDIA only (CUDA, OptiX); AMD (HIP), Intel (oneAPI) and Apple (Metal) devices are not built yet, and the CUDA kernels for generations other than the RTX 30 series are built but untested on hardware. See K-98 and K-99 in [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md).
 
 ## Credits
 

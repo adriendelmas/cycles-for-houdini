@@ -7,7 +7,7 @@ the bench apply:
 
     hython tools/count_nodes.py
 
-Set CYCLES_INSTALL_DIR to pick the engine (`install` for 5.2, `install-53`).
+Set CYCLES_INSTALL_DIR to pick another install tree (default `install-53`).
 """
 
 import os

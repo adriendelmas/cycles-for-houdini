@@ -27,7 +27,6 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 
 VERSIONS = {
-    "5.2": {"dir": "cycles", "install": "install"},
     "5.3": {"dir": "cycles-53", "install": "install-53"},
 }
 

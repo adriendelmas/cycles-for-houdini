@@ -4,6 +4,10 @@ external/cycles-53/
 build/
 install/
 install-53/
+# Cycles 5.2 was retired on 2026-10-12 (frozen at 38 patches, never complete). Its patches,
+# clone and install stay on the author's machine only.
+patches/5.2/
+tests/nodes/5.2/
 *.user
 __pycache__/
 *.pyc
