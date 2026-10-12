@@ -46,3 +46,6 @@ docs/MATERIALX_COVERAGE.md
 docs/STANDARD_SURFACE_AUDIT.md
 docs/CYCLES_53.md
 docs/ENVIRONMENT.md
+
+# Folder assembled by tools/make_dist.py for users.
+dist/

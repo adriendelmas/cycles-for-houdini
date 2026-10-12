@@ -38,6 +38,15 @@ VERSIONS = {
 
 UPSTREAM = "https://projects.blender.org/blender/cycles.git"
 
+# One cubin per generation: Maxwell sm_50/52, Pascal sm_60/61, Volta sm_70,
+# Turing sm_75, Ampere sm_86, Ada sm_89, Blackwell sm_120. At run time Cycles
+# takes the cubin of the same major version with the highest minor that does
+# not exceed the card's (sm_89 runs the sm_86 one), and otherwise JIT-compiles
+# the compute_75 PTX through the driver, which covers sm_80, sm_90, sm_100 and
+# later. sm_100/sm_120 need CUDA 12.8+; Cycles skips an architecture its
+# toolkit cannot build.
+CUDA_ARCH = "sm_50;sm_52;sm_60;sm_61;sm_70;sm_75;sm_86;sm_89;sm_120;compute_75"
+
 
 def run(cmd, cwd=None, env=None):
     print("  $ " + " ".join(cmd))
@@ -79,7 +88,7 @@ def apply_patches(src, version):
     run(["git"] + identity + ["am"] + patches, cwd=src)
 
 
-def configure(src, cfg, houdini, optix, arch, osl):
+def configure(src, cfg, houdini, optix, arch, osl, split=True):
     build = os.path.join(src, "build")
     args = [
         "cmake",
@@ -92,6 +101,14 @@ def configure(src, cfg, houdini, optix, arch, osl):
     ]
     if arch:
         args += ["-DWITH_CYCLES_CUDA_BINARIES=ON", "-DCYCLES_CUDA_BINARIES_ARCH=" + arch]
+        # Cycles turns nvcc's split compile on only for one or two
+        # architectures, to bound memory when several kernels build at once.
+        # They build one after another here, and the flag cuts a kernel from
+        # about 7.5 min to 1.5 min on a 128-thread machine. Always passed, empty
+        # when off, so that a value cached by an earlier run cannot linger and
+        # double up with the one Cycles adds itself.
+        many = len([a for a in arch.split(";") if a]) > 2
+        args += ["-DCUDA_NVCC_FLAGS=" + ("--split-compile=0" if split and many else "")]
     else:
         args += ["-DWITH_CYCLES_CUDA_BINARIES=OFF"]
     if optix:
@@ -109,10 +126,17 @@ def main():
                    help="Houdini install root (default: $HFS)")
     p.add_argument("--optix", default=os.environ.get("OPTIX_ROOT_DIR", ""),
                    help="OptiX SDK root; empty to build without OptiX")
-    p.add_argument("--cuda-arch", default="sm_86",
-                   help="CUDA kernel architecture, e.g. sm_86; empty to build none")
+    p.add_argument("--cuda-arch", default=CUDA_ARCH,
+                   help="CUDA kernel architectures, ';'-separated (default: every NVIDIA "
+                        "generation since Maxwell, plus a PTX fallback); "
+                        "pass --cuda-arch= to build none")
     p.add_argument("--no-osl", action="store_true", help="build without OSL")
-    p.add_argument("--jobs", type=int, default=0, help="parallel jobs (default: auto)")
+    p.add_argument("--no-split-compile", action="store_true",
+                   help="do not pass nvcc --split-compile=0 when building more than two "
+                        "CUDA architectures (slower, but lighter on memory)")
+    p.add_argument("--jobs", type=int, default=os.cpu_count() or 1,
+                   help="parallel jobs (default: the number of logical processors "
+                        "of this machine)")
     p.add_argument("--skip-build", action="store_true", help="stop after configuration")
     args = p.parse_args()
 
@@ -136,18 +160,20 @@ def main():
         apply_patches(src, args.version)
 
     print("== configuration ==")
-    build = configure(src, cfg, args.houdini, args.optix, args.cuda_arch, not args.no_osl)
+    build = configure(src, cfg, args.houdini, args.optix, args.cuda_arch, not args.no_osl,
+                      not args.no_split_compile)
     if args.skip_build:
         return
 
     print("== build and install ==")
     cmd = ["cmake", "--build", build, "--config", "Release", "--target", "install"]
-    if args.jobs:
+    if args.jobs > 0:
         cmd += ["--parallel", str(args.jobs)]
     run(cmd)
 
-    pkg = os.path.join(ROOT, cfg["install"], "houdini", "packages", "cycles.json")
-    print("\nDone. Copy the package into your Houdini packages:\n    %s" % pkg)
+    print("\nDone. Next: generate the VOP library, then assemble the folder for Houdini:\n"
+          "    hython tools/build_cycles_vops.py\n"
+          "    python tools/make_dist.py --version %s" % args.version)
 
 
 if __name__ == "__main__":

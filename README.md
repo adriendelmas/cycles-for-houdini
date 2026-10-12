@@ -109,7 +109,7 @@ rebuild, and so will the Python 3.11 flavour.
 |---|---|
 | Houdini | 22.0 series, built against **22.0.368** (USD 26.05, Python 3.13, MaterialX 1.39.5) |
 | OS | Windows 11, MSVC 14.44 (VS2022 Build Tools) |
-| GPU | CUDA 12.9 + OptiX SDK, or CPU only |
+| GPU | CUDA 12.9 + OptiX SDK, or CPU only. Kernels for every NVIDIA generation since Maxwell (GTX 9xx) up to RTX 50xx, plus a PTX fallback |
 | Also | CMake 3.28+, git, git-lfs |
 
 ## Building
@@ -129,14 +129,13 @@ once the install exists, with Houdini's Python:
 hython tools/build_cycles_vops.py
 ```
 
-Then point Houdini at the result by copying the generated package file:
+Then assemble the folder to hand to Houdini:
 
 ```
-copy install-53\houdini\packages\cycles.json %USERPROFILE%\Documents\houdini22.0\packages\
+python tools/make_dist.py --version 5.3
 ```
 
-The package is generated at install time from `CMAKE_INSTALL_PREFIX`, so it
-carries your own paths — there is nothing to edit by hand.
+It writes `dist/CyclesForHoudini-5.3/`, holding `cycles.json` and a `CyclesForHoudini/` folder. Copy **both** into `%USERPROFILE%\Documents\houdini22.0\packages\` and restart Houdini. The package finds the plugin through `$HOUDINI_PACKAGE_PATH`, so no path of any machine is written in it and the pair can be moved or zipped (`--zip`) as is.
 
 ## Repository layout
 

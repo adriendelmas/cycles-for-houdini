@@ -72,7 +72,7 @@ Everything else is in the delegate.
 
 | File | Installed to | Role |
 |---|---|---|
-| `cycles.json.in` | `houdini/packages/` | The Houdini package: `HOUDINI_PATH` and `PATH` to the install |
+| `cycles.json.in` | `houdini/packages/` | The Houdini package: `HOUDINI_PATH` and `PATH` to `$HOUDINI_PACKAGE_PATH/CyclesForHoudini/houdini` (layout built by `tools/make_dist.py`) |
 | `UsdRenderers.json` | `houdini/` | Menu labels "Cycles CPU" / "Cycles GPU", husk defaults |
 | `HdCyclesPlugin*_Global.ds` | `houdini/soho/parameters/` | Render Settings tab, **generated** by `tools/gen_render_properties.py` from the integrator's sockets |
 | `cycles_builder.py`, `CyclesTools.shelf` | `scripts/python/`, `toolbar/` | The Cycles Material Builder: a configured subnet with a three-input `suboutput` and a tab-menu mask |

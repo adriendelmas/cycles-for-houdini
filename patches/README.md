@@ -4,8 +4,8 @@ Cycles is not copied here: it has its own repository, and our changes live
 there on a branch of ours, as commits separated by topic. This series is its
 export through `git format-patch`.
 
-    patches/5.2/   38 patches, base 3b97e190 (branch release/5.2)
-    patches/5.3/   141 patches, base 8424ed53 (branch main)
+    patches/5.2/   39 patches, base 3b97e190 (branch release/5.2)
+    patches/5.3/   142 patches, base 8424ed53 (branch main)
 
 `tools/bootstrap.py` does the whole path -- clone, `git am`, build. By hand, on
 a clone that is already in place:
@@ -171,6 +171,7 @@ Most of these patches are independent of Houdini and of this machine --
 | `0139` | hydra: `kma_stderiv` (Karma's ST Derivatives) translated as a zero derivative: the node is no longer lost with a warning, the shader falls back on its own width |
 | `0140` | hydra: a node in a NodeGraph (Houdini material subnetwork), named "G/a" by Hydra, keeps its path; all of them fell onto the empty path and merged, so the network rendered a constant |
 | `0141` | hydra: the last French comments and docstrings in English (Python resources, Render menu, four comment blocks in Cycles); no code change |
+| `0142` | hydra: the Houdini package (`cycles.json`) finds the plugin through `$HOUDINI_PACKAGE_PATH` instead of the build prefix: no absolute path in the generated file (5.2: `0039`) |
 
 ---
 
