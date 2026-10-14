@@ -12,5 +12,6 @@ if not exist "%~dp0..\scratch" mkdir "%~dp0..\scratch"
 set CYCLES_LOG_FILE=%~dp0..\scratch\cycles_viewport.log
 if exist "%CYCLES_LOG_FILE%" del "%CYCLES_LOG_FILE%"
 set HOUDINI_SCRIPT_PATH=%~dp0autostart\scripts;^&
-start "" "E:\Side Effects Software\Houdini22.0.368\bin\houdini.exe" %*
+if "%HFS%"=="" set "HFS=E:\Side Effects Software\Houdini22.0.368"
+start "" "%HFS%\bin\houdini.exe" %*
 endlocal
