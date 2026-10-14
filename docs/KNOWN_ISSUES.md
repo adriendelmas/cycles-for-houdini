@@ -1259,9 +1259,12 @@ CUDA 12). The PTX is built with the installed CUDA, 12.9, so a card that falls
 back on it needs a recent driver; Cycles uses a CUDA 11 compiler for it when
 `CUDA11_NVCC_EXECUTABLE` is set, to keep that requirement low.
 
-Open: the development machine has one card, an RTX 3090 (`sm_86`). Nothing but
-`sm_86` has run. The existing `install-53` tree still holds the
-`sm_86` cubin only until rebuilt.
+Built on 2026-10-14 with CUDA 12.9: all ten kernels (`sm_50` to `sm_120` and
+the `compute_75` PTX) compiled without an error in 19 minutes, one after
+another, at 32 threads and below-normal priority (`--split-compile=32`),
+40 MB compressed, and were put in `install-53/houdini/lib`. Open: the
+development machine has one card, an RTX 3090 (`sm_86`); nothing but `sm_86`
+has run.
 
 ### K-99 AMD, Intel and Apple GPUs are not built — confirmed — open
 Requested together with K-98 so that every user can render on GPU. The delegate

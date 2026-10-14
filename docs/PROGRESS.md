@@ -190,7 +190,7 @@ surface models (`surface_audit.py`, K-63). On 2026-10-07 the numbers were
 | `tools/make_dist.py` (folder, zip, drive-letter scan) | ✅ | zip 66.8 MB; not tried on a second machine (K-102) |
 | Install section for non-builders in the README | ✅ | No GitHub Release published yet |
 | CPU rendering | ✅ | |
-| CUDA kernels, every NVIDIA generation Maxwell to Blackwell | 🟡 | Defaults in `bootstrap.py` since 2026-10-12; installed trees still hold `sm_86` only until rebuilt; only `sm_86` ever run (K-98) |
+| CUDA kernels, every NVIDIA generation Maxwell to Blackwell | 🟡 | Defaults in `bootstrap.py` since 2026-10-12; all ten kernels built with CUDA 12.9 and installed on 2026-10-14; only `sm_86` ever run (K-98) |
 | OptiX | ✅ | PTX kernels, any RTX card in principle; run on an RTX 3090 only |
 | Build time with ten CUDA architectures | 🟡 | One kernel 93 s with split compile, 458 s without; full build estimated 25-30 min, not run (K-100) |
 | AMD HIP | ❌ | Not built; needs the HIP SDK 6.0+ (K-99) |
