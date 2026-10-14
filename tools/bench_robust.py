@@ -23,7 +23,7 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-HFS = os.path.join(os.environ.get("HFS", "E:/Side Effects Software/Houdini22.0.368"), "bin")
+HFS = os.path.join(os.environ["HFS"], "bin")
 OUT = os.path.join(ROOT, "tests", "scratch", "robust")
 RUNS = 3
 

@@ -68,7 +68,7 @@ def Xform "world"
             token fieldDataType = "float"
             int fieldIndex = 0
             token fieldName = "density"
-            asset filePath = @E:/Side Effects Software/Houdini22.0.368/houdini/usd/scenes/noise_sampler/cloud.vdb@
+            asset filePath = @cloud.vdb@
         }
     }
 

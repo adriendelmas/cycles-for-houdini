@@ -20,7 +20,7 @@ import numpy as np
 import OpenImageIO as oiio
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-HFS = os.path.join(os.environ.get("HFS", "E:/Side Effects Software/Houdini22.0.368"), "bin")
+HFS = os.path.join(os.environ["HFS"], "bin")
 OUT = os.path.join(ROOT, "tests", "displace", "output")
 COLUMNS = (24, 36, 48, 60, 72)
 TOL_ROWS = 1

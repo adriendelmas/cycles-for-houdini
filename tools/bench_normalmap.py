@@ -22,7 +22,7 @@ import numpy as np
 import OpenImageIO as oiio
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-HFS = os.path.join(os.environ.get("HFS", "E:/Side Effects Software/Houdini22.0.368"), "bin")
+HFS = os.path.join(os.environ["HFS"], "bin")
 OUT = os.path.join(ROOT, "tests", "normalmap", "output")
 RES = 48
 # Cycles darkens a bumped or normal-mapped surface towards its terminator on

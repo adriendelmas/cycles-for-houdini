@@ -1335,7 +1335,7 @@ project. `WITH_COMPILER_CCACHE` (Cycles wraps `nvcc` with it) is untried on Wind
 
 ### K-101 `hdCycles.dll` embeds the source paths of its build — confirmed — open, harmless
 The `LOG_*` macros carry `__FILE__`, so the DLL holds strings such as
-`E:\WORK\...\src\hydra\render_delegate.cpp:679` (checked with a byte search of
+`<repo>\external\cycles-53\src\hydra\render_delegate.cpp:679` (checked with a byte search of
 the shipped DLL). Nothing reads them. Removing them takes `/pathmap` (or
 `/d1trimfile`) in the delegate's CMake and a rebuild. `make_dist.py` scans text
 files for drive letters but cannot judge a binary.

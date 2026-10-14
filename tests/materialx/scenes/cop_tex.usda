@@ -90,7 +90,7 @@ def Xform "world"
             def Shader "tex"
             {
                 uniform token info:id = "ND_image_color3"
-                asset inputs:file = @C:/Users/Adrien/AppData/Local/Temp/hdcycles_cop_img_copnet_OUT.0001.exr@
+                asset inputs:file = @cop_textures/hdcycles_cop_img_copnet_OUT.0001.exr@
                 token outputs:out
             }
 

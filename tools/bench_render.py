@@ -13,7 +13,7 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-HFS = os.path.join(os.environ.get("HFS", "E:/Side Effects Software/Houdini22.0.368"), "bin")
+HFS = os.path.join(os.environ["HFS"], "bin")
 # Which installation to target (Cycles 5.3, installed in `install-53`).
 INSTALL = os.environ.get("CYCLES_INSTALL_DIR", "install-53")
 VERSION = "5.3"

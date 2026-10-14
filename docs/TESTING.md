@@ -11,9 +11,10 @@ machine three things are needed or the plugin is not found and the images are
 wrong:
 
 ```bash
-export HOUDINI_USER_PREF_DIR="C:/Users/Adrien/Documents/houdini22.0"   # the real pref dir, holds packages/cycles.json
+export HOUDINI_USER_PREF_DIR="C:/Users/<you>/Documents/houdini22.0"   # the real pref dir, holds packages/cycles.json
 export MSYS_NO_PATHCONV=1                                             # Git Bash: keep /Render/settings intact
 export CYCLES_INSTALL_DIR=install-53                                  # which engine the benches target
+export HFS="C:/Program Files/Side Effects Software/Houdini 22.0.368"  # only for the benches run with plain python; hython sets it
 ```
 
 Reference images are rendered at **120×90**; comparing at another resolution

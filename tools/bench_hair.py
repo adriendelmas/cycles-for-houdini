@@ -25,7 +25,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "tests", "materialx", "hair")
 os.makedirs(OUT, exist_ok=True)
-HFS = os.path.join(os.environ.get("HFS", "E:/Side Effects Software/Houdini22.0.368"), "bin")
+HFS = os.path.join(os.environ["HFS"], "bin")
 
 # Expected absorption for melanin 0.5 / redness 0.5 and the default colors.
 m = -math.log(max(1.0 - 0.5, 1e-4))

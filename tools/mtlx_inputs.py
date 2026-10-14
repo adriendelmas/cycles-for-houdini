@@ -28,7 +28,7 @@ import MaterialX as mx
 from mtlx_rules import Resolver, add_own_nodegraphs
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-HFS = os.path.join(os.environ.get("HFS", "E:/Side Effects Software/Houdini22.0.368"), "bin")
+HFS = os.path.join(os.environ["HFS"], "bin")
 SOURCE = os.path.join(ROOT, "external", "cycles-53", "src", "hydra", "material.cpp")
 OUT = os.path.join(ROOT, "tests", "materialx", "output", "inputs")
 if not os.path.isdir(OUT):
