@@ -1259,7 +1259,37 @@ difference 0.028 - the blend approximation itself, since Karma rendering
 the blended graph differs from its own closure mix by 0.030).
 `bench_mtlx.py` case `surface_mix_fold`: four mattes mixed, exact.
 The cost of the fold: one layer's textures are still read per layer, so
-the material stays as heavy as Karma's.
+the material stays as heavy as Karma's. (A virtual stack in the compiler,
+to report the peak a failed shader would have needed, was tried and dropped
+the same day: a test that seemed to show it breaking the sky rendered a
+stage without `metersPerUnit`, but the measurements above were taken with
+it and the simpler diagnostic - the live values at the overflow - is kept.)
+
+### K-111 Textures inside a usdz archive rendered magenta — confirmed — **fixed** (0149)
+Every MEGALIB asset is a `.usdz` with its textures inside, so a texture's
+resolved path is `asset.usdz[textures/color.jpg]`: a form OpenImageIO
+cannot open, and Cycles painted every such texture magenta while Karma, which
+reads through USD's resolver, showed it. `HdCyclesArchiveImageLoader`
+(archive_image.cpp): the bytes come from `ArGetResolver().OpenAsset`, and
+Cycles' OpenImageIO loading takes an `IOProxy` (a parameter added to
+`ImageMetaData::oiio_load_metadata/pixels`) to decode them from memory; the
+material binds such a loader on every image node whose file is in an
+archive, as it already does for COP textures. The `ar` library joins the
+USD libraries linked. A MEGALIB cone renders textured, as in Karma;
+`bench_usdtex.py` case `mtlx_usdz`.
+
+### K-112 A material bound for the `full` purpose only was ignored — confirmed — **fixed** (0149)
+Houdini's Assign Material LOP, asked for a purpose, writes
+`material:binding:full`; the author's terrain carries only that. The
+delegate's `GetMaterialBindingPurpose` says `full`, but the Hydra 2
+emulation resolves the all-purpose binding alone: the terrain rendered with
+the default surface - its `displayColor`, near white - which also made it
+look 1.75 times brighter than Karma until the material was found missing. A
+`HdsiMaterialBindingResolvingSceneIndex` registered for both renderers
+copies the first binding found, `full` then all-purpose, onto the
+all-purpose one. `bench_mtlx.py` case `binding_full`. With K-110 and
+K-111, the Gauge terrain from its camera renders within 5 % of Karma in
+mean (0.155 vs 0.164, mean absolute difference 0.019).
 
 ## D. Repository and tests
 

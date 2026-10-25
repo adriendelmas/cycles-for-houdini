@@ -357,6 +357,13 @@ CASES = [
         "token outputs:out",
     ], mx_mix(BLUE, RED, 0.25), {"terminal": "surface",
                                   "extra": [matte("s1", RED), matte("s2", BLUE)]}),
+    # The material bound for the `full` purpose only: rendered unbound, grey,
+    # until the delegate resolved that purpose (K-112).
+    ("binding_full", [
+        'uniform token info:id = "ND_constant_color3"',
+        "color3f inputs:value = (0.2, 0.5, 0.8)",
+        "color3f outputs:out",
+    ], (0.2, 0.5, 0.8), {"binding_full": True}),
     # Four surfaces mixed: folded by the delegate into one standard_surface
     # with blended inputs (K-110), exact for mattes - Karma's closure mix of
     # four Lambert lobes is the same blend of their colours.
@@ -1030,8 +1037,12 @@ def render(name, body, options):
     material = [terminal, shader("probe", body)]
     material += options.get("extra", [])
     scene = os.path.join(OUT, name + ".usda")
-    open(scene, "w", encoding="utf-8").write(
-        SCENE % (options.get("mesh", ""), "\n".join(material)))
+    text = SCENE % (options.get("mesh", ""), "\n".join(material))
+    if options.get("binding_full"):
+        # Bound for the `full` purpose only, as Houdini's Assign Material
+        # writes when asked for a purpose (K-112).
+        text = text.replace("rel material:binding = ", "rel material:binding:full = ")
+    open(scene, "w", encoding="utf-8").write(text)
     exr = os.path.join(OUT, name + ".exr")
     if os.path.exists(exr):
         os.remove(exr)

@@ -1,0 +1,621 @@
+From ad5156dedbc6d47221c62ead178e9b69a9830c34 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Mon, 26 Oct 2026 00:04:01 +0100
+Subject: [PATCH 149/149] hydra + util: textures inside a usdz archive;
+ material:binding:full resolved
+
+Every MEGALIB asset is a usdz with its textures inside, so a texture's
+resolved path is asset.usdz[textures/color.jpg], which OpenImageIO cannot
+open: Cycles painted it magenta where Karma, reading through USD's
+resolver, showed it. HdCyclesArchiveImageLoader takes the bytes from
+ArGetResolver().OpenAsset and decodes them from memory through an IOProxy
+parameter added to ImageMetaData::oiio_load_metadata/pixels; the material
+binds it on every image node whose file is in an archive, as it does for
+COP textures. The ar library joins the USD libraries linked. (K-111)
+
+Houdini's Assign Material LOP, asked for a purpose, writes
+material:binding:full, which the Hydra 2 emulation does not resolve for
+this delegate despite GetMaterialBindingPurpose: the prim rendered with the
+default surface. A HdsiMaterialBindingResolvingSceneIndex registered for
+both renderers copies the first binding found, full then all-purpose, onto
+the all-purpose one. (K-112)
+
+The SVM compiler's virtual stack of 0148 is dropped; the report of the live
+values at an overflow and the per-shader peak stay. Cycles nodes keep their
+Hydra names.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ src/cmake/Modules/FindUSDHoudini.cmake |   2 +-
+ src/hydra/CMakeLists.txt               |   2 +
+ src/hydra/archive_image.cpp            |  98 ++++++++++++++++++++++
+ src/hydra/archive_image.h              |  42 ++++++++++
+ src/hydra/material.cpp                 |  41 ++++++++++
+ src/hydra/material.h                   |   4 +
+ src/hydra/plugin.cpp                   |  26 ++++++
+ src/scene/svm.cpp                      | 107 +++++++++++--------------
+ src/scene/svm.h                        |   6 +-
+ src/util/image_metadata.cpp            |  41 ++++++----
+ src/util/image_metadata.h              |  13 ++-
+ 11 files changed, 296 insertions(+), 86 deletions(-)
+ create mode 100644 src/hydra/archive_image.cpp
+ create mode 100644 src/hydra/archive_image.h
+
+diff --git a/src/cmake/Modules/FindUSDHoudini.cmake b/src/cmake/Modules/FindUSDHoudini.cmake
+index 95948535..ea7fcc7b 100644
+--- a/src/cmake/Modules/FindUSDHoudini.cmake
++++ b/src/cmake/Modules/FindUSDHoudini.cmake
+@@ -31,7 +31,7 @@ if(HOUDINI_ROOT AND EXISTS ${HOUDINI_ROOT})
+   string(REGEX MATCHALL "[0-9]+" HOUDINI_VERSION_MAJOR ${_houdini_version_major})
+ 
+   # USD
+-  set(USD_LIBRARIES hd hdsi geomUtil hgi hgiGL sdr gf arch garch plug tf trace vt work sdf cameraUtil hf pxOsd usd usdImaging usdGeom python)
++  set(USD_LIBRARIES hd hdsi geomUtil hgi hgiGL sdr gf arch garch plug tf trace vt work sdf cameraUtil hf pxOsd usd usdImaging usdGeom ar python)
+ 
+   foreach(lib ${USD_LIBRARIES})
+     find_library(_pxr_library NAMES pxr_${lib} PATHS ${_library_dir} NO_DEFAULT_PATH)
+diff --git a/src/hydra/CMakeLists.txt b/src/hydra/CMakeLists.txt
+index a7284275..b4f1a63c 100644
+--- a/src/hydra/CMakeLists.txt
++++ b/src/hydra/CMakeLists.txt
+@@ -22,6 +22,7 @@ set(LIB
+ cycles_external_libraries_append(LIB)
+ 
+ set(SRC_HD_CYCLES_HEADERS
++  archive_image.h
+   camera.h
+   config.h
+   curves.h
+@@ -49,6 +50,7 @@ set(SRC_HD_CYCLES_HEADERS
+ )
+ 
+ set(SRC_HD_CYCLES
++  archive_image.cpp
+   curves.cpp
+   camera.cpp
+   field.cpp
+diff --git a/src/hydra/archive_image.cpp b/src/hydra/archive_image.cpp
+new file mode 100644
+index 00000000..010695fb
+--- /dev/null
++++ b/src/hydra/archive_image.cpp
+@@ -0,0 +1,98 @@
++/* SPDX-FileCopyrightText: 2026 Blender Foundation
++ *
++ * SPDX-License-Identifier: Apache-2.0 */
++
++#include "hydra/archive_image.h"
++
++#include "util/image_metadata.h"
++#include "util/log.h"
++
++#include <OpenImageIO/filesystem.h>
++
++#include <pxr/usd/ar/asset.h>
++#include <pxr/usd/ar/resolvedPath.h>
++#include <pxr/usd/ar/resolver.h>
++
++HDCYCLES_NAMESPACE_OPEN_SCOPE
++
++bool IsArchiveImagePath(const std::string &path)
++{
++  const size_t bracket = path.rfind('[');
++  return bracket != std::string::npos && path.back() == ']' &&
++         (path.rfind(".usdz[", bracket) != std::string::npos ||
++          path.rfind(".USDZ[", bracket) != std::string::npos ||
++          path.rfind(".zip[", bracket) != std::string::npos);
++}
++
++HdCyclesArchiveImageLoader::HdCyclesArchiveImageLoader(std::string path) : _path(std::move(path))
++{
++  const size_t bracket = _path.rfind('[');
++  _inner = bracket == std::string::npos ? _path : _path.substr(bracket + 1, _path.size() - bracket - 2);
++}
++
++bool HdCyclesArchiveImageLoader::Read()
++{
++  if (_bytes) {
++    return true;
++  }
++  const std::shared_ptr<PXR_NS::ArAsset> asset = PXR_NS::ArGetResolver().OpenAsset(
++      PXR_NS::ArResolvedPath(_path));
++  if (!asset) {
++    LOG_WARNING << "Texture " << _path << " could not be opened in its archive.";
++    return false;
++  }
++  _size = asset->GetSize();
++  _bytes = asset->GetBuffer();
++  if (!_bytes || _size == 0) {
++    LOG_WARNING << "Texture " << _path << " is empty in its archive.";
++    _bytes.reset();
++    return false;
++  }
++  return true;
++}
++
++bool HdCyclesArchiveImageLoader::load_metadata(CCL_NS::ImageMetaData &metadata,
++                                               const CCL_NS::ImageLoaderParams &params,
++                                               CCL_NS::Progress & /*progress*/)
++{
++  if (!Read()) {
++    params.load_failure_num++;
++    return false;
++  }
++  OIIO::Filesystem::IOMemReader reader(_bytes.get(), _size);
++  if (!metadata.oiio_load_metadata(_inner, nullptr, &reader)) {
++    LOG_WARNING << "Texture " << _path << " could not be decoded.";
++    params.load_failure_num++;
++    return false;
++  }
++  return true;
++}
++
++bool HdCyclesArchiveImageLoader::load_pixels(const CCL_NS::ImageMetaData &metadata, void *pixels)
++{
++  if (!Read()) {
++    return false;
++  }
++  OIIO::Filesystem::IOMemReader reader(_bytes.get(), _size);
++  const bool ok = metadata.oiio_load_pixels(_inner, pixels, true, &reader);
++  /* The bytes are not needed past the device upload. */
++  _bytes.reset();
++  _size = 0;
++  if (!ok) {
++    return false;
++  }
++  metadata.conform_pixels(pixels);
++  return true;
++}
++
++CCL_NS::string HdCyclesArchiveImageLoader::name() const
++{
++  return _path;
++}
++
++bool HdCyclesArchiveImageLoader::equals(const CCL_NS::ImageLoader &other) const
++{
++  return _path == static_cast<const HdCyclesArchiveImageLoader &>(other)._path;
++}
++
++HDCYCLES_NAMESPACE_CLOSE_SCOPE
+diff --git a/src/hydra/archive_image.h b/src/hydra/archive_image.h
+new file mode 100644
+index 00000000..bb2ef55d
+--- /dev/null
++++ b/src/hydra/archive_image.h
+@@ -0,0 +1,42 @@
++/* SPDX-FileCopyrightText: 2026 Blender Foundation
++ *
++ * SPDX-License-Identifier: Apache-2.0 */
++
++#pragma once
++
++#include "hydra/config.h"
++
++#include "scene/image_loader.h"
++
++#include <memory>
++#include <string>
++
++HDCYCLES_NAMESPACE_OPEN_SCOPE
++
++/* A texture inside a USD archive - `asset.usdz[textures/color.jpg]`, the
++ * form every MEGALIB asset ships its textures in - which OpenImageIO cannot
++ * open by path. USD's resolver reads the bytes; OpenImageIO decodes them
++ * from memory (K-111). */
++bool IsArchiveImagePath(const std::string &path);
++
++class HdCyclesArchiveImageLoader final : public CCL_NS::ImageLoader {
++ public:
++  explicit HdCyclesArchiveImageLoader(std::string path);
++
++  bool load_metadata(CCL_NS::ImageMetaData &metadata,
++                     const CCL_NS::ImageLoaderParams &params,
++                     CCL_NS::Progress &progress) override;
++  bool load_pixels(const CCL_NS::ImageMetaData &metadata, void *pixels) override;
++  CCL_NS::string name() const override;
++  bool equals(const CCL_NS::ImageLoader &other) const override;
++
++ private:
++  bool Read();
++
++  std::string _path;
++  std::string _inner;
++  std::shared_ptr<const char> _bytes;
++  size_t _size = 0;
++};
++
++HDCYCLES_NAMESPACE_CLOSE_SCOPE
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index e9065932..9f249c04 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -5,6 +5,8 @@
+ 
+ #include <algorithm>
+ #include <set>
++
++#include "hydra/archive_image.h"
+ #include "hydra/material.h"
+ #include "hydra/mtlx_expand.h"
+ 
+@@ -3695,6 +3697,7 @@ void HdCyclesMaterial::Sync(HdSceneDelegate *sceneDelegate,
+       ApplyShaderSettings();
+       ResolveUdimTiles();
+       RefreshImageHandles();
++      BindArchiveImages(lock.scene);
+       BindHoudiniCopImages(lock.scene, sceneDelegate);
+       _shader->tag_update(lock.scene);
+     }
+@@ -3736,6 +3739,7 @@ void HdCyclesMaterial::Sync(HdSceneDelegate *sceneDelegate,
+       _shader->set_displacement_method(_hasDisplacement ? DISPLACE_BOTH : DISPLACE_BUMP);
+       ApplyShaderSettings();
+       ResolveUdimTiles();
++      BindArchiveImages(lock.scene);
+       BindHoudiniCopImages(lock.scene, sceneDelegate);
+ 
+       _shader->set_graph(std::move(graph));
+@@ -4210,6 +4214,43 @@ void HdCyclesMaterial::RefreshImageHandles()
+   }
+ }
+ 
++void HdCyclesMaterial::BindArchiveImages(Scene *scene)
++{
++  static const ustring kFilename("filename");
++  auto bind = [&](Node *const node) {
++    ImageSlotTextureNode *const slot = dynamic_cast<ImageSlotTextureNode *>(node);
++    if (slot == nullptr || !slot->handle.empty()) {
++      return;
++    }
++    const SocketType *const socket = slot->type->find_input(kFilename);
++    if (socket == nullptr) {
++      return;
++    }
++    const std::string path = slot->get_string(*socket).string();
++    if (!IsArchiveImagePath(path)) {
++      return;
++    }
++    ImageParams params;
++    if (ImageTextureNode *const image = dynamic_cast<ImageTextureNode *>(slot)) {
++      params = image->image_params();
++    }
++    else if (EnvironmentTextureNode *const env = dynamic_cast<EnvironmentTextureNode *>(slot)) {
++      params = env->image_params();
++    }
++    else {
++      return;
++    }
++    slot->handle = scene->image_manager->add_image(
++        std::make_unique<HdCyclesArchiveImageLoader>(path), params);
++  };
++  for (const auto &entry : _nodes) {
++    bind(entry.second.node);
++    for (const auto &helper : entry.second.helperNodes) {
++      bind(helper.second);
++    }
++  }
++}
++
+ void HdCyclesMaterial::BindHoudiniCopImages(Scene *scene, HdSceneDelegate *sceneDelegate)
+ {
+ #ifdef WITH_HOUDINI_COP
+diff --git a/src/hydra/material.h b/src/hydra/material.h
+index eb06d5fa..dec4d392 100644
+--- a/src/hydra/material.h
++++ b/src/hydra/material.h
+@@ -102,6 +102,10 @@ class HdCyclesMaterial final : public PXR_NS::HdMaterial {
+    * on the sync thread, and handed to Cycles in memory. */
+   void BindHoudiniCopImages(CCL_NS::Scene *scene, PXR_NS::HdSceneDelegate *sceneDelegate);
+ 
++  /* The textures inside a USD archive (`asset.usdz[textures/x.jpg]`), read
++   * through USD's resolver and handed to Cycles in memory (K-111). */
++  void BindArchiveImages(CCL_NS::Scene *scene);
++
+   CCL_NS::Shader *_shader = nullptr;
+   std::unordered_map<PXR_NS::SdfPath, NodeDesc, PXR_NS::SdfPath::Hash> _nodes;
+ };
+diff --git a/src/hydra/plugin.cpp b/src/hydra/plugin.cpp
+index 0acaf944..6095c9ff 100644
+--- a/src/hydra/plugin.cpp
++++ b/src/hydra/plugin.cpp
+@@ -23,7 +23,9 @@
+ #include <pxr/imaging/hd/sceneIndexPlugin.h>
+ #include <pxr/imaging/hd/sceneIndexPluginRegistry.h>
+ #include <pxr/imaging/hd/tokens.h>
++#include <pxr/imaging/hd/materialBindingsSchema.h>
+ #include <pxr/imaging/hdsi/lightLinkingSceneIndex.h>
++#include <pxr/imaging/hdsi/materialBindingResolvingSceneIndex.h>
+ 
+ PXR_NAMESPACE_OPEN_SCOPE
+ 
+@@ -220,6 +222,30 @@ TF_REGISTRY_FUNCTION(HdSceneIndexPlugin)
+         0,
+         HdSceneIndexPluginRegistry::InsertionOrderAtEnd);
+   }
++
++  /* Material binding purposes: a `material:binding:full` - what Houdini's
++   * Assign Material LOP writes when asked for a purpose - reached the
++   * delegate only under `materialBindings/full`, which nothing read: the
++   * prim rendered unbound, with the default surface, while Karma bound it.
++   * The delegate's GetMaterialBindingPurpose says `full`, but the emulation
++   * resolves the all-purpose binding alone. This scene index copies the
++   * first purpose found, `full` then all-purpose, onto the all-purpose one
++   * (K-112). */
++  for (const char *displayName : {"Cycles CPU", "Cycles GPU"}) {
++    HdSceneIndexPluginRegistry::GetInstance().RegisterSceneIndexForRenderer(
++        displayName,
++        [](const std::string & /*renderInstanceId*/,
++           const HdSceneIndexBaseRefPtr &inputScene,
++           const HdContainerDataSourceHandle & /*args*/) -> HdSceneIndexBaseRefPtr {
++          return HdsiMaterialBindingResolvingSceneIndex::New(
++              inputScene,
++              {HdTokens->full, HdMaterialBindingsSchemaTokens->allPurpose},
++              HdMaterialBindingsSchemaTokens->allPurpose);
++        },
++        nullptr,
++        0,
++        HdSceneIndexPluginRegistry::InsertionOrderAtEnd);
++  }
+ }
+ 
+ PXR_NAMESPACE_CLOSE_SCOPE
+diff --git a/src/scene/svm.cpp b/src/scene/svm.cpp
+index f0e50a6f..9c36124c 100644
+--- a/src/scene/svm.cpp
++++ b/src/scene/svm.cpp
+@@ -211,7 +211,7 @@ SVMStackOffset SVMCompiler::stack_find_offset(const int size)
+   int offset = -1;
+ 
+   /* find free space in stack & mark as used */
+-  for (int i = 0, num_unused = 0; i < Stack::DIAG_SIZE; i++) {
++  for (int i = 0, num_unused = 0; i < SVM_STACK_SIZE; i++) {
+     if (active_stack.users[i]) {
+       num_unused = 0;
+     }
+@@ -227,68 +227,57 @@ SVMStackOffset SVMCompiler::stack_find_offset(const int size)
+         active_stack.users[i--] = 1;
+       }
+ 
+-      if (offset + size > SVM_STACK_SIZE) {
+-        /* Past the real stack: the shader fails, the allocation goes on so
+-         * that the peak is known (reported by compile()). */
+-        if (!compile_failed) {
+-          compile_failed = true;
+-          LOG_ERROR << "Shader graph: out of SVM stack space, shader \""
+-                    << current_shader->name << "\" too big.";
+-          if (current_graph) {
+-            /* What holds the stack: the live values by node type (a float3
+-             * convert shares its input's slots and is not counted twice). */
+-            std::map<std::string, std::pair<int, int>> live;
+-            std::set<int> offsets;
+-            int total = 0;
+-            for (ShaderNode *node : current_graph->nodes) {
+-              for (ShaderOutput *output : node->outputs) {
+-                if (output->stack_offset != SVM_STACK_INVALID &&
+-                    offsets.insert(output->stack_offset).second)
+-                {
+-                  const int slots = stack_size(output);
+-                  auto &entry = live[node->type->name.string()];
+-                  entry.first += 1;
+-                  entry.second += slots;
+-                  total += slots;
+-                }
+-              }
+-            }
+-            std::string text;
+-            for (const auto &[type_name, counts] : live) {
+-              text += " " + type_name + " x" + std::to_string(counts.first) + " (" +
+-                      std::to_string(counts.second) + ")";
+-            }
+-            if (LOG_IS_ON(LOG_LEVEL_INFO)) {
+-              text += "\n  live outputs:";
+-              offsets.clear();
+-              for (ShaderNode *node : current_graph->nodes) {
+-                for (ShaderOutput *output : node->outputs) {
+-                  if (output->stack_offset != SVM_STACK_INVALID &&
+-                      offsets.insert(output->stack_offset).second)
+-                  {
+-                    text += "\n    " + node->name.string() + "." + output->name().string() +
+-                            " (" + std::to_string(stack_size(output)) + ")";
+-                  }
+-                }
+-              }
+-            }
+-            LOG_ERROR << "Live SVM stack at the overflow, " << total << " of " << SVM_STACK_SIZE
+-                      << " slots, " << size << " more asked by "
+-                      << (current_node ? current_node->type->name.string() : std::string("?"))
+-                      << ":" << text;
+-          }
+-        }
+-        return SVMStackOffset(0);
+-      }
+       return offset;
+     }
+   }
+ 
+-  /* Not even the virtual stack holds it. */
+   if (!compile_failed) {
+     compile_failed = true;
+-    LOG_ERROR << "Shader graph: out of SVM stack space, shader \"" << current_shader->name
+-              << "\" too big.";
++    LOG_ERROR << "Shader graph: out of SVM stack space, shader \""
++              << current_shader->name << "\" too big.";
++    if (current_graph) {
++      /* What holds the stack: the live values by node type (a float3
++       * convert shares its input's slots and is not counted twice). */
++      std::map<std::string, std::pair<int, int>> live;
++      std::set<int> offsets;
++      int total = 0;
++      for (ShaderNode *node : current_graph->nodes) {
++        for (ShaderOutput *output : node->outputs) {
++          if (output->stack_offset != SVM_STACK_INVALID &&
++              offsets.insert(output->stack_offset).second)
++          {
++            const int slots = stack_size(output);
++            auto &entry = live[node->type->name.string()];
++            entry.first += 1;
++            entry.second += slots;
++            total += slots;
++          }
++        }
++      }
++      std::string text;
++      for (const auto &[type_name, counts] : live) {
++        text += " " + type_name + " x" + std::to_string(counts.first) + " (" +
++                std::to_string(counts.second) + ")";
++      }
++      if (LOG_IS_ON(LOG_LEVEL_INFO)) {
++        text += "\n  live outputs:";
++        offsets.clear();
++        for (ShaderNode *node : current_graph->nodes) {
++          for (ShaderOutput *output : node->outputs) {
++            if (output->stack_offset != SVM_STACK_INVALID &&
++                offsets.insert(output->stack_offset).second)
++            {
++              text += "\n    " + node->name.string() + "." + output->name().string() +
++                      " (" + std::to_string(stack_size(output)) + ")";
++            }
++          }
++        }
++      }
++      LOG_ERROR << "Live SVM stack at the overflow, " << total << " of " << SVM_STACK_SIZE
++                << " slots, " << size << " more asked by "
++                << (current_node ? current_node->type->name.string() : std::string("?"))
++                << ":" << text;
++    }
+   }
+   return 0;
+ }
+@@ -1223,10 +1212,6 @@ void SVMCompiler::compile_type(Shader *shader, ShaderGraph *graph, ShaderType ty
+ 
+   /* if compile failed, generate empty shader */
+   if (compile_failed) {
+-    if (max_stack_use > SVM_STACK_SIZE) {
+-      LOG_ERROR << "Shader \"" << shader->name << "\" would need " << max_stack_use
+-                << " SVM stack slots of the " << SVM_STACK_SIZE << " available.";
+-    }
+     current_svm_nodes.clear();
+     compile_failed = false;
+   }
+diff --git a/src/scene/svm.h b/src/scene/svm.h
+index 76fc6e85..35d67682 100644
+--- a/src/scene/svm.h
++++ b/src/scene/svm.h
+@@ -205,11 +205,7 @@ class SVMCompiler {
+       printf(">\n");
+     }
+ 
+-    /* Past SVM_STACK_SIZE the stack is virtual: a shader that does not fit
+-     * fails, but its allocation goes on so that the peak it would need is
+-     * known and reported (hdCycles K-110). */
+-    static constexpr int DIAG_SIZE = 4096;
+-    int users[DIAG_SIZE];
++    int users[SVM_STACK_SIZE];
+   };
+ 
+   /* Global state of the compiler accessible from the compilation routines. */
+diff --git a/src/util/image_metadata.cpp b/src/util/image_metadata.cpp
+index 63a317cb..e74c9cd9 100644
+--- a/src/util/image_metadata.cpp
++++ b/src/util/image_metadata.cpp
+@@ -362,29 +362,34 @@ void ImageMetaData::detect_tiles(ImageInput &input,
+   }
+ }
+ 
+-bool ImageMetaData::oiio_load_metadata(OIIO::string_view filepath, OIIO::ImageSpec *r_spec)
++bool ImageMetaData::oiio_load_metadata(OIIO::string_view filepath,
++                                       OIIO::ImageSpec *r_spec,
++                                       OIIO::Filesystem::IOProxy *ioproxy)
+ {
+   /* Perform preliminary checks, with meaningful logging. */
+-  if (!OIIO::Filesystem::exists(filepath)) {
++  if (ioproxy == nullptr && !OIIO::Filesystem::exists(filepath)) {
+     LOG_WARNING << "Image file " << filepath << " does not exist.";
+     return false;
+   }
+-  if (OIIO::Filesystem::is_directory(filepath)) {
++  if (ioproxy == nullptr && OIIO::Filesystem::is_directory(filepath)) {
+     LOG_WARNING << "Image file " << filepath << " is a directory, cannot use as image.";
+     return false;
+   }
+ 
+-  std::unique_ptr<ImageInput> in(ImageInput::create(filepath));
+-  if (!in) {
+-    LOG_WARNING << "Image file " << filepath << " failed to load.";
+-    return false;
+-  }
+-
+   ImageSpec spec;
+   ImageSpec config;
+ 
+   /* Load without automatic OIIO alpha conversion. */
+   config.attribute("oiio:UnassociatedAlpha", 1);
++  if (ioproxy != nullptr) {
++    config.attribute("oiio:ioproxy", TypeDesc::PTR, &ioproxy);
++  }
++
++  std::unique_ptr<ImageInput> in(ImageInput::create(filepath, false, &config, ioproxy));
++  if (!in) {
++    LOG_WARNING << "Image file " << filepath << " failed to load.";
++    return false;
++  }
+ 
+   if (!in->open(filepath, spec, config)) {
+     LOG_WARNING << "Image file " << filepath << " failed to open.";
+@@ -712,14 +717,9 @@ static bool load_pixels_oiio(const ImageMetaData &metadata,
+ 
+ bool ImageMetaData::oiio_load_pixels(OIIO::string_view filepath,
+                                      void *pixels,
+-                                     const bool flip_y) const
++                                     const bool flip_y,
++                                     OIIO::Filesystem::IOProxy *ioproxy) const
+ {
+-  /* load image from file through OIIO */
+-  std::unique_ptr<ImageInput> in = ImageInput::create(filepath);
+-  if (!in) {
+-    return false;
+-  }
+-
+   ImageSpec spec = ImageSpec();
+   ImageSpec config = ImageSpec();
+ 
+@@ -727,6 +727,15 @@ bool ImageMetaData::oiio_load_pixels(OIIO::string_view filepath,
+    * will associate alpha in the 8bit buffer for PNGs, which leads to too
+    * much precision loss when we load it as half float to do a color-space transform. */
+   config.attribute("oiio:UnassociatedAlpha", 1);
++  if (ioproxy != nullptr) {
++    config.attribute("oiio:ioproxy", TypeDesc::PTR, &ioproxy);
++  }
++
++  /* load image from file through OIIO */
++  std::unique_ptr<ImageInput> in = ImageInput::create(filepath, false, &config, ioproxy);
++  if (!in) {
++    return false;
++  }
+ 
+   if (!in->open(filepath, spec, config)) {
+     return false;
+diff --git a/src/util/image_metadata.h b/src/util/image_metadata.h
+index 08d17193..ccf15db6 100644
+--- a/src/util/image_metadata.h
++++ b/src/util/image_metadata.h
+@@ -71,9 +71,16 @@ class ImageMetaData {
+   size_t memory_size() const;
+   size_t pixel_memory_size() const;
+ 
+-  /* OpenImageIO metadata and pixel loading. */
+-  bool oiio_load_metadata(OIIO::string_view filepath, OIIO::ImageSpec *r_spec = nullptr);
+-  bool oiio_load_pixels(OIIO::string_view filepath, void *pixels, const bool flip_y = true) const;
++  /* OpenImageIO metadata and pixel loading. With `ioproxy`, the file is read
++   * from that proxy (an image inside a USD archive, hdCycles K-111) and
++   * `filepath` only names its format. */
++  bool oiio_load_metadata(OIIO::string_view filepath,
++                          OIIO::ImageSpec *r_spec = nullptr,
++                          OIIO::Filesystem::IOProxy *ioproxy = nullptr);
++  bool oiio_load_pixels(OIIO::string_view filepath,
++                        void *pixels,
++                        const bool flip_y = true,
++                        OIIO::Filesystem::IOProxy *ioproxy = nullptr) const;
+ 
+   /* Change data type to float. */
+   void make_float();

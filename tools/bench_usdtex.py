@@ -123,6 +123,8 @@ CASES = [
     # input, as Houdini writes it - and with none, auto, the common case.
     ("mtlx_png_srgb", "corners.png", "MTLX", ' (\n                    colorSpace = "srgb_texture"\n                )'),
     ("mtlx_png_auto", "corners.png", "MTLX", ""),
+    # The same PNG inside a usdz archive (K-111).
+    ("mtlx_usdz", "tex.usdz[corners.png]", "MTLX", ""),
     # Two UDIM tiles, one colour each, the quad's u running over both; the
     # second spelling is the one Houdini writes.
     ("udim", "tile.<UDIM>.exr", ["float2 inputs:scale = (2, 1)"], []),
@@ -197,6 +199,10 @@ def write_textures():
         buf = oiio.ImageBuf(oiio.ImageSpec(8, 8, 3, oiio.FLOAT))
         oiio.ImageBufAlgo.fill(buf, colour)
         buf.write(os.path.join(OUT, "tile.%d.exr" % tile))
+    # The PNG inside a usdz archive, as every MEGALIB asset ships its textures
+    # (K-111): read through USD's resolver, not by path.
+    subprocess.run([os.path.join(HFS, "usdzip.exe"), "tex.usdz", "corners.png"],
+                   capture_output=True, text=True, cwd=OUT)
 
 
 def render(renderer, scene, exr):
