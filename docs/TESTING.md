@@ -38,7 +38,13 @@ scene edits went through every time.
 To test a freshly built DLL while Houdini holds the installed one: set
 `HOUDINI_PACKAGE_SKIP=1`, point `PXR_PLUGINPATH_NAME` at a temporary plugin
 tree, and put the Houdini and install `bin` directories on `PATH` in POSIX
-form (`/e/...`).
+form (`/e/...`). `HOUDINI_PACKAGE_SKIP` also drops Houdini's OCIO config,
+and without one Cycles stores an 8-bit sRGB texture encoded instead of
+decoded - three times too bright - while Karma complains it has no working
+space: set `OCIO` to `$HFS/packages/ocio/houdini-config-*.ocio` for any
+measurement with textures (`bench_usdtex.py` does it itself). A bench run
+under hython loads the packages, so husk then takes the **installed** DLL,
+not the one on `PXR_PLUGINPATH_NAME`: install before measuring.
 
 Writing a scene by hand: a `DistantLight` needs `inputs:normalize = 1` to
 light anything. Unnormalized, USD reads its intensity as the radiance of the
