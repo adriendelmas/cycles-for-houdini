@@ -97,6 +97,7 @@ after a Cycles standard attribute (`heat`, `density`, `color`, `temperature`,
 | `hython tools/bench_karma_settings.py` | Houdini's Karma Render Settings LOP, twelve AOVs ticked | Each of Karma's render vars (LPEs, `ray:hit*`, `CDA`) lands on a Cycles pass with the value the diffuse scene implies | Light components other than diffuse on a scene that has them |
 | `hython tools/mtlx_pinned.py [--list] [pattern]` | Every value nodedef, two grids | A nodedef renders the same with its inputs unwritten and with them written at their MaterialX defaults (677/677 since 0099; 57 differed before) | Values |
 | `hython tools/count_nodes.py` | Sdr registry | The node counts the docs quote: 163 published, 64 hidden, 99 VOPs, 97 probed | - |
+| `python tools/karma_nodegraphs.py <kma_node> \| --list` | `$HFS/houdini/karmaNodeGraphs.json` | A Karma node's own nodegraph as a readable list, inputs named; the nodes it uses that are not in the library, which a delegate nodegraph has to replace (K-106) | - |
 | `scratchpad/audit_surface.py` (local) | 39 `standard_surface` inputs | Each input changes the image, references local and gitignored | Agreement with Karma beyond the four measured cases |
 
 Taken together: the suite catches a node that stops rendering, a socket
