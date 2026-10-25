@@ -1,7 +1,7 @@
 From f47a4c7b9f118fb7c9195c8283ec4f985b818a0c Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 05:31:56 +0200
-Subject: [PATCH 098/147] hydra: unfolded MaterialX nodegraphs, extract and
+Subject: [PATCH 098/148] hydra: unfolded MaterialX nodegraphs, extract and
  swizzle, vector2
 
 The MaterialX library defines a good share of its nodes as graphs of simpler

@@ -179,6 +179,7 @@ Most of these patches are independent of Houdini and of this machine --
 | `0145` | hydra: Karma's Hextiled Triplanar, colour and normal, as the delegate's own nodegraphs on Cycles' hextiledimage; `transformvector/normal/point` between object and world (K-106) |
 | `0146` | hydra: the orthographic window is scaled by `metersPerUnit` like everything else sent to Cycles (K-107) |
 | `0147` | util + hydra: without an OCIO config an 8-bit sRGB texture rendered encoded, three times too bright - the builtin sRGB is the stored-as-sRGB case under a Rec.709 scene linear, and a file tagged sRGB keeps meaning it (K-108); the image nodes' `default` consumed without a warning (K-109) |
+| `0148` | hydra + scene: a mix of four or more standard_surface blended by its inputs into one, mixes chained layer by layer with ties so the SVM compiler takes one layer at a time (ten layers: 188 stack slots instead of 2000, 12 closures instead of 120); the SVM compiler reports each shader's peak stack and, on overflow, what held it; Cycles nodes named after their Hydra node (K-110) |
 
 ---
 

@@ -1,0 +1,573 @@
+From 78b94e00ddd518c95577450380aafa0a4eab1764 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Sun, 25 Oct 2026 22:02:30 +0100
+Subject: [PATCH 148/148] hydra + scene: a mix of many standard_surface blended
+ by its inputs; SVM stack diagnostics
+
+A terrain mixing ten tiled rock materials by nine mix_surfaceshader could
+not compile in Cycles: 120 closures against the kernel's 64, and some 2000
+SVM stack slots against 255 (offsets are a byte; the stack cannot grow).
+The growth is structural: each layer's tiled coordinates and hex weights
+feed its colour, its normal and its roughness, and the Sethi-Ullman order,
+optimal for trees, generates the whole colour tree first and keeps every
+layer's shared values alive for the other two.
+
+FoldSurfaceMix (mtlx_expand.cpp): a mix tree of four or more
+standard_surface becomes one standard_surface whose written inputs are the
+mixes of the leaves' by the same weights - the usual material-blend
+approximation, normals renormalised - with the mixes chained layer by layer
+and each layer's geometry lookups tied to the previous layer's last mix
+(value + 1e-30 x it), so the compiler takes one layer at a time: 188 slots
+for the ten layers. Three leaves or fewer keep the exact closure mix. The
+folded terrain is within 4 % of Karma's closure mix.
+
+The SVM compiler reports each shader's peak stack and word count at info,
+and a shader that does not fit goes on allocating on a virtual stack to
+report the peak it would need, with the live values by node at the overflow;
+Cycles nodes are named after their Hydra node for that. (K-110)
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp    |   3 +
+ src/hydra/mtlx_expand.cpp | 362 +++++++++++++++++++++++++++++++++++++-
+ src/scene/svm.cpp         |  68 ++++++-
+ src/scene/svm.h           |   6 +-
+ 4 files changed, 434 insertions(+), 5 deletions(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index 8f91e77e..e9065932 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -4660,6 +4660,9 @@ unique_ptr<ShaderGraph> HdCyclesMaterial::BuildShaderGraph(HdMaterialNetworkSche
+       /* If it's a native Cycles' node-type, just do the lookup now. */
+       if (const NodeType *nodeType = NodeType::find(cyclesType)) {
+         nodeDesc.node = graph->create_node(nodeType);
++        /* Named after the Hydra node: Cycles' logs (a stack overflow, a graph
++         * dump) then say which material node they mean, not just its type. */
++        nodeDesc.node->name = ustring(nodeName.GetString());
+ 
+         /* Apply the constants that pick this node's mode, if the mapping
+          * carries any. */
+diff --git a/src/hydra/mtlx_expand.cpp b/src/hydra/mtlx_expand.cpp
+index 5c0dd551..4781401d 100644
+--- a/src/hydra/mtlx_expand.cpp
++++ b/src/hydra/mtlx_expand.cpp
+@@ -27,7 +27,9 @@
+ #include <pxr/imaging/hd/retainedDataSource.h>
+ #include <pxr/usd/sdf/assetPath.h>
+ 
++#include <algorithm>
+ #include <cstdlib>
++#include <functional>
+ #include <map>
+ #include <set>
+ #include <string>
+@@ -1634,6 +1636,361 @@ bool FoldLayerIor(Network &net)
+   return any;
+ }
+ 
++/* A mix_surfaceshader tree of standard_surfaces - a material mixer's
++ * output - blended by its inputs instead of its closures.
++ *
++ * Cycles' SVM holds at most 64 closures per material, twelve per
++ * standard_surface, and 255 stack slots addressed on a byte: a terrain
++ * mixing ten tiled rock materials needed 120 closures and some 2000 slots,
++ * and rendered nothing. Four leaves or more are folded into one
++ * standard_surface whose every input is the mix of the leaves' inputs, by
++ * the same weights - the usual material-blend approximation (one specular
++ * lobe for the blend, not one per layer); three or fewer keep the exact
++ * closure mix. The mixes are chained layer by layer, and each layer's own
++ * geometry lookups go through a tie to the previous layer's last mix
++ * (value + 1e-30 x it), so that the SVM compiler, whose order is optimal for
++ * trees only, evaluates one layer at a time instead of keeping every
++ * layer's tiled coordinates alive for the normal and roughness trees: 190
++ * slots for the ten layers instead of 2000 (K-110). */
++bool FoldSurfaceMix(Network &net, const mx::DocumentPtr &library)
++{
++  static const TfToken kSurfaceTerminal("surface"), kMix("ND_mix_surfaceshader"), kFg("fg"),
++      kBg("bg"), kMixIn("mix"), kIn("in"), kIn1("in1"), kIn2("in2"), kIndex("index");
++  static const char *const kStandardSurface = "ND_standard_surface_surfaceshader";
++  constexpr size_t kMinLeaves = 4;
++  constexpr float kTie = 1e-30f;
++
++  const auto terminal = net.terminals.find(kSurfaceTerminal);
++  if (terminal == net.terminals.end()) {
++    return false;
++  }
++  const TfToken topName = terminal->second.upstream;
++  const auto topIt = net.nodes.find(topName);
++  if (topIt == net.nodes.end() || topIt->second.typeId != kMix) {
++    return false;
++  }
++
++  /* The tree: its mixes and its leaves, in order. */
++  std::vector<TfToken> leaves, mixes;
++  std::function<bool(const TfToken &)> collect = [&](const TfToken &name) -> bool {
++    const auto it = net.nodes.find(name);
++    if (it == net.nodes.end()) {
++      return false;
++    }
++    const Node &node = it->second;
++    if (node.typeId == kMix) {
++      mixes.push_back(name);
++      for (const TfToken &side : {kBg, kFg}) {
++        const auto c = node.conns.find(side);
++        if (c == node.conns.end() || c->second.empty() || !collect(c->second[0].upstream)) {
++          return false;
++        }
++      }
++      return true;
++    }
++    if (node.typeId.GetString().rfind(kStandardSurface, 0) != 0 ||
++        std::find(leaves.begin(), leaves.end(), name) != leaves.end())
++    {
++      return false;
++    }
++    leaves.push_back(name);
++    return true;
++  };
++  if (!collect(topName) || leaves.size() < kMinLeaves) {
++    return false;
++  }
++  const mx::NodeDefPtr surfaceDef = library->getNodeDef(kStandardSurface);
++  if (!surfaceDef) {
++    return false;
++  }
++
++  /* Everything upstream of a node. */
++  auto upstream = [&](const TfToken &start) {
++    std::set<TfToken> seen;
++    std::vector<TfToken> todo{start};
++    while (!todo.empty()) {
++      const TfToken name = todo.back();
++      todo.pop_back();
++      if (!seen.insert(name).second) {
++        continue;
++      }
++      const auto it = net.nodes.find(name);
++      if (it == net.nodes.end()) {
++        continue;
++      }
++      for (const auto &[input, list] : it->second.conns) {
++        for (const Conn &c : list) {
++          todo.push_back(c.upstream);
++        }
++      }
++    }
++    return seen;
++  };
++
++  int made = 0;
++  auto makeName = [&](const std::string &kind) {
++    return TfToken(Prefix(topName, "blend_" + kind + "_" + std::to_string(++made)));
++  };
++  /* A float that depends on a value: the value, or its first channel. */
++  auto depend = [&](const Conn &conn, const std::string &type) -> Conn {
++    if (type == "float") {
++      return conn;
++    }
++    Node e;
++    e.typeId = TfToken("ND_extract_" + type);
++    e.conns[kIn] = {conn};
++    e.params[kIndex] = VtValue(0);
++    const TfToken name = makeName("dep");
++    net.nodes[name] = std::move(e);
++    return Conn{name, kOut};
++  };
++  /* value + 1e-30 x dep: the value, with a dependency the compiler honours. */
++  auto tie = [&](const std::string &type, const Conn *valueConn, const VtValue &value,
++                 const Conn &dep) -> Conn {
++    Node mul;
++    mul.typeId = TfToken("ND_multiply_float");
++    mul.conns[kIn1] = {dep};
++    mul.params[kIn2] = VtValue(kTie);
++    const TfToken mulName = makeName("tie");
++    net.nodes[mulName] = std::move(mul);
++    Node add;
++    add.typeId = TfToken(type == "float" ? "ND_add_float" : "ND_add_" + type + "FA");
++    if (valueConn) {
++      add.conns[kIn1] = {*valueConn};
++    }
++    else {
++      add.params[kIn1] = value;
++    }
++    add.conns[kIn2] = {Conn{mulName, kOut}};
++    const TfToken addName = makeName("tie");
++    net.nodes[addName] = std::move(add);
++    return Conn{addName, kOut};
++  };
++  /* The layer's geometry lookups, each through a tie to `dep`, a float
++   * depending on `previous` (the previous layer's last mix) - except the
++   * lookups `previous` itself depends on, which a tie would loop: those of
++   * an earlier layer, or of a mask reading this layer's height. */
++  auto tieLeaves = [&](const TfToken &leaf, const Conn &dep, const Conn &previous) {
++    const std::set<TfToken> before = upstream(previous.upstream);
++    static const char *const kGeometry[] = {"ND_position_",
++                                            "ND_normal_",
++                                            "ND_tangent_",
++                                            "ND_bitangent_",
++                                            "ND_texcoord_",
++                                            "ND_geompropvalue_",
++                                            "ND_geomcolor_"};
++    const std::set<TfToken> layer = upstream(leaf);
++    int ties = 0, sharedLookups = 0;
++    for (const TfToken &g : layer) {
++      if (before.count(g)) {
++        sharedLookups += 1;
++        continue;
++      }
++      const std::string id = net.nodes[g].typeId.GetString();
++      bool geometry = false;
++      for (const char *prefix : kGeometry) {
++        geometry |= id.rfind(prefix, 0) == 0;
++      }
++      const std::string type = id.substr(id.rfind('_') + 1);
++      if (!geometry || (type != "float" && type != "vector2" && type != "vector3" &&
++                        type != "color3" && type != "color4" && type != "vector4"))
++      {
++        continue;
++      }
++      const Conn source{g, kOut};
++      const Conn tied = tie(type, &source, VtValue(), dep);
++      ties += 1;
++      for (const TfToken &n : layer) {
++        for (auto &[input, list] : net.nodes[n].conns) {
++          for (Conn &c : list) {
++            if (c.upstream == g) {
++              c = tied;
++            }
++          }
++        }
++      }
++    }
++    LOG_INFO << "MaterialX: layer " << leaf.GetString() << ": " << layer.size() << " nodes, "
++             << ties << " geometry lookups tied, " << sharedLookups << " already before.";
++  };
++
++  struct Entry {
++    std::string type;
++    VtValue value;
++    Conn conn;
++    bool connected = false;
++  };
++  struct Result {
++    std::map<TfToken, Entry> inputs;
++    bool hasLast = false;
++    Conn last;
++    std::string lastType;
++  };
++  std::function<Result(const TfToken &, const Result *)> blend =
++      [&](const TfToken &name, const Result *prev) -> Result {
++    Result r;
++    if (net.nodes[name].typeId != kMix) {
++      /* A leaf: its inputs, the nodedef's defaults for the unwritten ones. */
++      if (prev && prev->hasLast) {
++        tieLeaves(name, depend(prev->last, prev->lastType), prev->last);
++      }
++      /* Its written inputs only: the unwritten ones get the nodedef's
++       * default where a mix needs them, and CompleteMaterialXDefaults fills
++       * the rest of the blended surface as it does any other. */
++      const Node &leaf = net.nodes[name];
++      for (const mx::InputPtr &def : surfaceDef->getActiveInputs()) {
++        const TfToken in(def->getName());
++        Entry e;
++        e.type = def->getType();
++        if (const auto c = leaf.conns.find(in); c != leaf.conns.end() && !c->second.empty()) {
++          e.conn = c->second[0];
++          e.connected = true;
++        }
++        else if (const auto v = leaf.params.find(in); v != leaf.params.end()) {
++          e.value = v->second;
++        }
++        if (e.connected || !e.value.IsEmpty()) {
++          r.inputs[in] = e;
++        }
++      }
++      return r;
++    }
++    const Conn bgConn = net.nodes[name].conns[kBg][0];
++    const Conn fgConn = net.nodes[name].conns[kFg][0];
++    const Result bg = blend(bgConn.upstream, prev);
++    const Result fg = blend(fgConn.upstream, bg.hasLast ? &bg : prev);
++    Conn weight;
++    VtValue weightValue(0.0f);
++    bool weightConnected = false;
++    if (const auto c = net.nodes[name].conns.find(kMixIn);
++        c != net.nodes[name].conns.end() && !c->second.empty())
++    {
++      weight = c->second[0];
++      weightConnected = true;
++    }
++    else if (const auto v = net.nodes[name].params.find(kMixIn); v != net.nodes[name].params.end())
++    {
++      weightValue = v->second;
++    }
++    bool hasPrev = bg.hasLast || (prev && prev->hasLast);
++    Conn prevConn = bg.hasLast ? bg.last : (prev ? prev->last : Conn{});
++    std::string prevType = bg.hasLast ? bg.lastType : (prev ? prev->lastType : std::string());
++
++    std::vector<TfToken> names;
++    for (const auto &[in, e] : bg.inputs) {
++      names.push_back(in);
++    }
++    for (const auto &[in, e] : fg.inputs) {
++      if (!bg.inputs.count(in)) {
++        names.push_back(in);
++      }
++    }
++    static const TfToken kBaseColor("base_color");
++    std::sort(names.begin(), names.end(), [&](const TfToken &a, const TfToken &b) {
++      return (a != kBaseColor) < (b != kBaseColor) || (a == b ? false : (a != kBaseColor) == (b != kBaseColor) && a < b);
++    });
++    for (const TfToken &in : names) {
++      const auto bi = bg.inputs.find(in), fi = fg.inputs.find(in);
++      const Entry *b = bi != bg.inputs.end() ? &bi->second : nullptr;
++      const Entry *f = fi != fg.inputs.end() ? &fi->second : nullptr;
++      const Entry &any = b ? *b : *f;
++      const std::string &type = any.type;
++      /* A side that leaves the input unwritten has the nodedef's default. */
++      Entry fallback;
++      fallback.type = type;
++      if (const mx::InputPtr def = surfaceDef->getActiveInput(in.GetString())) {
++        fallback.value = MxValue(def->getType(), def->getValueString());
++      }
++      if (!b) {
++        b = &fallback;
++      }
++      if (!f) {
++        f = &fallback;
++      }
++      if (!b->connected && !f->connected && b->value == f->value) {
++        r.inputs[in] = *b;
++        continue;
++      }
++      if (type != "float" && type != "color3" && type != "color4" && type != "vector2" &&
++          type != "vector3" && type != "vector4")
++      {
++        /* Not blendable (a string, a boolean): the foreground's. */
++        r.inputs[in] = *f;
++        continue;
++      }
++      Node m;
++      m.typeId = TfToken("ND_mix_" + type);
++      for (const auto &[side, e] : {std::pair<TfToken, const Entry *>{kBg, b}, {kFg, f}}) {
++        if (e->connected) {
++          m.conns[side] = {e->conn};
++        }
++        else {
++          m.params[side] = e->value;
++        }
++      }
++      if (hasPrev) {
++        m.conns[kMixIn] = {
++            tie("float", weightConnected ? &weight : nullptr, weightValue, depend(prevConn, prevType))};
++      }
++      else if (weightConnected) {
++        m.conns[kMixIn] = {weight};
++      }
++      else {
++        m.params[kMixIn] = weightValue;
++      }
++      const TfToken mixName = makeName(in.GetString());
++      net.nodes[mixName] = std::move(m);
++      Entry e;
++      e.type = type;
++      e.conn = Conn{mixName, kOut};
++      e.connected = true;
++      r.inputs[in] = e;
++      prevConn = e.conn;
++      prevType = type;
++      hasPrev = true;
++    }
++    r.hasLast = hasPrev;
++    r.last = prevConn;
++    r.lastType = prevType;
++    return r;
++  };
++
++  const Result all = blend(topName, nullptr);
++  Node surface;
++  surface.typeId = TfToken(kStandardSurface);
++  static const TfToken kNormal("normal"), kTangent("tangent"), kCoatNormal("coat_normal");
++  for (const auto &[in, e] : all.inputs) {
++    if (e.connected) {
++      Conn c = e.conn;
++      if (in == kNormal || in == kTangent || in == kCoatNormal) {
++        Node n;
++        n.typeId = TfToken("ND_normalize_vector3");
++        n.conns[kIn] = {c};
++        const TfToken name = makeName("normalize");
++        net.nodes[name] = std::move(n);
++        c = Conn{name, kOut};
++      }
++      surface.conns[in] = {c};
++    }
++    else if (!e.value.IsEmpty()) {
++      surface.params[in] = e.value;
++    }
++  }
++  const TfToken surfaceName = makeName("surface");
++  net.nodes[surfaceName] = std::move(surface);
++  Redirect(net, topName, {{kOut.GetString(), Conn{surfaceName, kOut}}});
++  for (const TfToken &m : mixes) {
++    net.nodes.erase(m);
++  }
++  for (const TfToken &leaf : leaves) {
++    net.nodes.erase(leaf);
++  }
++  LOG_INFO << "MaterialX: " << leaves.size() << " standard_surface mixed at "
++           << topName.GetString() << " blended by their inputs into one (" << made
++           << " nodes), beyond Cycles' closure and stack limits.";
++  return true;
++}
++
+ /* The base colour of the two surface models whose base is more than one
+  * colour. Cycles' principled colours its diffuse, its subsurface and its metal
+  * with one base colour; standard_surface and OpenPBR give the subsurface its
+@@ -1797,8 +2154,8 @@ HdMaterialNetworkSchema ExpandMaterialXNodegraphs(HdMaterialNetworkSchema networ
+           break;
+         }
+         /* A medium's absorption, a layer's coat (FoldVdfAbsorption,
+-         * FoldLayerIor). */
+-        if (id == "ND_anisotropic_vdf" || id == "ND_layer_bsdf") {
++         * FoldLayerIor), a mix of surfaces (FoldSurfaceMix). */
++        if (id == "ND_anisotropic_vdf" || id == "ND_layer_bsdf" || id == "ND_mix_surfaceshader") {
+           candidate = true;
+           break;
+         }
+@@ -1831,6 +2188,7 @@ HdMaterialNetworkSchema ExpandMaterialXNodegraphs(HdMaterialNetworkSchema networ
+   const mx::DocumentPtr library = Library();
+   Network net = Read(network);
+ 
++  net.changed |= FoldSurfaceMix(net, library);
+   net.changed |= FoldThinFilm(net);
+   net.changed |= FoldSurfaceBase(net);
+   /* Before the weights: a weighted coat gets a multiply between it and its
+diff --git a/src/scene/svm.cpp b/src/scene/svm.cpp
+index d2b9a42b..f0e50a6f 100644
+--- a/src/scene/svm.cpp
++++ b/src/scene/svm.cpp
+@@ -4,6 +4,9 @@
+ 
+ #include <algorithm>
+ #include <functional>
++#include <map>
++#include <set>
++#include <string>
+ 
+ #include "device/device.h"
+ 
+@@ -208,7 +211,7 @@ SVMStackOffset SVMCompiler::stack_find_offset(const int size)
+   int offset = -1;
+ 
+   /* find free space in stack & mark as used */
+-  for (int i = 0, num_unused = 0; i < SVM_STACK_SIZE; i++) {
++  for (int i = 0, num_unused = 0; i < Stack::DIAG_SIZE; i++) {
+     if (active_stack.users[i]) {
+       num_unused = 0;
+     }
+@@ -224,16 +227,69 @@ SVMStackOffset SVMCompiler::stack_find_offset(const int size)
+         active_stack.users[i--] = 1;
+       }
+ 
++      if (offset + size > SVM_STACK_SIZE) {
++        /* Past the real stack: the shader fails, the allocation goes on so
++         * that the peak is known (reported by compile()). */
++        if (!compile_failed) {
++          compile_failed = true;
++          LOG_ERROR << "Shader graph: out of SVM stack space, shader \""
++                    << current_shader->name << "\" too big.";
++          if (current_graph) {
++            /* What holds the stack: the live values by node type (a float3
++             * convert shares its input's slots and is not counted twice). */
++            std::map<std::string, std::pair<int, int>> live;
++            std::set<int> offsets;
++            int total = 0;
++            for (ShaderNode *node : current_graph->nodes) {
++              for (ShaderOutput *output : node->outputs) {
++                if (output->stack_offset != SVM_STACK_INVALID &&
++                    offsets.insert(output->stack_offset).second)
++                {
++                  const int slots = stack_size(output);
++                  auto &entry = live[node->type->name.string()];
++                  entry.first += 1;
++                  entry.second += slots;
++                  total += slots;
++                }
++              }
++            }
++            std::string text;
++            for (const auto &[type_name, counts] : live) {
++              text += " " + type_name + " x" + std::to_string(counts.first) + " (" +
++                      std::to_string(counts.second) + ")";
++            }
++            if (LOG_IS_ON(LOG_LEVEL_INFO)) {
++              text += "\n  live outputs:";
++              offsets.clear();
++              for (ShaderNode *node : current_graph->nodes) {
++                for (ShaderOutput *output : node->outputs) {
++                  if (output->stack_offset != SVM_STACK_INVALID &&
++                      offsets.insert(output->stack_offset).second)
++                  {
++                    text += "\n    " + node->name.string() + "." + output->name().string() +
++                            " (" + std::to_string(stack_size(output)) + ")";
++                  }
++                }
++              }
++            }
++            LOG_ERROR << "Live SVM stack at the overflow, " << total << " of " << SVM_STACK_SIZE
++                      << " slots, " << size << " more asked by "
++                      << (current_node ? current_node->type->name.string() : std::string("?"))
++                      << ":" << text;
++          }
++        }
++        return SVMStackOffset(0);
++      }
+       return offset;
+     }
+   }
+ 
++  /* Not even the virtual stack holds it. */
+   if (!compile_failed) {
+     compile_failed = true;
+     LOG_ERROR << "Shader graph: out of SVM stack space, shader \"" << current_shader->name
+               << "\" too big.";
+   }
+-
+   return 0;
+ }
+ 
+@@ -1161,8 +1217,16 @@ void SVMCompiler::compile_type(Shader *shader, ShaderGraph *graph, ShaderType ty
+     bump_state_offset = SVM_STACK_INVALID;
+   }
+ 
++  LOG_INFO << "Shader \"" << shader->name << "\" type " << int(type) << ": peak SVM stack "
++           << max_stack_use << " of " << SVM_STACK_SIZE << ", " << current_svm_nodes.size()
++           << " words.";
++
+   /* if compile failed, generate empty shader */
+   if (compile_failed) {
++    if (max_stack_use > SVM_STACK_SIZE) {
++      LOG_ERROR << "Shader \"" << shader->name << "\" would need " << max_stack_use
++                << " SVM stack slots of the " << SVM_STACK_SIZE << " available.";
++    }
+     current_svm_nodes.clear();
+     compile_failed = false;
+   }
+diff --git a/src/scene/svm.h b/src/scene/svm.h
+index 35d67682..76fc6e85 100644
+--- a/src/scene/svm.h
++++ b/src/scene/svm.h
+@@ -205,7 +205,11 @@ class SVMCompiler {
+       printf(">\n");
+     }
+ 
+-    int users[SVM_STACK_SIZE];
++    /* Past SVM_STACK_SIZE the stack is virtual: a shader that does not fit
++     * fails, but its allocation goes on so that the peak it would need is
++     * known and reported (hdCycles K-110). */
++    static constexpr int DIAG_SIZE = 4096;
++    int users[DIAG_SIZE];
+   };
+ 
+   /* Global state of the compiler accessible from the compilation routines. */

@@ -357,6 +357,27 @@ CASES = [
         "token outputs:out",
     ], mx_mix(BLUE, RED, 0.25), {"terminal": "surface",
                                   "extra": [matte("s1", RED), matte("s2", BLUE)]}),
+    # Four surfaces mixed: folded by the delegate into one standard_surface
+    # with blended inputs (K-110), exact for mattes - Karma's closure mix of
+    # four Lambert lobes is the same blend of their colours.
+    ("surface_mix_fold", [
+        'uniform token info:id = "ND_mix_surfaceshader"',
+        "token inputs:bg.connect = </world/Materials/M/m2.outputs:out>",
+        "token inputs:fg.connect = </world/Materials/M/s4.outputs:out>",
+        "float inputs:mix = 0.3",
+        "token outputs:out",
+    ], mx_mix(mx_mix(mx_mix(RED, BLUE, 0.25), (0.2, 0.8, 0.3), 0.5), (0.9, 0.6, 0.1), 0.3),
+     {"terminal": "surface",
+      "extra": [matte("s1", RED), matte("s2", BLUE), matte("s3", (0.2, 0.8, 0.3)),
+                matte("s4", (0.9, 0.6, 0.1)),
+                shader("m1", ['uniform token info:id = "ND_mix_surfaceshader"',
+                              "token inputs:bg.connect = </world/Materials/M/s1.outputs:out>",
+                              "token inputs:fg.connect = </world/Materials/M/s2.outputs:out>",
+                              "float inputs:mix = 0.25", "token outputs:out"]),
+                shader("m2", ['uniform token info:id = "ND_mix_surfaceshader"',
+                              "token inputs:bg.connect = </world/Materials/M/m1.outputs:out>",
+                              "token inputs:fg.connect = </world/Materials/M/s3.outputs:out>",
+                              "float inputs:mix = 0.5", "token outputs:out"])]}),
     # The alpha of a constant colour4, read by a node of the network itself
     # (not one made by an expansion): the value replacing the wire was never
     # written back and the mix kept Cycles' 0.5 (K-93).

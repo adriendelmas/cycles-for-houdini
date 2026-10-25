@@ -1226,6 +1226,41 @@ on every glTF texture. Consumed silently now on the three image mappings,
 as `tiledimage` and the others were already; it stays exact for black only
 (CLIP gives black outside).
 
+### K-110 A mix of many surfaces could not compile: Cycles' closure and stack limits — confirmed — **fixed** (0148)
+The author's terrain is ten MEGALIB rock materials (each some 650 stdlib
+nodes of hex tiling) stacked by nine `mix_surfaceshader`: Karma renders it,
+Cycles rendered nothing, the shader having failed to compile. Two limits of
+Cycles' SVM, fixed in the kernel: at most 64 closures per material, and a
+`standard_surface` counts twelve, so six layers overflow; and a stack of 255
+floats addressed on a byte (every node's offsets are `uint8`), which cannot
+grow without rewriting every kernel. Measured with the compiler's new
+diagnostic (`CYCLES_LOGGING_LEVEL=info` prints each shader's peak stack and
+word count; a failed one lists what held the stack by node, the Cycles nodes
+being named after their Hydra node now): two layers need 147 slots, four
+233, five 328, ten some 2000. The growth is structural: each layer's tiled
+coordinates and hex weights serve its colour, its normal and its roughness,
+and the Sethi-Ullman order, optimal for trees, generates the whole colour
+tree first, keeping every layer's coordinates alive for the two other trees.
+A greedy variant of the scheduler (consume a value as soon as it is ready)
+was tried and made it worse; the fix is in the delegate, which knows the
+structure. `FoldSurfaceMix` (mtlx_expand.cpp): a mix tree whose leaves are
+four or more `standard_surface` is blended by its inputs into one
+`standard_surface` - each written input the `mix` of the leaves' by the same
+weights, the usual material-blend approximation (one specular lobe for the
+blend instead of one per layer; normals renormalised) - with the mixes
+chained layer by layer and each layer's own geometry lookups routed through
+a tie to the previous layer's last mix (value + 1e-30 x it, a dependency the
+compiler has to honour, excluding the lookups that mix already depends on,
+such as a mask reading the layer's height): the ten layers then take 188
+slots. Three leaves or fewer keep the exact closure mix. On the terrain
+material, sphere and ground under a dome, the folded Cycles render is
+within 4 % of Karma's closure mix in mean (0.145 vs 0.151, mean absolute
+difference 0.028 - the blend approximation itself, since Karma rendering
+the blended graph differs from its own closure mix by 0.030).
+`bench_mtlx.py` case `surface_mix_fold`: four mattes mixed, exact.
+The cost of the fold: one layer's textures are still read per layer, so
+the material stays as heavy as Karma's.
+
 ## D. Repository and tests
 
 ### K-50 Benches overwrite their own references — confirmed — **fixed** (2680470)

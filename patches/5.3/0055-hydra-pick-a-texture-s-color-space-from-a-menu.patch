@@ -1,7 +1,7 @@
 From 0aa3304fee3dd4adc95872c86e037ffe99d8a58a Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 4 Sep 2026 13:10:17 +0200
-Subject: [PATCH 055/147] hydra: pick a texture's color space from a menu
+Subject: [PATCH 055/148] hydra: pick a texture's color space from a menu
 
 The `colorspace` socket of image nodes was filled in by hand, and a misspelled
 name raised an error: exact names cannot be invented - the sRGB of an ACES

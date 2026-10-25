@@ -1,7 +1,7 @@
 From 4f8aa84f3176373b1e2ac418d4bca4698a1106e5 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 19:09:57 +0200
-Subject: [PATCH 107/147] hydra: absorbing volumes, subsurface at the right
+Subject: [PATCH 107/148] hydra: absorbing volumes, subsurface at the right
  scale, unlit surface
 
 MaterialX's absorption coefficient was passed as is as a color to Cycles, which

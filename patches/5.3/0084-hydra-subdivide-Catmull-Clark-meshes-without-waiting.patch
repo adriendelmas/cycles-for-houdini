@@ -1,7 +1,7 @@
 From 3c6bf442fba1e061c433146de6d4e960e7341fb7 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 22:46:04 +0200
-Subject: [PATCH 084/147] hydra: subdivide Catmull-Clark meshes without waiting
+Subject: [PATCH 084/148] hydra: subdivide Catmull-Clark meshes without waiting
  for a display level
 
 The delegate only subdivided with refineLevel > 0 and took that number as the

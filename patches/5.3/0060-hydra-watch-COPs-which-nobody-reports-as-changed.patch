@@ -1,7 +1,7 @@
 From d216bbb943874b86b75c0dba769e2f135e4eb00e Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 4 Sep 2026 19:40:15 +0200
-Subject: [PATCH 060/147] hydra: watch COPs, which nobody reports as changed
+Subject: [PATCH 060/148] hydra: watch COPs, which nobody reports as changed
 
 The pixels were indeed re-read when we were asked for a synchronization again -
 we still had to be asked. Solaris does not know the dependency between a

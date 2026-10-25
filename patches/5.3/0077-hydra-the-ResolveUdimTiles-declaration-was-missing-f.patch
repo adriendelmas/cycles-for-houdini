@@ -1,7 +1,7 @@
 From 1e99c502b776535ef8104db2082e4d06c257786e Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 16:49:20 +0200
-Subject: [PATCH 077/147] hydra: the ResolveUdimTiles declaration was missing
+Subject: [PATCH 077/148] hydra: the ResolveUdimTiles declaration was missing
  from the series
 
 material.cpp defines it and calls it from the UDIM tiles fix, but material.h was

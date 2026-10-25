@@ -1,7 +1,7 @@
 From 2edffc37b8d352a5b44770d9780ace83abab4e7a Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 12 Oct 2026 10:35:40 +0200
-Subject: [PATCH 142/147] hydra: the Houdini package finds the plugin next to
+Subject: [PATCH 142/148] hydra: the Houdini package finds the plugin next to
  itself, not at the build prefix
 
 cycles.json carried CMAKE_INSTALL_PREFIX, so the file written by a build

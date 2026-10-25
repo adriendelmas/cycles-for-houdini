@@ -1,7 +1,7 @@
 From 575d8fef829ffc68205fd726cac33aaa07ff6fb2 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sat, 10 Oct 2026 08:19:59 +0200
-Subject: [PATCH 127/147] hydra: split lights for lobe multipliers, shadow
+Subject: [PATCH 127/148] hydra: split lights for lobe multipliers, shadow
  colour and shadowless lights
 
 Cycles scales a light as a whole. A light whose diffuse and specular

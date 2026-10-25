@@ -172,6 +172,7 @@ surface models (`surface_audit.py`, K-63). On 2026-10-07 the numbers were
 | `colorcorrect`, `hsvadjust`, `curveadjust`, triplanar, Houdini `hmtlx*`, 2D patterns, `blur`, `hextilednormalmap` | ✅ | Through their nodegraphs (`mtlx_coverage.py`); `hextilednormalmap` from the delegate's own (K-84) |
 | Custom nodes of a package (nodedef + nodegraph in `materialx/` on HOUDINI_PATH) | ✅ | Expanded like the library's (0137); MtlX Text matches its numpy reference, 0 warnings (0138, 0139) |
 | `kma_stderiv` (Karma ST Derivatives) | ⚠️ | Zero derivative: Cycles' SVM has no derivative of an input (0139) |
+| A mix of four or more `standard_surface` (a material mixer's output) | ✅ | Blended by its inputs into one surface, mixes chained layer by layer for Cycles' 255-slot stack; three or fewer keep the exact closure mix (64 closures max) (K-110, 0148); `bench_mtlx.py` `surface_mix_fold` |
 | Karma Hextiled Triplanar (`kma_hextiled_triplanar_color`, `_normal`) | ✅ | The delegate's own nodegraphs on Cycles' hextiledimage, same size and orientation as Karma, tiles elsewhere (no seed; K-106, 0145); `transformvector/normal/point` object-world on the way |
 | Nodes inside a NodeGraph (Houdini material subnets) | ✅ | Kept apart by their path (0140); bench case `nodegraph_nested` |
 

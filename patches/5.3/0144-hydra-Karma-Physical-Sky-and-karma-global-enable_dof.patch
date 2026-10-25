@@ -1,7 +1,7 @@
 From fcadc4c00dec19f23fc4423d308a5018c1a15606 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sun, 25 Oct 2026 04:46:59 +0100
-Subject: [PATCH 144/147] hydra: Karma Physical Sky, and
+Subject: [PATCH 144/148] hydra: Karma Physical Sky, and
  karma:global:enable_dof
 
 The Karma Physical Sky LOP reaches Hydra as a generic `light` whose kma
