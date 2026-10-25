@@ -1,0 +1,794 @@
+From fcadc4c00dec19f23fc4423d308a5018c1a15606 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Sun, 25 Oct 2026 04:46:59 +0100
+Subject: [PATCH 144/144] hydra: Karma Physical Sky, and
+ karma:global:enable_dof
+
+The Karma Physical Sky LOP reaches Hydra as a generic `light` whose kma
+shader is KMAskyDomeLight (the dome), or as a `karmaSkyAtmosphere` prim
+carrying Karma's scattering coefficients as primvars (the atmosphere),
+plus a distant light for the sun. Neither was a type the delegate created:
+the sky was black. Both render as a dome on Cycles' sky texture now.
+
+The dome uses Hosek-Wilkie, Karma's own model: 1.00 of Karma on every
+patch at sun altitudes 10, 30 and 60 degrees (tools/bench_sky.py). The
+atmosphere uses the multiple-scattering sky lit by the scene's distant
+light (the session tracks the sun as its light syncs, every atmosphere
+rebuilds on it), Karma's Rayleigh, Mie and ozone coefficients converted to
+densities, and a measured scale of 0.0041: 0.88-1.25 of Karma per patch.
+Not carried over: aerial perspective, observer altitude, other scale
+heights (a warning). An unknown Karma light renders nothing instead of a
+white point light. (K-104)
+
+Depth of field: Karma blurs whenever the f-stop is above zero unless the
+render settings write disableDepthOfField (already read) or
+karma:global:enable_dof = false, which husk forwards to every renderer;
+the second counts now. (K-105)
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ src/hydra/camera.cpp          |  13 +-
+ src/hydra/camera.h            |   5 +-
+ src/hydra/light.cpp           | 299 +++++++++++++++++++++++++++++++---
+ src/hydra/light.h             |  39 +++++
+ src/hydra/plugin.cpp          |   4 +-
+ src/hydra/render_delegate.cpp |  16 +-
+ src/hydra/session.cpp         |  34 ++++
+ src/hydra/session.h           |  28 +++-
+ 8 files changed, 403 insertions(+), 35 deletions(-)
+
+diff --git a/src/hydra/camera.cpp b/src/hydra/camera.cpp
+index 5b9832bb..f61e898d 100644
+--- a/src/hydra/camera.cpp
++++ b/src/hydra/camera.cpp
+@@ -64,7 +64,6 @@ void HdCyclesCamera::Sync(HdSceneDelegate *sceneDelegate,
+   const HdContainerDataSourceHandle &primDs = prim.dataSource;
+ 
+   HdCameraSchema cameraSchema = HdCameraSchema::GetFromParent(primDs);
+-  HdContainerDataSourceHandle cameraDs = cameraSchema.GetContainer();
+ 
+   /* Read the shutter window from the camera prim so animated transforms can
+    * be sampled across it for motion blur. */
+@@ -191,7 +190,7 @@ void HdCyclesCamera::ApplyCameraSettings(HdRenderParam *renderParam, Camera *cam
+   HdCyclesSession *const session = static_cast<HdCyclesSession *>(renderParam);
+   CameraUtilConformWindowPolicy policy = _windowPolicy;
+   session->GetConformPolicy(&policy);
+-  ApplyCameraSettings(renderParam, _data, policy, cam);
++  ApplyCameraSettings(renderParam, _data, policy, cam, session->UseDepthOfField());
+   session->SetFilmExposure(-1.0f, GetLinearExposureScale());
+ 
+   const float metersPerUnit = static_cast<HdCyclesSession *>(renderParam)->GetStageMetersPerUnit();
+@@ -206,7 +205,8 @@ void HdCyclesCamera::ApplyCameraSettings(HdRenderParam *renderParam, Camera *cam
+ void HdCyclesCamera::ApplyCameraSettings(HdRenderParam *renderParam,
+                                          const GfCamera &dataUnconformedWindow,
+                                          CameraUtilConformWindowPolicy windowPolicy,
+-                                         Camera *cam)
++                                         Camera *cam,
++                                         const bool depthOfField)
+ {
+   /* A pixel aspect other than 1 widens what each pixel covers: the window
+    * conforms to the image's width times it (it was ignored). */
+@@ -246,9 +246,7 @@ void HdCyclesCamera::ApplyCameraSettings(HdRenderParam *renderParam,
+   cam->set_viewplane_bottom(viewplane.GetMin()[1]);
+   cam->set_viewplane_top(viewplane.GetMax()[1]);
+ 
+-  if (data.GetFStop() != 0.0f &&
+-      !static_cast<HdCyclesSession *>(renderParam)->IsDepthOfFieldDisabled())
+-  {
++  if (data.GetFStop() != 0.0f && depthOfField) {
+     cam->set_focaldistance(data.GetFocusDistance() * metersPerUnit);
+     cam->set_aperturesize(focalLength / (2.0f * data.GetFStop()));
+   }
+@@ -268,7 +266,8 @@ void HdCyclesCamera::ApplyCameraSettings(HdRenderParam *renderParam,
+   GfCamera data;
+   data.SetFromViewAndProjectionMatrix(worldToViewMatrix, projectionMatrix);
+ 
+-  ApplyCameraSettings(renderParam, data, CameraUtilFit, cam);
++  /* The free view has no f-stop to blur with. */
++  ApplyCameraSettings(renderParam, data, CameraUtilFit, cam, false);
+ }
+ 
+ HDCYCLES_NAMESPACE_CLOSE_SCOPE
+diff --git a/src/hydra/camera.h b/src/hydra/camera.h
+index f46fdbd1..b31d04d0 100644
+--- a/src/hydra/camera.h
++++ b/src/hydra/camera.h
+@@ -23,7 +23,8 @@ class HdCyclesCamera final : public PXR_NS::HdCamera {
+   static void ApplyCameraSettings(PXR_NS::HdRenderParam *renderParam,
+                                   const PXR_NS::GfCamera &dataUnconformedWindow,
+                                   PXR_NS::CameraUtilConformWindowPolicy windowPolicy,
+-                                  CCL_NS::Camera *cam);
++                                  CCL_NS::Camera *cam,
++                                  bool depthOfField);
+   static void ApplyCameraSettings(PXR_NS::HdRenderParam *renderParam,
+                                   const PXR_NS::GfMatrix4d &worldToViewMatrix,
+                                   const PXR_NS::GfMatrix4d &projectionMatrix,
+@@ -41,6 +42,8 @@ class HdCyclesCamera final : public PXR_NS::HdCamera {
+  private:
+   PXR_NS::GfCamera _data;
+   PXR_NS::HdTimeSampleArray<PXR_NS::GfMatrix4d, 2> _transformSamples;
++  /* Authored by Houdini (it writes its own namespace on its cameras): depth
++   * of field follows Karma's rule then (session.h). */
+ };
+ 
+ HDCYCLES_NAMESPACE_CLOSE_SCOPE
+diff --git a/src/hydra/light.cpp b/src/hydra/light.cpp
+index abe4c7e0..6127d6a3 100644
+--- a/src/hydra/light.cpp
++++ b/src/hydra/light.cpp
+@@ -21,7 +21,13 @@
+ #include "util/transform.h"
+ 
+ #include <pxr/imaging/hd/lightSchema.h>
++#include <pxr/imaging/hd/materialNetworkSchema.h>
++#include <pxr/imaging/hd/materialNodeParameterSchema.h>
++#include <pxr/imaging/hd/materialNodeSchema.h>
++#include <pxr/imaging/hd/materialSchema.h>
++#include <pxr/imaging/hd/overlayContainerDataSource.h>
+ #include <pxr/imaging/hd/primvarsSchema.h>
++#include <pxr/imaging/hd/retainedDataSource.h>
+ #include <pxr/imaging/hd/sceneDelegate.h>
+ #include <pxr/imaging/hd/visibilitySchema.h>
+ #include <pxr/imaging/hd/xformSchema.h>
+@@ -36,9 +42,21 @@ TF_DEFINE_PRIVATE_TOKENS(_tokens,
+     (visibleInPrimaryRay)
+     (treatAsPoint)
+     (falloff)
++    (karmaSkyAtmosphere)
++    (KMAskyDomeLight)
++    (kma)
+ );
+ // clang-format on
+ 
++namespace {
++
++/* Cycles' scattering sky against Karma's atmosphere, measured on the same
++ * rig (tools/bench_sky.py): the two are not in the same units. The dome needs
++ * none, Cycles' Hosek-Wilkie is Karma's to the fourth decimal. */
++constexpr float kKarmaAtmosphereScale = 0.0041f;
++
++}  // namespace
++
+ HdCyclesLight::HdCyclesLight(const SdfPath &sprimId, const TfToken &lightType)
+     : HdLight(sprimId), _lightType(lightType)
+ {
+@@ -66,7 +84,16 @@ void HdCyclesLight::Sync(HdSceneDelegate *sceneDelegate,
+   const SdfPath &id = GetId();
+   const HdSceneIndexPrim prim = GetPrim(sceneDelegate, id);
+   const HdContainerDataSourceHandle &primDs = prim.dataSource;
+-  const HdContainerDataSourceHandle lightDs = HdLightSchema::GetFromParent(primDs).GetContainer();
++  HdContainerDataSourceHandle lightDs = HdLightSchema::GetFromParent(primDs).GetContainer();
++  /* A Karma sky's parameters come from elsewhere than the light container,
++   * and the graph is rebuilt from them when the sun moves. */
++  if (*dirtyBits & DirtyBits::DirtyParams) {
++    lightDs = ReadSky(primDs, lightDs);
++    _lightDs = lightDs;
++  }
++  else if (_lightDs) {
++    lightDs = _lightDs;
++  }
+ 
+   if (*dirtyBits & DirtyBits::DirtyTransform) {
+     const float metersPerUnit =
+@@ -102,9 +129,7 @@ void HdCyclesLight::Sync(HdSceneDelegate *sceneDelegate,
+      * three times too strong (3.20). Without them, the six types land at 1.01
+      * of Karma - the gap that remains is that of the two engines on the same
+      * scene, not a unit. */
+-    if (_lightType == HdPrimTypeTokens->distantLight ||
+-        _lightType == HdPrimTypeTokens->domeLight)
+-    {
++    if (_lightType == HdPrimTypeTokens->distantLight || IsDome()) {
+       /* The intensity is taken as is. */
+     }
+     else {
+@@ -229,6 +254,14 @@ void HdCyclesLight::Sync(HdSceneDelegate *sceneDelegate,
+     if (!visible) {
+       strength = zero_float3();
+     }
++    /* A Karma light this delegate cannot read (another kma light shader
++     * than the sky's, an atmosphere turned off) lights nothing. */
++    if ((_lightType == HdPrimTypeTokens->light || _lightType == _tokens->karmaSkyAtmosphere) &&
++        !_sky.valid)
++    {
++      strength = zero_float3();
++      visible = false;
++    }
+ 
+     _strength = strength;
+     _light->set_strength(strength);
+@@ -280,12 +313,19 @@ void HdCyclesLight::Sync(HdSceneDelegate *sceneDelegate,
+     PopulateShaderGraph(lightDs);
+   }
+   // Need to update shader graph when transform changes in case transform was baked into it
+-  else if (_object->tfm_is_modified() && (_lightType == HdPrimTypeTokens->domeLight ||
+-                                          _light->get_shader()->has_surface_spatial_varying))
++  else if (_object->tfm_is_modified() &&
++           (IsDome() || _light->get_shader()->has_surface_spatial_varying))
+   {
+     PopulateShaderGraph(lightDs);
+   }
+ 
++  /* The scene's sun, which a Karma atmosphere is lit by. */
++  if (_lightType == HdPrimTypeTokens->distantLight) {
++    const Transform &tfm = _object->get_tfm();
++    static_cast<HdCyclesSession *>(renderParam)->SetSun(
++        safe_normalize(transform_direction(&tfm, make_float3(0.0f, 0.0f, 1.0f))), _strength);
++  }
++
+   SyncSplit(lock.scene, renderParam);
+ 
+   if (_light->is_modified()) {
+@@ -307,11 +347,19 @@ void HdCyclesLight::PopulateShaderGraph(const HdContainerDataSourceHandle &light
+ {
+   unique_ptr<ShaderGraph> graph = make_unique<ShaderGraph>();
+   ShaderNode *outputNode = nullptr;
++  bool hasSpatialVarying = false;
++  bool hasColorTemperature = false;
+ 
+-  if (_lightType == HdPrimTypeTokens->domeLight) {
++  if (IsDome()) {
+     BackgroundNode *bgNode = graph->create_node<BackgroundNode>();
+     // Bake strength into shader graph, since only the shader is used for background lights
+-    bgNode->set_color(_light->get_strength());
++    if (_sky.valid) {
++      graph->connect(SkyColor(graph.get(), _light->get_strength()), bgNode->input("Color"));
++      hasSpatialVarying = true;
++    }
++    else {
++      bgNode->set_color(_light->get_strength());
++    }
+ 
+     graph->connect(bgNode->output("Background"), graph->output()->input("Surface"));
+ 
+@@ -339,9 +387,6 @@ void HdCyclesLight::PopulateShaderGraph(const HdContainerDataSourceHandle &light
+     outputNode = emissionNode;
+   }
+ 
+-  bool hasSpatialVarying = false;
+-  bool hasColorTemperature = false;
+-
+   if (lightContainer) {
+     const bool enableColorTemperature = GetTypedValue<bool>(
+         lightContainer, HdLightTokens->enableColorTemperature, false);
+@@ -352,7 +397,7 @@ void HdCyclesLight::PopulateShaderGraph(const HdContainerDataSourceHandle &light
+         BlackbodyNode *blackbodyNode = graph->create_node<BlackbodyNode>();
+         blackbodyNode->set_temperature(ds->GetTypedValue(0.0f));
+ 
+-        if (_lightType == HdPrimTypeTokens->domeLight) {
++        if (IsDome()) {
+           VectorMathNode *mathNode = graph->create_node<VectorMathNode>();
+           mathNode->set_math_type(NODE_VECTOR_MATH_MULTIPLY);
+           mathNode->set_vector2(_light->get_strength());
+@@ -488,7 +533,7 @@ void HdCyclesLight::PopulateShaderGraph(const HdContainerDataSourceHandle &light
+ 
+       if (!filename.empty()) {
+         ImageSlotTextureNode *textureNode = nullptr;
+-        if (_lightType == HdPrimTypeTokens->domeLight) {
++        if (IsDome()) {
+           Transform tfm = _object->get_tfm();
+           transform_set_column(&tfm, 3, zero_float3());  // Remove translation
+           /* USD's dome follows OpenEXR's lat-long: top pole +Y, longitude 0
+@@ -543,7 +588,7 @@ void HdCyclesLight::PopulateShaderGraph(const HdContainerDataSourceHandle &light
+           graph->disconnect(outputNodeInput);
+           graph->connect(mathNode->output("Vector"), outputNodeInput);
+         }
+-        else if (_lightType == HdPrimTypeTokens->domeLight) {
++        else if (IsDome()) {
+           VectorMathNode *mathNode = graph->create_node<VectorMathNode>();
+           mathNode->set_math_type(NODE_VECTOR_MATH_MULTIPLY);
+           mathNode->set_vector2(_light->get_strength());
+@@ -561,7 +606,7 @@ void HdCyclesLight::PopulateShaderGraph(const HdContainerDataSourceHandle &light
+      * towards focusTint off the axis (lerp(focusTint, 1, factor)). Cycles has
+      * no such control; the axis is baked, the graph is rebuilt on a move. */
+     const float focus = GetTypedValue<float>(lightContainer, HdLightTokens->shapingFocus, 0.0f);
+-    if (focus > 0.0f && _lightType != HdPrimTypeTokens->domeLight) {
++    if (focus > 0.0f && !IsDome()) {
+       const GfVec3f tint = GetTypedValue<GfVec3f>(
+           lightContainer, HdLightTokens->shapingFocusTint, GfVec3f(0.0f));
+       const float3 axis = safe_normalize(
+@@ -652,6 +697,7 @@ void HdCyclesLight::Finalize(HdRenderParam *renderParam)
+   const SceneLock lock(renderParam);
+   const bool keep_nodes = static_cast<const HdCyclesSession *>(renderParam)->keep_nodes;
+   static_cast<HdCyclesSession *>(renderParam)->ForgetObject(_object);
++  static_cast<HdCyclesSession *>(renderParam)->RemoveAtmosphere(this);
+   DeleteTwins(lock.scene, renderParam, 0);
+   if (_tubeObject) {
+     static_cast<HdCyclesSession *>(renderParam)->ForgetObject(_tubeObject);
+@@ -688,14 +734,19 @@ void HdCyclesLight::Initialize(HdRenderParam *renderParam)
+   _light->set_use_mis(true);
+   _light->name = GetId().GetString();
+ 
++  if (_lightType == _tokens->karmaSkyAtmosphere) {
++    auto *const session = static_cast<HdCyclesSession *>(renderParam);
++    session->AddAtmosphere(this);
++    _hasSun = session->GetSun(&_sunDirection, &_sunStrength);
++  }
++
+   _object->set_geometry(_light);
+   _object->set_random_id(hash_uint2(hash_string(_light->name.c_str()), 0));
+   /* A light's own shape stays out of camera rays unless asked for; a dome is
+    * the background, which the camera sees unless it is hidden from it - the
+    * session reads this bit to make the film transparent. */
+-  _baseVisibility = _lightType == HdPrimTypeTokens->domeLight ?
+-                        PATH_RAY_VISIBILITY_ALL :
+-                        PATH_RAY_VISIBILITY_ALL & ~PATH_RAY_VISIBILITY_CAMERA;
++  _baseVisibility = IsDome() ? PATH_RAY_VISIBILITY_ALL :
++                               PATH_RAY_VISIBILITY_ALL & ~PATH_RAY_VISIBILITY_CAMERA;
+   _object->set_visibility(_baseVisibility);
+ 
+   Shader *const shader = lock.scene->create_node<Shader>();
+@@ -767,9 +818,15 @@ void CopySockets(Node *to, const Node &from)
+ 
+ }  // namespace
+ 
++bool HdCyclesLight::IsDome() const
++{
++  return _lightType == HdPrimTypeTokens->domeLight || _lightType == HdPrimTypeTokens->light ||
++         _lightType == _tokens->karmaSkyAtmosphere;
++}
++
+ Light *HdCyclesLight::CreateLight(Scene *scene) const
+ {
+-  if (_lightType == HdPrimTypeTokens->domeLight) {
++  if (IsDome()) {
+     return scene->create_node<BackgroundLight>();
+   }
+   if (_lightType == HdPrimTypeTokens->distantLight) {
+@@ -821,7 +878,7 @@ void HdCyclesLight::SyncSplit(Scene *scene, HdRenderParam *renderParam)
+   const uint specularLobes = PATH_RAY_VISIBILITY_GLOSSY | PATH_RAY_VISIBILITY_TRANSMIT;
+   const uint lobes = diffuseLobes | specularLobes;
+   const uint other = _baseVisibility & ~(lobes | PATH_RAY_VISIBILITY_CAMERA);
+-  const bool dome = _lightType == HdPrimTypeTokens->domeLight;
++  const bool dome = IsDome();
+ 
+   std::vector<std::pair<uint, float>> lobeGroups;
+   if (_diffuse == _specular) {
+@@ -982,6 +1039,208 @@ void HdCyclesLight::SyncTube(Scene *scene, HdRenderParam *renderParam)
+   _tubeObject->tag_update(scene);
+ }
+ 
++/* The sky's parameters, as a light container the rest of Sync reads. The
++ * dome's are the parameters of its kma shader node - the light container
++ * Hydra builds for a generic light holds none, not even the intensity; the
++ * atmosphere's are its primvars. Anything else of these two types is a Karma
++ * light this delegate has no reading of, and `_sky.valid` stays false. */
++HdContainerDataSourceHandle HdCyclesLight::ReadSky(const HdContainerDataSourceHandle &primDs,
++                                                   const HdContainerDataSourceHandle &lightDs)
++{
++  _sky = Sky();
++  if (_lightType != HdPrimTypeTokens->light && _lightType != _tokens->karmaSkyAtmosphere) {
++    return lightDs;
++  }
++
++  std::vector<TfToken> names;
++  std::vector<HdDataSourceBaseHandle> values;
++  const auto add = [&](const TfToken &name, const VtValue &value) {
++    if (!value.IsEmpty()) {
++      names.push_back(name);
++      values.push_back(HdCreateTypedRetainedDataSource(value));
++    }
++  };
++
++  if (_lightType == HdPrimTypeTokens->light) {
++    HdMaterialNodeContainerSchema nodes =
++        HdMaterialSchema::GetFromParent(primDs).GetMaterialNetwork(_tokens->kma).GetNodes();
++    for (const TfToken &nodeName : nodes.GetNames()) {
++      HdMaterialNodeSchema node = nodes.Get(nodeName);
++      const HdContainerDataSourceHandle ids = node.GetRenderContextNodeIdentifiers();
++      const auto kind = HdTokenDataSource::Cast(ids ? ids->Get(_tokens->kma) : nullptr);
++      if (!kind || kind->GetTypedValue(0.0f) != _tokens->KMAskyDomeLight) {
++        continue;
++      }
++      HdMaterialNodeParameterContainerSchema params = node.GetParameters();
++      for (const TfToken &name : params.GetNames()) {
++        if (auto ds = params.Get(name).GetValue()) {
++          add(name, ds->GetValue(0.0f));
++        }
++      }
++      _sky.valid = true;
++      break;
++    }
++    if (!_sky.valid) {
++      LOG_WARNING << "Light " << GetId().GetString()
++                  << ": a Karma light without a sky dome shader; it lights nothing in Cycles.";
++    }
++  }
++  else {
++    const HdPrimvarsSchema primvars = HdPrimvarsSchema::GetFromParent(primDs);
++    for (const char *name : {"enableatmosphere",
++                             "rayleighcoeff",
++                             "miescattercoeff",
++                             "mieabsorpcoeff",
++                             "extraabsorpcoeff",
++                             "groundalbedo",
++                             "rayleighdist",
++                             "miedist"})
++    {
++      add(TfToken(name), ReadPrimvar(primvars, TfToken(name)));
++    }
++    _sky.atmosphere = true;
++  }
++
++  const HdContainerDataSourceHandle own = HdRetainedContainerDataSource::New(
++      names.size(), names.data(), values.data());
++  const HdContainerDataSourceHandle ds = lightDs ? HdOverlayContainerDataSource::New(own, lightDs) :
++                                                   own;
++
++  if (_sky.atmosphere) {
++    _sky.valid = GetTypedValue<int>(ds, TfToken("enableatmosphere"), 1) != 0;
++    /* Karma's coefficients are per metre at sea level; Cycles' model carries
++     * the same quantities as densities, 1 being Earth's. The ratio is taken on
++     * the green channel (560 nm), where the model's spectral data sits:
++     * molecular scattering 1.067e-2 /km, aerosol scattering plus absorption
++     * (1.7711e-22 + 4.6168e-24) cm2 times 1.3681e20 /m3, ozone absorption
++     * 3.914e-25 cm2 times 334.5 Dobson times the peak density 1.514e19 at
++     * 25 km (third_party/sky/source/sky_multiple_scattering.cpp). */
++    const GfVec3f ray = GetTypedValue<GfVec3f>(
++        ds, TfToken("rayleighcoeff"), GfVec3f(6e-6f, 12e-6f, 27e-6f));
++    const GfVec3f mieS = GetTypedValue<GfVec3f>(ds, TfToken("miescattercoeff"), GfVec3f(4e-6f));
++    const GfVec3f mieA = GetTypedValue<GfVec3f>(ds, TfToken("mieabsorpcoeff"), GfVec3f(4.5e-6f));
++    const GfVec3f ozone = GetTypedValue<GfVec3f>(
++        ds, TfToken("extraabsorpcoeff"), GfVec3f(6.5e-7f, 1.88e-6f, 8.6e-8f));
++    _sky.air = ray[1] / 1.067e-5f;
++    _sky.aerosol = (mieS[1] + mieA[1]) / ((1.7711e-22f + 4.6168e-24f) * 1.3681e20f * 1e-3f);
++    _sky.ozone = ozone[1] / 1.982e-6f;
++    const GfVec3f albedo = GetTypedValue<GfVec3f>(ds, TfToken("groundalbedo"), GfVec3f(0.2f));
++    _sky.groundAlbedo = make_float3(albedo[0], albedo[1], albedo[2]);
++    /* The scale heights (rayleighdist 8000 m, miedist 1200 m) are
++     * the model's own and cannot be changed; said when they differ. */
++    const float rayleighDist = GetTypedValue<float>(ds, TfToken("rayleighdist"), 8000.0f);
++    const float mieDist = GetTypedValue<float>(ds, TfToken("miedist"), 1200.0f);
++    if (fabsf(rayleighDist - 8000.0f) > 1.0f || fabsf(mieDist - 1200.0f) > 1.0f) {
++      LOG_WARNING << "Atmosphere " << GetId().GetString()
++                  << ": Cycles' sky keeps Earth's scale heights (8000 m air, 1200 m aerosols); "
++                  << rayleighDist << " and " << mieDist << " are not carried.";
++    }
++  }
++  else if (_sky.valid) {
++    _sky.altitude = GetTypedValue<float>(ds, TfToken("solar_altitude"), 45.0f);
++    _sky.azimuth = GetTypedValue<float>(ds, TfToken("solar_azimuth"), 0.0f);
++    _sky.turbidity = GetTypedValue<float>(ds, TfToken("turbidity"), 3.0f);
++    _sky.horizonBlur = GetTypedValue<float>(ds, TfToken("horizon_blur"), 0.5f);
++    const GfVec3f albedo = GetTypedValue<GfVec3f>(ds, TfToken("ground_albedo"), GfVec3f(0.5f));
++    const GfVec3f ground = GetTypedValue<GfVec3f>(ds, TfToken("ground_color"), GfVec3f(0.0f));
++    _sky.groundAlbedo = make_float3(albedo[0], albedo[1], albedo[2]);
++    _sky.groundColor = make_float3(ground[0], ground[1], ground[2]);
++  }
++  return ds;
++}
++
++/* The sky's colour for the dome's shader: Cycles' sky texture read along the
++ * dome's own directions, times the light's strength, the ground colour below
++ * the horizon for the dome. Houdini's up is Y and the sky model's Z: the
++ * directions are turned (x, y, z) -> (x, -z, y), the sun with them. */
++ShaderOutput *HdCyclesLight::SkyColor(ShaderGraph *graph, const float3 &strength)
++{
++  /* The coordinate node applies the inverse of ob_tfm: the dome's rotation
++   * undone, then the axes turned (the inverse of the turn above). */
++  Transform rotation = _object->get_tfm();
++  transform_set_column(&rotation, 3, zero_float3());
++  TextureCoordinateNode *coordNode = graph->create_node<TextureCoordinateNode>();
++  coordNode->set_ob_tfm(rotation * make_transform(1, 0, 0, 0, 0, 0, 1, 0, 0, -1, 0, 0));
++  coordNode->set_use_transform(true);
++
++  /* The sun, in the dome's frame: its own altitude and azimuth (0 at -Z,
++   * growing towards +X), or the scene's distant light for the atmosphere. */
++  float3 sun;
++  if (_sky.atmosphere) {
++    const float3 world = _hasSun ? _sunDirection : make_float3(0.0f, 0.7071f, -0.7071f);
++    /* Into the dome's frame: the transpose undoes a rotation. */
++    sun = safe_normalize(transform_direction_transposed(&rotation, world));
++  }
++  else {
++    const float altitude = GfDegreesToRadians(_sky.altitude);
++    const float azimuth = GfDegreesToRadians(_sky.azimuth);
++    sun = make_float3(cosf(altitude) * sinf(azimuth), sinf(altitude), -cosf(altitude) * cosf(azimuth));
++  }
++  const float3 sunSky = make_float3(sun.x, -sun.z, sun.y);
++
++  SkyTextureNode *skyNode = graph->create_node<SkyTextureNode>();
++  graph->connect(coordNode->output("Object"), skyNode->input("Vector"));
++  float scale = 1.0f;
++  if (_sky.atmosphere) {
++    skyNode->set_sky_type(NODE_SKY_MULTIPLE_SCATTERING);
++    /* The sun itself is the scene's distant light. */
++    skyNode->set_sun_disc(false);
++    skyNode->set_sun_elevation(asinf(clamp(sunSky.z, -1.0f, 1.0f)));
++    skyNode->set_sun_rotation(atan2f(-sunSky.x, sunSky.y));
++    /* Karma's atmosphere is lit by the scene's sun: brighter sun, brighter sky. */
++    skyNode->set_sun_intensity(_hasSun ? average(_sunStrength) : 1.0f);
++    skyNode->set_air_density(_sky.air);
++    skyNode->set_aerosol_density(_sky.aerosol);
++    skyNode->set_ozone_density(_sky.ozone);
++    /* The model takes the camera's altitude in metres; the
++     * ground's altitude is not known here, sea level is used. */
++    skyNode->set_altitude(0.0f);
++    scale = kKarmaAtmosphereScale;
++  }
++  else {
++    skyNode->set_sky_type(NODE_SKY_HOSEK);
++    skyNode->set_sun_direction(sunSky);
++    skyNode->set_turbidity(clamp(_sky.turbidity, 1.0f, 10.0f));
++    skyNode->set_ground_albedo(
++        clamp(average(_sky.groundAlbedo), 0.0f, 1.0f));
++  }
++
++  VectorMathNode *scaleNode = graph->create_node<VectorMathNode>();
++  scaleNode->set_math_type(NODE_VECTOR_MATH_MULTIPLY);
++  scaleNode->set_vector2(strength * scale);
++  graph->connect(skyNode->output("Color"), scaleNode->input("Vector1"));
++  if (_sky.atmosphere) {
++    return scaleNode->output("Vector");
++  }
++
++  /* Below the horizon the ground colour, blended over the blur angle. */
++  SeparateXYZNode *upNode = graph->create_node<SeparateXYZNode>();
++  graph->connect(coordNode->output("Object"), upNode->input("Vector"));
++  MapRangeNode *blendNode = graph->create_node<MapRangeNode>();
++  blendNode->set_range_type(NODE_MAP_RANGE_SMOOTHSTEP);
++  blendNode->set_from_min(-sinf(GfDegreesToRadians(max(_sky.horizonBlur, 0.01f))));
++  blendNode->set_from_max(0.0f);
++  blendNode->set_to_min(0.0f);
++  blendNode->set_to_max(1.0f);
++  graph->connect(upNode->output("Z"), blendNode->input("Value"));
++  MixColorNode *mixNode = graph->create_node<MixColorNode>();
++  mixNode->set_blend_type(NODE_MIX_BLEND);
++  mixNode->set_a(_sky.groundColor * strength);
++  graph->connect(scaleNode->output("Vector"), mixNode->input("B"));
++  graph->connect(blendNode->output("Result"), mixNode->input("Factor"));
++  return mixNode->output("Result");
++}
++
++void HdCyclesLight::SetSun(const float3 &direction, const float3 &strength)
++{
++  _hasSun = true;
++  _sunDirection = direction;
++  _sunStrength = strength;
++  if (_sky.valid && _sky.atmosphere && _light && _lightDs) {
++    PopulateShaderGraph(_lightDs);
++  }
++}
++
+ void HdCyclesLight::DeleteTwins(Scene *scene, HdRenderParam *renderParam, const size_t keep)
+ {
+   auto *const session = static_cast<HdCyclesSession *>(renderParam);
+diff --git a/src/hydra/light.h b/src/hydra/light.h
+index f0472c2b..7a01ad44 100644
+--- a/src/hydra/light.h
++++ b/src/hydra/light.h
+@@ -15,6 +15,11 @@
+ #include <utility>
+ #include <vector>
+ 
++CCL_NAMESPACE_BEGIN
++class ShaderGraph;
++class ShaderOutput;
++CCL_NAMESPACE_END
++
+ HDCYCLES_NAMESPACE_OPEN_SCOPE
+ 
+ class HdCyclesLight final : public PXR_NS::HdLight {
+@@ -30,9 +35,43 @@ class HdCyclesLight final : public PXR_NS::HdLight {
+ 
+   void Finalize(PXR_NS::HdRenderParam *renderParam) override;
+ 
++  /* The scene's sun moved or changed: an atmosphere's sky follows
++   * (HdCyclesSession::SetSun). */
++  void SetSun(const CCL_NS::float3 &direction, const CCL_NS::float3 &strength);
++
+  private:
+   void Initialize(PXR_NS::HdRenderParam *renderParam);
+ 
++  /* Karma's Physical Sky. Its dome reaches Hydra as a generic `light` whose
++   * kma shader is `KMAskyDomeLight`, its atmosphere as a `karmaSkyAtmosphere`
++   * prim carrying its coefficients as primvars. Both render as a dome on
++   * Cycles' sky texture: Hosek-Wilkie for the dome, the model Karma uses; the
++   * multiple-scattering model for the atmosphere, lit by the scene's sun. */
++  struct Sky {
++    bool valid = false;
++    bool atmosphere = false;
++    float altitude = 45.0f; /* degrees above the horizon */
++    float azimuth = 0.0f;   /* degrees from -Z towards +X */
++    float turbidity = 3.0f;
++    float horizonBlur = 0.5f; /* degrees below the horizon */
++    CCL_NS::float3 groundAlbedo = CCL_NS::make_float3(0.5f, 0.5f, 0.5f);
++    CCL_NS::float3 groundColor = CCL_NS::make_float3(0.0f, 0.0f, 0.0f);
++    float air = 1.0f;
++    float aerosol = 1.0f;
++    float ozone = 1.0f;
++  };
++  bool IsDome() const;
++  PXR_NS::HdContainerDataSourceHandle ReadSky(
++      const PXR_NS::HdContainerDataSourceHandle &primDs,
++      const PXR_NS::HdContainerDataSourceHandle &lightDs);
++  CCL_NS::ShaderOutput *SkyColor(CCL_NS::ShaderGraph *graph, const CCL_NS::float3 &strength);
++
++  Sky _sky;
++  PXR_NS::HdContainerDataSourceHandle _lightDs;
++  bool _hasSun = false;
++  CCL_NS::float3 _sunDirection = CCL_NS::make_float3(0.0f, 1.0f, 0.0f);
++  CCL_NS::float3 _sunStrength = CCL_NS::make_float3(1.0f, 1.0f, 1.0f);
++
+   void PopulateShaderGraph(const PXR_NS::HdContainerDataSourceHandle &lightContainer);
+ 
+   CCL_NS::Light *CreateLight(CCL_NS::Scene *scene) const;
+diff --git a/src/hydra/plugin.cpp b/src/hydra/plugin.cpp
+index 2de581eb..0acaf944 100644
+--- a/src/hydra/plugin.cpp
++++ b/src/hydra/plugin.cpp
+@@ -190,7 +190,9 @@ TF_REGISTRY_FUNCTION(HdSceneIndexPlugin)
+                                        HdPrimTypeTokens->diskLight,
+                                        HdPrimTypeTokens->cylinderLight,
+                                        HdPrimTypeTokens->distantLight,
+-                                       HdPrimTypeTokens->domeLight};
++                                       HdPrimTypeTokens->domeLight,
++                                       HdPrimTypeTokens->light,
++                                       TfToken("karmaSkyAtmosphere")};
+   const VtArray<TfToken> geometryTypes = {HdPrimTypeTokens->mesh,
+                                           HdPrimTypeTokens->basisCurves,
+                                           HdPrimTypeTokens->points,
+diff --git a/src/hydra/render_delegate.cpp b/src/hydra/render_delegate.cpp
+index 60d8bcfc..40593318 100644
+--- a/src/hydra/render_delegate.cpp
++++ b/src/hydra/render_delegate.cpp
+@@ -57,6 +57,7 @@ TF_DEFINE_PRIVATE_TOKENS(_tokens,
+     (mtlx)
+     (kma)
+     (openvdbAsset)
++    (karmaSkyAtmosphere)
+ );
+ // clang-format on
+ 
+@@ -80,6 +81,10 @@ const TfTokenVector kSupportedSPrimTypes = {
+     HdPrimTypeTokens->domeLight,
+     HdPrimTypeTokens->rectLight,
+     HdPrimTypeTokens->sphereLight,
++    /* Karma's Physical Sky: its dome is a generic `light` with a kma shader,
++     * its atmosphere a prim of its own type (light.cpp). */
++    HdPrimTypeTokens->light,
++    _tokens->karmaSkyAtmosphere,
+ };
+ 
+ const TfTokenVector kSupportedBPrimTypes = {
+@@ -353,7 +358,8 @@ HdSprim *HdCyclesDelegate::CreateSprim(const TfToken &typeId, const SdfPath &spr
+   if (typeId == HdPrimTypeTokens->cylinderLight || typeId == HdPrimTypeTokens->diskLight ||
+       typeId == HdPrimTypeTokens->distantLight ||
+       typeId == HdPrimTypeTokens->domeLight || typeId == HdPrimTypeTokens->rectLight ||
+-      typeId == HdPrimTypeTokens->sphereLight)
++      typeId == HdPrimTypeTokens->sphereLight || typeId == HdPrimTypeTokens->light ||
++      typeId == _tokens->karmaSkyAtmosphere)
+   {
+     return new HdCyclesLight(sprimId, typeId);
+   }
+@@ -595,11 +601,15 @@ void HdCyclesDelegate::SetRenderSetting(const PXR_NS::TfToken &key, const PXR_NS
+   Scene *const scene = _renderParam->session->scene.get();
+   Session *const session = _renderParam->session;
+ 
+-  /* Houdini's Render Settings LOP writes it; it was ignored. */
+-  static const TfToken disableDepthOfFieldToken("disableDepthOfField");
++  /* Houdini's Render Settings LOPs write them; they were ignored. */
++  static const TfToken disableDepthOfFieldToken("disableDepthOfField"),
++      karmaEnableDofToken("karma:global:enable_dof");
+   if (key == disableDepthOfFieldToken) {
+     _renderParam->SetDepthOfFieldDisabled(VtValue::Cast<bool>(value).GetWithDefault(false));
+   }
++  else if (key == karmaEnableDofToken) {
++    _renderParam->SetKarmaDepthOfField(VtValue::Cast<bool>(value).GetWithDefault(true));
++  }
+   /* How the aperture meets an image of another aspect; it was always
+    * expanded (tools/bench_camera.py). */
+   static const TfToken conformPolicyToken("aspectRatioConformPolicy");
+diff --git a/src/hydra/session.cpp b/src/hydra/session.cpp
+index b44fce60..d2f21680 100644
+--- a/src/hydra/session.cpp
++++ b/src/hydra/session.cpp
+@@ -4,6 +4,7 @@
+  * SPDX-License-Identifier: Apache-2.0 */
+ 
+ #include "hydra/session.h"
++#include "hydra/light.h"
+ #include "scene/object.h"
+ #include "scene/shader.h"
+ // Have to include shader.h before background.h so that 'set_shader' uses the correct 'set'
+@@ -354,6 +355,39 @@ void HdCyclesSession::ForgetObject(Object *object)
+   _lightLinkingDirty |= _objectCategories.erase(object) + _lightLinks.erase(object) > 0;
+ }
+ 
++void HdCyclesSession::SetSun(const float3 &direction, const float3 &strength)
++{
++  if (_hasSun && _sunDirection == direction && _sunStrength == strength) {
++    return;
++  }
++  _hasSun = true;
++  _sunDirection = direction;
++  _sunStrength = strength;
++  for (HdCyclesLight *light : _atmospheres) {
++    light->SetSun(direction, strength);
++  }
++}
++
++bool HdCyclesSession::GetSun(float3 *direction, float3 *strength) const
++{
++  if (!_hasSun) {
++    return false;
++  }
++  *direction = _sunDirection;
++  *strength = _sunStrength;
++  return true;
++}
++
++void HdCyclesSession::AddAtmosphere(HdCyclesLight *light)
++{
++  _atmospheres.insert(light);
++}
++
++void HdCyclesSession::RemoveAtmosphere(HdCyclesLight *light)
++{
++  _atmospheres.erase(light);
++}
++
+ /* Hydra links a light to the prims of a category; Cycles to sets. A receiver
+  * belongs to one light set, the one of its combination of linked categories,
+  * and a light lists the sets it reaches: all of them when it links nothing,
+diff --git a/src/hydra/session.h b/src/hydra/session.h
+index 56ce9973..e3e04588 100644
+--- a/src/hydra/session.h
++++ b/src/hydra/session.h
+@@ -7,9 +7,11 @@
+ 
+ #include "hydra/config.h"
+ #include "util/thread.h"
++#include "util/types.h"
+ 
+ #include <cmath>
+ #include <map>
++#include <set>
+ #include <string>
+ 
+ #include <pxr/imaging/cameraUtil/framing.h>
+@@ -70,15 +72,30 @@ class HdCyclesSession final : public PXR_NS::HdRenderParam {
+         PXR_NS::VtValue::Cast<std::string>(value).GetWithDefault(std::string()));
+   }
+ 
+-  /* The render settings' disableDepthOfField: every camera renders sharp. */
+-  bool IsDepthOfFieldDisabled() const
++  /* Depth of field, as Karma decides it: an f-stop above zero blurs unless
++   * the render settings' disableDepthOfField (USD, written false by default
++   * by Houdini's Render Settings LOP and by husk) or Karma's own
++   * karma:global:enable_dof switch it off (tools/bench_sky.py). */
++  bool UseDepthOfField() const
+   {
+-    return _disableDepthOfField;
++    return !_disableDepthOfField && _karmaEnableDepthOfField;
+   }
+   void SetDepthOfFieldDisabled(const bool disabled)
+   {
+     _disableDepthOfField = disabled;
+   }
++  void SetKarmaDepthOfField(const bool enabled)
++  {
++    _karmaEnableDepthOfField = enabled;
++  }
++
++  /* The sun a Karma atmosphere is lit by: the scene's distant light, told
++   * here by its light as it syncs; every atmosphere rebuilds its sky on it
++   * (light.cpp). */
++  void SetSun(const CCL_NS::float3 &direction, const CCL_NS::float3 &strength);
++  bool GetSun(CCL_NS::float3 *direction, CCL_NS::float3 *strength) const;
++  void AddAtmosphere(class HdCyclesLight *light);
++  void RemoveAtmosphere(class HdCyclesLight *light);
+ 
+   float GetPixelAspect() const
+   {
+@@ -371,6 +388,11 @@ class HdCyclesSession final : public PXR_NS::HdRenderParam {
+   float _settingsExposure = 1.0f;
+   float _pixelAspect = 1.0f;
+   bool _disableDepthOfField = false;
++  bool _karmaEnableDepthOfField = true;
++  bool _hasSun = false;
++  CCL_NS::float3 _sunDirection = CCL_NS::make_float3(0.0f, 1.0f, 0.0f);
++  CCL_NS::float3 _sunStrength = CCL_NS::make_float3(1.0f, 1.0f, 1.0f);
++  std::set<class HdCyclesLight *> _atmospheres;
+   PXR_NS::TfToken _conformPolicy;
+   bool _batch = false;
+   PXR_NS::GfVec2i _batchResolution = PXR_NS::GfVec2i(0);

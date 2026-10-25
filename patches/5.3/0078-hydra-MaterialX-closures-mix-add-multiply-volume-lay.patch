@@ -1,7 +1,7 @@
 From d98615290c7676a9a30b5a4255e9ae3fe45a0579 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 17:13:13 +0200
-Subject: [PATCH 078/141] hydra: MaterialX closures - mix, add, multiply,
+Subject: [PATCH 078/144] hydra: MaterialX closures - mix, add, multiply,
  volume, layer, conductor
 
 The families typed by their suffix went through the prefix table: `mix_bsdf`

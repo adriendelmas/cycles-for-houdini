@@ -1,0 +1,75 @@
+From 061d6fe4d0106f0cdad42a376d5d72e15ef31b23 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Sun, 25 Oct 2026 04:46:32 +0100
+Subject: [PATCH 143/144] hydra: CYCLES_DUMP_PRIMS=1 logs each prim the scene
+ index adds
+
+With the logger at info, every prim the scene index delivers is logged with
+its type and its data source six levels deep: the way to see how Houdini
+hands a LOP to Hydra. Found the Karma Physical Sky's delivery (K-104).
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ src/hydra/implicit_surface.cpp | 37 ++++++++++++++++++++++++++++++++++
+ 1 file changed, 37 insertions(+)
+
+diff --git a/src/hydra/implicit_surface.cpp b/src/hydra/implicit_surface.cpp
+index 0dd7a039..08ef3fb6 100644
+--- a/src/hydra/implicit_surface.cpp
++++ b/src/hydra/implicit_surface.cpp
+@@ -27,6 +27,12 @@
+ #include <pxr/imaging/pxOsd/meshTopology.h>
+ #include <pxr/imaging/pxOsd/tokens.h>
+ 
++#include <pxr/base/tf/getenv.h>
++
++#include "util/log.h"
++
++#include <sstream>
++
+ HDCYCLES_NAMESPACE_OPEN_SCOPE
+ 
+ namespace {
+@@ -259,11 +265,42 @@ SdfPathVector HdCyclesImplicitSurfaceSceneIndex::GetChildPrimPaths(const SdfPath
+   return _GetInputSceneIndex()->GetChildPrimPaths(primPath);
+ }
+ 
++namespace {
++
++/* CYCLES_DUMP_PRIMS=1: every prim Hydra hands over, with its data source
++ * three levels deep - what a prim type the delegate does not know carries. */
++void DumpDataSource(const HdDataSourceBaseHandle &ds, const std::string &indent, const int depth)
++{
++  if (const auto container = HdContainerDataSource::Cast(ds)) {
++    for (const TfToken &name : container->GetNames()) {
++      const HdDataSourceBaseHandle child = container->Get(name);
++      std::string value;
++      if (const auto sampled = HdSampledDataSource::Cast(child)) {
++        std::stringstream text;
++        text << sampled->GetValue(0.0f);
++        value = " = " + text.str().substr(0, 120);
++      }
++      LOG_INFO << indent << name.GetString() << value;
++      if (depth > 0 && HdContainerDataSource::Cast(child)) {
++        DumpDataSource(child, indent + "  ", depth - 1);
++      }
++    }
++  }
++}
++
++}  // namespace
++
+ void HdCyclesImplicitSurfaceSceneIndex::_PrimsAdded(
+     const HdSceneIndexBase & /*sender*/, const HdSceneIndexObserver::AddedPrimEntries &entries)
+ {
++  static const bool dump = TfGetenvBool("CYCLES_DUMP_PRIMS", false);
+   HdSceneIndexObserver::AddedPrimEntries converted = entries;
+   for (HdSceneIndexObserver::AddedPrimEntry &entry : converted) {
++    if (dump) {
++      LOG_INFO << "Prim " << entry.primPath.GetString() << " type '" << entry.primType.GetString()
++               << "'";
++      DumpDataSource(_GetInputSceneIndex()->GetPrim(entry.primPath).dataSource, "    ", 6);
++    }
+     if (IsImplicit(entry.primType)) {
+       entry.primType = HdPrimTypeTokens->mesh;
+     }

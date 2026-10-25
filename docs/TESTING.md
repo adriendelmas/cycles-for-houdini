@@ -72,6 +72,7 @@ after a Cycles standard attribute (`heat`, `density`, `color`, `temperature`,
 | `hython tools/bench_light_split.py [name]` | A diffuse and a metal floor half under a large rect light, a board over each casting a shadow: lobe multipliers 0.5, 0, both, a shadow colour with and without a specular multiplier, shadows off | Lit and shadowed floor within 10 % of Karma on each half (K-87) | A light seen by the camera; domes |
 | `hython tools/bench_aniso.py` | A metal plane reflecting a small light: isotropic roughness, two alphas both ways, a reflecting dielectric, a roughness wired from `roughness_anisotropy` | The highlight's x/y spread within 20 % and its mean within 15 % of Karma (K-91) | Alphas more than 10 apart (Cycles' cap) |
 | `hython tools/bench_camera.py [pattern]` | Small white unlit squares, one camera per case: off-axis framing, aperture offsets, depth of field, orthographic, camera exposure, image aspect wider and taller than the aperture, a crop (`dataWindowNDC`, centred and in a corner), a pixel aspect of 2, the four other conform policies, `disableDepthOfField` | Each square's centroid and spread within a pixel and its total light within 5 % of Karma (K-71, K-77, K-78) | Motion blur of the camera, stereo |
+| `hython tools/bench_sky.py` | Houdini's Karma Physical Sky LOP built under hython, dome and atmosphere modes, the sun at 10, 30 and 60 degrees, a camera looking up over a ground and a ball; the same camera at f/0.1 on the ball with each depth-of-field switch | Four patches of the sky within 3 % of Karma for the dome, within 45 % for the atmosphere; the ball blurred as in Karma and sharp under either switch (K-104, K-105) | The sun's disc, the ground lit by the sky, aerial perspective |
 | `hython tools/bench_subdiv.py [pattern]` | A Catmull-Clark cube (no tags, all edges creased sharp and at 1.5, sharp corners) and an open grid (a hole, each boundary rule), white unlit silhouettes; a left-handed glass cube against the right-handed one | At most 1 % of the pixels differ from Karma (K-72); the glass cubes within 0.01 of each other (K-76) | Face-varying interpolation of UVs, Loop and bilinear schemes |
 | `hython tools/bench_normalmap.py [pattern]` | A quad with a constant tangent-space normal map tilted along +-u and +-v, lit from +X then +Y; the map's `scale`; UVs mirrored along X | Centre brightness within 10 % of Karma (Cycles' bump terminator term takes up to 8 %) (K-73) | Normal maps from textures, object-space maps, `bump` |
 | `hython tools/bench_points.py [pattern]` | White unlit points seen from above: constant width, a width per point, no width, under a scaled transform; linear curves without widths | Covered pixels overlap Karma's (IoU at least 0.9) (K-74) | Point shapes other than spheres, motion |
@@ -210,7 +211,10 @@ What writing it taught, each worth knowing before trusting a comparison:
 ## Measuring interactivity
 
 `CYCLES_LOGGING=1 CYCLES_LOGGING_LEVEL=info CYCLES_LOG_FILE=<path>` before
-starting Houdini. The log carries:
+starting Houdini. With `CYCLES_DUMP_PRIMS=1` as well, the log lists every
+prim the scene index adds, its type and its data source six levels deep: how
+Houdini delivers a LOP to Hydra (the sky of K-104 was found that way). The
+log carries:
 
 - `Display: ...` once per render pass creation - which driver and which Hgi;
 - `Render restarted: ...` at each session reset, with its cause (scene,

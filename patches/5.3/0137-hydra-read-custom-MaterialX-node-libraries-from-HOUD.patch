@@ -1,7 +1,7 @@
 From d6775815b8f7926bb8d242cc7b3fc9555f95eb6b Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sun, 11 Oct 2026 02:38:48 +0200
-Subject: [PATCH 137/141] hydra: read custom MaterialX node libraries from
+Subject: [PATCH 137/144] hydra: read custom MaterialX node libraries from
  HOUDINI_PATH
 
 A nodedef shipped by a package - a studio's own node defined as a

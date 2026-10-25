@@ -1,7 +1,7 @@
 From a25327c45e23d0e383eb48759720f673fcca9029 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 10 Sep 2026 14:40:15 +0200
-Subject: [PATCH 072/141] hydra: a full card says so, and COPs only weigh their
+Subject: [PATCH 072/144] hydra: a full card says so, and COPs only weigh their
  channels
 
 Reported: Cycles GPU slower than Cycles CPU, on an RTX 3090. The debug log

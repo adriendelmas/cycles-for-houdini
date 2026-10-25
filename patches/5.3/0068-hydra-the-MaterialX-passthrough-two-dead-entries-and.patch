@@ -1,7 +1,7 @@
 From 015cb08ab2e62b57e72937adac46f6bfdaef3482 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 9 Sep 2026 18:03:28 +0200
-Subject: [PATCH 068/141] hydra: the MaterialX passthrough, two dead entries,
+Subject: [PATCH 068/144] hydra: the MaterialX passthrough, two dead entries,
  and six more families
 
 From 549 to 647 translated nodedefs out of the 823 in the MaterialX 1.39.5

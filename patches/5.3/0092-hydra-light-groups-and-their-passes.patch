@@ -1,7 +1,7 @@
 From 9713d95aa3d239ffe3d571660efd9b3146a57563 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 03:16:40 +0200
-Subject: [PATCH 092/141] hydra: light groups and their passes
+Subject: [PATCH 092/144] hydra: light groups and their passes
 
 Lights had no group, and no render variable could isolate one. A light now takes
 its group from `cycles:lightgroup`, from the `cycles:object:lightgroup` primvar,

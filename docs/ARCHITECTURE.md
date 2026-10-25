@@ -178,4 +178,5 @@ cd external/cycles-53 && git format-patch --no-signature -o ../../patches/5.3 84
 | `CYCLES_COP_WATCH` | `0` stops polling Copernicus nodes for changes |
 | `CYCLES_LOGGING`, `CYCLES_LOGGING_LEVEL` | Cycles' own logger (`info`, `warning`, ...) |
 | `CYCLES_LOG_FILE` | Write that log to a file - Houdini has no console on Windows |
+| `CYCLES_DUMP_PRIMS` | `1` logs each prim the scene index adds, with its data source (needs the logger at `info`) |
 | `HD_CYCLES_DUMP_GRAPH` | Directory; one `.dot` per translated material |

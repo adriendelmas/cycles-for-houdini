@@ -174,6 +174,8 @@ Most of these patches are independent of Houdini and of this machine --
 | `0140` | hydra: a node in a NodeGraph (Houdini material subnetwork), named "G/a" by Hydra, keeps its path; all of them fell onto the empty path and merged, so the network rendered a constant |
 | `0141` | hydra: the last French comments and docstrings in English (Python resources, Render menu, four comment blocks in Cycles); no code change |
 | `0142` | hydra: the Houdini package (`cycles.json`) finds the plugin through `$HOUDINI_PACKAGE_PATH` instead of the build prefix: no absolute path in the generated file |
+| `0143` | hydra: `CYCLES_DUMP_PRIMS=1` logs each prim the scene index adds, with its data source |
+| `0144` | hydra: Karma Physical Sky - the dome on Cycles' Hosek-Wilkie sky, the atmosphere on its Nishita sky lit by the scene's sun (K-104); `karma:global:enable_dof` turns depth of field off (K-105) |
 
 ---
 

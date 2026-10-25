@@ -1,7 +1,7 @@
 From 4772b1458a46e5c90939a5a7fa64c9e2a56f1495 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 00:46:00 +0200
-Subject: [PATCH 036/141] node interface: connectors, file pickers, checkboxes
+Subject: [PATCH 036/144] node interface: connectors, file pickers, checkboxes
 
 A connector is emitted only for a socket that Cycles agrees to connect. The
 registry says so, and this matches exactly what Blender shows: on the

@@ -45,6 +45,8 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | IES profiles | ✅ | `bench_lights.py` | Read along the emission direction, in candelas, `normalize` and `angleScale` (K-70, 0113) - blurred and 30x off before |
 | Colour temperature, emission focus and tint | ✅ | `bench_lights.py` | Focus in the light shader (K-69, 0112) |
 | Dome and rect light textures | ✅ | `bench_dome.py`, `bench_rect.py` | Dome in USD's lat-long orientation and `poleAxis` (K-67, 0111); rect texture no longer mirrored (K-68, 0112) |
+| Karma Physical Sky | ✅ | `bench_sky.py` 6/6 vs Karma | Dome on Hosek-Wilkie, Karma's own model, 1.00 at three sun altitudes; atmosphere on Cycles' Nishita sky lit by the scene's sun, 0.88-1.25, a dome only (no aerial perspective) (K-104, 0144) |
+| Depth-of-field switches | ✅ | `bench_sky.py`, `bench_camera.py` | `disableDepthOfField` (K-78) and `karma:global:enable_dof` (K-105, 0144); an f-stop above zero blurs, as in Karma |
 | `visibleInPrimaryRay`, `shadowEnable` | ✅ | upstream | |
 | Light linking, shadow linking | ✅ | `bench_settings.py` | Hydra's light linking scene index → Cycles light and shadow sets (K-24, 0089); no light filters |
 | `shadow:color`, `diffuse`/`specular` multipliers, `shadow:enable` | ✅ | `bench_light_split.py` 8/8 vs Karma | The light is split over twins (K-87, 0127); a dome keeps 0 or 1 |

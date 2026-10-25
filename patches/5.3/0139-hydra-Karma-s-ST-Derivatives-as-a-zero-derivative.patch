@@ -1,7 +1,7 @@
 From 55b8b40d29eedc2dfffe0b8d2d9cad9c25c7730e Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sun, 11 Oct 2026 02:38:48 +0200
-Subject: [PATCH 139/141] hydra: Karma's ST Derivatives as a zero derivative
+Subject: [PATCH 139/144] hydra: Karma's ST Derivatives as a zero derivative
 
 kma_stderiv (no MaterialX definition, native to Karma) appears in
 MaterialX networks made for Karma, typically to size an edge or a filter to

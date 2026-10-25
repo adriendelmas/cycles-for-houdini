@@ -1,7 +1,7 @@
 From 8cfbccac87bfa939787d5bbff3bb6ed72c662361 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 03:59:54 +0200
-Subject: [PATCH 096/141] hydra: the pass no longer blocks the UI, and the COP
+Subject: [PATCH 096/144] hydra: the pass no longer blocks the UI, and the COP
  cache empties
 
 The render pass took the scene lock by waiting: while the render thread updated

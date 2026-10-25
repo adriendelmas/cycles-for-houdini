@@ -1,7 +1,7 @@
 From a05ed30e9d40722d3da02413f7c05e8fed883508 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 09:34:52 +0200
-Subject: [PATCH 103/141] hydra: basic BSDF roughness as alpha, dielectric_bsdf
+Subject: [PATCH 103/144] hydra: basic BSDF roughness as alpha, dielectric_bsdf
  by scatter_mode
 
 The roughness of conductor_bsdf and dielectric_bsdf is already the GGX alpha in

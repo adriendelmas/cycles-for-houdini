@@ -1,7 +1,7 @@
 From 9374189dc5f51328b658f04615052186aee76d54 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 10 Sep 2026 14:40:16 +0200
-Subject: [PATCH 073/141] hydra: MaterialX hair, and the surface node that cut
+Subject: [PATCH 073/144] hydra: MaterialX hair, and the surface node that cut
  everything
 
 Reported: impossible to shade hair in MaterialX with Cycles. Five nodes were

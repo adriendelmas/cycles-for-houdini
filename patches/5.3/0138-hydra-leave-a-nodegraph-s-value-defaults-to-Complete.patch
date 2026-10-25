@@ -1,7 +1,7 @@
 From a9c5682fc4882cb646559c24bbd049c11c246de4 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sun, 11 Oct 2026 02:38:48 +0200
-Subject: [PATCH 138/141] hydra: leave a nodegraph's value defaults to
+Subject: [PATCH 138/144] hydra: leave a nodegraph's value defaults to
  CompleteMaterialXDefaults
 
 Expanding a nodegraph wrote every input its inner nodes left unset with

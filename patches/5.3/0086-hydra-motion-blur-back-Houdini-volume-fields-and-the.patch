@@ -1,7 +1,7 @@
 From f020c0e8d034c564dfb62043a43403911dca2fa1 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 23:33:59 +0200
-Subject: [PATCH 086/141] hydra: motion blur back, Houdini volume fields, and
+Subject: [PATCH 086/144] hydra: motion blur back, Houdini volume fields, and
  the transparent film
 
 Motion blur: disableMotionBlur and instantaneousShutter set to true turned it

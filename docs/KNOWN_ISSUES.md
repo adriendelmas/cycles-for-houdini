@@ -1135,6 +1135,40 @@ values and the Sdr defaults. `bench_preview.py` builds real VOP networks
 and reads the preview back: 6 cases. Still one image per input, and a
 procedural shows the default.
 
+### K-104 Karma Physical Sky rendered nothing — confirmed — **fixed** (0144)
+The Karma Physical Sky LOP writes a `KarmaSkyDomeLight` and, in atmosphere
+mode, a `KarmaSkyAtmosphere`, plus a distant light for the sun. Hydra delivers
+the dome as a generic `light` whose parameters sit on a `KMAskyDomeLight` kma
+shader, and the atmosphere as a `karmaSkyAtmosphere` prim carrying its
+coefficients as primvars (found with `CYCLES_DUMP_PRIMS`, 0143). Neither was a
+type the delegate created: the sky was black and only the sun lit the scene.
+Both now render as a dome on Cycles' sky texture. The dome uses Hosek-Wilkie,
+the model Karma uses: `tools/bench_sky.py` measures Karma/Cycles at 1.00 on
+every patch of the sky at sun altitudes of 10, 30 and 60 degrees (sun
+direction, turbidity, ground albedo and horizon blur carried over). The
+atmosphere uses Cycles' multiple-scattering (Nishita) sky, lit by the scene's
+distant light - the session tracks the sun as its light syncs and every
+atmosphere rebuilds on it - with Karma's Rayleigh, Mie and ozone coefficients
+converted to Cycles' densities and a measured scale of 0.0041: Karma/Cycles
+within 0.88-1.25 per patch, 1.12-1.40 at worst. Not carried over: the aerial
+perspective (Karma's atmosphere also fogs distant geometry; Cycles' is a dome
+only), the observer altitude (0), scale heights other than Karma's 8000 and
+1200 m (a warning). A Karma light the delegate does not know rendered as a
+white point light before; it now renders nothing (strength 0, invisible).
+
+### K-105 Depth of field: what turns it off — confirmed — **fixed** (0144)
+Karma blurs whenever a camera's f-stop is above zero, unless the render
+settings write `disableDepthOfField = true` (USD, K-78) or
+`karma:global:enable_dof = false` (the Karma Render Settings switch, which
+husk forwards to every renderer). The delegate read only the first; the
+second now counts too. On the way, a rule keeping a Houdini-authored camera
+sharp unless the settings opted in was written and withdrawn before it
+shipped: it rested on a test whose camera looked at the sky, which "renders
+sharp" at any f-stop. Measured on the ball of `bench_sky.py`: at f/0.1 both
+renderers blur alike, and either switch restores the sharp edge. Houdini's
+Camera LOP authors `fStop = 0` by default, so only a camera given an f-stop
+blurs, in both renderers.
+
 ## D. Repository and tests
 
 ### K-50 Benches overwrite their own references — confirmed — **fixed** (2680470)

@@ -1,7 +1,7 @@
 From adc6bfedadac9e181ef31bf94fc1d0f6920bc76e Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 03:36:58 +0200
-Subject: [PATCH 094/141] hydra: the cryptomatte manifest in the image metadata
+Subject: [PATCH 094/144] hydra: the cryptomatte manifest in the image metadata
 
 husk wrote the CryptoObjectNN layers without the keys that the cryptomatte
 standard puts in the header - layer name, hash, conversion and manifest - and

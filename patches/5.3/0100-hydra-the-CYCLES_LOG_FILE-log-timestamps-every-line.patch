@@ -1,7 +1,7 @@
 From a5d830d8e8291b0887af9f9d684ae6279f4bfdb8 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 08:17:13 +0200
-Subject: [PATCH 100/141] hydra: the CYCLES_LOG_FILE log timestamps every line
+Subject: [PATCH 100/144] hydra: the CYCLES_LOG_FILE log timestamps every line
 
 A viewport that "takes four seconds to start" is a question of when: the restart
 line, the first sample, the display update, read against one another. Each line

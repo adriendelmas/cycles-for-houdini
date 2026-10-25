@@ -1,7 +1,7 @@
 From 3e30fae90e5ff3158a18b014b767a2e14aae43ce Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 4 Sep 2026 00:03:56 +0200
-Subject: [PATCH 051/141] hydra: pick the render device from Houdini's menu
+Subject: [PATCH 051/144] hydra: pick the render device from Houdini's menu
 
 Until now the device was chosen by naming the entry in the engine menu - Cycles
 CPU or Cycles GPU, which cannot tell OptiX from CUDA - or by setting

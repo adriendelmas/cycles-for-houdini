@@ -1,7 +1,7 @@
 From 328c3447f72862254930b56d0f3ef3e2dbb47f48 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sat, 10 Oct 2026 08:52:13 +0200
-Subject: [PATCH 128/141] hydra: computed colour4 alpha, BSDF weight,
+Subject: [PATCH 128/144] hydra: computed colour4 alpha, BSDF weight,
  geompropvalue colours
 
 The alpha a separate4 reads is now computed through colour4 nodes: each

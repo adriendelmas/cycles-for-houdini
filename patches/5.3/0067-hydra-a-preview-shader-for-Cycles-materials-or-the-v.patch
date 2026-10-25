@@ -1,7 +1,7 @@
 From 3bd14cb2a09e4ff75f09fee3e6269176a7695860 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 9 Sep 2026 17:24:54 +0200
-Subject: [PATCH 067/141] hydra: a preview shader for Cycles materials, or the
+Subject: [PATCH 067/144] hydra: a preview shader for Cycles materials, or the
  viewport stays gray
 
 Houdini's viewport only renders MaterialX, which it compiles itself, and
