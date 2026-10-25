@@ -1,7 +1,7 @@
 From 6f41241f682816f7d7c2d1bd9d77cd1a1253119a Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 13:14:49 +0200
-Subject: [PATCH 038/146] dispersion on the principled bsdf, ported from
+Subject: [PATCH 038/147] dispersion on the principled bsdf, ported from
  Blender PR 162041
 
 Two new sockets in Transmission -- the dispersion scale and the Abbe number --

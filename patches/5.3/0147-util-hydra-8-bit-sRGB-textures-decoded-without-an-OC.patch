@@ -1,0 +1,99 @@
+From cea6df469f92aef509e918af2d761c1f173c82fd Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Sun, 25 Oct 2026 06:53:04 +0100
+Subject: [PATCH 147/147] util + hydra: 8-bit sRGB textures decoded without an
+ OCIO config; image `default` consumed
+
+Without $OCIO (husk outside Houdini's packages) OpenColorIO has its raw
+config, with no sRGB space, and a texture's sRGB resolved to Cycles' builtin
+sRGB. That went down the conversion branch: half pixels, no processor to
+decode them, then compressed as sRGB for a kernel not told to decode - a
+texel of 0.5 rendered 0.75 instead of 0.21, declared sRGB or left to auto
+(where the config's default role, raw, took over the file's sRGB tag). Two
+lines in the colour-space manager: the builtin sRGB is the stored-as-sRGB
+case when the scene linear is Rec.709, and a file tagged sRGB keeps meaning
+it when the config lacks the space. Under Houdini's config nothing changes
+(bench_usdtex 17/17). (K-108)
+
+The MaterialX image nodes' `default` - the colour outside the image under
+constant wrapping, which Cycles has no socket for - is consumed without a
+warning; every glTF image's nodegraph bound it. (K-109)
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp  | 12 ++++++++++++
+ src/util/colorspace.cpp | 17 ++++++++++++++++-
+ 2 files changed, 28 insertions(+), 1 deletion(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index af96b2e8..8f91e77e 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -1059,6 +1059,10 @@ const MtlxImageTexture MtlxImage = {
+     {
+         {TfToken("file"), ustring("filename")},
+         {TfToken("texcoord"), ustring("vector")},
++        /* The colour outside the image under `constant` wrapping: Cycles has no
++         * socket for it, CLIP gives black, so it is exact for black only. Not
++         * reported (it came from every glTF image's nodegraph). */
++        {TfToken("default"), ustring("")},
+         {TfToken("uaddressmode"), ustring("extension")},
+         {TfToken("vaddressmode"), ustring("extension")},
+         {TfToken("filtertype"), ustring("interpolation")},
+@@ -1075,6 +1079,10 @@ MtlxImageTexture MakeMtlxImageData()
+                            {
+                                {TfToken("file"), ustring("filename")},
+                                {TfToken("texcoord"), ustring("vector")},
++                               /* The colour outside the image under `constant` wrapping: Cycles has no
++                                * socket for it, CLIP gives black, so it is exact for black only. Not
++                                * reported (it came from every glTF image's nodegraph). */
++                               {TfToken("default"), ustring("")},
+                                {TfToken("uaddressmode"), ustring("extension")},
+                                {TfToken("vaddressmode"), ustring("extension")},
+                                {TfToken("filtertype"), ustring("interpolation")},
+@@ -2376,6 +2384,10 @@ const std::vector<MtlxEntry> &MtlxTable()
+       {
+           {TfToken("file"), ustring("filename")},
+           {TfToken("texcoord"), ustring("vector")},
++          /* The colour outside the image under `constant` wrapping: Cycles has no
++           * socket for it, CLIP gives black, so it is exact for black only. Not
++           * reported (it came from every glTF image's nodegraph). */
++          {TfToken("default"), ustring("")},
+           {TfToken("tiling"), ustring("tiling")},
+           {TfToken("rotation"), ustring("rotation")},
+           {TfToken("rotationrange"), ustring("rotation_range")},
+diff --git a/src/util/colorspace.cpp b/src/util/colorspace.cpp
+index 80d7adfa..7e3d8dde 100644
+--- a/src/util/colorspace.cpp
++++ b/src/util/colorspace.cpp
+@@ -373,7 +373,10 @@ ustring ColorSpaceManager::detect_known_colorspace(ustring colorspace,
+     if (file_colorspace[0] && config->getColorSpace(file_colorspace)) {
+       colorspace = file_colorspace;
+     }
+-    else if (file_is_srgb && srgb_texture_colorspace() != u_colorspace_srgb) {
++    else if (file_is_srgb) {
++      /* The builtin sRGB when the config has no such space (a raw config,
++       * the one OCIO makes without $OCIO): the file says sRGB, and the
++       * config's `default` role, raw, would leave it undecoded (K-108). */
+       colorspace = srgb_texture_colorspace();
+     }
+     else {
+@@ -417,6 +420,18 @@ ustring ColorSpaceManager::detect_known_colorspace(ustring colorspace,
+                      u_colorspace_srgb;
+   }
+ 
++  /* The builtin sRGB, which a config without an sRGB space (or no config at
++   * all: husk outside Houdini's packages) falls back to, went through the
++   * conversion branch: half pixels, no processor to decode them, then
++   * compressed as sRGB for a kernel that was not told to decode - an 8-bit
++   * texture rendered encoded, three times too bright (hdCycles K-108). With
++   * a Rec.709 scene linear it is the plain stored-as-sRGB case. */
++  if (colorspace == u_colorspace_srgb &&
++      strcmp(get_scene_linear_interop_id(), "lin_rec709_scene") == 0)
++  {
++    return u_colorspace_scene_linear_srgb;
++  }
++
+   /* Builtin colorspaces. */
+   if (colorspace == u_colorspace_srgb || colorspace == u_colorspace_scene_linear ||
+       colorspace == u_colorspace_scene_linear_srgb || colorspace == u_colorspace_data)

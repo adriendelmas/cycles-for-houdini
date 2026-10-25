@@ -1,7 +1,7 @@
 From 6d19338bbdb82bf044ed989ebd76b5c77af3be8e Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 16:46:27 +0200
-Subject: [PATCH 076/146] hydra: mix, fades, saturate, facingratio,
+Subject: [PATCH 076/147] hydra: mix, fades, saturate, facingratio,
  viewdirection, geomcolor: exact
 
 Six MaterialX translations rendered wrong without anything saying so, the bench's

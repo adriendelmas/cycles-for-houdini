@@ -93,6 +93,7 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | Material settings (`displacement_method`...) | ✅ | phase 20 | |
 | Enum validation | ✅ | phase 14 | |
 | 8-bit sRGB auto-detection under ACES | ✅ | `bench_usdtex.py` | `auto` picks the config's sRGB texture space (K-66, 0110) |
+| 8-bit sRGB without an OCIO config (husk outside the packages) | ✅ | grey PNG/JPG vs Karma, 2026-10-25 | Decoded by the kernel like under a config; was encoded, 3x too bright (K-108, 0147) |
 | Viewport preview from the Cycles graph | 🟡 | `bench_preview.py` 6/6 | One image per input, followed through mixes (the side the factor favours) and colour nodes; mixes of constants computed (K-42, 0130); procedurals show the default |
 
 ## Materials - UsdPreviewSurface

@@ -1,7 +1,7 @@
 From 35aa9e6333a38f524c05d0d38b7f59c7174984cc Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 11 Sep 2026 17:01:21 +0200
-Subject: [PATCH 074/146] hydra: credit Ben Houston at the top of the MaterialX
+Subject: [PATCH 074/147] hydra: credit Ben Houston at the top of the MaterialX
  translation
 
 The MaterialX translation follows Ben Houston's blender-materialx-importer (MIT):

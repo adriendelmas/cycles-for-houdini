@@ -1202,6 +1202,30 @@ without `metersPerUnit` (USD's default is 0.01) a 4-unit window covered 400
 units: the ground a dot in the middle of the frame. Found while checking
 K-106 from above. `bench_camera.py` has the case `orthographic_cm`.
 
+### K-108 Without an OCIO config, 8-bit sRGB textures rendered encoded — confirmed — **fixed** (0147)
+husk outside Houdini's packages (`HOUDINI_PACKAGE_SKIP=1`, or any process
+without `$OCIO`) has OpenColorIO's raw config, with no sRGB space. The
+delegate then resolved a texture's sRGB to Cycles' builtin sRGB, which
+Cycles' own code sent down its conversion branch: half-float pixels, no
+processor to decode them, then compressed as sRGB for a kernel that was not
+told to decode. An 8-bit texel of 0.5 rendered as 0.75 instead of 0.21 -
+three times too bright - whether declared `srgb_texture`, `sRGB`, or left to
+`auto` (where the config's `default` role, raw, took over the file's sRGB
+tag). Karma decoded it. Two lines in Cycles' colour-space manager: the
+builtin sRGB is the stored-as-sRGB case when the scene linear is Rec.709
+(always, without a config), and a file tagged sRGB keeps meaning sRGB when
+the config has no such space. Under Houdini's own config nothing changes
+(`bench_usdtex.py` 17/17 both ways). Measured on a mid-grey PNG and JPG
+without `$OCIO`: 0.243 for sRGB and auto, Karma 0.232, raw 0.519.
+
+### K-109 glTF images warned about their default colour — confirmed — **fixed** (0147)
+`gltf_image` expands from its library nodegraph, which binds the inner
+image's `default` (the colour outside the image under `constant` wrapping)
+from the nodedef: an input Cycles' image node has no socket for, reported
+on every glTF texture. Consumed silently now on the three image mappings,
+as `tiledimage` and the others were already; it stays exact for black only
+(CLIP gives black outside).
+
 ## D. Repository and tests
 
 ### K-50 Benches overwrite their own references — confirmed — **fixed** (2680470)

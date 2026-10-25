@@ -1,7 +1,7 @@
 From de50404837a889137bdd8cd6fc281a4c32d89b52 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 08:30:42 +0200
-Subject: [PATCH 101/146] hydra: pick the glass lobe on transmission, not on
+Subject: [PATCH 101/147] hydra: pick the glass lobe on transmission, not on
  transmission_color
 
 Since CompleteMaterialXDefaults (0099) writes every unwritten input,

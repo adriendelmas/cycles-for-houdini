@@ -1,7 +1,7 @@
 From 8d8766264f3af7c950868e23e1b9b13591d0970a Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 03:41:04 +0200
-Subject: [PATCH 095/146] hydra: Karma's combined emission and motion vectors
+Subject: [PATCH 095/147] hydra: Karma's combined emission and motion vectors
 
 Karma's Render Settings node writes its combined emission `C.*O` and its motion
 vectors `ray:motionvector`: the first came out black, the second became an empty

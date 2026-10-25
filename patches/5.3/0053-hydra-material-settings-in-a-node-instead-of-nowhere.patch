@@ -1,7 +1,7 @@
 From 1127858cfa1305500461116558b2ef253533c864 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 4 Sep 2026 04:08:28 +0200
-Subject: [PATCH 053/146] hydra: material settings in a node instead of nowhere
+Subject: [PATCH 053/147] hydra: material settings in a node instead of nowhere
 
 Cycles renders a displacement as bump by default; switching to true
 displacement is done in the material settings, under Blender. Under Houdini

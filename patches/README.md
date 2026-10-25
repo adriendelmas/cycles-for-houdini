@@ -178,6 +178,7 @@ Most of these patches are independent of Houdini and of this machine --
 | `0144` | hydra: Karma Physical Sky - the dome on Cycles' Hosek-Wilkie sky, the atmosphere on its Nishita sky lit by the scene's sun (K-104); `karma:global:enable_dof` turns depth of field off (K-105) |
 | `0145` | hydra: Karma's Hextiled Triplanar, colour and normal, as the delegate's own nodegraphs on Cycles' hextiledimage; `transformvector/normal/point` between object and world (K-106) |
 | `0146` | hydra: the orthographic window is scaled by `metersPerUnit` like everything else sent to Cycles (K-107) |
+| `0147` | util + hydra: without an OCIO config an 8-bit sRGB texture rendered encoded, three times too bright - the builtin sRGB is the stored-as-sRGB case under a Rec.709 scene linear, and a file tagged sRGB keeps meaning it (K-108); the image nodes' `default` consumed without a warning (K-109) |
 
 ---
 

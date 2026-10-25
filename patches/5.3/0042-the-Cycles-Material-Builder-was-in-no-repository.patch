@@ -1,7 +1,7 @@
 From e79370e16d9acc7a42e65e6a5c9eb4e3dbb294b5 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 14:24:47 +0200
-Subject: [PATCH 042/146] the Cycles Material Builder was in no repository
+Subject: [PATCH 042/147] the Cycles Material Builder was in no repository
 
 Its module and shelf existed only in the install folder, which git ignores:
 written by hand, never versioned, never copied by the build. A clone of the

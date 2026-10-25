@@ -1,7 +1,7 @@
 From 8fc9acd2d7cfe320fbf08e4edbe2a14a4de56d93 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 4 Sep 2026 18:54:49 +0200
-Subject: [PATCH 059/146] hydra: COP textures go through memory, no longer
+Subject: [PATCH 059/147] hydra: COP textures go through memory, no longer
  through a file
 
 An `op:` was baked to a temporary EXR that Cycles then re-read. Measured on a

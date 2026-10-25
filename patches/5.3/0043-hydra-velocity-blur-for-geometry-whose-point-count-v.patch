@@ -1,7 +1,7 @@
 From b204dbd031318c043c7fa365930c42f7dd648925 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 14:38:28 +0200
-Subject: [PATCH 043/146] hydra: velocity blur, for geometry whose point count
+Subject: [PATCH 043/147] hydra: velocity blur, for geometry whose point count
  varies
 
 Position sampling does not cover everything. As soon as the point count changes
