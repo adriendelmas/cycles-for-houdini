@@ -1,7 +1,7 @@
 From 061d6fe4d0106f0cdad42a376d5d72e15ef31b23 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sun, 25 Oct 2026 04:46:32 +0100
-Subject: [PATCH 143/144] hydra: CYCLES_DUMP_PRIMS=1 logs each prim the scene
+Subject: [PATCH 143/146] hydra: CYCLES_DUMP_PRIMS=1 logs each prim the scene
  index adds
 
 With the logger at info, every prim the scene index delivers is logged with

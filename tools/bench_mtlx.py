@@ -597,9 +597,13 @@ CASES += [
 ]
 
 TEXTURED = [
-    ("image", "ND_image_color3"),
-    ("hextiledimage", "ND_hextiledimage_color3"),
-    ("gltf_image", "ND_gltf_image_color3_color3_1_0"),
+    ("image", "ND_image_color3", "color3f outputs:out"),
+    ("hextiledimage", "ND_hextiledimage_color3", "color3f outputs:out"),
+    ("gltf_image", "ND_gltf_image_color3_color3_1_0", "color3f outputs:out"),
+    # Karma's hextiled triplanar, the delegate's own nodegraphs (K-106): the
+    # colour is a vector4, the normal a world-space vector (seen as a colour).
+    ("kma_triplanar_color", "kma_hextiled_triplanar_color", "float4 outputs:out"),
+    ("kma_triplanar_normal", "kma_hextiled_triplanar_normal", "float3 outputs:out"),
 ]
 
 env = dict(os.environ)
@@ -1034,11 +1038,11 @@ def main():
     write_flat_texture()
     cases = list(CASES)
     if TEX:
-        for name, nodedef in TEXTURED:
+        for name, nodedef, out in TEXTURED:
             cases.append((name, [
                 'uniform token info:id = "%s"' % nodedef,
                 "asset inputs:file = @%s@" % TEX,
-                "color3f outputs:out",
+                out,
             ], None, {}))
     only = sys.argv[1] if len(sys.argv) > 1 else None
     if only:

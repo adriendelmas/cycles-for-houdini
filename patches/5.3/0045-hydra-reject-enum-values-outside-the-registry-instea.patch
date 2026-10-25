@@ -1,7 +1,7 @@
 From 6f56cdd3eb8807163e028b1468b5047771472f6a Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 18:20:13 +0200
-Subject: [PATCH 045/144] hydra: reject enum values outside the registry
+Subject: [PATCH 045/146] hydra: reject enum values outside the registry
  instead of passing them on
 
 A user material carried subsurface_method=0 on a principled bsdf -- a value

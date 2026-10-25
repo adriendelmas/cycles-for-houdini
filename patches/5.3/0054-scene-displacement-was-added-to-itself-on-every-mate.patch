@@ -1,7 +1,7 @@
 From 7a8563940584f55d1e62798b3f5ae64244598fa7 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 4 Sep 2026 13:10:02 +0200
-Subject: [PATCH 054/144] scene: displacement was added to itself on every
+Subject: [PATCH 054/146] scene: displacement was added to itself on every
  material edit
 
 Changing a displacement value in the viewport stacked the displacements: each

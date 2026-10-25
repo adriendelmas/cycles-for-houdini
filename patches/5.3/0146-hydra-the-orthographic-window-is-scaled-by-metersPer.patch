@@ -1,0 +1,32 @@
+From 0b216ee3737872917fcdb56197557e30eb04e89e Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Sun, 25 Oct 2026 05:22:00 +0100
+Subject: [PATCH 146/146] hydra: the orthographic window is scaled by
+ metersPerUnit
+
+Everything sent to Cycles is in metres but the orthographic window was not:
+on a stage without metersPerUnit (0.01 by USD's default) a 4-unit window
+covered 400 units. bench_camera.py gains orthographic_cm. (K-107)
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ src/hydra/camera.cpp | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/src/hydra/camera.cpp b/src/hydra/camera.cpp
+index f61e898d..654bab89 100644
+--- a/src/hydra/camera.cpp
++++ b/src/hydra/camera.cpp
+@@ -234,6 +234,12 @@ void HdCyclesCamera::ApplyCameraSettings(HdRenderParam *renderParam,
+ 
+     cam->set_fov(GfDegreesToRadians(data.GetFieldOfView(GfCamera::FOVVertical)));
+   }
++  else {
++    /* An orthographic window is in scene units, like everything else sent
++     * to Cycles in metres: on a stage of centimetres it framed a hundred
++     * times too wide (K-107). */
++    viewplane *= metersPerUnit;
++  }
+ 
+   cam->set_sensorwidth(data.GetHorizontalAperture() * GfCamera::APERTURE_UNIT * metersPerUnit);
+   cam->set_sensorheight(data.GetVerticalAperture() * GfCamera::APERTURE_UNIT * metersPerUnit);

@@ -1,7 +1,7 @@
 From 85d4d5700de32229ccdccdaabd2f37d2d94d294d Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 18:20:24 +0200
-Subject: [PATCH 046/144] kernel: Random Walk (Legacy) was missing from the
+Subject: [PATCH 046/146] kernel: Random Walk (Legacy) was missing from the
  closure skip table
 
 Found while looking for the cause of the black subsurface render:

@@ -1,7 +1,7 @@
 From 384a4193b8a3fc848134e5de4592ffa3662bead5 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 17:45:07 +0200
-Subject: [PATCH 104/144] hydra: shipped nodegraphs, constant transformmatrix,
+Subject: [PATCH 104/146] hydra: shipped nodegraphs, constant transformmatrix,
  F82, legacy Disney
 
 The nodes that the MaterialX library only writes in GLSL/OSL had neither a

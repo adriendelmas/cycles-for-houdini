@@ -1,7 +1,7 @@
 From be02ee87d235c83aaaeacb7adde24924c934464c Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 20:14:25 +0200
-Subject: [PATCH 108/144] hydra: translations fixed by comparing with Karma
+Subject: [PATCH 108/146] hydra: translations fixed by comparing with Karma
  across the whole library
 
 tools/mtlx_karma.py renders each value nodedef (695) with Cycles and Karma from

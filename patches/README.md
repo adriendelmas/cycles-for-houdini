@@ -176,6 +176,8 @@ Most of these patches are independent of Houdini and of this machine --
 | `0142` | hydra: the Houdini package (`cycles.json`) finds the plugin through `$HOUDINI_PACKAGE_PATH` instead of the build prefix: no absolute path in the generated file |
 | `0143` | hydra: `CYCLES_DUMP_PRIMS=1` logs each prim the scene index adds, with its data source |
 | `0144` | hydra: Karma Physical Sky - the dome on Cycles' Hosek-Wilkie sky, the atmosphere on its Nishita sky lit by the scene's sun (K-104); `karma:global:enable_dof` turns depth of field off (K-105) |
+| `0145` | hydra: Karma's Hextiled Triplanar, colour and normal, as the delegate's own nodegraphs on Cycles' hextiledimage; `transformvector/normal/point` between object and world (K-106) |
+| `0146` | hydra: the orthographic window is scaled by `metersPerUnit` like everything else sent to Cycles (K-107) |
 
 ---
 

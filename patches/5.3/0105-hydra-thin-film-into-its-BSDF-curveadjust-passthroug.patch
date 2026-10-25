@@ -1,7 +1,7 @@
 From ef4c687da8400227b29df97688e7564d3f26dbc2 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 18:14:11 +0200
-Subject: [PATCH 105/144] hydra: thin film into its BSDF, curveadjust
+Subject: [PATCH 105/146] hydra: thin film into its BSDF, curveadjust
  passthrough, image alpha
 
 thin_film_bsdf (MaterialX 1.38) is stacked by layer onto a BSDF; in 1.39 the

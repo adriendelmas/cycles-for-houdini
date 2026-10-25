@@ -1,0 +1,840 @@
+From b513c48e13c81429b1923cb0043fbbbedd3bfb70 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Sun, 25 Oct 2026 05:14:37 +0100
+Subject: [PATCH 145/146] hydra: Karma's Hextiled Triplanar as the delegate's
+ own nodegraphs
+
+kma_hextiled_triplanar_color and kma_hextiled_triplanar_normal, the ids the
+Karma Hextiled Triplanar VOP writes, had no node in the delegate. Both are
+nodegraphs in mtlx_nodegraphs.h now, transcribed from Karma's own
+($HFS/houdini/karmaNodeGraphs.json): the file hex-tiled three times on
+Cycles' hextiledimage, projected along the object's axes, blended by |N|
+raised to 1/blend. The normal form builds each projection's tangent frame as
+Karma does, flips the green on the faces looking down an axis, blends towards
+N by height and takes the sum to world space.
+
+Karma's hextiling parameters map onto Cycles': size is the tiling, rot and
+rand_rot the rotation range, scale and rand_scale the scale range, contrast
+the falloff gain, contrast_falloff the luminance weight; weightexp and seed
+have no counterpart, so the tiles fall elsewhere at the same size and
+orientation. The expansion takes these ids besides ND_.
+
+transformvector, transformnormal and transformpoint between object and world
+space join the table, on Cycles' vector transform node; `tospace` picks the
+direction. (K-106)
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp      |  50 ++-
+ src/hydra/mtlx_expand.cpp   |  15 +-
+ src/hydra/mtlx_nodegraphs.h | 675 ++++++++++++++++++++++++++++++++++++
+ 3 files changed, 734 insertions(+), 6 deletions(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index efdc6b0b..af96b2e8 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -1185,6 +1185,34 @@ UsdToCyclesMapping MakeMtlxTangentObject()
+ }
+ const UsdToCyclesMapping MtlxTangentObject = MakeMtlxTangentObject();
+ 
++/* transformvector, transformnormal and transformpoint between object and
++ * world space: Cycles' vector transform node. The table carries the
++ * object-to-world ones; `tospace` picks the other direction when the
++ * mapping is chosen (K-106). */
++UsdToCyclesMapping MakeMtlxTransform(const char *const type,
++                                     const char *const from,
++                                     const char *const to)
++{
++  UsdToCyclesMapping m{"vector_transform",
++                       {{TfToken("in"), ustring("vector")},
++                        {TfToken("fromspace"), ustring("")},
++                        {TfToken("tospace"), ustring("")},
++                        {CyclesMaterialTokens->out, ustring("vector")}}};
++  m.setFixedValues({{ustring("transform_type"), type},
++                    {ustring("convert_from"), from},
++                    {ustring("convert_to"), to}});
++  return m;
++}
++const UsdToCyclesMapping MtlxTransformVector = MakeMtlxTransform("vector", "object", "world");
++const UsdToCyclesMapping MtlxTransformVectorToObject = MakeMtlxTransform(
++    "vector", "world", "object");
++const UsdToCyclesMapping MtlxTransformNormal = MakeMtlxTransform("normal", "object", "world");
++const UsdToCyclesMapping MtlxTransformNormalToObject = MakeMtlxTransform(
++    "normal", "world", "object");
++const UsdToCyclesMapping MtlxTransformPoint = MakeMtlxTransform("point", "object", "world");
++const UsdToCyclesMapping MtlxTransformPointToObject = MakeMtlxTransform(
++    "point", "world", "object");
++
+ /* MaterialX `mix` is `mix(bg, fg, mix)`: the foreground wins as `mix` goes to
+  * one (stdlib_genglsl_impl.mtlx). Cycles' mix returns `b` at a factor of one,
+  * so the foreground is `b` and the background `a`. It was the other way round
+@@ -2761,6 +2789,9 @@ const std::vector<MtlxEntry> &MtlxTable()
+       /* Geometry. */
+       {"ND_position_", &MtlxPosition},
+       {"ND_normal_", &MtlxNormalLookup},
++      {"ND_transformvector_", &MtlxTransformVector},
++      {"ND_transformnormal_", &MtlxTransformNormal},
++      {"ND_transformpoint_", &MtlxTransformPoint},
+       {"ND_tangent_", &MtlxTangentLookup},
+       {"ND_bitangent_", &kBitangent},
+       {"ND_viewdirection", &kViewDirection},
+@@ -4461,11 +4492,11 @@ namespace {
+  * CompleteMaterialXDefaults (0099) writes every unwritten input, it is on
+  * every standard_surface, and the value has to speak. A written dispersion
+  * keeps the whole principled, the only node that renders it. */
+-/* The `space` of a geometric lookup; MaterialX's default, "object", when
+- * unwritten. "model" is object space to a renderer. */
+-std::string SpaceOf(HdMaterialNodeSchema nodeSchema)
++/* The `space` of a geometric lookup (or the space input named); MaterialX's
++ * default, "object", when unwritten. "model" is object space to a renderer. */
++std::string SpaceOf(HdMaterialNodeSchema nodeSchema, const char *const input = "space")
+ {
+-  const auto ds = nodeSchema.GetParameters().Get(TfToken("space")).GetValue();
++  const auto ds = nodeSchema.GetParameters().Get(TfToken(input)).GetValue();
+   const VtValue value = ds ? ds->GetValue(0.0f) : VtValue();
+   std::string space = "object";
+   if (value.IsHolding<TfToken>()) {
+@@ -4589,6 +4620,17 @@ unique_ptr<ShaderGraph> HdCyclesMaterial::BuildShaderGraph(HdMaterialNetworkSche
+             nodeDesc.mapping = &MtlxTangentObject;
+           }
+         }
++        if (nodeDesc.mapping == &MtlxTransformVector || nodeDesc.mapping == &MtlxTransformNormal ||
++            nodeDesc.mapping == &MtlxTransformPoint)
++        {
++          if (SpaceOf(nodeSchema, "tospace") == "object") {
++            nodeDesc.mapping = nodeDesc.mapping == &MtlxTransformVector ?
++                                   &MtlxTransformVectorToObject :
++                               nodeDesc.mapping == &MtlxTransformNormal ?
++                                   &MtlxTransformNormalToObject :
++                                   &MtlxTransformPointToObject;
++          }
++        }
+         if (nodeDesc.mapping == &MtlxGltfPbr) {
+           nodeDesc.mapping = MtlxGltfPbrFor(nodeSchema);
+         }
+diff --git a/src/hydra/mtlx_expand.cpp b/src/hydra/mtlx_expand.cpp
+index d990edbd..5c0dd551 100644
+--- a/src/hydra/mtlx_expand.cpp
++++ b/src/hydra/mtlx_expand.cpp
+@@ -1767,6 +1767,17 @@ HdMaterialNetworkSchema CompleteMaterialXDefaults(HdMaterialNetworkSchema networ
+   return net.changed ? Write(net) : network;
+ }
+ 
++namespace {
++
++/* The ids the expansion takes: the library's, and Karma's hextiled triplanar,
++ * whose nodegraph the delegate ships (mtlx_nodegraphs.h, K-106). */
++bool Expandable(const std::string &id)
++{
++  return id.rfind("ND_", 0) == 0 || id.rfind("kma_hextiled_triplanar_", 0) == 0;
++}
++
++}  // namespace
++
+ HdMaterialNetworkSchema ExpandMaterialXNodegraphs(HdMaterialNetworkSchema network,
+                                                   const HdCyclesNodeTranslatable &translatable)
+ {
+@@ -1778,7 +1789,7 @@ HdMaterialNetworkSchema ExpandMaterialXNodegraphs(HdMaterialNetworkSchema networ
+     for (const TfToken &name : nodes.GetNames()) {
+       if (auto ds = nodes.Get(name).GetNodeIdentifier()) {
+         const std::string id = ds->GetTypedValue(0.0f).GetString();
+-        if ((id.rfind("ND_", 0) == 0 && !translatable(id)) || id == "ND_separate4_color4" ||
++        if ((Expandable(id) && !translatable(id)) || id == "ND_separate4_color4" ||
+             id.rfind("ND_open_pbr_surface_surfaceshader", 0) == 0 ||
+             id.rfind("ND_standard_surface_surfaceshader", 0) == 0)
+         {
+@@ -1842,7 +1853,7 @@ HdMaterialNetworkSchema ExpandMaterialXNodegraphs(HdMaterialNetworkSchema networ
+         continue;
+       }
+       const std::string id = it->second.typeId.GetString();
+-      if (id.rfind("ND_", 0) != 0 || translatable(id)) {
++      if (!Expandable(id) || translatable(id)) {
+         continue;
+       }
+       const mx::NodeDefPtr nodeDef = library->getNodeDef(id);
+diff --git a/src/hydra/mtlx_nodegraphs.h b/src/hydra/mtlx_nodegraphs.h
+index 55b314d9..48c91aee 100644
+--- a/src/hydra/mtlx_nodegraphs.h
++++ b/src/hydra/mtlx_nodegraphs.h
+@@ -997,5 +997,680 @@ static const char *const kCyclesMaterialXNodegraphs = R"MTLX(<?xml version="1.0"
+     <output name="out" type="vector3" nodename="n" />
+   </nodegraph>
+ 
++
++)MTLX"
++    /* Split: MSVC caps one string literal at 16 KB; adjacent ones join. */
++    R"MTLX(
++  <!-- Karma's Hextiled Triplanar, colour (kma_hextiled_triplanar_color in
++       $HFS/houdini/karmaNodeGraphs.json): the file hex-tiled three times,
++       projected along the object's axes - st (z, 1-y), (x, 1-z), (x, y) -
++       and blended by |N| raised to 1/blend, normalised. Karma's hextiling
++       maps onto Cycles' hextiledimage: size is the tiling, rot and rand_rot
++       the rotation range (rot +- 180 rand_rot degrees), scale and rand_scale
++       the scale range, contrast the falloff gain, contrast_falloff the
++       luminance weight (Cycles halves it). weightexp (7, fixed in Cycles) and
++       seed have no counterpart. The weights output is the triplanar blend,
++       not Karma's per-hex colours (K-106). -->
++  <nodedef name="kma_hextiled_triplanar_color" node="kma_hextiled_triplanar_color">
++    <input name="file" type="filename" value="" />
++    <input name="size" type="float" value="1.0" />
++    <input name="scale" type="float" value="1.0" />
++    <input name="rand_scale" type="float" value="0.0" />
++    <input name="rot" type="float" value="0.0" />
++    <input name="rand_rot" type="float" value="0.5" />
++    <input name="seed" type="integer" value="0" />
++    <input name="contrast" type="float" value="0.5" />
++    <input name="contrast_falloff" type="float" value="0.6" />
++    <input name="weightexp" type="float" value="7.0" />
++    <input name="blend" type="float" value="0.02" />
++    <input name="sourceColorSpace" type="string" value="auto" />
++    <input name="position" type="vector3" defaultgeomprop="Pobject" />
++    <input name="normal" type="vector3" defaultgeomprop="Nobject" />
++    <output name="out" type="vector4" />
++    <output name="weights" type="vector3" />
++  </nodedef>
++  <nodegraph name="NG_cycles_kma_hextiled_triplanar_color" nodedef="kma_hextiled_triplanar_color">
++    <separate3 name="p" type="multioutput">
++      <input name="in" type="vector3" interfacename="position" />
++    </separate3>
++    <subtract name="omy" type="float">
++      <input name="in1" type="float" value="1" />
++      <input name="in2" type="float" nodename="p" output="outy" />
++    </subtract>
++    <subtract name="omz" type="float">
++      <input name="in1" type="float" value="1" />
++      <input name="in2" type="float" nodename="p" output="outz" />
++    </subtract>
++    <combine2 name="st_x" type="vector2">
++      <input name="in1" type="float" nodename="p" output="outz" />
++      <input name="in2" type="float" nodename="omy" />
++    </combine2>
++    <combine2 name="st_y" type="vector2">
++      <input name="in1" type="float" nodename="p" output="outx" />
++      <input name="in2" type="float" nodename="omz" />
++    </combine2>
++    <combine2 name="st_z" type="vector2">
++      <input name="in1" type="float" nodename="p" output="outx" />
++      <input name="in2" type="float" nodename="p" output="outy" />
++    </combine2>
++    <normalize name="nn" type="vector3">
++      <input name="in" type="vector3" interfacename="normal" />
++    </normalize>
++    <absval name="an" type="vector3">
++      <input name="in" type="vector3" nodename="nn" />
++    </absval>
++    <dotproduct name="dn" type="float">
++      <input name="in1" type="vector3" nodename="an" />
++      <input name="in2" type="vector3" value="1, 1, 1" />
++    </dotproduct>
++    <divide name="wn" type="vector3">
++      <input name="in1" type="vector3" nodename="an" />
++      <input name="in2" type="float" nodename="dn" />
++    </divide>
++    <clamp name="bl" type="float">
++      <input name="in" type="float" interfacename="blend" />
++      <input name="low" type="float" value="0.02" />
++      <input name="high" type="float" value="1" />
++    </clamp>
++    <divide name="ex" type="float">
++      <input name="in1" type="float" value="1" />
++      <input name="in2" type="float" nodename="bl" />
++    </divide>
++    <power name="wp" type="vector3">
++      <input name="in1" type="vector3" nodename="wn" />
++      <input name="in2" type="float" nodename="ex" />
++    </power>
++    <dotproduct name="dw" type="float">
++      <input name="in1" type="vector3" nodename="wp" />
++      <input name="in2" type="vector3" value="1, 1, 1" />
++    </dotproduct>
++    <divide name="w" type="vector3">
++      <input name="in1" type="vector3" nodename="wp" />
++      <input name="in2" type="float" nodename="dw" />
++    </divide>
++    <separate3 name="ws" type="multioutput">
++      <input name="in" type="vector3" nodename="w" />
++    </separate3>
++    <divide name="freq" type="float">
++      <input name="in1" type="float" value="1" />
++      <input name="in2" type="float" interfacename="size" />
++    </divide>
++    <combine2 name="tiling" type="vector2">
++      <input name="in1" type="float" nodename="freq" />
++      <input name="in2" type="float" nodename="freq" />
++    </combine2>
++    <multiply name="halfspan" type="float">
++      <input name="in1" type="float" interfacename="rand_rot" />
++      <input name="in2" type="float" value="180" />
++    </multiply>
++    <subtract name="rlo" type="float">
++      <input name="in1" type="float" interfacename="rot" />
++      <input name="in2" type="float" nodename="halfspan" />
++    </subtract>
++    <add name="rhi" type="float">
++      <input name="in1" type="float" interfacename="rot" />
++      <input name="in2" type="float" nodename="halfspan" />
++    </add>
++    <combine2 name="rrange" type="vector2">
++      <input name="in1" type="float" nodename="rlo" />
++      <input name="in2" type="float" nodename="rhi" />
++    </combine2>
++    <add name="rs1" type="float">
++      <input name="in1" type="float" value="1" />
++      <input name="in2" type="float" interfacename="rand_scale" />
++    </add>
++    <divide name="slo" type="float">
++      <input name="in1" type="float" interfacename="scale" />
++      <input name="in2" type="float" nodename="rs1" />
++    </divide>
++    <combine2 name="srange" type="vector2">
++      <input name="in1" type="float" nodename="slo" />
++      <input name="in2" type="float" interfacename="scale" />
++    </combine2>
++    <multiply name="fc" type="float">
++      <input name="in1" type="float" interfacename="contrast_falloff" />
++      <input name="in2" type="float" value="2" />
++    </multiply>
++
++)MTLX"
++    /* Split: MSVC caps one string literal at 16 KB; adjacent ones join. */
++    R"MTLX(
++    <hextiledimage name="h_x" type="color4">
++      <input name="file" type="filename" interfacename="file" />
++      <input name="texcoord" type="vector2" nodename="st_x" />
++      <input name="tiling" type="vector2" nodename="tiling" />
++      <input name="rotation" type="float" value="1" />
++      <input name="rotationrange" type="vector2" nodename="rrange" />
++      <input name="scale" type="float" value="1" />
++      <input name="scalerange" type="vector2" nodename="srange" />
++      <input name="offset" type="float" value="1" />
++      <input name="offsetrange" type="vector2" value="0, 1" />
++      <input name="falloff" type="float" interfacename="contrast" />
++      <input name="falloffcontrast" type="float" nodename="fc" />
++      <input name="lumacoeffs" type="color3" value="0.299, 0.587, 0.114" />
++    </hextiledimage>
++    <multiply name="c_x" type="color4">
++      <input name="in1" type="color4" nodename="h_x" />
++      <input name="in2" type="float" nodename="ws" output="outx" />
++    </multiply>
++    <hextiledimage name="h_y" type="color4">
++      <input name="file" type="filename" interfacename="file" />
++      <input name="texcoord" type="vector2" nodename="st_y" />
++      <input name="tiling" type="vector2" nodename="tiling" />
++      <input name="rotation" type="float" value="1" />
++      <input name="rotationrange" type="vector2" nodename="rrange" />
++      <input name="scale" type="float" value="1" />
++      <input name="scalerange" type="vector2" nodename="srange" />
++      <input name="offset" type="float" value="1" />
++      <input name="offsetrange" type="vector2" value="0, 1" />
++      <input name="falloff" type="float" interfacename="contrast" />
++      <input name="falloffcontrast" type="float" nodename="fc" />
++      <input name="lumacoeffs" type="color3" value="0.299, 0.587, 0.114" />
++    </hextiledimage>
++    <multiply name="c_y" type="color4">
++      <input name="in1" type="color4" nodename="h_y" />
++      <input name="in2" type="float" nodename="ws" output="outy" />
++    </multiply>
++    <hextiledimage name="h_z" type="color4">
++      <input name="file" type="filename" interfacename="file" />
++      <input name="texcoord" type="vector2" nodename="st_z" />
++      <input name="tiling" type="vector2" nodename="tiling" />
++      <input name="rotation" type="float" value="1" />
++      <input name="rotationrange" type="vector2" nodename="rrange" />
++      <input name="scale" type="float" value="1" />
++      <input name="scalerange" type="vector2" nodename="srange" />
++      <input name="offset" type="float" value="1" />
++      <input name="offsetrange" type="vector2" value="0, 1" />
++      <input name="falloff" type="float" interfacename="contrast" />
++      <input name="falloffcontrast" type="float" nodename="fc" />
++      <input name="lumacoeffs" type="color3" value="0.299, 0.587, 0.114" />
++    </hextiledimage>
++    <multiply name="c_z" type="color4">
++      <input name="in1" type="color4" nodename="h_z" />
++      <input name="in2" type="float" nodename="ws" output="outz" />
++    </multiply>
++    <add name="cxy" type="color4">
++      <input name="in1" type="color4" nodename="c_x" />
++      <input name="in2" type="color4" nodename="c_y" />
++    </add>
++    <add name="cxyz" type="color4">
++      <input name="in1" type="color4" nodename="cxy" />
++      <input name="in2" type="color4" nodename="c_z" />
++    </add>
++    <convert name="outv" type="vector4">
++      <input name="in" type="color4" nodename="cxyz" />
++    </convert>
++    <output name="out" type="vector4" nodename="outv" />
++    <output name="weights" type="vector3" nodename="w" />
++  </nodegraph>
++
++  <!-- Its normal-map form (kma_hextiled_triplanar_normal): each projection's
++       tangent-space map, read raw, is put on the frame Karma builds - T the
++       projection's s axis made perpendicular to N, B = N x T - with its
++       green flipped on the faces looking down the axis, scaled by `invert`,
++       blended towards N by `height`; the three are summed by the triplanar
++       weights, taken to world space and normalised. -->
++  <nodedef name="kma_hextiled_triplanar_normal" node="kma_hextiled_triplanar_normal">
++    <input name="file" type="filename" value="" />
++    <input name="size" type="float" value="1.0" />
++    <input name="scale" type="float" value="1.0" />
++    <input name="rand_scale" type="float" value="0.0" />
++    <input name="rot" type="float" value="0.0" />
++    <input name="rand_rot" type="float" value="0.5" />
++    <input name="seed" type="integer" value="0" />
++    <input name="contrast" type="float" value="0.5" />
++    <input name="contrast_falloff" type="float" value="0.6" />
++    <input name="weightexp" type="float" value="7.0" />
++    <input name="blend" type="float" value="0.02" />
++    <input name="height" type="float" value="0.1" />
++    <input name="invert" type="integer" value="0" />
++    <input name="normal" type="vector3" defaultgeomprop="Nobject" />
++    <input name="position" type="vector3" defaultgeomprop="Pobject" />
++    <output name="out" type="vector3" />
++    <output name="weights" type="vector3" />
++  </nodedef>
++  <nodegraph name="NG_cycles_kma_hextiled_triplanar_normal" nodedef="kma_hextiled_triplanar_normal">
++    <separate3 name="p" type="multioutput">
++      <input name="in" type="vector3" interfacename="position" />
++    </separate3>
++    <subtract name="omy" type="float">
++      <input name="in1" type="float" value="1" />
++      <input name="in2" type="float" nodename="p" output="outy" />
++    </subtract>
++    <subtract name="omz" type="float">
++      <input name="in1" type="float" value="1" />
++      <input name="in2" type="float" nodename="p" output="outz" />
++    </subtract>
++    <combine2 name="st_x" type="vector2">
++      <input name="in1" type="float" nodename="p" output="outz" />
++      <input name="in2" type="float" nodename="omy" />
++    </combine2>
++    <combine2 name="st_y" type="vector2">
++      <input name="in1" type="float" nodename="p" output="outx" />
++      <input name="in2" type="float" nodename="omz" />
++    </combine2>
++    <combine2 name="st_z" type="vector2">
++      <input name="in1" type="float" nodename="p" output="outx" />
++      <input name="in2" type="float" nodename="p" output="outy" />
++    </combine2>
++    <normalize name="nn" type="vector3">
++      <input name="in" type="vector3" interfacename="normal" />
++    </normalize>
++    <absval name="an" type="vector3">
++      <input name="in" type="vector3" nodename="nn" />
++    </absval>
++    <dotproduct name="dn" type="float">
++      <input name="in1" type="vector3" nodename="an" />
++      <input name="in2" type="vector3" value="1, 1, 1" />
++    </dotproduct>
++    <divide name="wn" type="vector3">
++      <input name="in1" type="vector3" nodename="an" />
++      <input name="in2" type="float" nodename="dn" />
++    </divide>
++    <clamp name="bl" type="float">
++      <input name="in" type="float" interfacename="blend" />
++      <input name="low" type="float" value="0.02" />
++      <input name="high" type="float" value="1" />
++    </clamp>
++    <divide name="ex" type="float">
++      <input name="in1" type="float" value="1" />
++      <input name="in2" type="float" nodename="bl" />
++    </divide>
++    <power name="wp" type="vector3">
++      <input name="in1" type="vector3" nodename="wn" />
++      <input name="in2" type="float" nodename="ex" />
++    </power>
++    <dotproduct name="dw" type="float">
++      <input name="in1" type="vector3" nodename="wp" />
++      <input name="in2" type="vector3" value="1, 1, 1" />
++    </dotproduct>
++    <divide name="w" type="vector3">
++      <input name="in1" type="vector3" nodename="wp" />
++      <input name="in2" type="float" nodename="dw" />
++    </divide>
++    <separate3 name="ws" type="multioutput">
++      <input name="in" type="vector3" nodename="w" />
++    </separate3>
++    <divide name="freq" type="float">
++      <input name="in1" type="float" value="1" />
++      <input name="in2" type="float" interfacename="size" />
++    </divide>
++    <combine2 name="tiling" type="vector2">
++      <input name="in1" type="float" nodename="freq" />
++      <input name="in2" type="float" nodename="freq" />
++    </combine2>
++    <multiply name="halfspan" type="float">
++      <input name="in1" type="float" interfacename="rand_rot" />
++      <input name="in2" type="float" value="180" />
++    </multiply>
++    <subtract name="rlo" type="float">
++      <input name="in1" type="float" interfacename="rot" />
++      <input name="in2" type="float" nodename="halfspan" />
++    </subtract>
++    <add name="rhi" type="float">
++      <input name="in1" type="float" interfacename="rot" />
++      <input name="in2" type="float" nodename="halfspan" />
++    </add>
++    <combine2 name="rrange" type="vector2">
++      <input name="in1" type="float" nodename="rlo" />
++      <input name="in2" type="float" nodename="rhi" />
++    </combine2>
++    <add name="rs1" type="float">
++      <input name="in1" type="float" value="1" />
++      <input name="in2" type="float" interfacename="rand_scale" />
++    </add>
++    <divide name="slo" type="float">
++      <input name="in1" type="float" interfacename="scale" />
++      <input name="in2" type="float" nodename="rs1" />
++    </divide>
++    <combine2 name="srange" type="vector2">
++      <input name="in1" type="float" nodename="slo" />
++      <input name="in2" type="float" interfacename="scale" />
++    </combine2>
++    <multiply name="fc" type="float">
++      <input name="in1" type="float" interfacename="contrast_falloff" />
++      <input name="in2" type="float" value="2" />
++    </multiply>
++    <convert name="invf" type="float">
++      <input name="in" type="integer" interfacename="invert" />
++    </convert>
++    <multiply name="inv2" type="float">
++      <input name="in1" type="float" nodename="invf" />
++      <input name="in2" type="float" value="2" />
++    </multiply>
++    <subtract name="hs" type="float">
++      <input name="in1" type="float" value="1" />
++      <input name="in2" type="float" nodename="inv2" />
++    </subtract>
++
++)MTLX"
++    /* Split: MSVC caps one string literal at 16 KB; adjacent ones join. */
++    R"MTLX(
++    <hextiledimage name="h_x" type="color3">
++      <input name="file" type="filename" interfacename="file" colorspace="raw" />
++      <input name="texcoord" type="vector2" nodename="st_x" />
++      <input name="tiling" type="vector2" nodename="tiling" />
++      <input name="rotation" type="float" value="1" />
++      <input name="rotationrange" type="vector2" nodename="rrange" />
++      <input name="scale" type="float" value="1" />
++      <input name="scalerange" type="vector2" nodename="srange" />
++      <input name="offset" type="float" value="1" />
++      <input name="offsetrange" type="vector2" value="0, 1" />
++      <input name="falloff" type="float" interfacename="contrast" />
++      <input name="falloffcontrast" type="float" nodename="fc" />
++      <input name="lumacoeffs" type="color3" value="0.299, 0.587, 0.114" />
++    </hextiledimage>
++    <multiply name="v2_x" type="color3">
++      <input name="in1" type="color3" nodename="h_x" />
++      <input name="in2" type="float" value="2" />
++    </multiply>
++    <subtract name="v_x" type="color3">
++      <input name="in1" type="color3" nodename="v2_x" />
++      <input name="in2" type="float" value="1" />
++    </subtract>
++    <convert name="vv_x" type="vector3">
++      <input name="in" type="color3" nodename="v_x" />
++    </convert>
++    <separate3 name="vs_x" type="multioutput">
++      <input name="in" type="vector3" nodename="vv_x" />
++    </separate3>
++    <dotproduct name="d_x" type="float">
++      <input name="in1" type="vector3" nodename="nn" />
++      <input name="in2" type="vector3" value="1, 0, 0" />
++    </dotproduct>
++    <ifgreater name="s_x" type="float">
++      <input name="value1" type="float" nodename="d_x" />
++      <input name="value2" type="float" value="0" />
++      <input name="in1" type="float" value="1" />
++      <input name="in2" type="float" value="-1" />
++    </ifgreater>
++    <dotproduct name="tn_x" type="float">
++      <input name="in1" type="vector3" value="0, 0, 1" />
++      <input name="in2" type="vector3" nodename="nn" />
++    </dotproduct>
++    <multiply name="tnn_x" type="vector3">
++      <input name="in1" type="vector3" nodename="nn" />
++      <input name="in2" type="float" nodename="tn_x" />
++    </multiply>
++    <subtract name="tr_x" type="vector3">
++      <input name="in1" type="vector3" value="0, 0, 1" />
++      <input name="in2" type="vector3" nodename="tnn_x" />
++    </subtract>
++    <normalize name="T_x" type="vector3">
++      <input name="in" type="vector3" nodename="tr_x" />
++    </normalize>
++    <crossproduct name="B_x" type="vector3">
++      <input name="in1" type="vector3" nodename="nn" />
++      <input name="in2" type="vector3" nodename="T_x" />
++    </crossproduct>
++    <multiply name="xs_x" type="float">
++      <input name="in1" type="float" nodename="vs_x" output="outx" />
++      <input name="in2" type="float" nodename="hs" />
++    </multiply>
++    <multiply name="ys0_x" type="float">
++      <input name="in1" type="float" nodename="vs_x" output="outy" />
++      <input name="in2" type="float" nodename="hs" />
++    </multiply>
++    <multiply name="ys_x" type="float">
++      <input name="in1" type="float" nodename="ys0_x" />
++      <input name="in2" type="float" nodename="s_x" />
++    </multiply>
++    <multiply name="Tx_x" type="vector3">
++      <input name="in1" type="vector3" nodename="T_x" />
++      <input name="in2" type="float" nodename="xs_x" />
++    </multiply>
++    <multiply name="By_x" type="vector3">
++      <input name="in1" type="vector3" nodename="B_x" />
++      <input name="in2" type="float" nodename="ys_x" />
++    </multiply>
++    <multiply name="Nz_x" type="vector3">
++      <input name="in1" type="vector3" nodename="nn" />
++      <input name="in2" type="float" nodename="vs_x" output="outz" />
++    </multiply>
++    <add name="tb_x" type="vector3">
++      <input name="in1" type="vector3" nodename="Tx_x" />
++      <input name="in2" type="vector3" nodename="By_x" />
++    </add>
++    <add name="m0_x" type="vector3">
++      <input name="in1" type="vector3" nodename="tb_x" />
++      <input name="in2" type="vector3" nodename="Nz_x" />
++    </add>
++    <normalize name="m_x" type="vector3">
++      <input name="in" type="vector3" nodename="m0_x" />
++    </normalize>
++    <mix name="n_x" type="vector3">
++      <input name="bg" type="vector3" nodename="nn" />
++      <input name="fg" type="vector3" nodename="m_x" />
++      <input name="mix" type="float" interfacename="height" />
++    </mix>
++    <multiply name="wn_x" type="vector3">
++      <input name="in1" type="vector3" nodename="n_x" />
++      <input name="in2" type="float" nodename="ws" output="outx" />
++    </multiply>
++    <hextiledimage name="h_y" type="color3">
++      <input name="file" type="filename" interfacename="file" colorspace="raw" />
++      <input name="texcoord" type="vector2" nodename="st_y" />
++      <input name="tiling" type="vector2" nodename="tiling" />
++      <input name="rotation" type="float" value="1" />
++      <input name="rotationrange" type="vector2" nodename="rrange" />
++      <input name="scale" type="float" value="1" />
++      <input name="scalerange" type="vector2" nodename="srange" />
++      <input name="offset" type="float" value="1" />
++      <input name="offsetrange" type="vector2" value="0, 1" />
++      <input name="falloff" type="float" interfacename="contrast" />
++      <input name="falloffcontrast" type="float" nodename="fc" />
++      <input name="lumacoeffs" type="color3" value="0.299, 0.587, 0.114" />
++    </hextiledimage>
++    <multiply name="v2_y" type="color3">
++      <input name="in1" type="color3" nodename="h_y" />
++      <input name="in2" type="float" value="2" />
++    </multiply>
++    <subtract name="v_y" type="color3">
++      <input name="in1" type="color3" nodename="v2_y" />
++      <input name="in2" type="float" value="1" />
++    </subtract>
++    <convert name="vv_y" type="vector3">
++      <input name="in" type="color3" nodename="v_y" />
++    </convert>
++    <separate3 name="vs_y" type="multioutput">
++      <input name="in" type="vector3" nodename="vv_y" />
++    </separate3>
++    <dotproduct name="d_y" type="float">
++      <input name="in1" type="vector3" nodename="nn" />
++      <input name="in2" type="vector3" value="0, 1, 0" />
++    </dotproduct>
++    <ifgreater name="s_y" type="float">
++      <input name="value1" type="float" nodename="d_y" />
++      <input name="value2" type="float" value="0" />
++      <input name="in1" type="float" value="1" />
++      <input name="in2" type="float" value="-1" />
++    </ifgreater>
++    <dotproduct name="tn_y" type="float">
++      <input name="in1" type="vector3" value="1, 0, 0" />
++      <input name="in2" type="vector3" nodename="nn" />
++    </dotproduct>
++    <multiply name="tnn_y" type="vector3">
++      <input name="in1" type="vector3" nodename="nn" />
++      <input name="in2" type="float" nodename="tn_y" />
++    </multiply>
++    <subtract name="tr_y" type="vector3">
++      <input name="in1" type="vector3" value="1, 0, 0" />
++      <input name="in2" type="vector3" nodename="tnn_y" />
++    </subtract>
++    <normalize name="T_y" type="vector3">
++      <input name="in" type="vector3" nodename="tr_y" />
++    </normalize>
++    <crossproduct name="B_y" type="vector3">
++      <input name="in1" type="vector3" nodename="nn" />
++      <input name="in2" type="vector3" nodename="T_y" />
++    </crossproduct>
++    <multiply name="xs_y" type="float">
++      <input name="in1" type="float" nodename="vs_y" output="outx" />
++      <input name="in2" type="float" nodename="hs" />
++    </multiply>
++    <multiply name="ys0_y" type="float">
++      <input name="in1" type="float" nodename="vs_y" output="outy" />
++      <input name="in2" type="float" nodename="hs" />
++    </multiply>
++    <multiply name="ys_y" type="float">
++      <input name="in1" type="float" nodename="ys0_y" />
++      <input name="in2" type="float" nodename="s_y" />
++    </multiply>
++    <multiply name="Tx_y" type="vector3">
++      <input name="in1" type="vector3" nodename="T_y" />
++      <input name="in2" type="float" nodename="xs_y" />
++    </multiply>
++    <multiply name="By_y" type="vector3">
++      <input name="in1" type="vector3" nodename="B_y" />
++      <input name="in2" type="float" nodename="ys_y" />
++    </multiply>
++    <multiply name="Nz_y" type="vector3">
++      <input name="in1" type="vector3" nodename="nn" />
++      <input name="in2" type="float" nodename="vs_y" output="outz" />
++    </multiply>
++    <add name="tb_y" type="vector3">
++      <input name="in1" type="vector3" nodename="Tx_y" />
++      <input name="in2" type="vector3" nodename="By_y" />
++    </add>
++    <add name="m0_y" type="vector3">
++      <input name="in1" type="vector3" nodename="tb_y" />
++      <input name="in2" type="vector3" nodename="Nz_y" />
++    </add>
++    <normalize name="m_y" type="vector3">
++      <input name="in" type="vector3" nodename="m0_y" />
++    </normalize>
++    <mix name="n_y" type="vector3">
++      <input name="bg" type="vector3" nodename="nn" />
++      <input name="fg" type="vector3" nodename="m_y" />
++      <input name="mix" type="float" interfacename="height" />
++    </mix>
++    <multiply name="wn_y" type="vector3">
++      <input name="in1" type="vector3" nodename="n_y" />
++      <input name="in2" type="float" nodename="ws" output="outy" />
++    </multiply>
++
++)MTLX"
++    /* Split: MSVC caps one string literal at 16 KB; adjacent ones join. */
++    R"MTLX(
++    <hextiledimage name="h_z" type="color3">
++      <input name="file" type="filename" interfacename="file" colorspace="raw" />
++      <input name="texcoord" type="vector2" nodename="st_z" />
++      <input name="tiling" type="vector2" nodename="tiling" />
++      <input name="rotation" type="float" value="1" />
++      <input name="rotationrange" type="vector2" nodename="rrange" />
++      <input name="scale" type="float" value="1" />
++      <input name="scalerange" type="vector2" nodename="srange" />
++      <input name="offset" type="float" value="1" />
++      <input name="offsetrange" type="vector2" value="0, 1" />
++      <input name="falloff" type="float" interfacename="contrast" />
++      <input name="falloffcontrast" type="float" nodename="fc" />
++      <input name="lumacoeffs" type="color3" value="0.299, 0.587, 0.114" />
++    </hextiledimage>
++    <multiply name="v2_z" type="color3">
++      <input name="in1" type="color3" nodename="h_z" />
++      <input name="in2" type="float" value="2" />
++    </multiply>
++    <subtract name="v_z" type="color3">
++      <input name="in1" type="color3" nodename="v2_z" />
++      <input name="in2" type="float" value="1" />
++    </subtract>
++    <convert name="vv_z" type="vector3">
++      <input name="in" type="color3" nodename="v_z" />
++    </convert>
++    <separate3 name="vs_z" type="multioutput">
++      <input name="in" type="vector3" nodename="vv_z" />
++    </separate3>
++    <dotproduct name="d_z" type="float">
++      <input name="in1" type="vector3" nodename="nn" />
++      <input name="in2" type="vector3" value="0, 0, 1" />
++    </dotproduct>
++    <ifgreater name="s_z" type="float">
++      <input name="value1" type="float" nodename="d_z" />
++      <input name="value2" type="float" value="0" />
++      <input name="in1" type="float" value="1" />
++      <input name="in2" type="float" value="-1" />
++    </ifgreater>
++    <dotproduct name="tn_z" type="float">
++      <input name="in1" type="vector3" value="1, 0, 0" />
++      <input name="in2" type="vector3" nodename="nn" />
++    </dotproduct>
++    <multiply name="tnn_z" type="vector3">
++      <input name="in1" type="vector3" nodename="nn" />
++      <input name="in2" type="float" nodename="tn_z" />
++    </multiply>
++    <subtract name="tr_z" type="vector3">
++      <input name="in1" type="vector3" value="1, 0, 0" />
++      <input name="in2" type="vector3" nodename="tnn_z" />
++    </subtract>
++    <normalize name="T_z" type="vector3">
++      <input name="in" type="vector3" nodename="tr_z" />
++    </normalize>
++    <crossproduct name="B_z" type="vector3">
++      <input name="in1" type="vector3" nodename="nn" />
++      <input name="in2" type="vector3" nodename="T_z" />
++    </crossproduct>
++    <multiply name="xs_z" type="float">
++      <input name="in1" type="float" nodename="vs_z" output="outx" />
++      <input name="in2" type="float" nodename="hs" />
++    </multiply>
++    <multiply name="ys0_z" type="float">
++      <input name="in1" type="float" nodename="vs_z" output="outy" />
++      <input name="in2" type="float" nodename="hs" />
++    </multiply>
++    <multiply name="ys_z" type="float">
++      <input name="in1" type="float" nodename="ys0_z" />
++      <input name="in2" type="float" nodename="s_z" />
++    </multiply>
++    <multiply name="Tx_z" type="vector3">
++      <input name="in1" type="vector3" nodename="T_z" />
++      <input name="in2" type="float" nodename="xs_z" />
++    </multiply>
++    <multiply name="By_z" type="vector3">
++      <input name="in1" type="vector3" nodename="B_z" />
++      <input name="in2" type="float" nodename="ys_z" />
++    </multiply>
++    <multiply name="Nz_z" type="vector3">
++      <input name="in1" type="vector3" nodename="nn" />
++      <input name="in2" type="float" nodename="vs_z" output="outz" />
++    </multiply>
++    <add name="tb_z" type="vector3">
++      <input name="in1" type="vector3" nodename="Tx_z" />
++      <input name="in2" type="vector3" nodename="By_z" />
++    </add>
++    <add name="m0_z" type="vector3">
++      <input name="in1" type="vector3" nodename="tb_z" />
++      <input name="in2" type="vector3" nodename="Nz_z" />
++    </add>
++    <normalize name="m_z" type="vector3">
++      <input name="in" type="vector3" nodename="m0_z" />
++    </normalize>
++    <mix name="n_z" type="vector3">
++      <input name="bg" type="vector3" nodename="nn" />
++      <input name="fg" type="vector3" nodename="m_z" />
++      <input name="mix" type="float" interfacename="height" />
++    </mix>
++    <multiply name="wn_z" type="vector3">
++      <input name="in1" type="vector3" nodename="n_z" />
++      <input name="in2" type="float" nodename="ws" output="outz" />
++    </multiply>
++    <add name="nxy" type="vector3">
++      <input name="in1" type="vector3" nodename="wn_x" />
++      <input name="in2" type="vector3" nodename="wn_y" />
++    </add>
++    <add name="nxyz" type="vector3">
++      <input name="in1" type="vector3" nodename="nxy" />
++      <input name="in2" type="vector3" nodename="wn_z" />
++    </add>
++    <transformvector name="nw" type="vector3">
++      <input name="in" type="vector3" nodename="nxyz" />
++      <input name="fromspace" type="string" value="object" />
++      <input name="tospace" type="string" value="world" />
++    </transformvector>
++    <normalize name="outn" type="vector3">
++      <input name="in" type="vector3" nodename="nw" />
++    </normalize>
++    <output name="out" type="vector3" nodename="outn" />
++    <output name="weights" type="vector3" nodename="w" />
++  </nodegraph>
+ </materialx>
+ )MTLX";

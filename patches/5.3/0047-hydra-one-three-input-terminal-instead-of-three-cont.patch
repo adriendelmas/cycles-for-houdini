@@ -1,7 +1,7 @@
 From cb7024b8455b6d0737962762369669a15056bfcc Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 19:01:34 +0200
-Subject: [PATCH 047/144] hydra: one three-input terminal, instead of three
+Subject: [PATCH 047/146] hydra: one three-input terminal, instead of three
  contradicting connectors
 
 The Material Builder wired each terminal to its own subnetconnector, whose

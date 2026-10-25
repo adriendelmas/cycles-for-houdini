@@ -1,7 +1,7 @@
 From 9fb74d708862ae05ea7c1ba7ce49463020998719 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 14:51:26 +0200
-Subject: [PATCH 044/144] hydra: per-corner normals, instead of faceting what
+Subject: [PATCH 044/146] hydra: per-corner normals, instead of faceting what
  is not faceted
 
 The previous fix read the mesh normals rather than the display index, but

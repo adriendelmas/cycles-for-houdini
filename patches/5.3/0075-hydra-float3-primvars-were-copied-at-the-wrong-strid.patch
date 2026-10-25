@@ -1,7 +1,7 @@
 From 1c906ef35ab9c6d89a0caa45e449c1f1f7f9aff6 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 16:46:27 +0200
-Subject: [PATCH 075/144] hydra: float3 primvars were copied at the wrong
+Subject: [PATCH 075/146] hydra: float3 primvars were copied at the wrong
  stride, and read as garbage
 
 ApplyPrimvars widened each GfVec3f into a float3 - sixteen bytes, the padded

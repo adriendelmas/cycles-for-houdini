@@ -1,7 +1,7 @@
 From 9952c6a7c44e7facf30edd99d57c25d00f4fcb3f Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 17:53:25 +0200
-Subject: [PATCH 080/144] hydra: OpenPBR, glTF, Disney, surface defaults,
+Subject: [PATCH 080/146] hydra: OpenPBR, glTF, Disney, surface defaults,
  UsdUVTexture channels, kma
 
 The three MaterialX surfaces other than standard_surface pointed at its table:

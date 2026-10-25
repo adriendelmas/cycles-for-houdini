@@ -1,7 +1,7 @@
 From 71e273d7822e8919ee099cd60920713b6b79ae9e Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 00:50:49 +0200
-Subject: [PATCH 089/144] hydra: light linking and shadow linking
+Subject: [PATCH 089/146] hydra: light linking and shadow linking
 
 Nothing read the lights' lightLink and shadowLink collections: every light lit
 everything, every shadow fell. Hydra's light linking scene index is registered

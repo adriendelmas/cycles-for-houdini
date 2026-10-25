@@ -93,6 +93,12 @@ CASES = [
                                    "float horizontalAperture = 120",
                                    "float verticalAperture = 80"],
      [(0, 0, -10, 1), (3, 2, -10, 1)]),
+    # The same on a stage in centimetres (USD's default when metersPerUnit is
+    # unwritten): the window has to be scaled like the rest (K-107).
+    ("orthographic_cm", "(120, 80)", ['token projection = "orthographic"',
+                                      "float horizontalAperture = 120",
+                                      "float verticalAperture = 80"],
+     [(0, 0, -10, 1), (3, 2, -10, 1)]),
     ("exposure", "(120, 80)", PERSP + ["float exposure = 1"], [(0, 0, -10, 1)]),
     ("aspect_wider", "(160, 80)", PERSP, [(0, 0, -10, 0.4), (3, 1.5, -10, 0.4)]),
     ("aspect_taller", "(80, 80)", PERSP, [(0, 0, -10, 0.4), (3, 1.5, -10, 0.4)]),
@@ -176,8 +182,10 @@ def main():
             continue
         count += 1
         scene = os.path.join(OUT, name + ".usda")
-        open(scene, "w", encoding="utf-8").write(scene_text(res, camera, squares,
-                                                             SETTINGS.get(name, "")))
+        text = scene_text(res, camera, squares, SETTINGS.get(name, ""))
+        if name.endswith("_cm"):
+            text = text.replace("metersPerUnit = 1", "metersPerUnit = 0.01")
+        open(scene, "w", encoding="utf-8").write(text)
         cyc = render("HdCyclesPlugin", scene, os.path.join(OUT, name + "_cycles.exr"))
         kar = render("BRAY_HdKarma", scene, os.path.join(OUT, name + "_karma.exr"))
         if cyc is None or kar is None:

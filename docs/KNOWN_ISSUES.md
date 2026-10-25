@@ -1169,6 +1169,39 @@ renderers blur alike, and either switch restores the sharp edge. Houdini's
 Camera LOP authors `fStop = 0` by default, so only a camera given an f-stop
 blurs, in both renderers.
 
+### K-106 Karma's Hextiled Triplanar rendered nothing — confirmed — **fixed** (0145)
+The Karma Hextiled Triplanar VOP writes `kma_hextiled_triplanar_color` (its
+colour as a vector4) and `kma_hextiled_triplanar_normal` (a world-space
+normal), ids the delegate had no node for: in the author's Gauge scene, 36
+colour and 12 normal instances, every surface flat. Both are now nodegraphs
+the delegate ships (`mtlx_nodegraphs.h`), transcribed from Karma's own
+(`$HFS/houdini/karmaNodeGraphs.json`): the file hex-tiled three times,
+projected along the object's axes, blended by |N| raised to 1/blend. The
+normal form builds each projection's tangent frame as Karma does, flips the
+green on the faces looking down an axis, blends towards N by `height` and
+takes the sum to world space - which brought `transformvector`,
+`transformnormal` and `transformpoint` between object and world space into
+the table (Cycles' vector transform node). Karma's hextiling maps onto
+Cycles' hextiledimage: `size` is the tiling, `rot` and `rand_rot` the
+rotation range (rot +- 180 rand_rot degrees), `scale` and `rand_scale` the
+scale range, `contrast` the falloff gain, `contrast_falloff` the luminance
+weight (Cycles halves it); `weightexp` (7, fixed in Cycles) and `seed` have
+no counterpart, so the tiles fall elsewhere than Karma's, at the same size
+and orientation (checked on a sphere and a ground with an arrow texture: the
+arrows point the same way, the hexes have the same size, the ground's mean
+colour within 1 %). The `weights` output is the triplanar blend, not Karma's
+per-hex colours. The expansion now takes ids starting with
+`kma_hextiled_triplanar_` besides `ND_`; `bench_mtlx.py` renders both with
+the flat texture. The author's optimised hextiled node, in the works, will
+need its own entry once its definition exists.
+
+### K-107 Orthographic cameras framed a hundred times too wide on a centimetre stage — confirmed — **fixed** (0146)
+Everything the delegate sends to Cycles is in metres: positions, clipping,
+focal length, the sensor. The orthographic window was not, so on a stage
+without `metersPerUnit` (USD's default is 0.01) a 4-unit window covered 400
+units: the ground a dot in the middle of the frame. Found while checking
+K-106 from above. `bench_camera.py` has the case `orthographic_cm`.
+
 ## D. Repository and tests
 
 ### K-50 Benches overwrite their own references — confirmed — **fixed** (2680470)

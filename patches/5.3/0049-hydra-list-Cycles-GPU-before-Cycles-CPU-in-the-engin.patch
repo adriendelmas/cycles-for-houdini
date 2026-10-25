@@ -1,7 +1,7 @@
 From cbb18b2e7ceab0c80248e607bf178f1327d11df8 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 22:47:08 +0200
-Subject: [PATCH 049/144] hydra: list Cycles GPU before Cycles CPU in the
+Subject: [PATCH 049/146] hydra: list Cycles GPU before Cycles CPU in the
  engine menu
 
 Both entries already existed, but in Houdini's order for Karma - CPU on top.
