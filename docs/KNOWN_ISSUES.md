@@ -1291,6 +1291,19 @@ all-purpose one. `bench_mtlx.py` case `binding_full`. With K-110 and
 K-111, the Gauge terrain from its camera renders within 5 % of Karma in
 mean (0.155 vs 0.164, mean absolute difference 0.019).
 
+### K-113 Instances with a scale or an orientation landed in the wrong place — confirmed — **fixed** (0150)
+A PointInstancer's instance is scale, then orientation, then position, then
+the instancer's own transform (HdInstancer); with GfMatrix4d's row vectors
+that product is S x R x T x X. The delegate multiplied the other way round,
+X x T x R x S, which scaled and rotated the positions: six cones given
+orientations and scales scattered elsewhere than in Karma (positions alone
+agreed, which is what `bench_instances.py` exercised), and a scatter of
+rocks over a terrain seemed to vanish. A nested instancer's placement came
+before its child's for the same reason. Both products reversed; the six
+cones now sit where Karma puts them to the pixel. `bench_instances.py`
+case `placed`: each square given a quarter turn and a scale, found where
+its position says.
+
 ## D. Repository and tests
 
 ### K-50 Benches overwrite their own references — confirmed — **fixed** (2680470)

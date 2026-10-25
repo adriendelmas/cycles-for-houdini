@@ -93,6 +93,7 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | Material settings (`displacement_method`...) | ✅ | phase 20 | |
 | Enum validation | ✅ | phase 14 | |
 | 8-bit sRGB auto-detection under ACES | ✅ | `bench_usdtex.py` | `auto` picks the config's sRGB texture space (K-66, 0110) |
+| Instance scale and orientation | ✅ | `bench_instances.py` `placed`, six MEGALIB cones vs Karma | Composed scale, orientation, position, instancer; the positions were scaled before (K-113, 0150) |
 | Textures inside a usdz archive (`asset.usdz[textures/x.jpg]`, every MEGALIB asset) | ✅ | `bench_usdtex.py` `mtlx_usdz` | Read through USD's resolver, decoded from memory (K-111, 0149) |
 | `material:binding:full` (Assign Material with a purpose) | ✅ | `bench_mtlx.py` `binding_full` | A binding-resolving scene index, `full` then all-purpose (K-112, 0149) |
 | 8-bit sRGB without an OCIO config (husk outside the packages) | ✅ | grey PNG/JPG vs Karma, 2026-10-25 | Decoded by the kernel like under a config; was encoded, 3x too bright (K-108, 0147) |

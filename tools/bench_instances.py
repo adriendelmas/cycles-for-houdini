@@ -136,6 +136,16 @@ def flat_body():
     return indent(row_instancer("inst", 0.0), 4)
 
 
+def placed_body():
+    """Each square turned a quarter about Z and scaled by two: it stays
+    centred where its position says. With the instance composed the wrong
+    way round the positions were scaled too, and the probes saw black
+    (K-113)."""
+    extra = ('    quath[] orientations = [%s]\n    float3[] scales = [%s]\n'
+             % (", ".join(["(0.7071, 0, 0, 0.7071)"] * 3), ", ".join(["(2, 2, 2)"] * 3)))
+    return indent(row_instancer("inst", 0.0).replace("    def Scope \"protos\"", extra + "    def Scope \"protos\""), 4)
+
+
 def nested_body():
     inner = row_instancer("row", 0.0).replace("rel prototypes = [</world/row/protos/square>]",
                                               "rel prototypes = [</world/outer/protos/row/protos/square>]")
@@ -173,6 +183,7 @@ CASES = [
     ("attribute", "attribute", flat_body(), expect_flat("attribute")),
     ("object_color", "object_color", flat_body(), expect_flat("object_color")),
     ("weight", "weight", flat_body(), expect_flat("weight")),
+    ("placed", "attribute", placed_body(), expect_flat("attribute")),
     ("nested_color", "attribute", nested_body(), expect_nested("attribute")),
     ("nested_rowweight", "rowweight", nested_body(), expect_nested("rowweight")),
 ]
