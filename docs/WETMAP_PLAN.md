@@ -342,17 +342,17 @@ Threads and time
     `run_update_for_next_iteration`, before `path_trace_->load_kernels()`):
     it logs "Invalid handle in cuModuleGetGlobal" once and is harmless.
 
-16d. **Open on 2026-10-26, 10:00:** the other session measured the Gauge
-    scene (442 000 instances, Cycles GPU viewport) at 0.5 s per sample with
-    occupancy 0.08 on 0156, against 0.010 s on 0152 the same morning. Nothing
-    of this addition runs per sample without a Wet State node in a material
-    (the read-back happens once a render ran to its end, the zeroing at a
-    reset, the slot arrays upload when the objects change). Asked for: the
-    VRAM and "falls back to host" lines of that log, and whether Adrien's own
-    30 GB Houdini shared the 3090 during the measurement (14.7 of 24 GB in
-    use at 09:55 with three Houdini sessions open). To settle it: the same
-    husk GPU render of the Gauge export on 0157 and on 0152 with its kernels
-    rebuilt (26 min), nothing else on the GPU.
+16d. **A slow GPU is a full GPU first.** On 2026-10-26 the other session
+    measured the Gauge scene (442 000 instances, Cycles GPU viewport) at
+    0.5 s per sample on 0156 against 0.010 s on 0152 the same morning, and
+    suspected this addition. Its own log held the answer: "Not enough device
+    memory: 107.94M of 'objects' went to host memory, read over the bus.
+    Only 175.11M of 24.00G was free" - Adrien's own Houdini was rendering
+    the same scene on the same 3090 (23.9 of 24.6 GB used, 92 % load).
+    Nothing of this addition runs per sample without a Wet State node in a
+    material. Before blaming a build for speed: `nvidia-smi`, and the
+    "went to host memory" line. Withdrawn by that session at 10:10; its clean
+    measurement on 0157 with the GPU free is still to come.
 
 Scene and identity
 
