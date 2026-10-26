@@ -1,8 +1,8 @@
 From a236ad76d967ff34b3e2f72c71f60bf7ae4b07a4 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 26 Oct 2026 09:28:11 +0100
-Subject: [PATCH] wetmap: a session reset no longer raises a scene update (S2
- fix)
+Subject: [PATCH 156/158] wetmap: a session reset no longer raises a scene
+ update (S2 fix)
 
 Wet map (addition). WetStateManager::tag_reset, called from Session::reset,
 raised need_update_, so Scene::need_data_update() - and need_reset(), which

@@ -1336,7 +1336,10 @@ add chains behind the surface's inputs (through a normalize for the
 normal) and ties each layer's own geometry lookups to the previous
 accumulation, with the ties FoldSurfaceMix uses, lifted into `LayerTies`:
 172 slots for the ten layers, and the sphere at 0.068 against Karma's
-0.069, as the mix form gave.
+0.069, as the mix form gave. The ties first asked for three accumulations:
+a rock mixed with moss and lichen has two, went untied, and its three
+hextiled axes times three layers overflowed (248 slots); from 0158 two
+accumulations are enough (170 slots for that rock).
 
 ## D. Repository and tests
 
