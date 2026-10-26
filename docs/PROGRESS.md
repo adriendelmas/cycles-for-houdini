@@ -84,7 +84,7 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 
 | Feature | State | Verified by | Notes |
 |---|---|---|---|
-| 163 nodes published to Sdr, 100 VOPs | ✅ | CYCLES_VOPS.md | `convert_*` hidden |
+| 164 nodes published to Sdr, 101 VOPs | ✅ | CYCLES_VOPS.md | `convert_*` hidden; the 164th is the wet map's `wet_state` |
 | Material Builder, three terminals, properties node | ✅ | phase 15, 20 | |
 | Ramps and curves (Houdini encoding → table) | ✅ | phase 10 | |
 | UDIM (`<UDIM>`, `%(UDIM)d`) | ✅ | code and render | |
@@ -216,7 +216,7 @@ surface models (`surface_audit.py`, K-63). On 2026-10-07 the numbers were
 | Bootstrap from a clean clone | ✅ | Re-run: 14 min 20 s (ENVIRONMENT.md) |
 | Regression tests on images | ✅ | `references/` tracked, `output/` ignored, `bench_diff.py --accept` (K-50) |
 | Code and messages in English | ✅ | Translated (K-53, 0097) |
-| README numbers reproducible | ✅ | `count_nodes.py`: 163 / 64 / 99 / 97 (K-54) |
+| README numbers reproducible | ✅ | `count_nodes.py`: 164 / 64 / 100 / 98 (K-54; 2026-10-26, with the wet map's node) |
 
 ## Wet map (addition)
 
@@ -227,6 +227,6 @@ prefix (`wetmap:`), planned and tracked in [WETMAP_PLAN.md](WETMAP_PLAN.md).
 |---|---|---|
 | The delegate follows the stage's frame (S0) | ✅ | `HdCyclesWetState`, patch 0153; `currentFrame` arrives under husk, one delegate across the frames |
 | AO traced against raycast-visible objects only (S1) | ✅ | `raycast_visibility` on the AO node, `cycles:object:visibility:raycast` ("Raycast Rays"), patch 0154; `bench_wet.py --gpu` 10/10 on CPU and OptiX |
-| Per-object state kept across frames (S2) | ❌ | Kernel node, `WetStateManager`, commit on frame change |
+| Per-object state kept across frames (S2) | ✅ | `cycles_wet_state` node, `WetStateManager`, commit on frame change, patch 0155; `bench_wet.py` 8-frame sequence within 0.03 of the formula on CPU and OptiX, no advance on a re-rendered frame |
 | State on disk per frame (S3) | ❌ | - |
 | Houdini finish, MaterialX bridge (S4, S5) | ❌ | - |

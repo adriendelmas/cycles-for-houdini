@@ -1,0 +1,910 @@
+From d93e2720a4f7bc9f1f2185f4800be230215fbb5c Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Mon, 26 Oct 2026 09:11:25 +0100
+Subject: [PATCH] wetmap: a per-object state kept across frames, the Wet State
+ node (S2)
+
+Wet map (addition, docs/WETMAP_PLAN.md). A 'Wet State' shader node reads
+the value the previous frame left for its object and outputs
+min(max(previous, contact), max wet). On the first wet_accum_samples
+samples of the primary camera hits (the AOV idiom) it adds contact, wet
+rate, dry time and max wet into per-object device accumulators, with a
+count. WetStateManager, owned by the Scene, sizes the arrays to the
+objects after the ObjectManager, uploads the previous state, zeroes the
+accumulators whenever Session::reset cuts a render short, reads the sums
+back on the session thread when a render ran to its end, and - when the
+host says the frame changed - folds them into the state:
+wet = clamp(wet * exp(-dt / dry_time) + wet_rate * dt * contact, 0, max).
+The state is kept by Object::wet_key (the delegate writes the prim path and
+the instance index), not by the object index, which moves between frames.
+Unseen objects keep their value. Integrator socket wet_accum_samples (16).
+OSL form: the current contact only.
+
+Measured with tools/bench_wet.py --gpu (sequence of eight frames under
+husk, contact 0.75, rate 50, dry time 0.25 s at 24 fps): CPU 0.751, 1.0,
+1.0, 1.0 (the plane gone, the state carried), 0.855, 0.732, 0.627, 0.539;
+OptiX 0.749, 1.0, 1.0, 1.0, 0.847, 0.718, 0.608, 0.516 against the expected
+0.75, 1, 1, 1, 0.846, 0.717, 0.607, 0.513. Frame 2 rendered twice in one
+run reads 0.75 both times: the same frame does not advance the state. The
+CPU's drift comes from its AO (0.8 % of the rays stopped by the probe's own
+coplanar triangle), not from the state.
+---
+ src/hydra/geometry.inl                        |   3 +
+ src/hydra/render_pass.cpp                     |  16 +-
+ .../resources/HdCyclesPluginGPU_Global.ds     |  27 +++
+ src/hydra/resources/HdCyclesPlugin_Global.ds  |  27 +++
+ src/kernel/CMakeLists.txt                     |   1 +
+ src/kernel/data_arrays.h                      |   5 +
+ src/kernel/data_template.h                    |   3 +
+ src/kernel/osl/shaders/CMakeLists.txt         |   1 +
+ src/kernel/osl/shaders/node_wet_state.osl     |  16 ++
+ src/kernel/svm/node_types.h                   |  12 ++
+ src/kernel/svm/node_types_template.h          |   2 +
+ src/kernel/svm/svm.h                          |  10 +
+ src/kernel/svm/wet_state.h                    |  69 +++++++
+ src/scene/CMakeLists.txt                      |   2 +
+ src/scene/devicescene.cpp                     |   5 +-
+ src/scene/devicescene.h                       |   5 +
+ src/scene/integrator.cpp                      |   3 +
+ src/scene/integrator.h                        |   1 +
+ src/scene/object.cpp                          |   2 +
+ src/scene/object.h                            |   1 +
+ src/scene/scene.cpp                           |   8 +
+ src/scene/scene.h                             |   2 +
+ src/scene/wet_state.cpp                       | 185 ++++++++++++++++++
+ src/scene/wet_state.h                         |  88 +++++++++
+ src/session/session.cpp                       |   9 +
+ 25 files changed, 500 insertions(+), 3 deletions(-)
+ create mode 100644 src/kernel/osl/shaders/node_wet_state.osl
+ create mode 100644 src/kernel/svm/wet_state.h
+ create mode 100644 src/scene/wet_state.cpp
+ create mode 100644 src/scene/wet_state.h
+
+diff --git a/src/hydra/geometry.inl b/src/hydra/geometry.inl
+index fc152c52..59bb8dd7 100644
+--- a/src/hydra/geometry.inl
++++ b/src/hydra/geometry.inl
+@@ -358,6 +358,9 @@ void HdCyclesGeometry<Base, CyclesBase>::InitializeInstance(int index)
+    * cryptomatte could tell nothing apart. */
+   instance->name = _geom->name;
+   instance->set_asset_name(ustring(Base::GetId().GetParentPath().GetString()));
++  /* Wet map (addition): the name its state is kept under across frames -
++   * the prim and the instance's index, since object indices move. */
++  instance->set_wet_key(ustring(Base::GetId().GetString() + "#" + std::to_string(index)));
+ }
+ 
+ template<typename Base, typename CyclesBase>
+diff --git a/src/hydra/render_pass.cpp b/src/hydra/render_pass.cpp
+index d97bf619..44f03889 100644
+--- a/src/hydra/render_pass.cpp
++++ b/src/hydra/render_pass.cpp
+@@ -27,6 +27,7 @@
+ #include "scene/shader.h"
+ #include "scene/object.h"
+ #include "scene/scene.h"
++#include "scene/wet_state.h"
+ 
+ #include "session/session.h"
+ #include "util/log.h"
+@@ -117,8 +118,9 @@ void HdCyclesRenderPass::_Execute(const HdRenderPassStateSharedPtr &renderPassSt
+     session->progress.reset();
+   }
+ 
+-  /* Wet map (addition): follow the stage's frame. */
+-  _renderParam->wetState.OnExecute(*GetRenderIndex());
++  /* Wet map (addition): follow the stage's frame; the state is committed
++   * below, once the scene is locked. */
++  const bool wetFrameChanged = _renderParam->wetState.OnExecute(*GetRenderIndex());
+ 
+   /* Motion blur turned back on, or the shutter moved: the prims synced so far
+    * carry no motion samples, or samples over the old shutter. Have them synced
+@@ -195,6 +197,16 @@ void HdCyclesRenderPass::_Execute(const HdRenderPassStateSharedPtr &renderPassSt
+     PollHoudiniCops(scene);
+ #endif
+     const clock::time_point tPolled = clock::now();
++
++    /* Wet map (addition): the frame changed - what the last completed render
++     * of the frame left behind becomes the state the new frame starts from.
++     * A frame left before any render completed keeps the state as it was. */
++    if (wetFrameChanged &&
++        !scene->wet_manager->commit(_renderParam->wetState.DeltaSeconds()))
++    {
++      LOG_INFO << "Wet map: no completed render to commit for the frame left; state kept.";
++    }
++
+     auto *const renderDelegate = static_cast<HdCyclesDelegate *>(
+         GetRenderIndex()->GetRenderDelegate());
+ 
+diff --git a/src/hydra/resources/HdCyclesPluginGPU_Global.ds b/src/hydra/resources/HdCyclesPluginGPU_Global.ds
+index dfba804b..5efd567a 100644
+--- a/src/hydra/resources/HdCyclesPluginGPU_Global.ds
++++ b/src/hydra/resources/HdCyclesPluginGPU_Global.ds
+@@ -1362,6 +1362,33 @@
+         disablewhen  R"({ xn__cyclesintegratorao_additive_factor_control_h9bk == block } { xn__cyclesintegratorao_additive_factor_control_h9bk == none })"
+     }
+     }
++    groupcollapsible {
++        name "cycles_wet_map"
++        label "Wet Map"
++        grouptag { "group_default" "1" }
++    parm {
++        name    "xn__cyclesintegratorwet_accum_samples_control_u7bk"
++        label   "Wet Map Accumulation Samples"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'int')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__cyclesintegratorwet_accum_samples_tubk"
++        label   "Wet Map Accumulation Samples"
++        type    integer
++        size    1
++        default { 16 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "int" }
++        disablewhen  R"({ xn__cyclesintegratorwet_accum_samples_control_u7bk == block } { xn__cyclesintegratorwet_accum_samples_control_u7bk == none })"
++    }
++    }
+     groupcollapsible {
+         name "cycles_advanced"
+         label "Advanced"
+diff --git a/src/hydra/resources/HdCyclesPlugin_Global.ds b/src/hydra/resources/HdCyclesPlugin_Global.ds
+index dfba804b..5efd567a 100644
+--- a/src/hydra/resources/HdCyclesPlugin_Global.ds
++++ b/src/hydra/resources/HdCyclesPlugin_Global.ds
+@@ -1362,6 +1362,33 @@
+         disablewhen  R"({ xn__cyclesintegratorao_additive_factor_control_h9bk == block } { xn__cyclesintegratorao_additive_factor_control_h9bk == none })"
+     }
+     }
++    groupcollapsible {
++        name "cycles_wet_map"
++        label "Wet Map"
++        grouptag { "group_default" "1" }
++    parm {
++        name    "xn__cyclesintegratorwet_accum_samples_control_u7bk"
++        label   "Wet Map Accumulation Samples"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'int')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__cyclesintegratorwet_accum_samples_tubk"
++        label   "Wet Map Accumulation Samples"
++        type    integer
++        size    1
++        default { 16 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "int" }
++        disablewhen  R"({ xn__cyclesintegratorwet_accum_samples_control_u7bk == block } { xn__cyclesintegratorwet_accum_samples_control_u7bk == none })"
++    }
++    }
+     groupcollapsible {
+         name "cycles_advanced"
+         label "Advanced"
+diff --git a/src/kernel/CMakeLists.txt b/src/kernel/CMakeLists.txt
+index 43eae1e8..aabd58e2 100644
+--- a/src/kernel/CMakeLists.txt
++++ b/src/kernel/CMakeLists.txt
+@@ -53,6 +53,7 @@ set(SRC_KERNEL_SVM_HEADERS
+   svm/svm.h
+   svm/ao.h
+   svm/aov.h
++  svm/wet_state.h
+   svm/attribute.h
+   svm/bevel.h
+   svm/blackbody.h
+diff --git a/src/kernel/data_arrays.h b/src/kernel/data_arrays.h
+index 766f1971..b08c69be 100644
+--- a/src/kernel/data_arrays.h
++++ b/src/kernel/data_arrays.h
+@@ -96,5 +96,10 @@ KERNEL_DATA_ARRAY_WRITABLE(uint8_t, image_texture_tile_access_state)
+ KERNEL_DATA_ARRAY(KernelImageUDIM, image_texture_udims)
+ KERNEL_DATA_ARRAY(KernelImageInfo, image_info)
+ 
++/* wetmap: per object, the state of the previous frame and this frame's sums. */
++KERNEL_DATA_ARRAY(float, wet_prev)
++KERNEL_DATA_ARRAY_WRITABLE(float, wet_accum)
++KERNEL_DATA_ARRAY_WRITABLE(uint, wet_count)
++
+ #undef KERNEL_DATA_ARRAY
+ #undef KERNEL_DATA_ARRAY_WRITABLE
+diff --git a/src/kernel/data_template.h b/src/kernel/data_template.h
+index cda78449..678ab1c2 100644
+--- a/src/kernel/data_template.h
++++ b/src/kernel/data_template.h
+@@ -187,6 +187,9 @@ KERNEL_STRUCT_MEMBER(integrator, int, ao_bounces)
+ KERNEL_STRUCT_MEMBER(integrator, float, ao_bounces_distance)
+ KERNEL_STRUCT_MEMBER(integrator, float, ao_bounces_factor)
+ KERNEL_STRUCT_MEMBER(integrator, float, ao_additive_factor)
++/* wetmap: samples per pixel that feed the accumulators, and the slot count. */
++KERNEL_STRUCT_MEMBER(integrator, int, wet_accum_samples)
++KERNEL_STRUCT_MEMBER(integrator, int, wet_num_objects)
+ /* Transparency. */
+ KERNEL_STRUCT_MEMBER(integrator, int, transparent_min_bounce)
+ KERNEL_STRUCT_MEMBER(integrator, int, transparent_max_bounce)
+diff --git a/src/kernel/osl/shaders/CMakeLists.txt b/src/kernel/osl/shaders/CMakeLists.txt
+index c0dd3e67..ce210cf0 100644
+--- a/src/kernel/osl/shaders/CMakeLists.txt
++++ b/src/kernel/osl/shaders/CMakeLists.txt
+@@ -7,6 +7,7 @@
+ set(SRC_OSL
+   node_add_closure.osl
+   node_ambient_occlusion.osl
++  node_wet_state.osl
+   node_attribute.osl
+   node_background.osl
+   node_bevel.osl
+diff --git a/src/kernel/osl/shaders/node_wet_state.osl b/src/kernel/osl/shaders/node_wet_state.osl
+new file mode 100644
+index 00000000..14de2cca
+--- /dev/null
++++ b/src/kernel/osl/shaders/node_wet_state.osl
+@@ -0,0 +1,16 @@
++/* SPDX-FileCopyrightText: 2026 Blender Foundation
++ *
++ * SPDX-License-Identifier: Apache-2.0 */
++
++#include "stdcycles.h"
++
++/* Wet map (addition). OSL has no access to the per-object state the SVM node
++ * keeps across frames: the OSL form shows the current contact only. */
++shader node_wet_state(float Contact = 0.0,
++                      float WetRate = 1.0,
++                      float DryTime = 1.0,
++                      float MaxWet = 1.0,
++                      output float Wet = 0.0)
++{
++  Wet = min(Contact, MaxWet);
++}
+diff --git a/src/kernel/svm/node_types.h b/src/kernel/svm/node_types.h
+index d4d0d77b..7b2b0350 100644
+--- a/src/kernel/svm/node_types.h
++++ b/src/kernel/svm/node_types.h
+@@ -1313,6 +1313,18 @@ struct SVMNodeAOVValue {
+ static_assert(alignof(SVMNodeAOVValue) <= alignof(uint));
+ static_assert(sizeof(SVMNodeAOVValue) % sizeof(uint) == 0);
+ 
++/* NODE_WET_STATE (wetmap) */
++struct SVMNodeWetState {
++  SVMInputFloat contact;
++  SVMInputFloat wet_rate;
++  SVMInputFloat dry_time;
++  SVMInputFloat max_wet;
++  SVMStackOffset out_wet;
++  uint8_t _pad[3];
++};
++static_assert(alignof(SVMNodeWetState) <= alignof(uint));
++static_assert(sizeof(SVMNodeWetState) % sizeof(uint) == 0);
++
+ /* NODE_RADIAL_TILING */
+ struct SVMNodeRadialTiling {
+   SVMInputFloat3 vector;
+diff --git a/src/kernel/svm/node_types_template.h b/src/kernel/svm/node_types_template.h
+index cf156b28..56a7138e 100644
+--- a/src/kernel/svm/node_types_template.h
++++ b/src/kernel/svm/node_types_template.h
+@@ -107,6 +107,8 @@ SHADER_NODE_TYPE(NODE_MIX_FLOAT)
+ SHADER_NODE_TYPE(NODE_MIX_VECTOR)
+ SHADER_NODE_TYPE(NODE_MIX_VECTOR_NON_UNIFORM)
+ SHADER_NODE_TYPE(NODE_SCENE_TIME)
++/* wetmap */
++SHADER_NODE_TYPE(NODE_WET_STATE)
+ SHADER_NODE_TYPE(NODE_NONE)
+ 
+ /* Padding for struct alignment. */
+diff --git a/src/kernel/svm/svm.h b/src/kernel/svm/svm.h
+index 607e7124..c5f1097e 100644
+--- a/src/kernel/svm/svm.h
++++ b/src/kernel/svm/svm.h
+@@ -34,6 +34,7 @@
+ /* Nodes */
+ 
+ #include "kernel/svm/aov.h"
++#include "kernel/svm/wet_state.h"
+ #include "kernel/svm/attribute.h"
+ #include "kernel/svm/blackbody.h"
+ #include "kernel/svm/brick.h"
+@@ -606,6 +607,15 @@ ccl_device void svm_eval_nodes(KernelGlobals kg,
+       svm_node_aov_value<node_feature_mask>(
+           kg, sd, state, stack, svm_node_get<SVMNodeAOVValue>(kg, &offset), render_buffer);
+       break;
++      SVM_CASE(NODE_WET_STATE)
++      svm_node_wet_state<node_feature_mask>(kg,
++                                            state,
++                                            sd,
++                                            stack,
++                                            svm_node_get<SVMNodeWetState>(kg, &offset),
++                                            render_buffer,
++                                            path_flag);
++      break;
+       SVM_CASE(NODE_FLOAT_CURVE)
+       {
+         const ccl_global auto &node = svm_node_get<SVMNodeFloatCurve>(kg, &offset);
+diff --git a/src/kernel/svm/wet_state.h b/src/kernel/svm/wet_state.h
+new file mode 100644
+index 00000000..dfd619a9
+--- /dev/null
++++ b/src/kernel/svm/wet_state.h
+@@ -0,0 +1,69 @@
++/* SPDX-FileCopyrightText: 2026 Blender Foundation
++ *
++ * SPDX-License-Identifier: Apache-2.0 */
++
++#pragma once
++
++/* Wet map (addition): a value per object that persists from one frame to the
++ * next. The node reads what the previous frame left for this object and, on
++ * the first samples of the primary camera hits, adds what it sees now to an
++ * accumulator the host folds into the state when the frame changes. */
++
++#include "kernel/globals.h"
++
++#include "kernel/svm/aov.h"
++#include "kernel/svm/node_types.h"
++#include "kernel/svm/util.h"
++
++#include "util/atomic.h"
++
++CCL_NAMESPACE_BEGIN
++
++/* Per object: the sums of contact, wet rate, dry time and max wet. */
++#define WET_ACCUM_STRIDE 4
++
++template<uint node_feature_mask, typename ConstIntegratorGenericState>
++ccl_device_noinline void svm_node_wet_state(KernelGlobals kg,
++                                            ConstIntegratorGenericState state,
++                                            ccl_private ShaderData *sd,
++                                            ccl_private float *ccl_restrict stack,
++                                            const ccl_global SVMNodeWetState &ccl_restrict node,
++                                            ccl_global float *render_buffer,
++                                            const uint32_t path_flag)
++{
++  const float contact = stack_load(stack, node.contact);
++  const float max_wet = stack_load(stack, node.max_wet);
++  float wet = fminf(contact, max_wet);
++
++  const int object = sd->object;
++  if (object != OBJECT_NONE && object < kernel_data.integrator.wet_num_objects) {
++    /* What the previous frame left, and the contact of this one at once:
++     * wetting shows on the frame it happens, drying waits for the commit. */
++    const float prev = kernel_data_array(wet_prev)[object];
++    wet = fminf(fmaxf(prev, contact), max_wet);
++
++    IF_KERNEL_NODES_FEATURE(AOV)
++    {
++      /* Primary camera hits only, as the AOV nodes, and not the second
++       * shading of a shadow catcher; the first samples suffice (every sample
++       * covers the same pixels) and keep the float sums short. */
++      if (svm_node_aov_check(path_flag, render_buffer) &&
++          !(path_flag & PATH_RAY_SHADOW_CATCHER_PASS) &&
++          INTEGRATOR_STATE(state, path, sample) < kernel_data.integrator.wet_accum_samples)
++      {
++        ccl_global float *accum = kernel_data_array(wet_accum) + object * WET_ACCUM_STRIDE;
++        atomic_add_and_fetch_float(accum + 0, contact);
++        atomic_add_and_fetch_float(accum + 1, stack_load(stack, node.wet_rate));
++        atomic_add_and_fetch_float(accum + 2, stack_load(stack, node.dry_time));
++        atomic_add_and_fetch_float(accum + 3, max_wet);
++        atomic_fetch_and_add_uint32(kernel_data_array(wet_count) + object, 1u);
++      }
++    }
++  }
++
++  if (stack_valid(node.out_wet)) {
++    stack_store_float(stack, node.out_wet, wet);
++  }
++}
++
++CCL_NAMESPACE_END
+diff --git a/src/scene/CMakeLists.txt b/src/scene/CMakeLists.txt
+index f7a122da..871e5cb6 100644
+--- a/src/scene/CMakeLists.txt
++++ b/src/scene/CMakeLists.txt
+@@ -15,6 +15,7 @@ set(SRC
+   attribute.cpp
+   background.cpp
+   bake.cpp
++  wet_state.cpp
+   camera.cpp
+   constant_fold.cpp
+   devicescene.cpp
+@@ -59,6 +60,7 @@ set(SRC
+ set(SRC_HEADERS
+   attribute.h
+   bake.h
++  wet_state.h
+   background.h
+   camera.h
+   constant_fold.h
+diff --git a/src/scene/devicescene.cpp b/src/scene/devicescene.cpp
+index dc8479bd..afc69220 100644
+--- a/src/scene/devicescene.cpp
++++ b/src/scene/devicescene.cpp
+@@ -60,7 +60,10 @@ DeviceScene::DeviceScene(Device *device)
+       image_textures(device, "image_textures", MEM_GLOBAL),
+       image_texture_tile_descriptors(device, "image_texture_tile_descriptors", MEM_GLOBAL),
+       image_texture_tile_access_state(device, "image_texture_tile_access_state", MEM_GLOBAL),
+-      image_texture_udims(device, "image_texture_udims", MEM_GLOBAL)
++      image_texture_udims(device, "image_texture_udims", MEM_GLOBAL),
++      wet_prev(device, "wet_prev", MEM_GLOBAL),
++      wet_accum(device, "wet_accum", MEM_GLOBAL),
++      wet_count(device, "wet_count", MEM_GLOBAL)
+ {
+   memset((void *)&data, 0, sizeof(data));
+ }
+diff --git a/src/scene/devicescene.h b/src/scene/devicescene.h
+index cee8bc85..713fc4af 100644
+--- a/src/scene/devicescene.h
++++ b/src/scene/devicescene.h
+@@ -98,6 +98,11 @@ class DeviceScene {
+   device_vector<uint8_t> image_texture_tile_access_state;
+   device_vector<KernelImageUDIM> image_texture_udims;
+ 
++  /* wetmap */
++  device_vector<float> wet_prev;
++  device_vector<float> wet_accum;
++  device_vector<uint> wet_count;
++
+   KernelData data;
+ 
+   DeviceScene(Device *device);
+diff --git a/src/scene/integrator.cpp b/src/scene/integrator.cpp
+index 77ca236c..079597d6 100644
+--- a/src/scene/integrator.cpp
++++ b/src/scene/integrator.cpp
+@@ -80,6 +80,8 @@ NODE_DEFINE(Integrator)
+   SOCKET_FLOAT(ao_factor, "AO Factor", 0.0f);
+   SOCKET_FLOAT(ao_distance, "AO Distance", FLT_MAX);
+   SOCKET_FLOAT(ao_additive_factor, "AO Additive Factor", 0.0f);
++  /* wetmap */
++  SOCKET_INT(wet_accum_samples, "Wet Map Accumulation Samples", 16);
+ 
+   SOCKET_BOOLEAN(volume_ray_marching, "Biased", false);
+   SOCKET_INT(volume_max_steps, "Volume Max Steps", 1024);
+@@ -236,6 +238,7 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
+   kintegrator->ao_bounces_distance = ao_distance;
+   kintegrator->ao_bounces_factor = ao_factor;
+   kintegrator->ao_additive_factor = ao_additive_factor;
++  kintegrator->wet_accum_samples = wet_accum_samples;
+ 
+ #ifdef WITH_CYCLES_DEBUG
+   kintegrator->direct_light_sampling_type = direct_light_sampling_type;
+diff --git a/src/scene/integrator.h b/src/scene/integrator.h
+index 9c3f5346..d28b6185 100644
+--- a/src/scene/integrator.h
++++ b/src/scene/integrator.h
+@@ -59,6 +59,7 @@ class Integrator : public Node {
+   NODE_SOCKET_API(float, ao_factor)
+   NODE_SOCKET_API(float, ao_distance)
+   NODE_SOCKET_API(float, ao_additive_factor)
++  NODE_SOCKET_API(int, wet_accum_samples)
+ 
+   NODE_SOCKET_API(bool, volume_ray_marching)
+   NODE_SOCKET_API(int, volume_max_steps)
+diff --git a/src/scene/object.cpp b/src/scene/object.cpp
+index 31563bb0..89fdd33b 100644
+--- a/src/scene/object.cpp
++++ b/src/scene/object.cpp
+@@ -91,6 +91,8 @@ NODE_DEFINE(Object)
+   SOCKET_FLOAT(shadow_terminator_shading_offset, "Shadow Terminator Shading Offset", 0.0f);
+   SOCKET_FLOAT(shadow_terminator_geometry_offset, "Shadow Terminator Geometry Offset", 0.1f);
+   SOCKET_STRING(asset_name, "Asset Name", ustring());
++  /* wetmap: the name the per-object state is kept under across frames. */
++  SOCKET_STRING(wet_key, "Wet Key", ustring());
+ 
+   SOCKET_BOOLEAN(is_shadow_catcher, "Shadow Catcher", false);
+ 
+diff --git a/src/scene/object.h b/src/scene/object.h
+index 752c732f..efd2cc93 100644
+--- a/src/scene/object.h
++++ b/src/scene/object.h
+@@ -47,6 +47,7 @@ class Object : public Node {
+   NODE_SOCKET_API(float3, color)
+   NODE_SOCKET_API(float, alpha)
+   NODE_SOCKET_API(ustring, asset_name)
++  NODE_SOCKET_API(ustring, wet_key)
+   vector<ParamValue> attributes;
+   NODE_SOCKET_API(uint, visibility)
+   NODE_SOCKET_API_ARRAY(array<Transform>, motion)
+diff --git a/src/scene/scene.cpp b/src/scene/scene.cpp
+index 06cd5561..5304d8af 100644
+--- a/src/scene/scene.cpp
++++ b/src/scene/scene.cpp
+@@ -10,6 +10,7 @@
+ 
+ #include "scene/background.h"
+ #include "scene/bake.h"
++#include "scene/wet_state.h"
+ #include "scene/camera.h"
+ #include "scene/curves.h"
+ #include "scene/devicescene.h"
+@@ -66,6 +67,7 @@ Scene ::Scene(const SceneParams &params_, Device *device)
+   image_manager = make_unique<ImageManager>(device->info, params);
+   particle_system_manager = make_unique<ParticleSystemManager>();
+   bake_manager = make_unique<BakeManager>();
++  wet_manager = make_unique<WetStateManager>();
+   procedural_manager = make_unique<ProceduralManager>();
+   volume_manager = make_unique<VolumeManager>();
+ 
+@@ -145,6 +147,7 @@ void Scene::free_memory(bool final)
+     light_manager->device_free(device, &dscene);
+     particle_system_manager->device_free(device, &dscene);
+     bake_manager->device_free(device, &dscene);
++    wet_manager->device_free(device, &dscene);
+     volume_manager->device_free(&dscene);
+ 
+     if (final) {
+@@ -167,6 +170,7 @@ void Scene::free_memory(bool final)
+     particle_system_manager.reset();
+     image_manager.reset();
+     bake_manager.reset();
++    wet_manager.reset();
+     update_stats.reset();
+     procedural_manager.reset();
+     volume_manager.reset();
+@@ -299,6 +303,9 @@ void Scene::device_update(Device *device_, Progress &progress)
+     return;
+   }
+ 
++  /* wetmap: one slot per object, after the objects. */
++  wet_manager->device_update(device, &dscene, this);
++
+   progress.set_status("Updating Particle Systems");
+   particle_system_manager->device_update(device, &dscene, this, progress);
+ 
+@@ -492,6 +499,7 @@ bool Scene::need_data_update()
+       geometry_manager->need_update() || light_manager->need_update() ||
+       lookup_tables->need_update() || integrator->is_modified() || shader_manager->need_update() ||
+       particle_system_manager->need_update() || bake_manager->need_update() ||
++      wet_manager->need_update() ||
+       film->is_modified() || procedural_manager->need_update() || scene_attribute->is_modified());
+ }
+ 
+diff --git a/src/scene/scene.h b/src/scene/scene.h
+index 613e3414..c0354c4d 100644
+--- a/src/scene/scene.h
++++ b/src/scene/scene.h
+@@ -52,6 +52,7 @@ class Shader;
+ class ShaderManager;
+ class Progress;
+ class BakeManager;
++class WetStateManager;
+ class BakeData;
+ class RenderStats;
+ class SceneUpdateStats;
+@@ -171,6 +172,7 @@ class Scene : public NodeOwner {
+   unique_ptr<ObjectManager> object_manager;
+   unique_ptr<ParticleSystemManager> particle_system_manager;
+   unique_ptr<BakeManager> bake_manager;
++  unique_ptr<WetStateManager> wet_manager; /* wetmap */
+   unique_ptr<ProceduralManager> procedural_manager;
+   unique_ptr<VolumeManager> volume_manager;
+ 
+diff --git a/src/scene/wet_state.cpp b/src/scene/wet_state.cpp
+new file mode 100644
+index 00000000..54c400f1
+--- /dev/null
++++ b/src/scene/wet_state.cpp
+@@ -0,0 +1,185 @@
++/* SPDX-FileCopyrightText: 2026 Blender Foundation
++ *
++ * SPDX-License-Identifier: Apache-2.0 */
++
++#include "scene/wet_state.h"
++
++#include "device/device.h"
++#include "scene/devicescene.h"
++#include "scene/object.h"
++#include "scene/osl.h"
++#include "scene/scene.h"
++#include "scene/svm.h"
++
++#include "kernel/svm/wet_state.h"
++
++#include "util/log.h"
++#include "util/math.h"
++
++#include <algorithm>
++#include <cmath>
++
++CCL_NAMESPACE_BEGIN
++
++/* Node. */
++
++NODE_DEFINE(WetStateNode)
++{
++  NodeType *type = NodeType::add("wet_state", create, NodeType::SHADER);
++
++  SOCKET_IN_FLOAT(contact, "Contact", 0.0f);
++  SOCKET_IN_FLOAT(wet_rate, "Wet Rate", 1.0f);
++  SOCKET_IN_FLOAT(dry_time, "Dry Time", 1.0f);
++  SOCKET_IN_FLOAT(max_wet, "Max Wet", 1.0f);
++
++  SOCKET_OUT_FLOAT(wet, "Wet");
++
++  return type;
++}
++
++WetStateNode::WetStateNode() : ShaderNode(get_node_type()) {}
++
++void WetStateNode::compile(SVMCompiler &compiler)
++{
++  compiler.add_node(this,
++                    NODE_WET_STATE,
++                    SVMNodeWetState{
++                        .contact = compiler.input_float("Contact"),
++                        .wet_rate = compiler.input_float("Wet Rate"),
++                        .dry_time = compiler.input_float("Dry Time"),
++                        .max_wet = compiler.input_float("Max Wet"),
++                        .out_wet = compiler.output("Wet"),
++                    });
++}
++
++void WetStateNode::compile(OSLCompiler &compiler)
++{
++  compiler.add(this, "node_wet_state");
++}
++
++/* Manager. */
++
++void WetStateManager::device_update(Device * /*device*/, DeviceScene *dscene, Scene *scene)
++{
++  const size_t num = scene->objects.size();
++  /* At least one slot, so that the arrays always exist on the device. */
++  const size_t slots = std::max<size_t>(num, 1);
++
++  bool keys_changed = keys_.size() != num;
++  keys_.resize(num);
++  for (size_t i = 0; i < num; i++) {
++    const ustring key = scene->objects[i]->get_wet_key();
++    if (keys_[i] != key) {
++      keys_[i] = key;
++      keys_changed = true;
++    }
++  }
++
++  if (keys_changed || prev_dirty_) {
++    float *prev = dscene->wet_prev.alloc(slots);
++    for (size_t i = 0; i < slots; i++) {
++      prev[i] = 0.0f;
++      if (i < num && !keys_[i].empty()) {
++        const auto it = state_.find(keys_[i].string());
++        if (it != state_.end()) {
++          prev[i] = it->second;
++        }
++      }
++    }
++    dscene->wet_prev.copy_to_device();
++    prev_dirty_ = false;
++  }
++
++  if (keys_changed || reset_pending_) {
++    float *accum = dscene->wet_accum.alloc(slots * WET_ACCUM_STRIDE);
++    std::fill(accum, accum + slots * WET_ACCUM_STRIDE, 0.0f);
++    dscene->wet_accum.copy_to_device();
++    uint *count = dscene->wet_count.alloc(slots);
++    std::fill(count, count + slots, 0u);
++    dscene->wet_count.copy_to_device();
++    reset_pending_ = false;
++  }
++
++  dscene->data.integrator.wet_num_objects = int(num);
++  need_update_ = false;
++}
++
++void WetStateManager::device_free(Device * /*device*/, DeviceScene *dscene)
++{
++  dscene->wet_prev.free();
++  dscene->wet_accum.free();
++  dscene->wet_count.free();
++  keys_.clear();
++  need_update_ = true;
++  reset_pending_ = true;
++  prev_dirty_ = true;
++}
++
++void WetStateManager::tag_reset()
++{
++  reset_pending_ = true;
++  need_update_ = true;
++}
++
++void WetStateManager::read_back(DeviceScene *dscene)
++{
++  const thread_scoped_lock lock(mutex_);
++  if (dscene->wet_count.size() == 0 || dscene->wet_accum.size() == 0) {
++    return;
++  }
++  dscene->wet_accum.copy_from_device();
++  dscene->wet_count.copy_from_device();
++  accum_.resize(dscene->wet_accum.size());
++  std::copy(dscene->wet_accum.data(), dscene->wet_accum.data() + accum_.size(), accum_.data());
++  count_.resize(dscene->wet_count.size());
++  std::copy(dscene->wet_count.data(), dscene->wet_count.data() + count_.size(), count_.data());
++  have_readback_ = true;
++}
++
++bool WetStateManager::commit(const double dt)
++{
++  vector<float> accum;
++  vector<uint> count;
++  {
++    const thread_scoped_lock lock(mutex_);
++    if (!have_readback_) {
++      return false;
++    }
++    accum.swap(accum_);
++    count.swap(count_);
++    have_readback_ = false;
++  }
++
++  const size_t num = std::min(count.size(), keys_.size());
++  size_t seen = 0;
++  for (size_t i = 0; i < num; i++) {
++    if (count[i] == 0 || keys_[i].empty()) {
++      /* Unseen: the state stays as it was. */
++      continue;
++    }
++    seen++;
++    const float inv = 1.0f / float(count[i]);
++    const float contact = accum[i * WET_ACCUM_STRIDE + 0] * inv;
++    const float wet_rate = accum[i * WET_ACCUM_STRIDE + 1] * inv;
++    const float dry_time = accum[i * WET_ACCUM_STRIDE + 2] * inv;
++    const float max_wet = accum[i * WET_ACCUM_STRIDE + 3] * inv;
++
++    float &wet = state_[keys_[i].string()];
++    const float decay = (dry_time > 0.0f) ? expf(-float(dt) / dry_time) : 0.0f;
++    wet = clamp(wet * decay + wet_rate * float(dt) * contact, 0.0f, max_wet);
++  }
++
++  LOG_INFO << "Wet map: committed " << seen << " of " << num << " objects over " << dt << " s.";
++  prev_dirty_ = true;
++  need_update_ = true;
++  return true;
++}
++
++void WetStateManager::clear()
++{
++  state_.clear();
++  prev_dirty_ = true;
++  need_update_ = true;
++}
++
++CCL_NAMESPACE_END
+diff --git a/src/scene/wet_state.h b/src/scene/wet_state.h
+new file mode 100644
+index 00000000..c7072177
+--- /dev/null
++++ b/src/scene/wet_state.h
+@@ -0,0 +1,88 @@
++/* SPDX-FileCopyrightText: 2026 Blender Foundation
++ *
++ * SPDX-License-Identifier: Apache-2.0 */
++
++#pragma once
++
++/* Wet map (addition): a value per object that the renderer keeps from one
++ * frame to the next. The Wet State shader node reads it and feeds this
++ * frame's contact into device accumulators; the manager sizes those to the
++ * objects, uploads the previous state before a render, reads the sums back
++ * when a render completes, and folds them into the state when the host says
++ * the frame changed. The state is kept by the object's `wet_key`, not by its
++ * index, which moves between frames. */
++
++#include "scene/shader_nodes.h"
++
++#include "util/thread.h"
++#include "util/vector.h"
++
++#include <string>
++#include <unordered_map>
++
++CCL_NAMESPACE_BEGIN
++
++class Device;
++class DeviceScene;
++class Scene;
++
++class WetStateNode : public ShaderNode {
++ public:
++  SHADER_NODE_CLASS(WetStateNode)
++
++  bool has_spatial_varying() override
++  {
++    return true;
++  }
++
++  NODE_SOCKET_API(float, contact)
++  NODE_SOCKET_API(float, wet_rate)
++  NODE_SOCKET_API(float, dry_time)
++  NODE_SOCKET_API(float, max_wet)
++};
++
++class WetStateManager {
++ public:
++  WetStateManager() = default;
++  ~WetStateManager() = default;
++
++  /* After the objects are updated: slots per object, previous state uploaded,
++   * accumulators zeroed when a reset is pending. */
++  void device_update(Device *device, DeviceScene *dscene, Scene *scene);
++  void device_free(Device *device, DeviceScene *dscene);
++
++  bool need_update() const
++  {
++    return need_update_;
++  }
++
++  /* A session reset: the accumulators of the render it cuts short are void. */
++  void tag_reset();
++
++  /* On the session thread, once a render completed: the sums come back. */
++  void read_back(DeviceScene *dscene);
++
++  /* On the host, when the frame changes: folds the last completed read-back
++   * into the state. `dt` is the time to the new frame, in seconds. Returns
++   * false when no completed render was read back since the last commit. */
++  bool commit(double dt);
++
++  void clear();
++
++ private:
++  bool need_update_ = true;
++  bool reset_pending_ = true;
++  bool prev_dirty_ = true;
++
++  /* The key of each object slot at the last device update. */
++  vector<ustring> keys_;
++  std::unordered_map<std::string, float> state_;
++
++  /* The read-back of the last completed render, under the mutex. */
++  thread_mutex mutex_;
++  bool have_readback_ = false;
++  vector<float> accum_;
++  vector<uint> count_;
++};
++
++CCL_NAMESPACE_END
+diff --git a/src/session/session.cpp b/src/session/session.cpp
+index 26b4501d..ba9d02c4 100644
+--- a/src/session/session.cpp
++++ b/src/session/session.cpp
+@@ -15,6 +15,7 @@
+ #include "scene/mesh.h"
+ #include "scene/object.h"
+ #include "scene/scene.h"
++#include "scene/wet_state.h"
+ #include "scene/shader_graph.h"
+ #include "session/buffers.h"
+ #include "session/display_driver.h"
+@@ -170,6 +171,11 @@ void Session::run_main_render_loop()
+     const bool did_cancel = progress.get_cancel();
+ 
+     if (!render_work) {
++      /* wetmap: no work left and not cancelled - the render ran to its end,
++       * its sums go to the host. A cancelled render leaves nothing. */
++      if (!did_cancel) {
++        scene->wet_manager->read_back(&scene->dscene);
++      }
+       if (LOG_IS_ON(LOG_LEVEL_INFO)) {
+         if (did_cancel) {
+           LOG_INFO << "Rendering was canceled.";
+@@ -594,6 +600,9 @@ void Session::reset(const SessionParams &session_params, const BufferParams &buf
+ 
+     scene->scene_updated_while_loading_kernels = true;
+ 
++    /* wetmap: the render this cuts short accumulated for nothing. */
++    scene->wet_manager->tag_reset();
++
+     path_trace_->cancel();
+   }
+ 

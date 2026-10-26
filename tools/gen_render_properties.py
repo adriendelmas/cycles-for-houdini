@@ -44,6 +44,8 @@ GROUPS = [
     ("Light Paths", ("min_bounce", "max_bounce", "max_diffuse", "max_glossy",
                      "max_transmission", "max_volume", "transparent_")),
     ("Ambient Occlusion", ("ao_",)),
+    # wetmap (addition, docs/WETMAP_PLAN.md)
+    ("Wet Map", ("wet_",)),
     ("Volumes", ("volume_",)),
     ("Caustics", ("caustics_", "filter_glossy")),
     ("Denoising", ("denois", "use_denoise")),
@@ -166,7 +168,7 @@ def main():
             emit_parm("cycles:integrator:" + name, label, parm_type, usd_type, default))
 
     order = ["Session", "Film", "Sampling", "Light Paths", "Volumes", "Caustics",
-             "Denoising", "Guiding", "Ambient Occlusion", "Advanced"]
+             "Denoising", "Guiding", "Ambient Occlusion", "Wet Map", "Advanced"]
 
     body = []
     for label in order:

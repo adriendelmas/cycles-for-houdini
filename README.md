@@ -14,7 +14,7 @@ Houdini and a **Cycles Material Builder** to wire them in.
 Cycles' own delegate renders geometry, lights and cameras; the shading side is
 where the work went.
 
-- **163 Cycles shader nodes published to USD**, discovered from Cycles' node
+- **164 Cycles shader nodes published to USD**, discovered from Cycles' node
   registry at runtime, so the node set always matches the linked Cycles version.
 - **A Cycles Material Builder** — a dedicated LOP context holding every Cycles
   node in Blender's own categories, with Blender's parameter groupings, and
@@ -182,7 +182,7 @@ warnings, for a non-black image, and for a difference against a baseline:
 hython tools/bench_export.py && python tools/bench_render.py && hython tools/bench_diff.py
 ```
 
-97 nodes pass that check against their committed reference images. Two more
+98 nodes pass that check against their committed reference images. Two more
 compare with Karma, rendering the same USD with both: seventeen materials
 region by region (`hython tools/bench_agree.py`, 67 checks, floor within
 1 %), and every MaterialX node one quad each (`hython tools/mtlx_karma.py`:
