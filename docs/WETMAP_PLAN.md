@@ -333,6 +333,27 @@ Threads and time
     scene data runs on the session thread when the delayed reset is applied
     (`Session::update_scene`, `zero_device`), never through `need_update`.
 
+16c. **No device write outside `Scene::device_update` before the kernels are
+    loaded.** An interactive session loads them on the session thread at the
+    first scene update; a `copy_to_device`/`zero_to_device` of a `MEM_GLOBAL`
+    array before that binds a global on a module that does not exist yet.
+    0157 guards the reset-time zeroing with `Scene::are_kernels_loaded()`.
+    Upstream has one such write of its own (`update_camera_resolution` from
+    `run_update_for_next_iteration`, before `path_trace_->load_kernels()`):
+    it logs "Invalid handle in cuModuleGetGlobal" once and is harmless.
+
+16d. **Open on 2026-10-26, 10:00:** the other session measured the Gauge
+    scene (442 000 instances, Cycles GPU viewport) at 0.5 s per sample with
+    occupancy 0.08 on 0156, against 0.010 s on 0152 the same morning. Nothing
+    of this addition runs per sample without a Wet State node in a material
+    (the read-back happens once a render ran to its end, the zeroing at a
+    reset, the slot arrays upload when the objects change). Asked for: the
+    VRAM and "falls back to host" lines of that log, and whether Adrien's own
+    30 GB Houdini shared the 3090 during the measurement (14.7 of 24 GB in
+    use at 09:55 with three Houdini sessions open). To settle it: the same
+    husk GPU render of the Gauge export on 0157 and on 0152 with its kernels
+    rebuilt (26 min), nothing else on the GPU.
+
 Scene and identity
 
 21. Object indices move between frames (§3): key by string, fill `wet_prev`
