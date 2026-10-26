@@ -24,7 +24,7 @@ if not os.path.isdir(OUT):
     os.makedirs(OUT)
 
 # The terminal node and the graph output are not tested like a shader.
-SKIP = {"cycles_material", "cycles_output", "cycles_aov_output"}
+SKIP = {"cycles_material", "cycles_output", "cycles_aov_output", "cycles_material_properties"}
 
 cat = hou.vopNodeTypeCategory()
 names = sorted(n for n in cat.nodeTypes()
