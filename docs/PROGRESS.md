@@ -227,6 +227,6 @@ prefix (`wetmap:`), planned and tracked in [WETMAP_PLAN.md](WETMAP_PLAN.md).
 |---|---|---|
 | The delegate follows the stage's frame (S0) | ✅ | `HdCyclesWetState`, patch 0153; `currentFrame` arrives under husk, one delegate across the frames |
 | AO traced against raycast-visible objects only (S1) | ✅ | `raycast_visibility` on the AO node, `cycles:object:visibility:raycast` ("Raycast Rays"), patch 0154; `bench_wet.py --gpu` 10/10 on CPU and OptiX |
-| Per-object state kept across frames (S2) | ✅ | `cycles_wet_state` node, `WetStateManager`, commit on frame change, patch 0155; `bench_wet.py` 8-frame sequence within 0.03 of the formula on CPU and OptiX, no advance on a re-rendered frame |
+| Per-object state kept across frames (S2) | ✅ | `cycles_wet_state` node, `WetStateManager`, commit on frame change, patches 0155-0156; `bench_wet.py` 8-frame sequence within 0.03 of the formula on CPU and OptiX, no advance on a re-rendered frame. 0156: a reset no longer raises a scene update (it restarted the session on every redraw of a 442 000-instance scene and crashed the GPU viewport) - the gauge re-test is the other session's |
 | State on disk per frame (S3) | ❌ | - |
 | Houdini finish, MaterialX bridge (S4, S5) | ❌ | - |

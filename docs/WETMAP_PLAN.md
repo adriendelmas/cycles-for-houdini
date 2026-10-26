@@ -322,6 +322,17 @@ Threads and time
     none (`geometry.h:68`). A backwards or non-unit jump is a sequence
     break: load `wet_<frame-1>.bin` or restart, never apply a negative `dt`.
 
+16b. **A manager's `need_update()` is a render restart.** `Scene::need_data_update`
+    feeds `need_reset`, which `_Execute` reads on every render pass: a flag
+    raised by `Session::reset` itself (the first `tag_reset` did) is true on
+    every pass until the render thread's `device_update` clears it - on a
+    scene whose update takes seconds (442 000 instances), every Hydra redraw
+    restarted the session again, cancelling the update in progress, and the
+    GPU viewport died with "illegal address in CUDA" (2026-10-26, 0155,
+    Adrien's gauge scene; fixed in 0156). A reset-time action that needs no
+    scene data runs on the session thread when the delayed reset is applied
+    (`Session::update_scene`, `zero_device`), never through `need_update`.
+
 Scene and identity
 
 21. Object indices move between frames (§3): key by string, fill `wet_prev`
