@@ -1,0 +1,141 @@
+From efdd36e17a37927ee6b918ab61a63e93c4b43870 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Mon, 26 Oct 2026 23:37:32 +0100
+Subject: [PATCH 160/160] hydra: a bumped chain's layer ties depend on the base
+ colour's accumulation
+
+TieSumChains tied each layer's lookups to the previous accumulation of
+the layer's own chain. On the normal chain that made each layer's bump
+depend on the previous layer's bump, and Cycles evaluates a bump's
+height three times (centre and two derivatives): a procedural terrain of
+eight bumped layers compiled to 5.2 million words, 3^8, minutes per
+sample. Depending on the base colour's accumulation everywhere cured it
+but ordered the hextiled terrain too loosely and it overflowed the stack
+again. A chain whose accumulation carries a bump or a heighttonormal now
+takes its dependencies from the base colour's chain (or the first chain
+that is not the normal); the others keep their own. The displacement, a
+program of its own, is no longer tied. Probes in husk CPU: the hextiled
+terrain 107 slots, the procedural terrain 117 slots and 86 614 words, the
+procedural rock 47 (K-115).
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ src/hydra/mtlx_expand.cpp | 80 +++++++++++++++++++++++++++------------
+ 1 file changed, 55 insertions(+), 25 deletions(-)
+
+diff --git a/src/hydra/mtlx_expand.cpp b/src/hydra/mtlx_expand.cpp
+index 09b53207..217327b8 100644
+--- a/src/hydra/mtlx_expand.cpp
++++ b/src/hydra/mtlx_expand.cpp
+@@ -2056,25 +2056,24 @@ bool TieSumChains(Network &net)
+     return c == it->second.conns.end() || c->second.empty() ? nullptr : &c->second[0];
+   };
+ 
+-  std::vector<Conn> starts;
++  /* Every chained input is tied, but every tie depends on the base colour's
++   * accumulation (or, failing that, the first input's that is not the
++   * normal): a dependency on a chain's own accumulation made each layer's
++   * bump evaluation depend on the previous layer's bump - Cycles evaluates
++   * a bump's height three times - and a procedural terrain of eight layers
++   * compiled to 5.2 million words (3^8). The colour's accumulation holds no
++   * bump. The displacement, a program of its own, is not tied. */
++  static const TfToken kBaseColor("base_color"), kNormal("normal");
++  struct Chain {
++    TfToken input;
++    std::vector<TfToken> accs; /* bottom up: the first add first */
++  };
++  std::vector<Chain> chainList;
+   for (const auto &[input, list] : topIt->second.conns) {
+-    if (!list.empty()) {
+-      starts.push_back(list[0]);
+-    }
+-  }
+-  /* The height, accumulated the same way, behind the displacement node. */
+-  static const TfToken kDisplacementTerminal("displacement"), kDisplacement("displacement");
+-  if (const auto d = net.terminals.find(kDisplacementTerminal); d != net.terminals.end()) {
+-    if (idOf(d->second.upstream).rfind("ND_displacement_", 0) == 0) {
+-      if (const Conn *c = firstConn(d->second.upstream, kDisplacement)) {
+-        starts.push_back(*c);
+-      }
++    if (list.empty()) {
++      continue;
+     }
+-  }
+-  LayerTies ties(net, topName);
+-  int chains = 0;
+-  for (const Conn &start : starts) {
+-    TfToken name = start.upstream;
++    TfToken name = list[0].upstream;
+     /* A normal goes through a normalize first. */
+     if (idOf(name).rfind("ND_normalize_", 0) == 0) {
+       const Conn *c = firstConn(name, kIn);
+@@ -2084,30 +2083,61 @@ bool TieSumChains(Network &net)
+       name = c->upstream;
+     }
+     /* The accumulations, top down: each add's in1 is the previous one. */
+-    std::vector<TfToken> accs;
++    Chain chain{input, {}};
+     while (idOf(name).rfind("ND_add_", 0) == 0) {
+-      accs.push_back(name);
++      chain.accs.push_back(name);
+       const Conn *c = firstConn(name, kIn1);
+       if (!c) {
+         break;
+       }
+       name = c->upstream;
+     }
+-    if (accs.size() < kMinLayers) {
++    if (chain.accs.size() < kMinLayers) {
+       continue;
+     }
+-    std::reverse(accs.begin(), accs.end());
+-    for (size_t i = 1; i < accs.size(); ++i) {
+-      const Conn *term = firstConn(accs[i], kIn2);
++    std::reverse(chain.accs.begin(), chain.accs.end());
++    chainList.push_back(std::move(chain));
++  }
++  const Chain *order = nullptr;
++  for (const Chain &chain : chainList) {
++    if (chain.input == kBaseColor) {
++      order = &chain;
++    }
++  }
++  if (!order) {
++    for (const Chain &chain : chainList) {
++      if (chain.input != kNormal) {
++        order = &chain;
++        break;
++      }
++    }
++  }
++  LayerTies ties(net, topName);
++  int chains = 0;
++  for (const Chain &chain : chainList) {
++    /* A chain that carries a bump (a procedural normal) takes its
++     * dependencies from the colour's accumulation; the others, from their
++     * own, which orders them more tightly (the hextiled terrain: 231 slots
++     * through its own, past 255 through the colour's). */
++    bool bump = false;
++    for (const TfToken &n : ties.upstream(chain.accs.back())) {
++      const std::string id = idOf(n);
++      bump |= id.rfind("ND_bump_", 0) == 0 || id.rfind("ND_heighttonormal_", 0) == 0;
++    }
++    const Chain *source = bump && order && order != &chain ? order : &chain;
++    for (size_t i = 1; i < chain.accs.size(); ++i) {
++      const Conn *term = firstConn(chain.accs[i], kIn2);
+       if (!term) {
+         continue;
+       }
++      const TfToken &previousName = i - 1 < source->accs.size() ? source->accs[i - 1] :
++                                                                  chain.accs[i - 1];
+       /* ND_add_float, ND_add_color3FA: the accumulation's type. */
+-      std::string type = idOf(accs[i - 1]).substr(strlen("ND_add_"));
++      std::string type = idOf(previousName).substr(strlen("ND_add_"));
+       if (type.size() > 2 && type.compare(type.size() - 2, 2, "FA") == 0) {
+         type.resize(type.size() - 2);
+       }
+-      const Conn previous{accs[i - 1], kOut};
++      const Conn previous{previousName, kOut};
+       ties.tieLeaves(term->upstream, ties.depend(previous, type), previous);
+     }
+     chains += 1;

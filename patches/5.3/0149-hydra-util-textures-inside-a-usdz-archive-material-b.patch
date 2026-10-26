@@ -1,7 +1,7 @@
 From ad5156dedbc6d47221c62ead178e9b69a9830c34 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 26 Oct 2026 00:04:01 +0100
-Subject: [PATCH 149/159] hydra + util: textures inside a usdz archive;
+Subject: [PATCH 149/160] hydra + util: textures inside a usdz archive;
  material:binding:full resolved
 
 Every MEGALIB asset is a usdz with its textures inside, so a texture's

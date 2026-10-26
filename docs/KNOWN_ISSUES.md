@@ -1341,6 +1341,20 @@ a rock mixed with moss and lichen has two, went untied, and its three
 hextiled axes times three layers overflowed (248 slots); from 0158 two
 accumulations are enough (170 slots for that rock).
 
+The ties then chose the wrong dependency for a bump: a layer's lookups
+tied to its own chain's previous accumulation made, on the normal chain,
+each layer's bump depend on the previous layer's bump, and Cycles
+evaluates a bump's height three times (centre and two derivatives): a
+procedural terrain of eight bumped layers compiled to 5.2 million words
+(3^8) and took minutes per sample. Taking every chain's dependencies from
+the base colour's accumulation cured it (69 507 words) but ordered the
+hextiled terrain too loosely (255 slots, black again). From 0160 the rule
+is hybrid: a chain whose accumulation carries a bump or a heighttonormal
+takes its dependencies from the base colour's chain (or, failing one, the
+first chain that is not the normal); the others keep their own. Probes in
+husk CPU: the hextiled terrain 107 slots, the procedural terrain 117 slots
+and 86 614 words, the procedural rock 47.
+
 ### K-116 randomfloat and randomcolor ignored their input, range and seed — confirmed — **fixed** (0159)
 `ND_randomfloat` and `ND_randomcolor` were mapped to Cycles' white noise
 texture, which has no `in`, `min`, `max` or `seed`: the delegate warned

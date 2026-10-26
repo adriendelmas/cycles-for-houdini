@@ -1,7 +1,7 @@
 From 46ed3b9709e0e7fc258e22c69898f081aba5469b Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 26 Oct 2026 09:54:09 +0100
-Subject: [PATCH 157/159] wetmap: no device write at a reset before the kernels
+Subject: [PATCH 157/160] wetmap: no device write at a reset before the kernels
  are loaded (S2 fix)
 
 Wet map (addition). The zeroing of the accumulators at a delayed reset
