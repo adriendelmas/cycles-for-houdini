@@ -11,6 +11,7 @@ Start here. Each file answers one question; none repeats another.
 | In what order do we fix it, and how do we know it is fixed? | [PLAN.md](PLAN.md) |
 | How do we test, and what do the benches really prove? | [TESTING.md](TESTING.md) |
 | Rules of the repository: language, patches, commits, builds | [CONVENTIONS.md](CONVENTIONS.md) |
+| How would a time-accumulated wet map be built in the renderer? (plan, 2026-10-26, nothing built) | [WETMAP_PLAN.md](WETMAP_PLAN.md) |
 
 ## Reference and history
 
