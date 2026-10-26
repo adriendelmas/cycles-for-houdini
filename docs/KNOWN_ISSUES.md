@@ -1341,6 +1341,16 @@ a rock mixed with moss and lichen has two, went untied, and its three
 hextiled axes times three layers overflowed (248 slots); from 0158 two
 accumulations are enough (170 slots for that rock).
 
+### K-116 randomfloat and randomcolor ignored their input, range and seed — confirmed — **fixed** (0159)
+`ND_randomfloat` and `ND_randomcolor` were mapped to Cycles' white noise
+texture, which has no `in`, `min`, `max` or `seed`: the delegate warned
+"No input 'in'" and "no input 'max' ... value ignored", and the value
+came out of the texture coordinate, in 0..1, the same for every seed. The
+mapping is gone; the two expand from the library's own nodegraphs
+(cellnoise2d of `in` and `seed`, ranged to min..max), as Karma evaluates
+them. Seen on the NEPAL procedural materials (per-instance randomness);
+their levels now match Karma within 1 %.
+
 ## D. Repository and tests
 
 ### K-50 Benches overwrite their own references — confirmed — **fixed** (2680470)

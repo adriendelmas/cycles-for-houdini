@@ -1,7 +1,7 @@
 From a81a682f6b7e678d4b43ed952c8057ec82447661 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 26 Oct 2026 06:20:02 +0100
-Subject: [PATCH 152/158] hydra: tie a single surface's accumulated layers for
+Subject: [PATCH 152/159] hydra: tie a single surface's accumulated layers for
  the SVM compiler
 
 Houdini's Material Mixer in its single-surface mode writes each input of

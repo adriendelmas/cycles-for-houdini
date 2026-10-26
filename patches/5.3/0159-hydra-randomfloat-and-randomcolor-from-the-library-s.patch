@@ -1,0 +1,36 @@
+From 9beabed5286e5b5110042b8722b88f69be37e45b Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Mon, 26 Oct 2026 20:55:28 +0100
+Subject: [PATCH 159/159] hydra: randomfloat and randomcolor from the library's
+ nodegraphs
+
+ND_randomfloat and ND_randomcolor were mapped to the white noise texture,
+which has no `in`, `min`, `max` or `seed`: the delegate warned that the
+input was dropped and the range ignored, and the value came from the
+texture coordinate, in 0..1, the same for every seed. The mapping is
+removed; the two expand from the library's own nodegraphs, a cellnoise2d
+of `in` and `seed` ranged to min..max, as Karma evaluates them. The NEPAL
+procedural materials, which draw per-instance randomness from them, now
+match Karma within 1 % (K-116).
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index 9f249c04..ca20f03f 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -2708,8 +2708,9 @@ const std::vector<MtlxEntry> &MtlxTable()
+       {"ND_unifiednoise3d_float", &kMxUnified3dF},
+       {"ND_unifiednoise3d", &kMxUnified3dC},
+       {"ND_flake", &kVoronoi},
+-      {"ND_randomcolor", &kWhiteNoise},
+-      {"ND_randomfloat", &kWhiteNoise},
++      /* randomfloat and randomcolor expand from the library's nodegraphs
++       * (cellnoise2d of `in` and `seed`, ranged to min..max): mapped to a
++       * white noise they dropped `in`, `min`, `max` and `seed` (K-116). */
+       {"ND_checkerboard", &MtlxCheckerboard},
+       {"ND_clamp_", &kClamp},
+       {"ND_remap_", &kRemap},

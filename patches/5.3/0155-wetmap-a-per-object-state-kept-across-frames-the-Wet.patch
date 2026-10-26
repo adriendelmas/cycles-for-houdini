@@ -1,7 +1,7 @@
 From d93e2720a4f7bc9f1f2185f4800be230215fbb5c Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 26 Oct 2026 09:11:25 +0100
-Subject: [PATCH 155/158] wetmap: a per-object state kept across frames, the
+Subject: [PATCH 155/159] wetmap: a per-object state kept across frames, the
  Wet State node (S2)
 
 Wet map (addition, docs/WETMAP_PLAN.md). A 'Wet State' shader node reads
