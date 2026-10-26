@@ -182,6 +182,7 @@ Most of these patches are independent of Houdini and of this machine --
 | `0148` | hydra + scene: a mix of four or more standard_surface blended by its inputs into one, mixes chained layer by layer with ties so the SVM compiler takes one layer at a time (ten layers: 188 stack slots instead of 2000, 12 closures instead of 120); the SVM compiler reports each shader's peak stack and, on overflow, what held it; Cycles nodes named after their Hydra node (K-110) |
 | `0149` | hydra + util: textures inside a usdz archive read through USD's resolver and decoded from memory (K-111); `material:binding:full` resolved by a scene index (K-112); the SVM compiler's virtual stack dropped, its overflow report kept |
 | `0150` | hydra: an instance's transform composed as scale, orientation, position, then the instancer's (it ran the other way, scaling the positions); a nested instance before its parent's placement (K-113) |
+| `0151` | hydra: the display driver off by default again - under a Karma Physical Sky Houdini's viewport showed the sky and none of the geometry, through the output driver the whole scene (K-114); the render pass logs the view it renders (camera, visible objects, shaders) at info level |
 
 ---
 

@@ -1304,6 +1304,25 @@ cones now sit where Karma puts them to the pixel. `bench_instances.py`
 case `placed`: each square given a quarter turn and a scale, found where
 its position says.
 
+### K-114 With the display driver, a scene lit by a Karma Physical Sky showed the sky and nothing else — confirmed — **worked around** (0151)
+In Houdini's viewport (Cycles CPU and GPU) the Gauge scatter - 6400 rock
+instances under a Karma Physical Sky - rendered as the sky alone, as did a
+single emissive sphere placed twenty units in front of the camera: the
+rays were traced (same render time as husk, the objects visible and in
+front of the camera in the `View:` log line, the shaders right) but the
+geometry never reached the viewport. husk rendered the exported stage
+correctly, and so did the viewport once `CYCLES_DISPLAY_DRIVER=0` sent the
+pixels through the output driver instead. Without the sky - a plain dome
+light, or the sun alone - the display driver showed the geometry. The cause
+in the display path is not found (candidates: the display pass chosen when
+the background is spatially varying, the half4 texture, Houdini's
+compositing of it); this is defect 3 of 0012 ("something resembling a depth
+pass") seen again. The display driver is off by default again, as it was
+until 0050; `CYCLES_DISPLAY_DRIVER=1` turns it back on. The `View:` block
+the render pass now logs at info level (camera, motion samples, visible
+objects, their origins, the largest object, each geometry's shaders and the
+background shader) is what located this; it stays.
+
 ## D. Repository and tests
 
 ### K-50 Benches overwrite their own references — confirmed — **fixed** (2680470)

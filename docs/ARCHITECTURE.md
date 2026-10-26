@@ -174,7 +174,7 @@ cd external/cycles-53 && git format-patch --no-signature -o ../../patches/5.3 84
 | Variable | Effect |
 |---|---|
 | `CYCLES_DEVICE` | `CPU`, `GPU`, `OPTIX`, `CUDA`, `HIP`, `ONEAPI`, `METAL`; read when the delegate is created |
-| `CYCLES_DISPLAY_DRIVER` | `0` forces the output driver even under OpenGL |
+| `CYCLES_DISPLAY_DRIVER` | `1` turns on the GL display driver (off by default, K-114); the output driver is used otherwise |
 | `CYCLES_COP_WATCH` | `0` stops polling Copernicus nodes for changes |
 | `CYCLES_LOGGING`, `CYCLES_LOGGING_LEVEL` | Cycles' own logger (`info`, `warning`, ...) |
 | `CYCLES_LOG_FILE` | Write that log to a file - Houdini has no console on Windows |

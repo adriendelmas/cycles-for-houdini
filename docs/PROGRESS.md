@@ -77,7 +77,7 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | Per-object ray visibility, holdout, shadow catcher, light groups, caustics flags | ✅ | `bench_settings.py` | `primvars:cycles:object:*` and Karma's visibility/holdout (K-27, 0088); light group passes since 0092 |
 | Render tags / purposes | ✅ | checked in Houdini | Honoured live (K-28, 0090) |
 | Batch mode under husk | ✅ | measured | `background = true` brings nothing (K-29); crop, pixel aspect, conform policy read from husk's settings (K-77, K-78) |
-| GL display driver | ✅ | user's viewport; agent's MCP session, 2026-10-09 | Houdini 22's own viewport is Vulkan ("Houdini VK", the default), but it ships only `hgiGL`: a delegate always gets an OpenGL Hgi and the display driver works under it (checked live, Cycles CPU in a Houdini VK viewport). The output driver remains for husk, which has no Hgi, and for a future Hgi that is not OpenGL |
+| GL display driver | ⚠️ | agent's MCP session, 2026-10-26 | Off by default again (K-114): under a Karma Physical Sky it showed the sky and no geometry; the output driver shows the scene. `CYCLES_DISPLAY_DRIVER=1` turns it on. Houdini 22's viewport is Vulkan but ships only `hgiGL`, so a delegate always gets an OpenGL Hgi (0050, 0151) |
 | Viewport interactivity | ✅ | timestamped live log | K-31 closed 2026-10-08: 871 restarts by hand, first sample 19 ms median, no host-thread pass over 50 ms |
 
 ## Materials - native Cycles
