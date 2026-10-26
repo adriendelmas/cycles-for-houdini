@@ -1,7 +1,7 @@
 From 78b94e00ddd518c95577450380aafa0a4eab1764 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sun, 25 Oct 2026 22:02:30 +0100
-Subject: [PATCH 148/151] hydra + scene: a mix of many standard_surface blended
+Subject: [PATCH 148/152] hydra + scene: a mix of many standard_surface blended
  by its inputs; SVM stack diagnostics
 
 A terrain mixing ten tiled rock materials by nine mix_surfaceshader could

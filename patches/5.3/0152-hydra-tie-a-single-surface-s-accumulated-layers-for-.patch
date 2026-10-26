@@ -1,0 +1,416 @@
+From a81a682f6b7e678d4b43ed952c8057ec82447661 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Mon, 26 Oct 2026 06:20:02 +0100
+Subject: [PATCH 152/152] hydra: tie a single surface's accumulated layers for
+ the SVM compiler
+
+Houdini's Material Mixer in its single-surface mode writes each input of
+one standard_surface as a chain of adds, acc_k = acc_(k-1) + (layer_k -
+acc_(k-1)) x w_k. Nothing told the SVM compiler the layers apart: it
+evaluated every layer's tiled lookups before the first add, and the
+ten-layer Gauge terrain overflowed the 255 stack slots and rendered black,
+where the same mixer's mix_surfaceshader form had been folded and tied
+layer by layer (K-110).
+
+TieSumChains walks the add chains behind the surface's inputs (through a
+normalize for the normal) and ties each layer's own geometry lookups to
+the previous accumulation. The ties FoldSurfaceMix used are lifted into
+LayerTies, shared by both. Ten layers: 172 slots, and the sphere at 0.068
+against Karma's 0.069 (K-115).
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ src/hydra/mtlx_expand.cpp | 312 +++++++++++++++++++++++++++-----------
+ 1 file changed, 223 insertions(+), 89 deletions(-)
+
+diff --git a/src/hydra/mtlx_expand.cpp b/src/hydra/mtlx_expand.cpp
+index 4781401d..f709ea2a 100644
+--- a/src/hydra/mtlx_expand.cpp
++++ b/src/hydra/mtlx_expand.cpp
+@@ -29,6 +29,7 @@
+ 
+ #include <algorithm>
+ #include <cstdlib>
++#include <cstring>
+ #include <functional>
+ #include <map>
+ #include <set>
+@@ -1636,76 +1637,25 @@ bool FoldLayerIor(Network &net)
+   return any;
+ }
+ 
+-/* A mix_surfaceshader tree of standard_surfaces - a material mixer's
+- * output - blended by its inputs instead of its closures.
+- *
+- * Cycles' SVM holds at most 64 closures per material, twelve per
+- * standard_surface, and 255 stack slots addressed on a byte: a terrain
+- * mixing ten tiled rock materials needed 120 closures and some 2000 slots,
+- * and rendered nothing. Four leaves or more are folded into one
+- * standard_surface whose every input is the mix of the leaves' inputs, by
+- * the same weights - the usual material-blend approximation (one specular
+- * lobe for the blend, not one per layer); three or fewer keep the exact
+- * closure mix. The mixes are chained layer by layer, and each layer's own
+- * geometry lookups go through a tie to the previous layer's last mix
+- * (value + 1e-30 x it), so that the SVM compiler, whose order is optimal for
+- * trees only, evaluates one layer at a time instead of keeping every
+- * layer's tiled coordinates alive for the normal and roughness trees: 190
+- * slots for the ten layers instead of 2000 (K-110). */
+-bool FoldSurfaceMix(Network &net, const mx::DocumentPtr &library)
+-{
+-  static const TfToken kSurfaceTerminal("surface"), kMix("ND_mix_surfaceshader"), kFg("fg"),
+-      kBg("bg"), kMixIn("mix"), kIn("in"), kIn1("in1"), kIn2("in2"), kIndex("index");
+-  static const char *const kStandardSurface = "ND_standard_surface_surfaceshader";
+-  constexpr size_t kMinLeaves = 4;
+-  constexpr float kTie = 1e-30f;
++/* The ties between a blend's layers, shared by FoldSurfaceMix and
++ * TieSumChains: value + 1e-30 x dependency, which the SVM compiler honours
++ * and the render cannot see. */
++struct LayerTies {
++  Network &net;
++  TfToken topName;
++  int made = 0;
++  static constexpr float kTie = 1e-30f;
+ 
+-  const auto terminal = net.terminals.find(kSurfaceTerminal);
+-  if (terminal == net.terminals.end()) {
+-    return false;
+-  }
+-  const TfToken topName = terminal->second.upstream;
+-  const auto topIt = net.nodes.find(topName);
+-  if (topIt == net.nodes.end() || topIt->second.typeId != kMix) {
+-    return false;
+-  }
++  LayerTies(Network &n, const TfToken &top) : net(n), topName(top) {}
+ 
+-  /* The tree: its mixes and its leaves, in order. */
+-  std::vector<TfToken> leaves, mixes;
+-  std::function<bool(const TfToken &)> collect = [&](const TfToken &name) -> bool {
+-    const auto it = net.nodes.find(name);
+-    if (it == net.nodes.end()) {
+-      return false;
+-    }
+-    const Node &node = it->second;
+-    if (node.typeId == kMix) {
+-      mixes.push_back(name);
+-      for (const TfToken &side : {kBg, kFg}) {
+-        const auto c = node.conns.find(side);
+-        if (c == node.conns.end() || c->second.empty() || !collect(c->second[0].upstream)) {
+-          return false;
+-        }
+-      }
+-      return true;
+-    }
+-    if (node.typeId.GetString().rfind(kStandardSurface, 0) != 0 ||
+-        std::find(leaves.begin(), leaves.end(), name) != leaves.end())
+-    {
+-      return false;
+-    }
+-    leaves.push_back(name);
+-    return true;
+-  };
+-  if (!collect(topName) || leaves.size() < kMinLeaves) {
+-    return false;
+-  }
+-  const mx::NodeDefPtr surfaceDef = library->getNodeDef(kStandardSurface);
+-  if (!surfaceDef) {
+-    return false;
++  TfToken makeName(const std::string &kind)
++  {
++    return TfToken(Prefix(topName, "blend_" + kind + "_" + std::to_string(++made)));
+   }
+ 
+-  /* Everything upstream of a node. */
+-  auto upstream = [&](const TfToken &start) {
++  /* Everything upstream of a node, itself included. */
++  std::set<TfToken> upstream(const TfToken &start) const
++  {
+     std::set<TfToken> seen;
+     std::vector<TfToken> todo{start};
+     while (!todo.empty()) {
+@@ -1725,52 +1675,53 @@ bool FoldSurfaceMix(Network &net, const mx::DocumentPtr &library)
+       }
+     }
+     return seen;
+-  };
++  }
+ 
+-  int made = 0;
+-  auto makeName = [&](const std::string &kind) {
+-    return TfToken(Prefix(topName, "blend_" + kind + "_" + std::to_string(++made)));
+-  };
+   /* A float that depends on a value: the value, or its first channel. */
+-  auto depend = [&](const Conn &conn, const std::string &type) -> Conn {
++  Conn depend(const Conn &conn, const std::string &type)
++  {
+     if (type == "float") {
+       return conn;
+     }
+     Node e;
+     e.typeId = TfToken("ND_extract_" + type);
+-    e.conns[kIn] = {conn};
+-    e.params[kIndex] = VtValue(0);
++    e.conns[TfToken("in")] = {conn};
++    e.params[TfToken("index")] = VtValue(0);
+     const TfToken name = makeName("dep");
+     net.nodes[name] = std::move(e);
+     return Conn{name, kOut};
+-  };
++  }
++
+   /* value + 1e-30 x dep: the value, with a dependency the compiler honours. */
+-  auto tie = [&](const std::string &type, const Conn *valueConn, const VtValue &value,
+-                 const Conn &dep) -> Conn {
++  Conn tie(const std::string &type, const Conn *valueConn, const VtValue &value, const Conn &dep)
++  {
+     Node mul;
+     mul.typeId = TfToken("ND_multiply_float");
+-    mul.conns[kIn1] = {dep};
+-    mul.params[kIn2] = VtValue(kTie);
++    mul.conns[TfToken("in1")] = {dep};
++    mul.params[TfToken("in2")] = VtValue(kTie);
+     const TfToken mulName = makeName("tie");
+     net.nodes[mulName] = std::move(mul);
+     Node add;
+     add.typeId = TfToken(type == "float" ? "ND_add_float" : "ND_add_" + type + "FA");
+     if (valueConn) {
+-      add.conns[kIn1] = {*valueConn};
++      add.conns[TfToken("in1")] = {*valueConn};
+     }
+     else {
+-      add.params[kIn1] = value;
++      add.params[TfToken("in1")] = value;
+     }
+-    add.conns[kIn2] = {Conn{mulName, kOut}};
++    add.conns[TfToken("in2")] = {Conn{mulName, kOut}};
+     const TfToken addName = makeName("tie");
+     net.nodes[addName] = std::move(add);
+     return Conn{addName, kOut};
+-  };
++  }
++
+   /* The layer's geometry lookups, each through a tie to `dep`, a float
+-   * depending on `previous` (the previous layer's last mix) - except the
+-   * lookups `previous` itself depends on, which a tie would loop: those of
+-   * an earlier layer, or of a mask reading this layer's height. */
+-  auto tieLeaves = [&](const TfToken &leaf, const Conn &dep, const Conn &previous) {
++   * depending on `previous` (the previous layer's last mix, or accumulation)
++   * - except the lookups `previous` itself depends on, which a tie would
++   * loop: those of an earlier layer, or of a mask reading this layer's
++   * height. */
++  void tieLeaves(const TfToken &leaf, const Conn &dep, const Conn &previous)
++  {
+     const std::set<TfToken> before = upstream(previous.upstream);
+     static const char *const kGeometry[] = {"ND_position_",
+                                             "ND_normal_",
+@@ -1812,6 +1763,83 @@ bool FoldSurfaceMix(Network &net, const mx::DocumentPtr &library)
+     }
+     LOG_INFO << "MaterialX: layer " << leaf.GetString() << ": " << layer.size() << " nodes, "
+              << ties << " geometry lookups tied, " << sharedLookups << " already before.";
++  }
++};
++
++/* A mix_surfaceshader tree of standard_surfaces - a material mixer's
++ * output - blended by its inputs instead of its closures.
++ *
++ * Cycles' SVM holds at most 64 closures per material, twelve per
++ * standard_surface, and 255 stack slots addressed on a byte: a terrain
++ * mixing ten tiled rock materials needed 120 closures and some 2000 slots,
++ * and rendered nothing. Four leaves or more are folded into one
++ * standard_surface whose every input is the mix of the leaves' inputs, by
++ * the same weights - the usual material-blend approximation (one specular
++ * lobe for the blend, not one per layer); three or fewer keep the exact
++ * closure mix. The mixes are chained layer by layer, and each layer's own
++ * geometry lookups go through a tie to the previous layer's last mix
++ * (value + 1e-30 x it), so that the SVM compiler, whose order is optimal for
++ * trees only, evaluates one layer at a time instead of keeping every
++ * layer's tiled coordinates alive for the normal and roughness trees: 190
++ * slots for the ten layers instead of 2000 (K-110). */
++bool FoldSurfaceMix(Network &net, const mx::DocumentPtr &library)
++{
++  static const TfToken kSurfaceTerminal("surface"), kMix("ND_mix_surfaceshader"), kFg("fg"),
++      kBg("bg"), kMixIn("mix"), kIn("in");
++  static const char *const kStandardSurface = "ND_standard_surface_surfaceshader";
++  constexpr size_t kMinLeaves = 4;
++
++  const auto terminal = net.terminals.find(kSurfaceTerminal);
++  if (terminal == net.terminals.end()) {
++    return false;
++  }
++  const TfToken topName = terminal->second.upstream;
++  const auto topIt = net.nodes.find(topName);
++  if (topIt == net.nodes.end() || topIt->second.typeId != kMix) {
++    return false;
++  }
++
++  /* The tree: its mixes and its leaves, in order. */
++  std::vector<TfToken> leaves, mixes;
++  std::function<bool(const TfToken &)> collect = [&](const TfToken &name) -> bool {
++    const auto it = net.nodes.find(name);
++    if (it == net.nodes.end()) {
++      return false;
++    }
++    const Node &node = it->second;
++    if (node.typeId == kMix) {
++      mixes.push_back(name);
++      for (const TfToken &side : {kBg, kFg}) {
++        const auto c = node.conns.find(side);
++        if (c == node.conns.end() || c->second.empty() || !collect(c->second[0].upstream)) {
++          return false;
++        }
++      }
++      return true;
++    }
++    if (node.typeId.GetString().rfind(kStandardSurface, 0) != 0 ||
++        std::find(leaves.begin(), leaves.end(), name) != leaves.end())
++    {
++      return false;
++    }
++    leaves.push_back(name);
++    return true;
++  };
++  if (!collect(topName) || leaves.size() < kMinLeaves) {
++    return false;
++  }
++  const mx::NodeDefPtr surfaceDef = library->getNodeDef(kStandardSurface);
++  if (!surfaceDef) {
++    return false;
++  }
++
++  LayerTies ties(net, topName);
++  auto makeName = [&](const std::string &kind) { return ties.makeName(kind); };
++  auto depend = [&](const Conn &conn, const std::string &type) { return ties.depend(conn, type); };
++  auto tie = [&](const std::string &type, const Conn *valueConn, const VtValue &value,
++                 const Conn &dep) { return ties.tie(type, valueConn, value, dep); };
++  auto tieLeaves = [&](const TfToken &leaf, const Conn &dep, const Conn &previous) {
++    ties.tieLeaves(leaf, dep, previous);
+   };
+ 
+   struct Entry {
+@@ -1986,11 +2014,112 @@ bool FoldSurfaceMix(Network &net, const mx::DocumentPtr &library)
+     net.nodes.erase(leaf);
+   }
+   LOG_INFO << "MaterialX: " << leaves.size() << " standard_surface mixed at "
+-           << topName.GetString() << " blended by their inputs into one (" << made
++           << topName.GetString() << " blended by their inputs into one (" << ties.made
+            << " nodes), beyond Cycles' closure and stack limits.";
+   return true;
+ }
+ 
++/* A standard_surface whose inputs are accumulated layer by layer by a chain
++ * of adds - Houdini's Material Mixer in its single-surface mode writes, per
++ * input, acc_k = acc_(k-1) + (layer_k - acc_(k-1)) x w_k. Nothing keeps the
++ * layers apart for the SVM compiler, which evaluated every layer's tiled
++ * lookups before the first add: the ten-layer terrain overflowed the 255
++ * stack slots and rendered black. Each layer's own geometry lookups are
++ * tied to the previous accumulation, as FoldSurfaceMix does with its mixes
++ * (K-115). */
++bool TieSumChains(Network &net)
++{
++  static const TfToken kSurfaceTerminal("surface"), kIn("in"), kIn1("in1"), kIn2("in2");
++  constexpr size_t kMinLayers = 3;
++
++  const auto terminal = net.terminals.find(kSurfaceTerminal);
++  if (terminal == net.terminals.end()) {
++    return false;
++  }
++  const TfToken topName = terminal->second.upstream;
++  const auto topIt = net.nodes.find(topName);
++  if (topIt == net.nodes.end() ||
++      topIt->second.typeId.GetString().rfind("ND_standard_surface_surfaceshader", 0) != 0)
++  {
++    return false;
++  }
++  const auto idOf = [&](const TfToken &name) -> std::string {
++    const auto it = net.nodes.find(name);
++    return it == net.nodes.end() ? std::string() : it->second.typeId.GetString();
++  };
++  const auto firstConn = [&](const TfToken &name, const TfToken &input) -> const Conn * {
++    const auto it = net.nodes.find(name);
++    if (it == net.nodes.end()) {
++      return nullptr;
++    }
++    const auto c = it->second.conns.find(input);
++    return c == it->second.conns.end() || c->second.empty() ? nullptr : &c->second[0];
++  };
++
++  std::vector<Conn> starts;
++  for (const auto &[input, list] : topIt->second.conns) {
++    if (!list.empty()) {
++      starts.push_back(list[0]);
++    }
++  }
++  /* The height, accumulated the same way, behind the displacement node. */
++  static const TfToken kDisplacementTerminal("displacement"), kDisplacement("displacement");
++  if (const auto d = net.terminals.find(kDisplacementTerminal); d != net.terminals.end()) {
++    if (idOf(d->second.upstream).rfind("ND_displacement_", 0) == 0) {
++      if (const Conn *c = firstConn(d->second.upstream, kDisplacement)) {
++        starts.push_back(*c);
++      }
++    }
++  }
++  LayerTies ties(net, topName);
++  int chains = 0;
++  for (const Conn &start : starts) {
++    TfToken name = start.upstream;
++    /* A normal goes through a normalize first. */
++    if (idOf(name).rfind("ND_normalize_", 0) == 0) {
++      const Conn *c = firstConn(name, kIn);
++      if (!c) {
++        continue;
++      }
++      name = c->upstream;
++    }
++    /* The accumulations, top down: each add's in1 is the previous one. */
++    std::vector<TfToken> accs;
++    while (idOf(name).rfind("ND_add_", 0) == 0) {
++      accs.push_back(name);
++      const Conn *c = firstConn(name, kIn1);
++      if (!c) {
++        break;
++      }
++      name = c->upstream;
++    }
++    if (accs.size() < kMinLayers) {
++      continue;
++    }
++    std::reverse(accs.begin(), accs.end());
++    for (size_t i = 1; i < accs.size(); ++i) {
++      const Conn *term = firstConn(accs[i], kIn2);
++      if (!term) {
++        continue;
++      }
++      /* ND_add_float, ND_add_color3FA: the accumulation's type. */
++      std::string type = idOf(accs[i - 1]).substr(strlen("ND_add_"));
++      if (type.size() > 2 && type.compare(type.size() - 2, 2, "FA") == 0) {
++        type.resize(type.size() - 2);
++      }
++      const Conn previous{accs[i - 1], kOut};
++      ties.tieLeaves(term->upstream, ties.depend(previous, type), previous);
++    }
++    chains += 1;
++  }
++  if (chains) {
++    LOG_INFO << "MaterialX: " << topName.GetString() << ": " << chains
++             << " inputs accumulated layer by layer, each layer tied to the previous one ("
++             << ties.made << " nodes).";
++  }
++  return chains > 0;
++}
++
+ /* The base colour of the two surface models whose base is more than one
+  * colour. Cycles' principled colours its diffuse, its subsurface and its metal
+  * with one base colour; standard_surface and OpenPBR give the subsurface its
+@@ -2188,7 +2317,12 @@ HdMaterialNetworkSchema ExpandMaterialXNodegraphs(HdMaterialNetworkSchema networ
+   const mx::DocumentPtr library = Library();
+   Network net = Read(network);
+ 
+-  net.changed |= FoldSurfaceMix(net, library);
++  if (FoldSurfaceMix(net, library)) {
++    net.changed = true;
++  }
++  else {
++    net.changed |= TieSumChains(net);
++  }
+   net.changed |= FoldThinFilm(net);
+   net.changed |= FoldSurfaceBase(net);
+   /* Before the weights: a weighted coat gets a multiply between it and its

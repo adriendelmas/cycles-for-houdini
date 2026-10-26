@@ -183,6 +183,7 @@ Most of these patches are independent of Houdini and of this machine --
 | `0149` | hydra + util: textures inside a usdz archive read through USD's resolver and decoded from memory (K-111); `material:binding:full` resolved by a scene index (K-112); the SVM compiler's virtual stack dropped, its overflow report kept |
 | `0150` | hydra: an instance's transform composed as scale, orientation, position, then the instancer's (it ran the other way, scaling the positions); a nested instance before its parent's placement (K-113) |
 | `0151` | hydra: the display driver off by default again - under a Karma Physical Sky Houdini's viewport showed the sky and none of the geometry, through the output driver the whole scene (K-114); the render pass logs the view it renders (camera, visible objects, shaders) at info level |
+| `0152` | hydra: a standard_surface whose inputs are accumulated layer by layer by add chains (the Material Mixer's single-surface mode) has each layer's geometry lookups tied to the previous accumulation, as the mix form is; the ten-layer terrain overflowed the SVM stack and rendered black (K-115) |
 
 ---
 

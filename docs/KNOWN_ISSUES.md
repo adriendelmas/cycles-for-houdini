@@ -1323,6 +1323,21 @@ the render pass now logs at info level (camera, motion samples, visible
 objects, their origins, the largest object, each geometry's shaders and the
 background shader) is what located this; it stays.
 
+### K-115 A material mixer's single surface overflowed the SVM stack — confirmed — **fixed** (0152)
+Houdini's Material Mixer in its single-surface mode (one standard_surface
+per material, the layers lerped input by input) writes each input as a
+chain of adds, acc_k = acc_(k-1) + (layer_k - acc_(k-1)) x w_k. Nothing
+told the SVM compiler the layers apart: it evaluated every layer's tiled
+lookups before the first add, and the ten-layer Gauge terrain overflowed
+the 255 stack slots (30 float-to-vector conversions alive at once) and
+rendered black, where the same mixer in its mix_surfaceshader mode had
+been folded and tied layer by layer (K-110). `TieSumChains` now walks the
+add chains behind the surface's inputs (through a normalize for the
+normal) and ties each layer's own geometry lookups to the previous
+accumulation, with the ties FoldSurfaceMix uses, lifted into `LayerTies`:
+172 slots for the ten layers, and the sphere at 0.068 against Karma's
+0.069, as the mix form gave.
+
 ## D. Repository and tests
 
 ### K-50 Benches overwrite their own references — confirmed — **fixed** (2680470)
