@@ -185,6 +185,7 @@ Most of these patches are independent of Houdini and of this machine --
 | `0151` | hydra: the display driver off by default again - under a Karma Physical Sky Houdini's viewport showed the sky and none of the geometry, through the output driver the whole scene (K-114); the render pass logs the view it renders (camera, visible objects, shaders) at info level |
 | `0152` | hydra: a standard_surface whose inputs are accumulated layer by layer by add chains (the Material Mixer's single-surface mode) has each layer's geometry lookups tied to the previous accumulation, as the mix form is; the ten-layer terrain overflowed the SVM stack and rendered black (K-115) |
 | `0153` | **wetmap** (addition, `docs/WETMAP_PLAN.md`): the delegate follows the stage's frame - `HdCyclesWetState` on the session reads `currentFrame` and the frame rate from the scene globals and logs each change with its delta; measured under husk, one delegate across three frames |
+| `0154` | **wetmap**: the Ambient Occlusion node's "Raycast Visibility" toggle traces against the objects visible to raycast rays only (`PATH_RAY_VISIBILITY_RAYCAST`, the bit the Raycast node uses - 5.3 has no free one), exposed per prim as `cycles:object:visibility:raycast` ("Raycast Rays"); `bench_wet.py --gpu` 10/10 on CPU and OptiX, the 97-node bench unchanged |
 
 ---
 

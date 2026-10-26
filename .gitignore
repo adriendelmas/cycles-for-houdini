@@ -28,6 +28,7 @@ tests/implicit/output/
 tests/settings/output/
 tests/aovs/output/
 tests/karma_settings/output/
+tests/wet/output/
 tests/agreement/output/
 tests/volume/output/
 tests/usdtex/output/

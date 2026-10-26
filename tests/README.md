@@ -15,6 +15,7 @@ into is listed in `.gitignore` and named `output/`, `scratch/` or `hair/`.
 | `scenes/displacement/` | The dispersion and displacement comparison, with its images | - |
 | `houdini/` | Scenes to check by hand in a live Houdini, what husk cannot show: `motion_toggle.hip` (motion blur turned off and back on, K-34), `purpose_toggle.hip` (display purposes toggled in the viewport, K-28). Each `.hip` sublayers its `.usda` and carries a sticky note with the steps | Open in Houdini, viewport on Cycles |
 | `curves/output/`, `motion/output/`, `instances/output/`, `implicit/output/`, `settings/output/`, `aovs/output/` (ignored) | What the phase 5 and 6 benches write | `tools/bench_curves.py`, `bench_motion.py`, `bench_instances.py`, `bench_implicit.py`, `bench_settings.py`, `bench_aovs.py` |
+| `wet/output/` (ignored) | What the wet-map bench writes (addition, `docs/WETMAP_PLAN.md`) | `tools/bench_wet.py` |
 | `notes/` | Text dumps kept from the early inventories (node and socket lists, case lists) | - |
 | `scratch/` (ignored) | Anything rendered by hand while investigating | - |
 

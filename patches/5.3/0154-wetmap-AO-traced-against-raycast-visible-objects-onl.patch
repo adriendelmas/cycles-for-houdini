@@ -1,0 +1,220 @@
+From 5e0021e1e8c90a5f37aa53fa74af9543dc966bb3 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Mon, 26 Oct 2026 08:28:24 +0100
+Subject: [PATCH] wetmap: AO traced against raycast-visible objects only (S1)
+
+Wet map (addition, docs/WETMAP_PLAN.md). The Ambient Occlusion node gets a
+'Raycast Visibility' toggle: its rays are then tested against the objects
+visible to raycast rays, the bit the Raycast node already traces with,
+instead of every shadow-opaque object. Cycles 5.3 has no free visibility
+bit (PATH_RAY_VISIBILITY_RAYCAST took the eighth), so the target set is the
+raycast visibility, which the delegate now exposes per prim as
+cycles:object:visibility:raycast ('Raycast Rays' in the Render Geometry
+Settings). The OSL node carries the flag through the swidth texture option.
+
+Measured with tools/bench_wet.py --gpu, 10/10 on CPU and OptiX: a probe
+0.1 in front of a wide raycast-visible plane reads AO 0.011 (0.01 by the
+geometry), 0.996 / 0.999 when the plane's raycast visibility is off, 0.011
+again with the toggle off (control), 0.999 in front of a plane hidden from
+every ray type. bench_render.py 97 rendered, bench_diff.py 0 regressions.
+---
+ src/hydra/object_properties.cpp               |  2 ++
+ .../resources/HdCyclesPluginGPU_Geometry.ds   | 22 +++++++++++++++++++
+ .../resources/HdCyclesPlugin_Geometry.ds      | 22 +++++++++++++++++++
+ src/kernel/osl/services_shared.h              |  3 +++
+ .../osl/shaders/node_ambient_occlusion.osl    |  5 ++++-
+ src/kernel/svm/ao.h                           |  7 +++++-
+ src/kernel/svm/types.h                        |  2 ++
+ src/scene/shader_nodes.cpp                    |  6 ++++-
+ src/scene/shader_nodes.h                      |  1 +
+ 9 files changed, 67 insertions(+), 3 deletions(-)
+
+diff --git a/src/hydra/object_properties.cpp b/src/hydra/object_properties.cpp
+index 8f50fb5f..acb0abd6 100644
+--- a/src/hydra/object_properties.cpp
++++ b/src/hydra/object_properties.cpp
+@@ -145,6 +145,8 @@ HdCyclesObjectProperties HdCyclesObjectProperties::Read(const HdPrimvarsSchema &
+       {"visibility:transmission", PATH_RAY_VISIBILITY_TRANSMIT},
+       {"visibility:shadow", PATH_RAY_VISIBILITY_SHADOW},
+       {"visibility:volume_scatter", PATH_RAY_VISIBILITY_VOLUME_SCATTER},
++      /* wetmap: what the Raycast node and a raycast-visibility AO may hit. */
++      {"visibility:raycast", PATH_RAY_VISIBILITY_RAYCAST},
+   };
+   for (const auto &[name, bit] : rays) {
+     bool seen = true;
+diff --git a/src/hydra/resources/HdCyclesPluginGPU_Geometry.ds b/src/hydra/resources/HdCyclesPluginGPU_Geometry.ds
+index 20f2a4fb..b5479b1b 100644
+--- a/src/hydra/resources/HdCyclesPluginGPU_Geometry.ds
++++ b/src/hydra/resources/HdCyclesPluginGPU_Geometry.ds
+@@ -144,6 +144,28 @@
+         parmtag { "usdvaluetype" "bool" }
+         disablewhen  R"({ xn__primvarscyclesobjectvisibilityvolume_scatter_control_tqcggk == block } { xn__primvarscyclesobjectvisibilityvolume_scatter_control_tqcggk == none })"
+     }
++    parm {
++        name    "xn__primvarscyclesobjectvisibilityraycast_control_ffcggk"
++        label   "Raycast Rays"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'bool')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__primvarscyclesobjectvisibilityraycast_e1bggk"
++        label   "Raycast Rays"
++        type    toggle
++        size    1
++        default { 1 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "bool" }
++        disablewhen  R"({ xn__primvarscyclesobjectvisibilityraycast_control_ffcggk == block } { xn__primvarscyclesobjectvisibilityraycast_control_ffcggk == none })"
++    }
+     }
+     groupcollapsible {
+         name "cycles_object_shading"
+diff --git a/src/hydra/resources/HdCyclesPlugin_Geometry.ds b/src/hydra/resources/HdCyclesPlugin_Geometry.ds
+index 20f2a4fb..b5479b1b 100644
+--- a/src/hydra/resources/HdCyclesPlugin_Geometry.ds
++++ b/src/hydra/resources/HdCyclesPlugin_Geometry.ds
+@@ -144,6 +144,28 @@
+         parmtag { "usdvaluetype" "bool" }
+         disablewhen  R"({ xn__primvarscyclesobjectvisibilityvolume_scatter_control_tqcggk == block } { xn__primvarscyclesobjectvisibilityvolume_scatter_control_tqcggk == none })"
+     }
++    parm {
++        name    "xn__primvarscyclesobjectvisibilityraycast_control_ffcggk"
++        label   "Raycast Rays"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'bool')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__primvarscyclesobjectvisibilityraycast_e1bggk"
++        label   "Raycast Rays"
++        type    toggle
++        size    1
++        default { 1 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "bool" }
++        disablewhen  R"({ xn__primvarscyclesobjectvisibilityraycast_control_ffcggk == block } { xn__primvarscyclesobjectvisibilityraycast_control_ffcggk == none })"
++    }
+     }
+     groupcollapsible {
+         name "cycles_object_shading"
+diff --git a/src/kernel/osl/services_shared.h b/src/kernel/osl/services_shared.h
+index adc6ee18..ff7bcdc4 100644
+--- a/src/kernel/osl/services_shared.h
++++ b/src/kernel/osl/services_shared.h
+@@ -774,6 +774,9 @@ ccl_device bool osl_shared_texture(KernelGlobals kg,
+         if (int(options->tblur)) {
+           flags |= NODE_AO_GLOBAL_RADIUS;
+         }
++        if (int(options->swidth)) {
++          flags |= NODE_AO_RAYCAST_VISIBILITY;
++        }
+         result[0] = svm_ao(kg, state, sd, N, radius, num_samples, flags);
+         status = true;
+       }
+diff --git a/src/kernel/osl/shaders/node_ambient_occlusion.osl b/src/kernel/osl/shaders/node_ambient_occlusion.osl
+index e3a8f6f7..80f8ba9f 100644
+--- a/src/kernel/osl/shaders/node_ambient_occlusion.osl
++++ b/src/kernel/osl/shaders/node_ambient_occlusion.osl
+@@ -10,6 +10,7 @@ shader node_ambient_occlusion(color ColorIn = color(1.0, 1.0, 1.0),
+                               normal Normal = N,
+                               int inside = 0,
+                               int only_local = 0,
++                              int raycast_visibility = 0,
+                               output color ColorOut = color(1.0, 1.0, 1.0),
+                               output float AO = 1.0)
+ {
+@@ -28,6 +29,8 @@ shader node_ambient_occlusion(color ColorIn = color(1.0, 1.0, 1.0),
+                "sblur",
+                only_local,
+                "tblur",
+-               global_radius);
++               global_radius,
++               "swidth",
++               raycast_visibility);
+   ColorOut = ColorIn * AO;
+ }
+diff --git a/src/kernel/svm/ao.h b/src/kernel/svm/ao.h
+index e252e837..dd18f8ed 100644
+--- a/src/kernel/svm/ao.h
++++ b/src/kernel/svm/ao.h
+@@ -86,7 +86,12 @@ ccl_device float svm_ao(
+       }
+     }
+     else {
+-      if (!scene_intersect_shadow(kg, &ray, PATH_RAY_VISIBILITY_SHADOW_OPAQUE)) {
++      /* wetmap: the raycast visibility bit picks the objects a shader may
++       * measure against (the water), as the Raycast node does. */
++      const uint visibility = (flags & NODE_AO_RAYCAST_VISIBILITY) ?
++                                  PATH_RAY_VISIBILITY_RAYCAST :
++                                  PATH_RAY_VISIBILITY_SHADOW_OPAQUE;
++      if (!scene_intersect_shadow(kg, &ray, visibility)) {
+         unoccluded++;
+       }
+     }
+diff --git a/src/kernel/svm/types.h b/src/kernel/svm/types.h
+index b7d77da2..474b1522 100644
+--- a/src/kernel/svm/types.h
++++ b/src/kernel/svm/types.h
+@@ -431,6 +431,8 @@ enum NodeAO {
+   NODE_AO_ONLY_LOCAL = (1 << 0),
+   NODE_AO_INSIDE = (1 << 1),
+   NODE_AO_GLOBAL_RADIUS = (1 << 2),
++  /* wetmap: trace against the objects visible to raycast rays only. */
++  NODE_AO_RAYCAST_VISIBILITY = (1 << 3),
+ };
+ 
+ enum ShaderType {
+diff --git a/src/scene/shader_nodes.cpp b/src/scene/shader_nodes.cpp
+index 42a541b8..acbdee39 100644
+--- a/src/scene/shader_nodes.cpp
++++ b/src/scene/shader_nodes.cpp
+@@ -3470,6 +3470,8 @@ NODE_DEFINE(AmbientOcclusionNode)
+ 
+   SOCKET_BOOLEAN(inside, "Inside", false);
+   SOCKET_BOOLEAN(only_local, "Only Local", false);
++  /* wetmap: occluded by the objects visible to raycast rays only. */
++  SOCKET_BOOLEAN(raycast_visibility, "Raycast Visibility", false);
+ 
+   SOCKET_OUT_COLOR(color, "Color");
+   SOCKET_OUT_FLOAT(ao, "AO");
+@@ -3483,7 +3485,8 @@ void AmbientOcclusionNode::compile(SVMCompiler &compiler)
+ {
+   ShaderInput *distance_in = input("Distance");
+ 
+-  int flags = (inside ? NODE_AO_INSIDE : 0) | (only_local ? NODE_AO_ONLY_LOCAL : 0);
++  int flags = (inside ? NODE_AO_INSIDE : 0) | (only_local ? NODE_AO_ONLY_LOCAL : 0) |
++              (raycast_visibility ? NODE_AO_RAYCAST_VISIBILITY : 0);
+ 
+   if (!distance_in->link && distance == 0.0f) {
+     flags |= NODE_AO_GLOBAL_RADIUS;
+@@ -3507,6 +3510,7 @@ void AmbientOcclusionNode::compile(OSLCompiler &compiler)
+   compiler.parameter(this, "samples");
+   compiler.parameter(this, "inside");
+   compiler.parameter(this, "only_local");
++  compiler.parameter(this, "raycast_visibility");
+   compiler.add(this, "node_ambient_occlusion");
+ }
+ 
+diff --git a/src/scene/shader_nodes.h b/src/scene/shader_nodes.h
+index b8c7754d..e512c0ae 100644
+--- a/src/scene/shader_nodes.h
++++ b/src/scene/shader_nodes.h
+@@ -907,6 +907,7 @@ class AmbientOcclusionNode : public ShaderNode {
+ 
+   NODE_SOCKET_API(bool, only_local)
+   NODE_SOCKET_API(bool, inside)
++  NODE_SOCKET_API(bool, raycast_visibility)
+ };
+ 
+ class VolumeNode : public ShaderNode {

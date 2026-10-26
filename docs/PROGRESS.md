@@ -217,3 +217,16 @@ surface models (`surface_audit.py`, K-63). On 2026-10-07 the numbers were
 | Regression tests on images | ✅ | `references/` tracked, `output/` ignored, `bench_diff.py --accept` (K-50) |
 | Code and messages in English | ✅ | Translated (K-53, 0097) |
 | README numbers reproducible | ✅ | `count_nodes.py`: 163 / 64 / 99 / 97 (K-54) |
+
+## Wet map (addition)
+
+Not part of hdCycles proper: an addition scoped by name, file and patch
+prefix (`wetmap:`), planned and tracked in [WETMAP_PLAN.md](WETMAP_PLAN.md).
+
+| Item | State | Notes |
+|---|---|---|
+| The delegate follows the stage's frame (S0) | ✅ | `HdCyclesWetState`, patch 0153; `currentFrame` arrives under husk, one delegate across the frames |
+| AO traced against raycast-visible objects only (S1) | ✅ | `raycast_visibility` on the AO node, `cycles:object:visibility:raycast` ("Raycast Rays"), patch 0154; `bench_wet.py --gpu` 10/10 on CPU and OptiX |
+| Per-object state kept across frames (S2) | ❌ | Kernel node, `WetStateManager`, commit on frame change |
+| State on disk per frame (S3) | ❌ | - |
+| Houdini finish, MaterialX bridge (S4, S5) | ❌ | - |

@@ -219,6 +219,8 @@ GEOMETRY = [
         ("primvars:cycles:object:visibility:transmission", "Transmission Rays", "toggle", "bool", "1"),
         ("primvars:cycles:object:visibility:shadow", "Shadow Rays", "toggle", "bool", "1"),
         ("primvars:cycles:object:visibility:volume_scatter", "Volume Scatter Rays", "toggle", "bool", "1"),
+        # wetmap: the Raycast node and a raycast-visibility AO hit these only.
+        ("primvars:cycles:object:visibility:raycast", "Raycast Rays", "toggle", "bool", "1"),
     ]),
     ("Shading", [
         ("primvars:cycles:object:holdout", "Holdout", "toggle", "bool", "0"),

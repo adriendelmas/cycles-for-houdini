@@ -75,26 +75,33 @@ the names and files above give the same legibility without that cost.
 
 ### A. Target-set tracing
 
-- New bit `PATH_RAY_VISIBILITY_TRACE_TARGET = (1U << 7U)` in
-  `kernel/types.h`. **Not** folded into `PATH_RAY_VISIBILITY_ALL` (0x7F): an
-  object carries it only when asked, or every object is a target.
-- `Object::visibility_for_tracing` (`scene/object.cpp:301`) asserts
-  `visibility & ~ALL == 0`: widen the assert to `~(ALL | TRACE_TARGET)`.
-- `HdCyclesObjectProperties::Apply` (`object_properties.cpp:169`) masks with
-  `ALL`: OR the target bit in when `cycles:object:trace_target` is true.
-- `AmbientOcclusionNode`: new `SOCKET_BOOLEAN(trace_target_only, "Trace Target Only", false)`
-  → flag `NODE_AO_TRACE_TARGET = (1 << 3)` in `kernel/svm/types.h:431`.
-  In `svm_ao` (`ao.h:83-92`) a third branch:
-  `scene_intersect_shadow(kg, &ray, PATH_RAY_VISIBILITY_TRACE_TARGET)`. Same
-  flag in the OSL path (`kernel/osl/services_shared.h:769-775`).
-- No new OptiX program group: the callable's signature does not change.
-- OptiX passes `visibility & 0xFF` as the hardware mask
-  (`kernel/device/optix/bvh.h:405`) and builds the instance mask from
-  `visibility_for_tracing() & 0xFF` (`device_impl.cpp:1798`): bit 7 is the
-  last one that fits. Embree takes a 32-bit mask (`bvh/embree.cpp:306`), BVH2
-  compares `prim_visibility`: both fine.
-- Later (not V1): a `Distance` output on the same node, min hit distance
-  normalized by `Distance`, which is what a wet line wants more than AO.
+> **Revised 2026-10-26 (S1).** The first draft of this section, read from the
+> 5.2 tree, wanted a new visibility bit 7. In 5.3 that bit exists already:
+> `PATH_RAY_VISIBILITY_RAYCAST` (`kernel/types.h:169`), the bit the new
+> **Raycast node** traces with (`kernel/svm/raycast.h:79`), and
+> `PATH_RAY_VISIBILITY_ALL` is `0xFF`: the eight bits the OptiX hardware mask
+> holds are all taken. No new bit, then - the raycast bit *is* the target set.
+
+- An object is a target when it keeps its **raycast visibility**; every other
+  object has it turned off. Objects carry the bit by default (it is in
+  `ALL`), so the delegate exposes it like the other ray types:
+  `cycles:object:visibility:raycast` (`object_properties.cpp`, the `rays`
+  table) and a "Raycast Rays" toggle in the Visibility group of the Render
+  Geometry Settings (`gen_render_properties.py`). In Solaris one Render
+  Geometry Settings LOP on `* - /water` turns it off everywhere but the water.
+- `AmbientOcclusionNode`: `SOCKET_BOOLEAN(raycast_visibility, "Raycast Visibility", false)`
+  → flag `NODE_AO_RAYCAST_VISIBILITY = (1 << 3)` (`kernel/svm/types.h`). In
+  `svm_ao` the non-local branch traces with `PATH_RAY_VISIBILITY_RAYCAST`
+  instead of `SHADOW_OPAQUE` when the flag is set; the OSL path carries the
+  flag through the `swidth` texture option (`services_shared.h`,
+  `node_ambient_occlusion.osl`). No kernel structure, no new OptiX program
+  group, no change to any mask.
+- The **Raycast node itself** is the native alternative for a wet line: one
+  ray along `-N` (or straight down) with a length, `Hit Distance` out,
+  already limited to raycast-visible objects. The AO form gives a cone, the
+  raycast form a direction; both read the same per-object toggle.
+- Later (not V1): a `Distance` output on the AO node (min hit distance
+  normalized), which a wet line wants more than an occlusion ratio.
 
 ### B. Persistent state
 
@@ -221,7 +228,7 @@ one row in `patches/README.md`, PROGRESS.md in the same commit.
 | Step | What | Done when |
 |---|---|---|
 | **S0 Spike** - **done 2026-10-26** (patch 0153) | `currentFrame` **arrives under husk**: `--frame 1 --frame-count 3` ran one delegate through frames 1, 2, 3 with `timeCodesPerSecond` 24 (`dt` 0.0417 s), one `Render restarted: scene` per frame. `write_render_tile` **does fire on cancel** - read, not run: `render_scheduler.cpp:259` sets `tile.write` for a cancelled render that has samples (pitfall 16 stands). The build has `WITH_CYCLES_OSL=ON` (pitfall 11 stands: the `.osl` stub is mandatory) and ten CUDA architectures (pitfall 30). Not done: the viewport reading of `currentFrame` (needs a GUI session; the code handles its absence), the kernel rebuild timing (S1 measures it). Seen on the way: `install-53/houdini/lib/` holds OptiX `.ptx` of Oct 25 next to CUDA `.cubin` of Oct 14 - check both dates after S1 (pitfall 29) | - |
-| **S1 Target bit** | §2.A, kernel + object + property + AO socket; `gen_render_properties.py`, `build_cycles_vops.py` | `bench_wet.py` cases 1, 2, 5 pass on CPU and OptiX; `bench_render.py` + `bench_diff.py` unchanged (default off) |
+| **S1 Target set** - **done 2026-10-26** (patch 0154) | §2.A as revised: `raycast_visibility` on the AO node (flag `NODE_AO_RAYCAST_VISIBILITY`, OSL through `swidth`), `cycles:object:visibility:raycast` and its "Raycast Rays" toggle; `gen_render_properties.py`, `build_cycles_vops.py` rerun (the AO VOP carries the toggle). **Measured**: `bench_wet.py --gpu` 10/10 - the raycast-visible plane occludes (AO 0.011 against the 0.01 the geometry predicts), the raycast-hidden one does not (0.996 / 0.999), the control occludes (0.011), the all-hidden plane does not occlude on OptiX either (0.999: pitfall 3 does not bite), CPU and OptiX agree. Full rebuild with the ten CUDA architectures and OptiX: **26 min** (07:47-08:13), every kernel dated after it. First OptiX render after a kernel change: 137 s of pipeline compile, once (pitfall 32) | - |
 | **S2 State node, in memory** | §2.B kernel node, manager, session hooks, delegate commit on frame change; `wet_accum_samples` | cases 3, 4, 6 |
 | **S3 State on disk** | `wet_state_dir`, `save`/`load`, jump handling | case 7 |
 | **S4 Houdini finish** | labels, docs (`PROGRESS`, `KNOWN_ISSUES`, `TESTING`, `CYCLES_VOPS`, counts), `make_dist.py` check | docs and README numbers agree with `count_nodes.py` |
@@ -231,15 +238,20 @@ one row in `patches/README.md`, PROGRESS.md in the same commit.
 
 Kernel and visibility
 
-1. **The target bit in `PATH_RAY_VISIBILITY_ALL`** would make every object a
-   target. Keep `ALL = 0x7F`; the water alone gets bit 7.
-2. `static_assert(PATH_RAY_VISIBILITY_ALL <= 0xff)` (`types.h:178`): the
-   integrator state stores visibility in a `uint8_t`. Bit 7 (0x80) is the
-   last free one; there is no bit 8.
+1. **Read the tree you build.** Pitfalls 1-3 of the first draft were written
+   from `external/cycles` (5.2); 5.3 had taken bit 7 for the Raycast node in
+   the meantime. Every line number in this plan is now from `cycles-53`;
+   anything added later must be read there too.
+2. **The raycast bit is in `ALL`**: every object is a target until its
+   `visibility:raycast` is turned off. The default is "everything occludes",
+   which is the old AO behaviour, so the flag changes nothing until the user
+   authors the toggle; the docs must say that the water is selected by
+   turning the others *off*.
 3. **OptiX turns a zero mask into 0xFF** (`device_impl.cpp:1801`): an object
-   hidden from every ray type becomes hittable by *every* mask, ours
-   included, on OptiX only. Test it (case 5); if it bites, give such objects
-   `0x7F` there instead of `0xFF`, or skip them in the kernel by object flag.
+   hidden from every ray type becomes hittable by *every* mask, the raycast
+   one included, on OptiX only. Test it (case 5); if it bites, give such
+   objects `0x7F` there instead of `0xFF`, or skip them in the kernel by
+   object flag.
 4. The `|= 4` on ribbons and point clouds (`device_impl.cpp:1811`) touches bit
    2, not ours - harmless, noted so nobody hunts it.
 5. HIP-RT builds its own masks (`kernel/device/hiprt/bvh.h`), Metal has its
