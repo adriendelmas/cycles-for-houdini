@@ -1,7 +1,7 @@
 From 5e0021e1e8c90a5f37aa53fa74af9543dc966bb3 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 26 Oct 2026 08:28:24 +0100
-Subject: [PATCH 154/160] wetmap: AO traced against raycast-visible objects
+Subject: [PATCH 154/161] wetmap: AO traced against raycast-visible objects
  only (S1)
 
 Wet map (addition, docs/WETMAP_PLAN.md). The Ambient Occlusion node gets a

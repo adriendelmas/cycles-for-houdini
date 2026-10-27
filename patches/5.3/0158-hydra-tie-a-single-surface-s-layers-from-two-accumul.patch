@@ -1,7 +1,7 @@
 From 0c22f081e45ced83b719b2f0a9fad4d6bb170a5f Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 26 Oct 2026 13:25:53 +0100
-Subject: [PATCH 158/160] hydra: tie a single surface's layers from two
+Subject: [PATCH 158/161] hydra: tie a single surface's layers from two
  accumulations on
 
 The ties TieSumChains puts between the layers of a Material Mixer's

@@ -1365,6 +1365,18 @@ mapping is gone; the two expand from the library's own nodegraphs
 them. Seen on the NEPAL procedural materials (per-instance randomness);
 their levels now match Karma within 1 %.
 
+### K-117 A MaterialX bump was ten times too weak — confirmed — **fixed** (0161)
+ND_bump's `scale` multiplies the height, in scene units. It was mapped to
+the Cycles bump node's `strength`, a 0..1 blend between the perturbed and
+the flat normal, and the node's `distance` - the real scale of the height -
+kept its default of 0.1: every bump came out ten times weaker than Karma's,
+and a terrain whose relief was a sum of noises in metres through a bump
+looked flat. `scale` now maps to `distance` (strength stays 1). Measured on
+a sphere with a noise height under a sphere light, the bump's own effect
+(bumped minus flat, per renderer): Karma 0.0141, Cycles 0.0140 at scale 1;
+0.0018 and 0.0014 at scale 0.1, which is what Cycles gave at scale 1
+before.
+
 ## D. Repository and tests
 
 ### K-50 Benches overwrite their own references — confirmed — **fixed** (2680470)

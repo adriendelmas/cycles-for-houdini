@@ -1,7 +1,7 @@
 From 783d2da3832a914074995198b5d874890ee282d5 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 26 Oct 2026 07:44:04 +0100
-Subject: [PATCH 153/160] wetmap: the delegate follows the stage's frame (S0)
+Subject: [PATCH 153/161] wetmap: the delegate follows the stage's frame (S0)
 
 Wet map (addition, docs/WETMAP_PLAN.md). HdCyclesWetState on the session
 reads currentFrame and timeCodesPerSecond from the scene globals at every

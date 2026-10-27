@@ -138,7 +138,7 @@ surface models (`surface_audit.py`, K-63). On 2026-10-07 the numbers were
 | `open_pbr_surface`, `disney_principled`, `gltf_pbr` | ✅ | Own tables since 2026-10-07 (K-05); defaults verified by `mtlx_defaults.py`; each lists its dropped inputs |
 | Unauthored inputs of every surface | ✅ | MaterialX / USD defaults pinned (K-55) |
 | `image`, `tiledimage`, `hextiledimage`, `gltf_image` | ✅ | `constant` wrap only exact for black |
-| `normalmap`, `bump`, `displacement` | ✅ | `bench_normalmap.py`, `bench_displace.py`; per-vertex UVs broke the tangent space before 0116 (K-73) |
+| `normalmap`, `bump`, `displacement` | ✅ | `bench_normalmap.py`, `bench_displace.py`; per-vertex UVs broke the tangent space before 0116 (K-73); bump `scale` is Cycles' `distance`, ten times too weak before 0161 (K-117) |
 | `heighttonormal` | ✅ | Tangent-space map from the delegate's own nodegraph (K-12, 0108) |
 | `texcoord`, `position`, `normal`, `tangent` | ✅ | `index`, `space` as Karma (K-18, 0106); `mtlx_karma.py` |
 | `geomcolor` | ✅ | Exact since 2026-10-07 (K-06, K-19); `index` not carried |
