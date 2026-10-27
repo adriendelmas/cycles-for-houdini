@@ -1377,6 +1377,26 @@ a sphere with a noise height under a sphere light, the bump's own effect
 0.0018 and 0.0014 at scale 0.1, which is what Cycles gave at scale 1
 before.
 
+### K-118 A smooth bump is flat far from the origin — confirmed — open
+Cycles takes a bump's slope by finite differences: the height at P and at
+P + dP.dx x 0.1 (the pixel footprint times the bump node's filter width),
+in float32. Fifteen kilometres from the origin a float32 step is about a
+millimetre; a close-up's footprint is a fraction of one, so the offset
+point rounds back to P, both heights are equal and the slope is zero. A
+stepped height (a cellnoise through a floor) keeps a difference wherever
+the step falls, so the Gauge terrain's scree stayed in relief while its
+pebbles - smooth worley domes - went flat in the viewport. Karma
+differentiates the height analytically and resists (it still loses 40 %
+at 44 km). Measured with the terrain material on a plane, husk CPU 96x72,
+the bump's own effect: at the origin Karma 0.0318, Cycles 0.0287; the
+same plane at (44000, 0, 44000) Karma 0.0195, Cycles 0.0000. The scene's
+camera1 sits at (4268, 1595, -14269). The remedy is the scene's:
+recentre it near the origin (a Transform LOP over the whole stage), which
+also cures the float32 pixelation of the hextiled lookups (2026-10-26). A
+delegate-side mitigation would floor the finite-difference offset at a
+few ULPs of |P| in the kernel (about 4 mm at 15 km): coarser than the
+smallest pebbles, and a CPU + GPU kernel rebuild.
+
 ## D. Repository and tests
 
 ### K-50 Benches overwrite their own references — confirmed — **fixed** (2680470)
