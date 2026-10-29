@@ -1397,6 +1397,61 @@ delegate-side mitigation would floor the finite-difference offset at a
 few ULPs of |P| in the kernel (about 4 mm at 15 km): coarser than the
 smallest pebbles, and a CPU + GPU kernel rebuild.
 
+### K-119 No World shader — confirmed — open, not scheduled (PLAN phase 10)
+Cycles' background is a shader graph like any other, with a surface
+(Background node) and a volume terminal; Blender's World exposes both.
+The delegate builds the Dome Light's shader itself from the light's
+parameters (`light.cpp`, `PopulateShaderGraph`: colour, intensity,
+`textureFile`, Karma's sky) and accepts no node network on it, so a
+procedural background or a world volume cannot be authored. Proposed
+contract: a material bound to the Dome Light; its surface terminal's
+emission is the background colour, its volume terminal the world volume.
+Cycles only: Karma ignores a material bound to a light. Asked by the user
+on 2026-10-27, written to the plan, not started.
+
+### K-120 Stencil maps are ignored — confirmed — open, not scheduled (PLAN phase 10)
+The Render Geometry Settings LOP's Stencil Map writes
+`primvars:karma:object:stencilmap` (an asset path) and
+`karma:object:stencilthresh`; Karma cuts the polygon away at `st` without
+running the shader. `object_properties.cpp` reads Karma's visibility and
+holdout from the same prefix and nothing else, so the map is ignored and
+the object renders whole. Cycles has no cutout outside the shader; the
+equivalent is a Transparent BSDF mixed into the object's surface shader by
+the map, which runs the shader on shadow rays too (the look, not Karma's
+speed). Asked by the user on 2026-10-27, written to the plan, not started.
+
+### K-121 Houdini crashed once on a layer reload under the Cycles GPU viewport — reported, not reproduced — open
+Reported by the MEGALIB session on 2026-10-29: `Sdf.Layer.Reload` followed
+by Reload on a Reference LOP, with the viewport on Cycles GPU, crashed
+Houdini once. The reloaded layer held a Mesh, BasisCurves on the guide
+purpose and a MaterialX NodeGraph referenced from another file
+(`_lib/grass.usda`) that had just been rewritten on disk; no `op:`
+textures, no instancer. No crash log was found in that session's temp
+folder. Not seen again; the session works around it by switching the
+viewport to Houdini GL before each reload. To look at: a material whose
+referenced file changes while its shader is being compiled (the material
+finalize runs on a worker thread, 0096), and a guide-purpose prim leaving
+the stage mid-update. Needs a reproduction or a crash log.
+
+### K-122 Authored normals facing against the winding rendered black — confirmed — **fixed** (0162)
+A face whose authored normals point against its winding - mirrored
+geometry does it to every face, a generator writing its own normals to
+some - came out black in Cycles and lit in Karma. The kernel flips N
+along with Ng on a backface (shader_setup_from_ray): a normal already
+facing the viewer on a face wound the other way ended up pointing away,
+and every diffuse lobe saw no light. Karma orients the shading normal by
+the face it sees. Measured on a 4x4 m plane seen from the side its
+normals point to, husk CPU 64x48, grey UsdPreviewSurface: Cycles 0.000,
+Karma 0.126; the same plane without normals, or wound to match them,
+0.158 and 0.155. Reported by the MEGALIB session on a grass tuft
+(2026-10-29). Now each authored normal is turned to the side its faces
+wind towards before upload (per vertex, summed over the vertex's
+triangles; per corner, that corner's triangle): all five plane cases
+render 0.158. `orientation = leftHanded` was not the cause: Hydra
+triangulates it the right way round, measured (the left-handed plane
+wound against its normals went black like the right-handed one, and
+Karma lit both at 0.126).
+
 ## D. Repository and tests
 
 ### K-50 Benches overwrite their own references — confirmed — **fixed** (2680470)

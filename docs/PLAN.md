@@ -220,6 +220,16 @@ Maxwell, who has never built anything, installs by copying two items and renders
 on the GPU; the same on a card of each of the other vendors is the stretch goal
 and each is closed only by a render on that hardware, not by a green compile.
 
+## Phase 10 — Asked for by the user, not scheduled (2026-10-27)
+
+Written down so they are not lost; neither is started. Each closes its
+K-number in KNOWN_ISSUES.md.
+
+| Task | Closes |
+|---|---|
+| World shader: a material bound to the Dome Light becomes the background shader, surface terminal as the background colour (times the light's intensity and exposure), volume terminal as the world volume; MaterialX and Cycles-native nodes alike; Cycles only, Karma ignores a material on a light. About a day. Interim that works in both renderers: an inverted emissive sphere and a box with a volume material | K-119 |
+| Stencil maps: `karma:object:stencilmap` (an asset path, looked up at `st`) and `karma:object:stencilthresh` from the Render Geometry Settings LOP. Cycles has no cutout outside the shader, so the delegate would give the object a copy of its surface shader with the map on a Transparent BSDF mix (image texture at `st`, step at the threshold, closest filter); also for instances. The whole shader still runs on shadow rays, so none of Karma's speed gain, only the look. Half a day | K-120 |
+
 ## What is explicitly deferred
 
 - Linux builds. macOS, with Metal, is the last row of phase 9 and still unstarted.

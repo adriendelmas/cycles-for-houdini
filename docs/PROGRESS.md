@@ -13,6 +13,7 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | Polygon meshes, triangulation, primvars | ✅ | 97-node bench, user scenes | |
 | Per-vertex colours and vector primvars | ✅ | `geomcolor` bench case exact | Garbage until 2026-10-07 (K-19, patch 0075) |
 | Face-varying (corner) normals | ✅ | bit-identical vs per-point normals | |
+| Authored normals facing against the winding | ✅ | plane probe, 5 cases 0.158 vs Karma | Turned to the winding's side before upload; black in Cycles before (K-122, 0162) |
 | Smooth/flat from authored normals | ✅ | measured | |
 | Catmull-Clark subdivision, creases, corners, boundary rules | ✅ | `bench_subdiv.py` 7/7 vs Karma | Always for `catmullClark`, capped by `cycles:max_subdivisions` (K-30, 0084); the tags were never read before 0115 (K-72) |
 | Adaptive dicing rate, dicing camera | ✅ | 10.3 M → expected triangle counts | Setting `cycles:dicing_rate`, clamped ≥ 0.1 |
@@ -51,6 +52,7 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | Light linking, shadow linking | ✅ | `bench_settings.py` | Hydra's light linking scene index → Cycles light and shadow sets (K-24, 0089); no light filters |
 | `shadow:color`, `diffuse`/`specular` multipliers, `shadow:enable` | ✅ | `bench_light_split.py` 8/8 vs Karma | The light is split over twins (K-87, 0127); a dome keeps 0 or 1 |
 | Light filters | ❌ | code read | No Cycles counterpart |
+| World shader (material on the Dome Light, surface + volume) | ❌ | code read | The delegate builds the dome shader from the light's parameters only (K-119, planned, phase 10) |
 | Dome `textureFormat` | ⏸ | Karma, 2026-10-09 | Lat-long only. Not done on purpose: Karma itself reads `mirroredBall` and `angular` maps as lat-long (measured), so there is no reference for their orientation, which the HDRShop pages USD cites leave ambiguous |
 | Camera: perspective, ortho, DoF, apertures, lens shift, aspect conform | ✅ | `bench_camera.py` 7/7 vs Karma | |
 | Camera exposure | ✅ | `bench_camera.py` | Times the render settings' film exposure (K-71, 0114) |
@@ -75,6 +77,7 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | Film exposure, pixel filter | ✅ | `bench_settings.py` (exposure) | Any film/background socket as `cycles:film:*`, `cycles:background:*` (0086) |
 | Denoising (OIDN/OptiX) | ✅ | integrator sockets | |
 | Per-object ray visibility, holdout, shadow catcher, light groups, caustics flags | ✅ | `bench_settings.py` | `primvars:cycles:object:*` and Karma's visibility/holdout (K-27, 0088); light group passes since 0092 |
+| Stencil maps (`karma:object:stencilmap`, `stencilthresh`) | ❌ | code read | Ignored; would be a Transparent BSDF mix in the object's shader (K-120, planned, phase 10) |
 | Render tags / purposes | ✅ | checked in Houdini | Honoured live (K-28, 0090) |
 | Batch mode under husk | ✅ | measured | `background = true` brings nothing (K-29); crop, pixel aspect, conform policy read from husk's settings (K-77, K-78) |
 | GL display driver | ⚠️ | agent's MCP session, 2026-10-26 | Off by default again (K-114): under a Karma Physical Sky it showed the sky and no geometry; the output driver shows the scene. `CYCLES_DISPLAY_DRIVER=1` turns it on. Houdini 22's viewport is Vulkan but ships only `hgiGL`, so a delegate always gets an OpenGL Hgi (0050, 0151) |

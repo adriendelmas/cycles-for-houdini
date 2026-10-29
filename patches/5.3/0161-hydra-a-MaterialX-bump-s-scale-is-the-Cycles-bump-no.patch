@@ -1,7 +1,7 @@
 From 949eb6e79f5d59e9145a522f117ecaba97cd406c Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 27 Oct 2026 01:53:01 +0100
-Subject: [PATCH 161/161] hydra: a MaterialX bump's scale is the Cycles bump
+Subject: [PATCH 161/162] hydra: a MaterialX bump's scale is the Cycles bump
  node's distance
 
 ND_bump's scale multiplies the height, in scene units. It was mapped to
