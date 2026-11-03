@@ -83,6 +83,14 @@ def aov_folders():
         toggle("environment", "Environment"),
         toggle("ao", "Ambient Occlusion"),
         toggle("shadowcatcher", "Shadow Catcher"),
+        hou.LabelParmTemplate("gsplatlabel", "Gaussian Splats", column_labels=("Gaussian Splats",)),
+        toggle("gsplatemission", "Splat Emission",
+               help="SplatEmit: the composited splats' emission seen straight from the camera, "
+                    "without the other emitters, lights or background. Nearly noise-free."),
+        toggle("beautynogsplat", "Beauty without Splat Emission",
+               help="BeautyNoSplatEmit: the beauty minus SplatEmit, in one layer - the scene lit "
+                    "by the splats, the lights, the dome, everything else. Taken from the "
+                    "denoised beauty when the denoiser is on."),
     ]))
 
     folders.append(folder("Cryptomatte", [

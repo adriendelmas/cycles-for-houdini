@@ -246,4 +246,14 @@ fixed 2026-11-03, before that the group pass stayed black. A segment's emission
 goes to the group of its strongest splat. Cycles has no pass for emission seen
 indirectly only (Karma's `C.+O`): with the splats as the only emitters it is
 `Combined_<group> - Emit`. Two render vars naming the same light group write
-only the first. See K-128 for the light group fix found on the way.
+only the first.
+
+**SplatEmit / BeautyNoSplatEmit** (2026-11-03, for EGO's comp): render var
+sources `gsplat_emission` (the splats' emission seen straight from the camera,
+nothing else) and `combined_without_gsplat_emission` (the beauty without it, one
+layer). With them, the kernel writes the splats' direct emission to its own pass
+instead of the beauty; the denoiser works on the rest; the delegate adds the pass
+back to the beauty it reads. So the beauty keeps the splats' detail undenoised,
+BeautyNoSplatEmit is denoised, and C = BeautyNoSplatEmit + SplatEmit. The
+viewport's `color` display (no render settings) is not affected. Film exposure
+other than 1 is not applied to the pass (untested). See K-128 for the light group fix found on the way.
