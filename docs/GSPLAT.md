@@ -255,5 +255,5 @@ layer). With them, the kernel writes the splats' direct emission to its own pass
 instead of the beauty; the denoiser works on the rest; the delegate adds the pass
 back to the beauty it reads. So the beauty keeps the splats' detail undenoised,
 BeautyNoSplatEmit is denoised, and C = BeautyNoSplatEmit + SplatEmit. The
-viewport's `color` display (no render settings) is not affected. Film exposure
-other than 1 is not applied to the pass (untested). See K-128 for the light group fix found on the way.
+viewport's `color` display (no render settings) is not affected. The film
+exposure is applied to the pass by the delegate (checked at exposure 2). See K-128 for the light group fix found on the way.
