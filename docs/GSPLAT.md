@@ -237,6 +237,13 @@ clamps are divided by it, the user's Blender habit of x10 lights / x0.1 film
 without touching the scene. It only acts past the adaptive minimum samples, so
 it does little at 128 spp.
 
-**Passes.** The composited emission goes to the Emission pass (Emit) and to the
-splats' light group if any (Cycles AOVs LOP, `Combined_<group>`); no separate
-direct/indirect split. See K-128 for the light group fix found on the way.
+**Passes.** Composited emission seen straight from the camera goes to the
+Emission pass (Emit, Karma's `CO`); seen through a surface it goes to that
+surface's light passes (DiffDir/DiffInd, GlossDir/GlossInd...), as any Cycles
+emission. It goes to the splats' light group (`Combined_<group>`, light group
+from `primvars:cycles:object:lightgroup` or Karma's `primvars:karma:object:lpetag`):
+fixed 2026-11-03, before that the group pass stayed black. A segment's emission
+goes to the group of its strongest splat. Cycles has no pass for emission seen
+indirectly only (Karma's `C.+O`): with the splats as the only emitters it is
+`Combined_<group> - Emit`. Two render vars naming the same light group write
+only the first. See K-128 for the light group fix found on the way.
