@@ -58,7 +58,9 @@ def parameters():
         toggle("roughness", "Roughness"),
         toggle("denoisingdata", "Denoising Data",
                help="Denoising Albedo and Denoising Normal, as Blender writes them."),
-        toggle("objectindex", "Object Index"),
+        toggle("objectindex", "Object Index",
+               help="The Hydra prim id + 1. Hydra numbers prims as it loads them, so the "
+                    "values change from one render to the next: use Cryptomatte for mattes."),
         toggle("materialindex", "Material Index"),
         toggle("samplecount", "Debug Sample Count"),
     ]))
