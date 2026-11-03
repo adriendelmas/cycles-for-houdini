@@ -9,12 +9,16 @@ the render vars (src/hydra/resources/cycles_aovs.py does the work).
 """
 
 import os
+import shutil
+import tempfile
 
 import hou
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CYCLES = os.environ.get("CYCLES_SOURCE", os.path.join(ROOT, "external", "cycles-53"))
 HDA = os.path.join(CYCLES, "src", "hydra", "resources", "otls", "hdcycles_aovs.hda")
+
+ICON = os.path.join(CYCLES, "src", "hydra", "resources", "icons", "blender_icon_128x128.png")
 
 TYPE_NAME = "hdcycles::cycles_aovs::1.0"
 LABEL = "Cycles AOVs"
@@ -37,18 +41,10 @@ def folder(label, parms):
     return f
 
 
-def parameters():
-    group = hou.ParmTemplateGroup()
-    group.append(hou.StringParmTemplate(
-        "products", "Render Products", 1,
-        help="The render products to add the AOVs to, separated by spaces. Empty: every "
-             "product of the stage's render settings."))
-    group.append(hou.StringParmTemplate(
-        "location", "Render Vars Location", 1,
-        help="Where the render var prims are created. Empty: a Vars scope next to the first "
-             "render product."))
-
-    group.append(folder("Data", [
+def aov_folders():
+    """The pass folders, shared with the Cycles Render Settings LOP
+    (tools/build_render_settings_hda.py)."""
+    folders = [folder("Data", [
         toggle("z", "Z"),
         toggle("mist", "Mist"),
         toggle("position", "Position"),
@@ -63,9 +59,9 @@ def parameters():
                     "values change from one render to the next: use Cryptomatte for mattes."),
         toggle("materialindex", "Material Index"),
         toggle("samplecount", "Debug Sample Count"),
-    ]))
+    ])]
 
-    group.append(folder("Light", [
+    folders.append(folder("Light", [
         hou.LabelParmTemplate("difflabel", "Diffuse", column_labels=("Diffuse",)),
         toggle("diffusedirect", "Direct"),
         toggle("diffuseindirect", "Indirect"),
@@ -89,7 +85,7 @@ def parameters():
         toggle("shadowcatcher", "Shadow Catcher"),
     ]))
 
-    group.append(folder("Cryptomatte", [
+    folders.append(folder("Cryptomatte", [
         toggle("cryptoobject", "Object"),
         toggle("cryptomaterial", "Material"),
         toggle("cryptoasset", "Asset"),
@@ -99,20 +95,95 @@ def parameters():
 
     shader = hou.FolderParmTemplate("shaderaovs", "Shader AOVs",
                                     folder_type=hou.folderType.MultiparmBlock)
+    shader.addParmTemplate(hou.ToggleParmTemplate(
+        "shaderaovenable#", "", default_value=True, join_with_next=True,
+        help="Write this AOV."))
     shader.addParmTemplate(hou.StringParmTemplate(
-        "shaderaov#", "Name", 1, help="The name of an AOV Output node in the materials."))
+        "shaderaov#", "Name", 1, join_with_next=True,
+        help="The name of an AOV Output node in the materials."))
     shader.addParmTemplate(hou.MenuParmTemplate(
         "shaderaovtype#", "Type", ("color", "value"), ("Color", "Value")))
-    group.append(folder("Shader AOVs", [shader]))
+    folders.append(folder("Shader AOVs", [
+        button("autofillshaderaovs", "Auto Fill", "autofill_shader_aovs",
+               "Adds every AOV Output node name found in the input's materials."),
+        shader]))
 
     groups = hou.FolderParmTemplate("lightgroups", "Light Groups",
                                     folder_type=hou.folderType.MultiparmBlock)
+    groups.addParmTemplate(hou.ToggleParmTemplate(
+        "lightgroupenable#", "", default_value=True, join_with_next=True,
+        help="Write this light group."))
     groups.addParmTemplate(hou.StringParmTemplate(
         "lightgroup#", "Name", 1,
-        help="A light group, as set on lights and objects (cycles:object:lightgroup). "
-             "Written as Combined_<name>."))
-    group.append(folder("Light Groups", [groups]))
+        help="A light group, as set on objects (Render Geometry Settings, Cycles tab, or the "
+             "LPE Tag LOP's geometry tag) and on lights (their LPE Tag). Written as "
+             "Combined_<name>."))
+    folders.append(folder("Light Groups", [
+        button("autofilllightgroups", "Auto Fill", "autofill_light_groups",
+               "Adds every light group and LPE tag set on the input's prims and lights."),
+        groups]))
+    return folders
+
+
+def button(name, label, function, help):
+    return hou.ButtonParmTemplate(
+        name, label, help=help,
+        script_callback="import cycles_aovs; cycles_aovs.%s(kwargs['node'])" % function,
+        script_callback_language=hou.scriptLanguage.Python)
+
+
+def parameters():
+    group = hou.ParmTemplateGroup()
+    group.append(hou.StringParmTemplate(
+        "products", "Render Products", 1,
+        help="The render products to add the AOVs to, separated by spaces. Empty: every "
+             "product of the stage's render settings."))
+    group.append(hou.StringParmTemplate(
+        "location", "Render Vars Location", 1,
+        help="Where the render var prims are created. Empty: a Vars scope next to the first "
+             "render product."))
+    for f in aov_folders():
+        group.append(f)
     return group
+
+
+TOOL = """<?xml version="1.0" encoding="UTF-8"?>
+<shelfDocument>
+  <tool name="$HDA_DEFAULT_TOOL" label="$HDA_LABEL" icon="$HDA_ICON">
+    <toolMenuContext name="viewer">
+      <contextNetType>LOP</contextNetType>
+    </toolMenuContext>
+    <toolMenuContext name="network">
+      <contextOpType>$HDA_TABLE_AND_NAME</contextOpType>
+    </toolMenuContext>
+    <toolSubmenu>Rendering/Cycles</toolSubmenu>
+    <script scriptType="python"><![CDATA[import loptoolutils
+
+loptoolutils.genericTool(kwargs, '$HDA_NAME')]]></script>
+  </tool>
+</shelfDocument>
+"""
+
+
+def finish_definition(definition, parms):
+    """Parameters, the Blender icon and a Rendering/Cycles entry in the tab menu."""
+    definition.setParmTemplateGroup(parms)
+    with open(ICON, "rb") as f:
+        definition.addSection("IconImage", f.read())
+    definition.setIcon("opdef:.?IconImage")
+    definition.addSection("Tools.shelf", TOOL)
+
+
+def save_asset(asset, path):
+    """Saves through a scratch file: saving over an existing library makes Houdini
+    keep a backup folder next to it, here in the source tree."""
+    scratch = tempfile.mkdtemp(prefix="hda_")
+    tmp = os.path.join(scratch, os.path.basename(path))
+    asset.type().definition().save(tmp, asset, hou.HDAOptions())
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    shutil.copyfile(tmp, path)
+    shutil.rmtree(scratch, ignore_errors=True)
+    print("HDA written:", path)
 
 
 def main():
@@ -127,14 +198,13 @@ def main():
         if child.type().name() == "output":
             child.setFirstInput(script)
 
-    os.makedirs(os.path.dirname(HDA), exist_ok=True)
+    scratch = tempfile.mkdtemp(prefix="hda_")
     asset = subnet.createDigitalAsset(
-        name=TYPE_NAME, hda_file_name=HDA, description=LABEL,
+        name=TYPE_NAME, hda_file_name=os.path.join(scratch, "build.hda"), description=LABEL,
         min_num_inputs=1, max_num_inputs=1, ignore_external_references=True)
-    definition = asset.type().definition()
-    definition.setParmTemplateGroup(parameters())
-    definition.save(HDA, asset, hou.HDAOptions())
-    print("HDA written:", HDA)
+    finish_definition(asset.type().definition(), parameters())
+    save_asset(asset, HDA)
 
 
-main()
+if __name__ == "__main__":
+    main()
