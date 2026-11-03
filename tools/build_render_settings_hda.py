@@ -18,7 +18,8 @@ import tempfile
 
 import hou
 
-from build_aovs_hda import CYCLES, SCRIPT, aov_folders, finish_definition, save_asset
+from build_aovs_hda import (CYCLES, MENU_SCRIPT, SCRIPT, aov_folders, finish_definition,
+                            save_asset)
 
 HDA = os.path.join(CYCLES, "src", "hydra", "resources", "otls",
                    "hdcycles_render_settings.hda")
@@ -95,6 +96,9 @@ def parameters(settings, controls):
 
     aovs = [hou.StringParmTemplate(
         "denoiseaovs", "Denoise AOVs", 1,
+        item_generator_script=MENU_SCRIPT % ("denoise_menu", "denoise_menu"),
+        item_generator_script_language=hou.scriptLanguage.Python,
+        menu_type=hou.menuType.StringToggle,
         help="Render var names, separated by spaces, that OIDN denoises at the end of the "
              "render, guided by albedo and normal (cycles:denoise_aovs) - as the AOVs list of "
              "Karma's denoiser. The beauty is left to Cycles' own denoiser (Rendering > "

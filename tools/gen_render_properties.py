@@ -86,7 +86,7 @@ def parse_sockets():
     return out
 
 
-def emit_parm(usd_name, label, parm_type, usd_type, default, menu=None):
+def emit_parm(usd_name, label, parm_type, usd_type, default, menu=None, script=None):
     """One property: a control parm driving whether it is authored, then the
     value parm itself. Mirrors how Houdini writes Karma's own definitions.
     `menu` lists (token, label) pairs for a string with fixed choices."""
@@ -96,6 +96,11 @@ def emit_parm(usd_name, label, parm_type, usd_type, default, menu=None):
     if menu:
         items = "".join('            "%s" "%s"\n' % item for item in menu)
         default_block += "        menu {\n%s        }\n" % items
+    if script:
+        # A menu of choices that still takes typed text (menureplace).
+        lines = "".join('            [ "%s" ]\n' % line.replace('"', '\\"')
+                        for line in script.split(chr(10)))
+        default_block += "        menureplace {\n%s            language python\n        }\n" % lines
     return f'''    parm {{
         name    "{control}"
         label   "{label}"
@@ -212,6 +217,14 @@ def main():
     write_geometry()
 
 
+# The light groups already on the input stage (resources/cycles_aovs.py), for the Light Group
+# field of the Render Geometry Settings LOP.
+LIGHT_GROUP_MENU = """import cycles_aovs
+if not hasattr(cycles_aovs, 'light_group_menu'):
+    import importlib
+    importlib.reload(cycles_aovs)
+return cycles_aovs.light_group_menu(kwargs['node'])"""
+
 # Per-object properties, read by the delegate from constant primvars
 # (src/hydra/object_properties.cpp). Houdini's Render Geometry Settings node
 # shows them from <renderer>_Geometry.ds.
@@ -231,7 +244,8 @@ GEOMETRY = [
         ("primvars:cycles:object:shadow_catcher", "Shadow Catcher", "toggle", "bool", "0"),
         ("primvars:cycles:object:caustics_caster", "Cast Shadow Caustics", "toggle", "bool", "0"),
         ("primvars:cycles:object:caustics_receiver", "Receive Shadow Caustics", "toggle", "bool", "0"),
-        ("primvars:cycles:object:lightgroup", "Light Group", "string", "string", '""'),
+        ("primvars:cycles:object:lightgroup", "Light Group", "string", "string", '""', None,
+         LIGHT_GROUP_MENU),
         ("primvars:cycles:object:shadow_terminator_shading_offset",
          "Shadow Terminator Shading Offset", "float", "float", "0"),
         ("primvars:cycles:object:shadow_terminator_geometry_offset",

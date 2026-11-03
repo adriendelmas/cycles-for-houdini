@@ -21,6 +21,13 @@ HDA = os.path.join(CYCLES, "src", "hydra", "resources", "otls", "hdcycles_aovs.h
 ICON = os.path.join(CYCLES, "src", "hydra", "resources", "icons", "blender_icon_128x128.png")
 
 TYPE_NAME = "hdcycles::cycles_aovs::1.0"
+
+# A menu script that picks up a cycles_aovs module installed after Houdini started.
+MENU_SCRIPT = """import cycles_aovs
+if not hasattr(cycles_aovs, "%s"):
+    import importlib
+    importlib.reload(cycles_aovs)
+return cycles_aovs.%s(kwargs["node"])"""
 LABEL = "Cycles AOVs"
 
 SCRIPT = '''import cycles_aovs
@@ -123,6 +130,9 @@ def aov_folders():
         help="Write this light group."))
     groups.addParmTemplate(hou.StringParmTemplate(
         "lightgroup#", "Name", 1,
+        item_generator_script=MENU_SCRIPT % ("light_group_menu", "light_group_menu"),
+        item_generator_script_language=hou.scriptLanguage.Python,
+        menu_type=hou.menuType.StringReplace,
         help="A light group, as set on objects (Render Geometry Settings, Cycles tab, or the "
              "LPE Tag LOP's geometry tag) and on lights (their LPE Tag). Written as "
              "Combined_<name>."))
