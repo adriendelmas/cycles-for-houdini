@@ -1450,7 +1450,38 @@ triangles; per corner, that corner's triangle): all five plane cases
 render 0.158. `orientation = leftHanded` was not the cause: Hydra
 triangulates it the right way round, measured (the left-handed plane
 wound against its normals went black like the right-handed one, and
-Karma lit both at 0.126).
+Karma lit both at 0.126). The grass's own case, per MEGALIB: point
+normals from a Normal SOP on three-sided tubes and V-folded ribbons,
+where the average of the adjacent faces opposes some of them (about 470
+of 9,526 primitives). The fix turns each vertex normal to the side of
+the sum of its faces, so a normal that opposes one face while agreeing
+with the sum still darkens that face: a complete cure would orient N to
+Ng at each hit, in the kernel (CPU + GPU rebuild). Left there; the asset
+side (normals consistent with the winding) is the right fix anyway.
+
+### K-123 3D Gaussian splats are not rendered - confirmed - open, not scheduled (PLAN phase 10)
+
+Hydra hands a `ParticleField3DGaussianSplat` prim (SOP Import of points with `GS_Alpha`) to the delegate as an rprim of type `particleField`; the delegate does not list that type, so Hydra skips the prim without a message (husk on a 3-splat probe: Karma "Rprim Added", hdCycles nothing). Cycles 5.3 (upstream main since 2026-09-15, `release/5.3`) renders splats as a point cloud with `render_as = gaussian_splats`, but our base predates it by 92 commits, and its stochastic acceptance (hit probability = opacity x response) is unusable as is for the emissive strings of EGO (opacity ~0.01: relative noise 10 per sample) and culls every splat of opacity below 0.01 (bounding radius 0). Study, measurements and plan: `docs/GSPLAT.md`. ARTIFACTORY session, 2026-11-03.
+
+### K-124 Cycles 5.3 standalone builds lose Embree without a word - confirmed - **fixed** on `gsplat-53`
+
+Upstream `30201123` ("Mesh: Use Embree for triangles BVH tree", Aug 2026, in `release/5.3`) switched `src/CMakeLists.txt` and `src/bvh/CMakeLists.txt` from `WITH_CYCLES_EMBREE` to Blender's `WITH_EMBREE`, which only Blender's build sets. A standalone Cycles build - ours - then compiles without `WITH_EMBREE`: the CPU device offers only BVH2, every CPU render is slower and anything that relies on Embree (ray masks, per-query user-geometry callbacks) silently does nothing. Found when the composited splats of K-123 rendered as stochastic ones on the CPU. Fix: `src/cmake/external_libs.cmake` sets `WITH_EMBREE` when `WITH_CYCLES_EMBREE` found Embree. Our shipped `install-53` predates it (base `8424ed53` builds Embree). Worth reporting upstream.
+
+### K-125 A Cycles render after a Karma Render Settings LOP misbehaves - reported - open
+
+Reported by the user (2026-11-03, EGO ARTIFACTORY): rendering with Cycles a stage that carries Karma's render settings (`/Render/rendersettings`, `karma:global:*` and `karma:object:*` attributes, Karma render vars and product) goes wrong. Not reproduced yet; symptom to pin down. Workaround in the ARTIFACTORY test scene (`E:/claude_temp/hdCycles/gsplat/artifactory/`): `/Render` deactivated and a Cycles RenderSettings prim of our own, with Karma's ray limits copied by hand.
+
+### K-126 A camera with a near clip of 0 renders black - confirmed - **fixed** on `gsplat-53`
+
+USD allows `clippingRange = (0, far)` and Karma renders it; the EGO ARTIFACTORY shot cameras carry (0, 100000). Cycles' `projection_perspective()` is then singular (two equal rows), the inverse that makes the camera rays is all NaN, and the viewport stays black at 0:00 through that camera (fine through the free view). Fix: `hydra/camera.cpp` floors the near clip at 1e-5, Cycles' own default. Checked with husk: a splat through a near-0 camera matches its reference. The shipped `install-53` has the same code and the same bug until the next ship.
+
+### K-127 Images over 2048 pixels hang (husk) or fail to write tiles (viewport) - confirmed - **fixed** on `gsplat-53`
+
+Cycles' auto-tiling cuts an image over its 2048 tile size (a 3840x2560 frame) into tiles written to disk and merged at the end. The delegate runs an interactive session, which does not drive that: husk hung after the first tile (a one-splat scene, 1 spp, over 10 minutes; 2000x1300 rendered in 3 s), and the viewport, with the render settings' 3840x2560, logged `Error opening tile file: Could not open "cycles-tile-buffer-...exr" (Permission denied)` / `Error writing tile to file`: the tile files went to the working directory, not writable for a Houdini started from Explorer. Fix: `use_auto_tile = false` in `hydra/render_delegate.cpp`; 4K from a read-only working directory now renders in 6 s (CPU) and 4 s (GPU). The shipped `install-53` has the same behaviour. Reported by the user on the EGO ARTIFACTORY test scene, 2026-11-03.
+
+### K-128 A light group pass takes the place of the beauty when the denoiser is on - confirmed - **fixed** on `gsplat-53` (`866e3603`)
+
+A light group pass is a combined pass with a light group set. With the denoiser on, two places in Cycles mistook it for the plain combined pass: `Film::finalize_passes()` merged the unnamed noisy combined pass the denoiser needs into it (same type, same mode), so nothing wrote the beauty; and `BufferParams`' (type, mode) offset table took the first match, while the passes are sorted with the 3-component ones (light groups) first, so the denoiser read and wrote the light group's slot. Measured on two spheres with a key light in a group: beauty 0.0007 (0.0768 without the denoiser), group 0.0009 instead of 0.0608. On the EGO frame with a `splats` light group, the GPU (OptiX denoiser) also left about 3 % of the pixels with an infinite or NaN Normal, Denoising, DiffCol, Emit, Env, Cryptomatte and shader AOV, and an alpha of 0; the CPU (OIDN) did not; the bench scene without a light group was identical on both. Those renders predate the fix; a GPU render after it is still to be done. Fix: `src/scene/film.cpp` merges only passes with the same light group, `src/session/buffers.cpp` keeps light group passes out of the offset table. After it: beauty 0.0769, group 0.0608, `bench_aovs.py` 9/9. Upstream code, also in the shipped `install-53`; worth reporting. Found while building the Cycles AOVs LOP, 2026-11-03.
 
 ## D. Repository and tests
 

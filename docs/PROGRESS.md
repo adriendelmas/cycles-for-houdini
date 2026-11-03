@@ -72,12 +72,13 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | `samples`, `time_limit`, `sample_offset`, `dicing_rate` | ✅ | measured | |
 | Shutter from settings, motion blur toggle | ✅ | `bench_settings.py` (batch) | Both flags, resync when blur returns (K-34, 0086); live toggle unmeasured |
 | AOVs: color, depth, normal, primId, instanceId, P | ✅ | phase 6 | Houdini names `C`, `N`, `P`, `Pz` |
-| Light passes, AO, mist, motion vectors, cryptomatte, shader AOVs | ✅ | `bench_aovs.py` 7/7 | Every Cycles pass by name, Karma names and LPEs in Karma's convention, cryptomatte layers, `aov_output` as a pass-through (K-25, 0087). cryptomatte manifest in the EXR header (0094), light groups (0092) |
+| Light passes, AO, mist, motion vectors, cryptomatte, shader AOVs | ✅ | `bench_aovs.py` 7/7 | Every Cycles pass by name, Karma names and LPEs in Karma's convention, cryptomatte layers, `aov_output` as a pass-through (K-25, 0087). cryptomatte manifest in the EXR header (0094), light groups (0092). Blender's View Layer page as a LOP, **Cycles AOVs** (`hdcycles_aovs.hda`, `gsplat-53`, 2026-11-03), Blender's EXR names; light group beauty with the denoiser fixed (K-128) |
 | Transparent background | ✅ | `bench_settings.py` | `cycles:background:transparent`, or a dome hidden from camera rays (K-26, 0086) |
 | Film exposure, pixel filter | ✅ | `bench_settings.py` (exposure) | Any film/background socket as `cycles:film:*`, `cycles:background:*` (0086) |
 | Denoising (OIDN/OptiX) | ✅ | integrator sockets | |
 | Per-object ray visibility, holdout, shadow catcher, light groups, caustics flags | ✅ | `bench_settings.py` | `primvars:cycles:object:*` and Karma's visibility/holdout (K-27, 0088); light group passes since 0092 |
 | Stencil maps (`karma:object:stencilmap`, `stencilthresh`) | ❌ | code read | Ignored; would be a Transparent BSDF mix in the object's shader (K-120, planned, phase 10) |
+| 3D Gaussian splats (`ParticleField3DGaussianSplat`, Hydra `particleField`) | ❌ | husk probe, 3 splats | Skipped silently; Cycles 5.3 has the primitive, stochastic and noisy at low opacity (K-123, study in `docs/GSPLAT.md`) |
 | Render tags / purposes | ✅ | checked in Houdini | Honoured live (K-28, 0090) |
 | Batch mode under husk | ✅ | measured | `background = true` brings nothing (K-29); crop, pixel aspect, conform policy read from husk's settings (K-77, K-78) |
 | GL display driver | ⚠️ | agent's MCP session, 2026-10-26 | Off by default again (K-114): under a Karma Physical Sky it showed the sky and no geometry; the output driver shows the scene. `CYCLES_DISPLAY_DRIVER=1` turns it on. Houdini 22's viewport is Vulkan but ships only `hgiGL`, so a delegate always gets an OpenGL Hgi (0050, 0151) |

@@ -229,6 +229,7 @@ K-number in KNOWN_ISSUES.md.
 |---|---|
 | World shader: a material bound to the Dome Light becomes the background shader, surface terminal as the background colour (times the light's intensity and exposure), volume terminal as the world volume; MaterialX and Cycles-native nodes alike; Cycles only, Karma ignores a material on a light. About a day. Interim that works in both renderers: an inverted emissive sphere and a box with a volume material | K-119 |
 | Stencil maps: `karma:object:stencilmap` (an asset path, looked up at `st`) and `karma:object:stencilthresh` from the Render Geometry Settings LOP. Cycles has no cutout outside the shader, so the delegate would give the object a copy of its surface shader with the map on a Transparent BSDF mix (image texture at `st`, step at the threshold, closest filter); also for instances. The whole shader still runs on shadow rays, so none of Karma's speed gain, only the look. Half a day | K-120 |
+| 3D Gaussian splats (Hydra `particleField` prims; Cycles 5.3's `render_as = gaussian_splats`): rebase the fork onto `release/5.3` (2-3 days), a `particleField` rprim feeding the GSPLAT attributes with `displayColor -> Emission` and a 3 sigma bounding radius (1 day), then a gate render of one real data string; the stock stochastic path needs ~40 000 spp at opacity 0.01 for 5 % noise, so an additive emissive kernel path (~1 week CPU, 3-5 days OptiX) and an emissive tube proxy for the light tree follow. See `docs/GSPLAT.md` | K-123 |
 
 ## What is explicitly deferred
 
