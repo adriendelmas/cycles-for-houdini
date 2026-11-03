@@ -169,8 +169,8 @@ def finish_definition(definition, parms):
     """Parameters, the Blender icon and a Rendering/Cycles entry in the tab menu."""
     definition.setParmTemplateGroup(parms)
     with open(ICON, "rb") as f:
-        definition.addSection("IconImage", f.read())
-    definition.setIcon("opdef:.?IconImage")
+        definition.addSection("IconImage.png", f.read())
+    definition.setIcon("opdef:.?IconImage.png")
     definition.addSection("Tools.shelf", TOOL)
 
 
