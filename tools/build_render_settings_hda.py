@@ -94,6 +94,13 @@ def parameters(settings, controls):
     group.append(_tabs("Rendering", rendering))
 
     aovs = [hou.StringParmTemplate(
+        "denoiseaovs", "Denoise AOVs", 1,
+        help="Render var names, separated by spaces, that OIDN denoises at the end of the "
+             "render, guided by albedo and normal (cycles:denoise_aovs) - as the AOVs list of "
+             "Karma's denoiser. The beauty is left to Cycles' own denoiser (Rendering > "
+             "Denoising). Denoising helps passes whose noise comes from bounces; a pass made "
+             "mostly of fine, direct splat emission loses detail."),
+            hou.StringParmTemplate(
         "location", "Render Vars Location", 1,
         help="Where the render var prims are created. Empty: a Vars scope next to the "
              "render product.")]

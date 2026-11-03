@@ -242,8 +242,8 @@ Emission pass (Emit, Karma's `CO`); seen through a surface it goes to that
 surface's light passes (DiffDir/DiffInd, GlossDir/GlossInd...), as any Cycles
 emission. It goes to the splats' light group (`Combined_<group>`, light group
 from `primvars:cycles:object:lightgroup` or Karma's `primvars:karma:object:lpetag`):
-fixed 2026-11-03, before that the group pass stayed black. A segment's emission
-goes to the group of its strongest splat. Cycles has no pass for emission seen
+fixed 2026-11-03, before that the group pass stayed black. Each group gets its own
+splats' share of a segment (up to 8 groups per segment). Cycles has no pass for emission seen
 indirectly only (Karma's `C.+O`): with the splats as the only emitters it is
 `Combined_<group> - Emit`. Two render vars naming the same light group write
 only the first.
@@ -257,3 +257,10 @@ back to the beauty it reads. So the beauty keeps the splats' detail undenoised,
 BeautyNoSplatEmit is denoised, and C = BeautyNoSplatEmit + SplatEmit. The
 viewport's `color` display (no render settings) is not affected. The film
 exposure is applied to the pass by the delegate (checked at exposure 2). See K-128 for the light group fix found on the way.
+
+**Denoise AOVs** (`cycles:denoise_aovs`, Cycles Render Settings > AOVs): render
+var names OIDN denoises at the end of the render, albedo and normal guided. It
+helps passes whose noise comes from bounces (a light group lit through the
+splats: 3.6x lower error at 64 spp); it softens passes made of fine direct splat
+emission (the strings), which are clean already. The beauty stays with Cycles'
+denoiser.
