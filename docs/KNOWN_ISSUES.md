@@ -1397,7 +1397,7 @@ delegate-side mitigation would floor the finite-difference offset at a
 few ULPs of |P| in the kernel (about 4 mm at 15 km): coarser than the
 smallest pebbles, and a CPU + GPU kernel rebuild.
 
-### K-119 No World shader — confirmed — open, not scheduled (PLAN phase 10)
+### K-119 No World shader — confirmed — **fixed** on `gsplat-53` (`a2bab2d4`)
 Cycles' background is a shader graph like any other, with a surface
 (Background node) and a volume terminal; Blender's World exposes both.
 The delegate builds the Dome Light's shader itself from the light's
@@ -1407,7 +1407,20 @@ procedural background or a world volume cannot be authored. Proposed
 contract: a material bound to the Dome Light; its surface terminal's
 emission is the background colour, its volume terminal the world volume.
 Cycles only: Karma ignores a material bound to a light. Asked by the user
-on 2026-10-27, written to the plan, not started.
+on 2026-10-27. Done on 2026-11-10 (`light.cpp`, `BuildWorldGraph` in
+`material.cpp`): the bound material's surface replaces the dome's own shader
+only when it has one; a volume-only material keeps the dome's colour,
+texture or Karma sky. The dome's colour, intensity and rotation do not
+scale or turn the material's surface. A Karma Sky Atmosphere gets a default
+world volume from its coefficients (Rayleigh, Mie, scale heights, planet).
+Kernel patch: a world volume that varies in space ends at its octree,
++-10 km around the origin; before, Cycles traced on to FLT_MAX at the root's
+majorant and hung the GPU. A homogeneous world volume is still infinite, as
+in Blender: it hides the sky and the sun. Checked in the agent viewport: an
+unlit MaterialX material on a dome is the background and lights the scene;
+the atmosphere renders without hanging. Against Karma CPU on the same view,
+Karma shows no haze on boxes from 300 m to 9 km, and dims and reddens the
+sun (ground 130,121,116 sRGB against Cycles' 190,191,192).
 
 ### K-120 Stencil maps are ignored — confirmed — open, not scheduled (PLAN phase 10)
 The Render Geometry Settings LOP's Stencil Map writes
