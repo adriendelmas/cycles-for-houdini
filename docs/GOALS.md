@@ -10,11 +10,8 @@ reliability a Houdini user expects from Karma - and without forking Cycles.
 - A Houdini user who knows Cycles from Blender and wants its look, its
   Principled BSDF, its hair and its volumes on Solaris scenes, in the viewport
   and through husk.
-- The author's own pipeline: garments and yarns built in `md_seams`, rendered
-  with a renderer whose hair and thick-curve model he trusts.
-- Other Houdini artists who are handed the plugin, most of them without any
-  build experience: it has to install by copying files, on whatever GPU they
-  own (opened 2026-10-12, PLAN.md phase 9).
+- Houdini artists without any build experience: it has to install by copying
+  files, on whatever GPU they own.
 - Eventually, Blender upstream: the delegate lives in Cycles' own tree, and
   most of what is fixed here is a fix to that delegate, not to Houdini.
 
@@ -59,7 +56,7 @@ named in [TESTING.md](TESTING.md):
 - **No MaterialX-to-OSL compiler, for now.** Translating MaterialX to Cycles
   nodes is the chosen path because it runs on CUDA and HIP; OSL would not.
   The option stays open for the nodes that cannot be expressed as a node
-  graph (see [PLAN.md](PLAN.md), phase 7).
+  graph.
 - **No second viewport renderer.** Previewing a Cycles material in Houdini's
   own GL/Vulkan viewport goes through `UsdPreviewSurface`, which can only
   approximate; the goal is "recognisable", not "identical".

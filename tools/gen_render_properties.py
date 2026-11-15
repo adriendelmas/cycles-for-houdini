@@ -44,8 +44,6 @@ GROUPS = [
     ("Light Paths", ("min_bounce", "max_bounce", "max_diffuse", "max_glossy",
                      "max_transmission", "max_volume", "transparent_")),
     ("Ambient Occlusion", ("ao_",)),
-    # wetmap (addition, docs/WETMAP_PLAN.md)
-    ("Wet Map", ("wet_",)),
     ("Light Optimize", ("light_optimize",)),
     ("Volumes", ("volume_",)),
     ("Caustics", ("caustics_", "filter_glossy")),
@@ -174,7 +172,7 @@ def main():
             emit_parm("cycles:integrator:" + name, label, parm_type, usd_type, default))
 
     order = ["Session", "Film", "Sampling", "Light Paths", "Volumes", "Caustics",
-             "Denoising", "Guiding", "Ambient Occlusion", "Wet Map", "Light Optimize",
+             "Denoising", "Guiding", "Ambient Occlusion", "Light Optimize",
              "Advanced"]
 
     body = []
@@ -236,8 +234,6 @@ GEOMETRY = [
         ("primvars:cycles:object:visibility:transmission", "Transmission Rays", "toggle", "bool", "1"),
         ("primvars:cycles:object:visibility:shadow", "Shadow Rays", "toggle", "bool", "1"),
         ("primvars:cycles:object:visibility:volume_scatter", "Volume Scatter Rays", "toggle", "bool", "1"),
-        # wetmap: the Raycast node and a raycast-visibility AO hit these only.
-        ("primvars:cycles:object:visibility:raycast", "Raycast Rays", "toggle", "bool", "1"),
     ]),
     ("Shading", [
         ("primvars:cycles:object:holdout", "Holdout", "toggle", "bool", "0"),

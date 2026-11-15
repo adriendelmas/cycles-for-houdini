@@ -1,7 +1,7 @@
-From 467fd0f346639ea79a169f588fdab8106f213dc9 Mon Sep 17 00:00:00 2001
+From 545f7c41f9d4140d4aaa39d7eac3971f69e90279 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 16:37:32 +0200
-Subject: [PATCH 013/162] hydra: restart the render on scene edits, and
+Subject: [PATCH 013/180] hydra: restart the render on scene edits, and
  translate more MaterialX nodes
 
 Implement IsStopSupported/Stop/Restart. Hosts stop the render before applying
@@ -24,7 +24,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
  3 files changed, 196 insertions(+), 18 deletions(-)
 
 diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
-index 8a79ed23..1a0e86c2 100644
+index b6aeeb0a..3c56d623 100644
 --- a/src/hydra/material.cpp
 +++ b/src/hydra/material.cpp
 @@ -40,6 +40,7 @@ static SdfPath MaterialNodeNameToSdfPath(const TfToken &nodeName)

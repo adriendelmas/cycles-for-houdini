@@ -26,7 +26,7 @@ VERSIONS = {
         "dir": "cycles-53",
         "install": "install-53",
         "branch": "houdini-fixes-53",
-        "commit": "8424ed531b0d0b56667418d4a8d09452957b7904",
+        "commit": "b3f6262640f1a2f2d10b55b6ffccbf310ce0f981",
     },
 }
 

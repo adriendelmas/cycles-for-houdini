@@ -1,7 +1,7 @@
-From 9c4606bbd40f8ad27e6f4f648986ced980f18d61 Mon Sep 17 00:00:00 2001
+From 95dd49a2de3e48bdab315f202b28ea16ba256f93 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 01:39:06 +0200
-Subject: [PATCH 005/162] hydra: translate MaterialX networks to Cycles nodes
+Subject: [PATCH 005/180] hydra: translate MaterialX networks to Cycles nodes
 
 Declares mtlx as a material render context and remaps MaterialX nodedef
 identifiers onto native Cycles nodes using the same mapping machinery as
@@ -18,7 +18,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
  2 files changed, 114 insertions(+), 1 deletion(-)
 
 diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
-index ea14ff8f..8a79ed23 100644
+index 911e3a78..b6aeeb0a 100644
 --- a/src/hydra/material.cpp
 +++ b/src/hydra/material.cpp
 @@ -39,6 +39,7 @@ static SdfPath MaterialNodeNameToSdfPath(const TfToken &nodeName)

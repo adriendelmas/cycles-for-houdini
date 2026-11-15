@@ -1,0 +1,572 @@
+From b6802b6b09439a9341ea653c2b31b46dccc4c595 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Tue, 10 Nov 2026 03:34:11 +0100
+Subject: [PATCH 179/180] hydra: world shader from a material bound to the dome
+ (K-119)
+
+A material bound to a dome light becomes Cycles' world shader: its surface,
+when it has one, replaces the dome's colour, texture or Karma sky; its volume
+is the world volume. A dome without a bound material, or bound to a
+volume-only material, keeps the shader it builds from its parameters. The
+material's network is translated by HdCyclesMaterial::BuildWorldGraph, and a
+material that syncs rebuilds the domes bound to it.
+
+A Karma Sky Atmosphere gets a default world volume from its own
+coefficients: Rayleigh and Mie scattering (Mie absorption, miephase as the
+Henyey-Greenstein anisotropy), each thinning with the altitude over Karma's
+planet by its scale height.
+
+kernel: a world volume that varies in space ends at its octree's bounds
+(+-10 km around the origin). Past them Cycles traced on at the root's
+majorant to the ray's end, FLT_MAX for a ray that escapes: null collisions
+without end, a GPU hang.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/light.cpp                  | 144 +++++++++++++++++++++++++--
+ src/hydra/light.h                    |  19 ++++
+ src/hydra/material.cpp               | 128 ++++++++++++++----------
+ src/hydra/material.h                 |   7 ++
+ src/hydra/session.cpp                |  17 ++++
+ src/hydra/session.h                  |   7 ++
+ src/kernel/integrator/shade_volume.h |  15 +++
+ 7 files changed, 278 insertions(+), 59 deletions(-)
+
+diff --git a/src/hydra/light.cpp b/src/hydra/light.cpp
+index 6127d6a3..4e810b6b 100644
+--- a/src/hydra/light.cpp
++++ b/src/hydra/light.cpp
+@@ -4,6 +4,7 @@
+  * SPDX-License-Identifier: Apache-2.0 */
+ 
+ #include "hydra/light.h"
++#include "hydra/material.h"
+ #include "hydra/session.h"
+ #include "hydra/util.h"
+ #include "kernel/types.h"
+@@ -21,6 +22,8 @@
+ #include "util/transform.h"
+ 
+ #include <pxr/imaging/hd/lightSchema.h>
++#include <pxr/imaging/hd/materialBindingSchema.h>
++#include <pxr/imaging/hd/materialBindingsSchema.h>
+ #include <pxr/imaging/hd/materialNetworkSchema.h>
+ #include <pxr/imaging/hd/materialNodeParameterSchema.h>
+ #include <pxr/imaging/hd/materialNodeSchema.h>
+@@ -90,6 +93,17 @@ void HdCyclesLight::Sync(HdSceneDelegate *sceneDelegate,
+   if (*dirtyBits & DirtyBits::DirtyParams) {
+     lightDs = ReadSky(primDs, lightDs);
+     _lightDs = lightDs;
++    /* A material bound to a dome is the world shader (K-119). */
++    if (IsDome()) {
++      _sceneDelegate = sceneDelegate;
++      SdfPath world;
++      if (auto pathDs =
++              HdMaterialBindingsSchema::GetFromParent(primDs).GetMaterialBinding().GetPath())
++      {
++        world = pathDs->GetTypedValue(0.0f);
++      }
++      _worldMaterial = world;
++    }
+   }
+   else if (_lightDs) {
+     lightDs = _lightDs;
+@@ -345,7 +359,26 @@ void HdCyclesLight::Sync(HdSceneDelegate *sceneDelegate,
+ 
+ void HdCyclesLight::PopulateShaderGraph(const HdContainerDataSourceHandle &lightContainer)
+ {
+-  unique_ptr<ShaderGraph> graph = make_unique<ShaderGraph>();
++  unique_ptr<ShaderGraph> graph;
++  /* The world material's graph, which the dome's own nodes join: its
++   * surface, when it has one, stands for the dome's colour, texture or sky;
++   * its volume is the world volume (K-119). */
++  if (IsDome() && !_worldMaterial.IsEmpty() && _sceneDelegate) {
++    HdCyclesMaterial world(_worldMaterial);
++    graph = world.BuildWorldGraph(_sceneDelegate, (Scene *)_light->get_owner());
++  }
++  if (!graph) {
++    graph = make_unique<ShaderGraph>();
++  }
++  if (IsDome() && graph->output()->input("Surface")->link) {
++    AddAtmosphereVolume(graph.get());
++    Shader *const shader = _light->get_shader();
++    shader->set_graph(std::move(graph));
++    shader->tag_update((Scene *)_light->get_owner());
++    shader->has_surface_spatial_varying = true;
++    return;
++  }
++
+   ShaderNode *outputNode = nullptr;
+   bool hasSpatialVarying = false;
+   bool hasColorTemperature = false;
+@@ -681,6 +714,10 @@ void HdCyclesLight::PopulateShaderGraph(const HdContainerDataSourceHandle &light
+     }
+   }
+ 
++  if (IsDome()) {
++    AddAtmosphereVolume(graph.get());
++  }
++
+   Shader *const shader = _light->get_shader();
+   shader->set_graph(std::move(graph));
+   shader->tag_update((Scene *)_light->get_owner());
+@@ -698,6 +735,7 @@ void HdCyclesLight::Finalize(HdRenderParam *renderParam)
+   const bool keep_nodes = static_cast<const HdCyclesSession *>(renderParam)->keep_nodes;
+   static_cast<HdCyclesSession *>(renderParam)->ForgetObject(_object);
+   static_cast<HdCyclesSession *>(renderParam)->RemoveAtmosphere(this);
++  static_cast<HdCyclesSession *>(renderParam)->RemoveDome(this);
+   DeleteTwins(lock.scene, renderParam, 0);
+   if (_tubeObject) {
+     static_cast<HdCyclesSession *>(renderParam)->ForgetObject(_tubeObject);
+@@ -734,6 +772,9 @@ void HdCyclesLight::Initialize(HdRenderParam *renderParam)
+   _light->set_use_mis(true);
+   _light->name = GetId().GetString();
+ 
++  if (IsDome()) {
++    static_cast<HdCyclesSession *>(renderParam)->AddDome(this);
++  }
+   if (_lightType == _tokens->karmaSkyAtmosphere) {
+     auto *const session = static_cast<HdCyclesSession *>(renderParam);
+     session->AddAtmosphere(this);
+@@ -1094,7 +1135,10 @@ HdContainerDataSourceHandle HdCyclesLight::ReadSky(const HdContainerDataSourceHa
+                              "extraabsorpcoeff",
+                              "groundalbedo",
+                              "rayleighdist",
+-                             "miedist"})
++                             "miedist",
++                             "miephase",
++                             "planetcenter",
++                             "sealevel"})
+     {
+       add(TfToken(name), ReadPrimvar(primvars, TfToken(name)));
+     }
+@@ -1126,15 +1170,25 @@ HdContainerDataSourceHandle HdCyclesLight::ReadSky(const HdContainerDataSourceHa
+     _sky.ozone = ozone[1] / 1.982e-6f;
+     const GfVec3f albedo = GetTypedValue<GfVec3f>(ds, TfToken("groundalbedo"), GfVec3f(0.2f));
+     _sky.groundAlbedo = make_float3(albedo[0], albedo[1], albedo[2]);
+-    /* The scale heights (rayleighdist 8000 m, miedist 1200 m) are
+-     * the model's own and cannot be changed; said when they differ. */
+-    const float rayleighDist = GetTypedValue<float>(ds, TfToken("rayleighdist"), 8000.0f);
+-    const float mieDist = GetTypedValue<float>(ds, TfToken("miedist"), 1200.0f);
+-    if (fabsf(rayleighDist - 8000.0f) > 1.0f || fabsf(mieDist - 1200.0f) > 1.0f) {
++    _sky.rayleigh = make_float3(ray[0], ray[1], ray[2]);
++    _sky.mieScatter = make_float3(mieS[0], mieS[1], mieS[2]);
++    _sky.mieAbsorb = make_float3(mieA[0], mieA[1], mieA[2]);
++    _sky.miePhase = GetTypedValue<float>(ds, TfToken("miephase"), 0.8f);
++    /* The scale heights (rayleighdist 8000 m, miedist 1200 m) shape the
++     * world volume; the sky texture keeps Earth's own, said when they differ. */
++    _sky.rayleighDist = max(GetTypedValue<float>(ds, TfToken("rayleighdist"), 8000.0f), 1.0f);
++    _sky.mieDist = max(GetTypedValue<float>(ds, TfToken("miedist"), 1200.0f), 1.0f);
++    if (fabsf(_sky.rayleighDist - 8000.0f) > 1.0f || fabsf(_sky.mieDist - 1200.0f) > 1.0f) {
+       LOG_WARNING << "Atmosphere " << GetId().GetString()
+-                  << ": Cycles' sky keeps Earth's scale heights (8000 m air, 1200 m aerosols); "
+-                  << rayleighDist << " and " << mieDist << " are not carried.";
++                  << ": Cycles' sky texture keeps Earth's scale heights (8000 m air, 1200 m "
++                     "aerosols); "
++                  << _sky.rayleighDist << " and " << _sky.mieDist
++                  << " shape the world volume only.";
+     }
++    const GfVec3f center = GetTypedValue<GfVec3f>(
++        ds, TfToken("planetcenter"), GfVec3f(0.0f, -6371000.0f, 0.0f));
++    _sky.planetCenter = make_float3(center[0], center[1], center[2]);
++    _sky.seaLevel = GetTypedValue<float>(ds, TfToken("sealevel"), 6370900.0f);
+   }
+   else if (_sky.valid) {
+     _sky.altitude = GetTypedValue<float>(ds, TfToken("solar_altitude"), 45.0f);
+@@ -1231,6 +1285,71 @@ ShaderOutput *HdCyclesLight::SkyColor(ShaderGraph *graph, const float3 &strength
+   return mixNode->output("Result");
+ }
+ 
++/* A Karma atmosphere's air and aerosols as the world volume, unless the
++ * world material has a volume of its own: Rayleigh and Mie coefficients at
++ * sea level, each thinning exponentially with the altitude over the planet
++ * (Karma's planet centre and sea-level radius) by its own scale height. Cycles
++ * bounds a world volume that varies in space to 10 km around the origin
++ * (VolumeManager::initialize_octree); past it rays reach the sky, and the sun
++ * the ground. Ozone sits at 25 km, outside that box, and stays in the sky
++ * texture. */
++void HdCyclesLight::AddAtmosphereVolume(ShaderGraph *graph)
++{
++  if (!_sky.valid || !_sky.atmosphere || graph->output()->input("Volume")->link) {
++    return;
++  }
++
++  GeometryNode *geomNode = graph->create_node<GeometryNode>();
++  VectorMathNode *distNode = graph->create_node<VectorMathNode>();
++  distNode->set_math_type(NODE_VECTOR_MATH_DISTANCE);
++  distNode->set_vector2(_sky.planetCenter);
++  graph->connect(geomNode->output("Position"), distNode->input("Vector1"));
++  MathNode *altitudeNode = graph->create_node<MathNode>();
++  altitudeNode->set_math_type(NODE_MATH_SUBTRACT);
++  altitudeNode->set_value2(_sky.seaLevel);
++  graph->connect(distNode->output("Value"), altitudeNode->input("Value1"));
++  /* Below sea level the air keeps its sea-level density. */
++  MathNode *aboveNode = graph->create_node<MathNode>();
++  aboveNode->set_math_type(NODE_MATH_MAXIMUM);
++  aboveNode->set_value2(0.0f);
++  graph->connect(altitudeNode->output("Value"), aboveNode->input("Value1"));
++
++  /* exp(-altitude / scale height), times the sea-level coefficients. */
++  auto coefficients = [&](const float scaleHeight, const float3 &sigma) {
++    MathNode *rateNode = graph->create_node<MathNode>();
++    rateNode->set_math_type(NODE_MATH_MULTIPLY);
++    rateNode->set_value2(-1.0f / scaleHeight);
++    graph->connect(aboveNode->output("Value"), rateNode->input("Value1"));
++    MathNode *expNode = graph->create_node<MathNode>();
++    expNode->set_math_type(NODE_MATH_EXPONENT);
++    graph->connect(rateNode->output("Value"), expNode->input("Value1"));
++    VectorMathNode *scaleNode = graph->create_node<VectorMathNode>();
++    scaleNode->set_math_type(NODE_VECTOR_MATH_SCALE);
++    scaleNode->set_vector1(sigma);
++    graph->connect(expNode->output("Value"), scaleNode->input("Scale"));
++    return scaleNode->output("Vector");
++  };
++
++  VolumeCoefficientsNode *airNode = graph->create_node<VolumeCoefficientsNode>();
++  airNode->set_phase(CLOSURE_VOLUME_RAYLEIGH_ID);
++  airNode->set_absorption_coeffs(zero_float3());
++  graph->connect(coefficients(_sky.rayleighDist, _sky.rayleigh),
++                 airNode->input("Scatter Coefficients"));
++
++  VolumeCoefficientsNode *aerosolNode = graph->create_node<VolumeCoefficientsNode>();
++  aerosolNode->set_phase(CLOSURE_VOLUME_HENYEY_GREENSTEIN_ID);
++  aerosolNode->set_anisotropy(clamp(_sky.miePhase, -0.99f, 0.99f));
++  graph->connect(coefficients(_sky.mieDist, _sky.mieScatter),
++                 aerosolNode->input("Scatter Coefficients"));
++  graph->connect(coefficients(_sky.mieDist, _sky.mieAbsorb),
++                 aerosolNode->input("Absorption Coefficients"));
++
++  AddClosureNode *addNode = graph->create_node<AddClosureNode>();
++  graph->connect(airNode->output("Volume"), addNode->input("Closure1"));
++  graph->connect(aerosolNode->output("Volume"), addNode->input("Closure2"));
++  graph->connect(addNode->output("Closure"), graph->output()->input("Volume"));
++}
++
+ void HdCyclesLight::SetSun(const float3 &direction, const float3 &strength)
+ {
+   _hasSun = true;
+@@ -1241,6 +1360,13 @@ void HdCyclesLight::SetSun(const float3 &direction, const float3 &strength)
+   }
+ }
+ 
++void HdCyclesLight::WorldMaterialChanged(const SdfPath &material)
++{
++  if (_light && material == _worldMaterial) {
++    PopulateShaderGraph(_lightDs);
++  }
++}
++
+ void HdCyclesLight::DeleteTwins(Scene *scene, HdRenderParam *renderParam, const size_t keep)
+ {
+   auto *const session = static_cast<HdCyclesSession *>(renderParam);
+diff --git a/src/hydra/light.h b/src/hydra/light.h
+index 7a01ad44..20660769 100644
+--- a/src/hydra/light.h
++++ b/src/hydra/light.h
+@@ -39,6 +39,10 @@ class HdCyclesLight final : public PXR_NS::HdLight {
+    * (HdCyclesSession::SetSun). */
+   void SetSun(const CCL_NS::float3 &direction, const CCL_NS::float3 &strength);
+ 
++  /* A material synced: a dome bound to it rebuilds its world shader
++   * (HdCyclesSession::WorldMaterialChanged). */
++  void WorldMaterialChanged(const PXR_NS::SdfPath &material);
++
+  private:
+   void Initialize(PXR_NS::HdRenderParam *renderParam);
+ 
+@@ -59,14 +63,29 @@ class HdCyclesLight final : public PXR_NS::HdLight {
+     float air = 1.0f;
+     float aerosol = 1.0f;
+     float ozone = 1.0f;
++    /* The atmosphere's own coefficients (per metre at sea level), scale
++     * heights and planet, for its world volume. */
++    CCL_NS::float3 rayleigh = CCL_NS::make_float3(6e-6f, 12e-6f, 27e-6f);
++    CCL_NS::float3 mieScatter = CCL_NS::make_float3(4e-6f, 4e-6f, 4e-6f);
++    CCL_NS::float3 mieAbsorb = CCL_NS::make_float3(4.5e-6f, 4.5e-6f, 4.5e-6f);
++    float miePhase = 0.8f;
++    float rayleighDist = 8000.0f;
++    float mieDist = 1200.0f;
++    CCL_NS::float3 planetCenter = CCL_NS::make_float3(0.0f, -6371000.0f, 0.0f);
++    float seaLevel = 6370900.0f;
+   };
+   bool IsDome() const;
+   PXR_NS::HdContainerDataSourceHandle ReadSky(
+       const PXR_NS::HdContainerDataSourceHandle &primDs,
+       const PXR_NS::HdContainerDataSourceHandle &lightDs);
+   CCL_NS::ShaderOutput *SkyColor(CCL_NS::ShaderGraph *graph, const CCL_NS::float3 &strength);
++  void AddAtmosphereVolume(CCL_NS::ShaderGraph *graph);
+ 
+   Sky _sky;
++  /* The material bound to a dome, its world shader (K-119), read through the
++   * scene delegate the dome last synced with. */
++  PXR_NS::SdfPath _worldMaterial;
++  PXR_NS::HdSceneDelegate *_sceneDelegate = nullptr;
+   PXR_NS::HdContainerDataSourceHandle _lightDs;
+   bool _hasSun = false;
+   CCL_NS::float3 _sunDirection = CCL_NS::make_float3(0.0f, 1.0f, 0.0f);
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index 4385a3a6..1219ae03 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -3617,8 +3617,81 @@ std::vector<HdCyclesGeomPropDefault> CollectGeomPropDefaults(HdMaterialNetworkSc
+   return result;
+ }
+ 
++/* The network of a material prim the delegate translates: its Cycles one, else
++ * its MaterialX or Karma one, else the universal one; MaterialX nodegraphs
++ * expanded and every input left unwritten given its nodedef's default. */
++HdMaterialNetworkSchema ReadMaterialNetwork(const HdContainerDataSourceHandle &primDs)
++{
++  HdMaterialSchema matSchema = HdMaterialSchema::GetFromParent(primDs);
++  /* Prefer cycles network if it exists, otherwise use universal network. */
++  HdMaterialNetworkSchema network = matSchema.GetMaterialNetwork(CyclesMaterialTokens->cycles);
++  if (!network) {
++    /* MaterialX networks are translated to Cycles nodes, see sMtlxToCycles. */
++    network = matSchema.GetMaterialNetwork(CyclesMaterialTokens->mtlx);
++  }
++  if (!network) {
++    /* A Karma Material Builder writes the same MaterialX nodes under its
++     * own context. The delegate declared `kma` among its render contexts
++     * but never asked for that network, and fell to the preview surface
++     * Houdini writes alongside. */
++    network = matSchema.GetMaterialNetwork(CyclesMaterialTokens->kma);
++  }
++  if (!network) {
++    network = matSchema.GetMaterialNetwork();
++  }
++  if (!network) {
++    return network;
++  }
++  /* MaterialX nodes the table does not know but the library defines as
++   * nodegraphs - switch, ramp4, every hmtlx* node - become their inner
++   * nodes here, which the table does know (mtlx_expand.h). */
++  network = ExpandMaterialXNodegraphs(network, [](const std::string &nodeTypeId) {
++    if (nodeTypeId.starts_with("cycles_") || nodeTypeId.starts_with("cycles:")) {
++      return true;
++    }
++    if (sUsdToCyles->findUsd(TfToken(nodeTypeId))) {
++      return true;
++    }
++    const UsdToCyclesMapping *mapping = FindMtlxMapping(nodeTypeId);
++    return mapping != nullptr && NodeType::find(mapping->nodeType()) != nullptr;
++  });
++  /* Then every MaterialX input left unwritten takes its nodedef's
++   * default, so that no Cycles default stands in for a MaterialX one. */
++  return CompleteMaterialXDefaults(
++      network, [](const std::string &nodeTypeId, const std::string &input) {
++        const UsdToCyclesMapping *mapping = FindMtlxMapping(nodeTypeId);
++        if (mapping == nullptr) {
++          return false;
++        }
++        const TfToken name(input);
++        if (mapping->hasParameterMapping(name)) {
++          return true;
++        }
++        const NodeType *type = NodeType::find(mapping->nodeType());
++        return type != nullptr && type->find_input(ustring(input)) != nullptr;
++      });
++}
++
+ }  // namespace
+ 
++unique_ptr<ShaderGraph> HdCyclesMaterial::BuildWorldGraph(HdSceneDelegate *sceneDelegate,
++                                                          Scene *scene)
++{
++  const HdMaterialNetworkSchema network = ReadMaterialNetwork(
++      GetPrim(sceneDelegate, GetId()).dataSource);
++  if (!network) {
++    LOG_WARNING << "No material network at " << GetId().GetString()
++                << ", bound to a dome light; the dome keeps its own shader.";
++    return nullptr;
++  }
++  unique_ptr<ShaderGraph> graph = BuildShaderGraph(network);
++  if (graph) {
++    ResolveUdimTiles();
++    BindArchiveImages(scene);
++  }
++  return graph;
++}
++
+ const std::vector<HdCyclesGeomPropDefault> &HdCyclesGeomPropDefaults(const Shader *shader)
+ {
+   static const std::vector<HdCyclesGeomPropDefault> none;
+@@ -3640,56 +3713,8 @@ void HdCyclesMaterial::Sync(HdSceneDelegate *sceneDelegate,
+   const SdfPath &id = GetId();
+ 
+   if (dirtyResource || dirtyParams) {
+-    const HdSceneIndexPrim prim = GetPrim(sceneDelegate, id);
+-    const HdContainerDataSourceHandle &primDs = prim.dataSource;
+-
+-    HdMaterialSchema matSchema = HdMaterialSchema::GetFromParent(primDs);
+-    /* Prefer cycles network if it exists, otherwise use universal network. */
+-    HdMaterialNetworkSchema network = matSchema.GetMaterialNetwork(CyclesMaterialTokens->cycles);
+-    if (!network) {
+-      /* MaterialX networks are translated to Cycles nodes, see sMtlxToCycles. */
+-      network = matSchema.GetMaterialNetwork(CyclesMaterialTokens->mtlx);
+-    }
+-    if (!network) {
+-      /* A Karma Material Builder writes the same MaterialX nodes under its
+-       * own context. The delegate declared `kma` among its render contexts
+-       * but never asked for that network, and fell to the preview surface
+-       * Houdini writes alongside. */
+-      network = matSchema.GetMaterialNetwork(CyclesMaterialTokens->kma);
+-    }
+-    if (!network) {
+-      network = matSchema.GetMaterialNetwork();
+-    }
+-    if (network) {
+-      /* MaterialX nodes the table does not know but the library defines as
+-       * nodegraphs - switch, ramp4, every hmtlx* node - become their inner
+-       * nodes here, which the table does know (mtlx_expand.h). */
+-      network = ExpandMaterialXNodegraphs(network, [](const std::string &nodeTypeId) {
+-        if (nodeTypeId.starts_with("cycles_") || nodeTypeId.starts_with("cycles:")) {
+-          return true;
+-        }
+-        if (sUsdToCyles->findUsd(TfToken(nodeTypeId))) {
+-          return true;
+-        }
+-        const UsdToCyclesMapping *mapping = FindMtlxMapping(nodeTypeId);
+-        return mapping != nullptr && NodeType::find(mapping->nodeType()) != nullptr;
+-      });
+-      /* Then every MaterialX input left unwritten takes its nodedef's
+-       * default, so that no Cycles default stands in for a MaterialX one. */
+-      network = CompleteMaterialXDefaults(
+-          network, [](const std::string &nodeTypeId, const std::string &input) {
+-            const UsdToCyclesMapping *mapping = FindMtlxMapping(nodeTypeId);
+-            if (mapping == nullptr) {
+-              return false;
+-            }
+-            const TfToken name(input);
+-            if (mapping->hasParameterMapping(name)) {
+-              return true;
+-            }
+-            const NodeType *type = NodeType::find(mapping->nodeType());
+-            return type != nullptr && type->find_input(ustring(input)) != nullptr;
+-          });
+-    }
++    const HdMaterialNetworkSchema network = ReadMaterialNetwork(
++        GetPrim(sceneDelegate, id).dataSource);
+ 
+     const SceneLock lock(renderParam);
+ 
+@@ -3750,6 +3775,9 @@ void HdCyclesMaterial::Sync(HdSceneDelegate *sceneDelegate,
+       _shader->tag_update(lock.scene);
+     }
+ 
++    /* A dome bound to this material takes its network as the world shader. */
++    static_cast<HdCyclesSession *>(renderParam)->WorldMaterialChanged(id);
++
+     if (_shader) {
+       if (network) {
+         GeomPropRegistry()[_shader] = CollectGeomPropDefaults(network);
+diff --git a/src/hydra/material.h b/src/hydra/material.h
+index dec4d392..a31d1e36 100644
+--- a/src/hydra/material.h
++++ b/src/hydra/material.h
+@@ -51,6 +51,13 @@ class HdCyclesMaterial final : public PXR_NS::HdMaterial {
+     return _shader;
+   }
+ 
++  /* The network of the material at this sprim's path, translated into a graph
++   * of its own and left to the caller: a dome light bound to the material
++   * takes it as the world shader (light.cpp, K-119). This material keeps no
++   * Shader of its own; images from a Houdini COP are not bound. */
++  unique_ptr<CCL_NS::ShaderGraph> BuildWorldGraph(PXR_NS::HdSceneDelegate *sceneDelegate,
++                                                  CCL_NS::Scene *scene);
++
+  private:
+   struct NodeDesc {
+     CCL_NS::ShaderNode *node;
+diff --git a/src/hydra/session.cpp b/src/hydra/session.cpp
+index 3df91cfc..454b5613 100644
+--- a/src/hydra/session.cpp
++++ b/src/hydra/session.cpp
+@@ -394,6 +394,23 @@ void HdCyclesSession::RemoveAtmosphere(HdCyclesLight *light)
+   _atmospheres.erase(light);
+ }
+ 
++void HdCyclesSession::AddDome(HdCyclesLight *light)
++{
++  _domes.insert(light);
++}
++
++void HdCyclesSession::RemoveDome(HdCyclesLight *light)
++{
++  _domes.erase(light);
++}
++
++void HdCyclesSession::WorldMaterialChanged(const SdfPath &material)
++{
++  for (HdCyclesLight *light : _domes) {
++    light->WorldMaterialChanged(material);
++  }
++}
++
+ /* Hydra links a light to the prims of a category; Cycles to sets. A receiver
+  * belongs to one light set, the one of its combination of linked categories,
+  * and a light lists the sets it reaches: all of them when it links nothing,
+diff --git a/src/hydra/session.h b/src/hydra/session.h
+index b61793f2..0e8cb8c6 100644
+--- a/src/hydra/session.h
++++ b/src/hydra/session.h
+@@ -99,6 +99,12 @@ class HdCyclesSession final : public PXR_NS::HdRenderParam {
+   void AddAtmosphere(class HdCyclesLight *light);
+   void RemoveAtmosphere(class HdCyclesLight *light);
+ 
++  /* The domes, which take the material bound to them as the world shader:
++   * a material that syncs rebuilds the domes bound to it (K-119). */
++  void AddDome(class HdCyclesLight *light);
++  void RemoveDome(class HdCyclesLight *light);
++  void WorldMaterialChanged(const PXR_NS::SdfPath &material);
++
+   float GetPixelAspect() const
+   {
+     return _pixelAspect;
+@@ -446,6 +452,7 @@ class HdCyclesSession final : public PXR_NS::HdRenderParam {
+   CCL_NS::float3 _sunDirection = CCL_NS::make_float3(0.0f, 1.0f, 0.0f);
+   CCL_NS::float3 _sunStrength = CCL_NS::make_float3(1.0f, 1.0f, 1.0f);
+   std::set<class HdCyclesLight *> _atmospheres;
++  std::set<class HdCyclesLight *> _domes;
+   PXR_NS::TfToken _conformPolicy;
+   bool _batch = false;
+   PXR_NS::GfVec2i _batchResolution = PXR_NS::GfVec2i(0);
+diff --git a/src/kernel/integrator/shade_volume.h b/src/kernel/integrator/shade_volume.h
+index 6e999bfd..a1d38bef 100644
+--- a/src/kernel/integrator/shade_volume.h
++++ b/src/kernel/integrator/shade_volume.h
+@@ -440,6 +440,12 @@ ccl_device bool volume_octree_setup_single(KernelGlobals kg,
+     local.t.max = local.ray_voxel_intersect(ray->tmax);
+   }
+   else {
++    if (entry.object == kernel_data.background.object_index) {
++      /* The world volume ends at its octree's bounds: past them, an unbounded segment at the
++       * root's majorant would take null collisions without end. */
++      local.node = nullptr;
++      return true;
++    }
+     /* Current ray segment lies outside of the octree, usually happens with implicit volume, i.e.
+      * everything behind a surface is considered as volume. */
+     local.t.max = ray->tmax;
+@@ -480,6 +486,10 @@ ccl_device bool volume_octree_setup(KernelGlobals kg,
+     {
+       break;
+     }
++    if (!local.node) {
++      /* Skipped, or a world volume the ray is past. */
++      continue;
++    }
+ 
+     global.sigma += local.sigma;
+     if (local.t.max <= global.t.max) {
+@@ -519,6 +529,11 @@ ccl_device_inline bool volume_octree_advance(KernelGlobals kg,
+       return false;
+     }
+ 
++    if (octree.entry.object == kernel_data.background.object_index) {
++      /* The world volume ends at its octree's bounds (see volume_octree_setup_single). */
++      return false;
++    }
++
+     /* Outside of the root node, continue tracing using the extrema of the root node. */
+     octree.t = {octree.t.max, ray->tmax};
+     octree.node = &kernel_data_fetch(volume_tree_nodes,

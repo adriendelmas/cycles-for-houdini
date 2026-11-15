@@ -1,0 +1,32 @@
+From 9ee1dee924f4ba8cd7c223c78347fd273aa35c6e Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Tue, 3 Nov 2026 11:57:53 +0100
+Subject: [PATCH 158/180] cmake: a standalone build gets Embree again
+
+Upstream 30201123 (in release/5.3) switched the sources from
+WITH_CYCLES_EMBREE to Blender's WITH_EMBREE, which only Blender's build
+sets. A standalone build then compiled without WITH_EMBREE: the CPU device
+offered only BVH2, slower, and everything resting on Embree (ray masks,
+per-query user geometry callbacks) silently did nothing.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/cmake/external_libs.cmake | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/src/cmake/external_libs.cmake b/src/cmake/external_libs.cmake
+index 5b5ae357..b75704e2 100644
+--- a/src/cmake/external_libs.cmake
++++ b/src/cmake/external_libs.cmake
+@@ -508,6 +508,11 @@ if(WITH_CYCLES_EMBREE)
+   else()
+     add_bundled_libraries(embree/lib)
+   endif()
++
++  # The sources test Blender's WITH_EMBREE since upstream 30201123 (Aug 2026), which only
++  # Blender's build defines: a standalone build silently lost Embree, the CPU fell back to
++  # BVH2. Set it here.
++  set(WITH_EMBREE ON)
+ endif()
+ 
+ 

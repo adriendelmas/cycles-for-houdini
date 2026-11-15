@@ -1,7 +1,7 @@
-From cde3d7a40153f9452cf746652415f6fdda553ed0 Mon Sep 17 00:00:00 2001
+From 5e8e58f20d894fbf13539822b0827cd2ec5dcd2f Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 23:08:52 +0200
-Subject: [PATCH 017/162] hydra: material edits never reached the device, and
+Subject: [PATCH 017/180] hydra: material edits never reached the device, and
  displacement was bump-only
 
 Shader::set_graph() does not mark the shader modified, so the branch that
@@ -30,7 +30,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
  5 files changed, 44 insertions(+), 7 deletions(-)
 
 diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
-index 1a0e86c2..b1f901ba 100644
+index 3c56d623..a3776b1a 100644
 --- a/src/hydra/material.cpp
 +++ b/src/hydra/material.cpp
 @@ -317,6 +317,24 @@ const UsdToCyclesMapping MtlxMix = {"mix_color",

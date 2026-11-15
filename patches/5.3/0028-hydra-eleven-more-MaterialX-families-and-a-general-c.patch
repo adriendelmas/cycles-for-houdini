@@ -1,7 +1,7 @@
-From ad2bcf8c169def7832511e6cf4eaf5673b232179 Mon Sep 17 00:00:00 2001
+From 47a8a1b67c9765137690f56ed16df8612e83bb03 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 17:06:18 +0200
-Subject: [PATCH 028/162] hydra: eleven more MaterialX families, and a general
+Subject: [PATCH 028/180] hydra: eleven more MaterialX families, and a general
  composite mechanism
 
 The helper node a mapping can ask for now takes several wires into the main
@@ -29,7 +29,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
  2 files changed, 186 insertions(+), 23 deletions(-)
 
 diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
-index 4141268d..011d0f70 100644
+index 77a37b2a..14bd94d9 100644
 --- a/src/hydra/material.cpp
 +++ b/src/hydra/material.cpp
 @@ -112,11 +112,17 @@ class UsdToCyclesMapping {

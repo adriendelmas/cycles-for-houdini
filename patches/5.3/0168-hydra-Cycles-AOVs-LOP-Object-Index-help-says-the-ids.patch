@@ -1,0 +1,60 @@
+From 252f738693c5dc3e9d5a699328e573b41de4ea26 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Tue, 3 Nov 2026 15:40:45 +0100
+Subject: [PATCH 168/180] hydra: Cycles AOVs LOP, Object Index help says the
+ ids change between renders
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/resources/otls/hdcycles_aovs.hda | Bin 9412 -> 9572 bytes
+ 1 file changed, 0 insertions(+), 0 deletions(-)
+
+diff --git a/src/hydra/resources/otls/hdcycles_aovs.hda b/src/hydra/resources/otls/hdcycles_aovs.hda
+index 7eeddb7e1bc47275b2aaccf7309e4d9b77119a58..b9fe3b07fc562b298a72e31981f651c2094a0f69 100644
+GIT binary patch
+delta 1132
+zcmV-y1e5#3N#sh9D+2Otku4ws@@$b$C<Y`hYU%Q9k$toR@@$hc0VyILhid8aYybcN
+z3`25dVRU6vV{&P5bN~PzhX4QpN^0ryY?FQg8YIyG001y*>GEs<000X^Z*FvDZgg`l
+zXL<ktAOQdX1E*@~@@%ub0i+0%TN(|2RA^-&NO@#(VIXjFX>A~BWFRXbF)koTd1P{7
+zAZ~SSVr6o3AaHVNZF3-Db0BGSAZ%}8WOE>NXk~3IAaidZbZBKDc42IFWpf~7Xkl(=
+zWgup9Z*3rNZe<{HWo~3;av*eXAarPDAZ}%NbUGk)b7deya(QrcZ*5_8bY&n4W^ZyJ
+zZDDkDWpk6j2{E&V3bPgj*Ci#{lRY6I0#0m`Um+WReSd^;N<%!NB9`8W;Zcx^&<|6k
+zxk&7)6wakC(M~?@<cD4wMi?(RHCo$2rZVd^>);d?oUK?cs*{uTe?s+bb#g)m7!}mA
+zg{ZiYa0+-ApKS5NND|38eZ=QNI!qUZP!?PlmAcAorWIhoh-sw+v)U-Jv>6ACWKQQ5
+zoC4&3ntcE*B@~*AytS+-%A8u!I#O#}noQZ&TN=7*jdWGgs%lN1Rb}3U6&RtoFpagy
+z=8HU=FV@Rym21jdv!b_xQ%hTi>7q2E!BN0;t_>HG*12tbu`G2Zcw=&r*7Ifo(zPvX
+zTTN&oxR378J<8Oxf!3@nwdf83Fe94tkTCXtLo$kj06}x!Os+Pu;Sd4P+Ag$#Gj1}W
+zzCZh6b}^nbVaA#waTtc^9<_zS&2@6#8nYi?10F=1AL1gfn90g^3}RWDoT_<E=K>b%
+zI1-BQ3^rxk!TLgC8dLr_*t!y?>6qg<&KJ(tNs|03OqFSsB#GlVU+$5%LlQ3>#c{xY
+z!z~F*hae0XM&JR4B$-T;>D$S8mQ2RiZ>O`Llh@PVk_6m0v+33J=K7bLYj?NSXp7I%
+zn0qWG5BT4$=YyY+eI0vBY_f|PZ!rU&vWWP27xQBTe?<m_gu__8!V&m`m|%a8@Z^&a
+zUdsOg<1zHsv`yBvB)8O5K!AYTW)io5D~ji{F_4$aCH$;%iMDi!hBV-8L-7q=N@@z{
+z4&AP`((Lun%Zx93zXR?yM5s<N{Lwq^;a(rLC(HydO;%KU8SeXBmu(x{=g05d!8`X`
+z!2S1buaE9`3k<deax(OWJlZSpA9eke=MC_{A4N~GBfiB>eHl|6Y_Rud`$UR=<;pI!
+zdT8rmL3-Ow2#r}9NdLelFS&fYPki}E`Cn;~fV&QLG}hJSG46xweq4#o^Os96h(4$E
+zq7M5c8%i=7$^*oBMulq<?h7m{N^LB3zK9U&I0I9w<AtsV<)8ex-$#w?3YsZPGu5<D
+z>?3L^pA%=)xoo@$<3P&cfg}7+Tb)wB^A4b+lrrf(-op*ojN?5p3ZwmP4}AHNm`UOV
+y;t@;<>+I>5cHWRNi9H|7$#jyOPp_`Vv-69y%jC_)<@o66$oU(#^$?Qx3IG5!{}L?#
+
+delta 989
+zcmV<310ww7O2kQ!D+1={ku4ws=I4=5C<Y^rYU$?Zk$toR=I4_$0VyIK=4$EY=Kufz
+z3`25dVRU6vV{&P5bN~Py<^TWzN^0rm=aYT`8YD0P001y*>E`DE000X^Z*FvDZgg`l
+zXL<ktA7B6g1E^~0=I67#0i+0%@DC=lCkwL{1Xm>`+mqfQAOenKk|G;_gJ6VlN<%!N
+zA{HYN;?W=#VGyQDbCK9pDV$4PqMdx)$q)TBj4)nsYP7aqrZVd^>);d?oUK?cs*{uT
+ze?s+bb#g*Hj0$SmLR4HxI0d|mPqz4BB#GplZt%H~4%0;;lm*vCrLHoYX$2TCVp=J|
+ztTsw4ZN>p3nbUa%rvSNsW*<OH35Dh&Z!If|GN)Fwj?~(gCR4WcmWHlcBVCoWs#=q0
+zRhc(o1x6??Ok*vw`6AEei}kWv<(l%=tmv)a)Y8^rx+slka1=0|Yr}=4b#5D9EK6Mp
+z-k4mZ^}JbtbZyJpRuftX9-upPk23XapfxK?ExJPh%!uYZB#eW9kOWaYM9`c!ldDZE
+z#v=qkYrD_}&bY~h`u^;P*~NI$gc)m!#9<hsd(;*RH`mE|Ys`Lp4cLnwe~62`VkRrw
+zF^FYpa;oMvoeNm3<47pJGuV`E2O9{9X-xTMuyrL&(=o?!oG+ZOlO*|7m@3mMNfO6#
+zzT6{iha`SDisJ!)54R*N9fB}m7=aHMl4LSXrf(<XSuz=4zn#v0PF_!cOA>J3%%)e<
+zo9kb0uHD^Qqb)v5WA3w*Jm7z~o)3OP_I2zjvB@rGyu}>wltm=KyO<v%_$%TO5)NbW
+z3P%ulF~Pwe;mIc<yp;a~#$)KMX`8HTNp7jBfB*rv%_MGrR}{}@V<0b;OY~Xg5^d=c
+z4e5ZhM~XkvrKF~C?$GU8E6rXHz0CNs_dDQTLxk!S!ymol9`5x~d%{fc(qu)om*Kw8
+zb=kJDeSZAT_1?MP0`9+edwq1jTi{?@ASXkA$fLai|54Xp`M!s}U=%&Yj`$Wk4P;F5
+z;1PR&wojygSg!0stB1B87No!3gwU9!0~s9H<RzDn|A{XjDgP@i5^&d{j>fvWJjQ)+
+z-H$7=dH!PQMREK&r5APBC)rSv(NG>B#xp8hlW<>PSy5_Zq4PzAP{;91t&SJE_R2r`
+zalelm*%dTXmS(DHpV&v#Qa&fnsB_u)5yk^4hX;;O@NacWgU&mEj#A2`zqyASt{KOF
+zU=&9C+aCDxBQcZ2ABYW@64u$%FYUY`V-ouTmXqluIiFr#jc4Z<XP3#Fi_7uR(UJ2v
+Ln;*-o_X+?2j3CtP
+

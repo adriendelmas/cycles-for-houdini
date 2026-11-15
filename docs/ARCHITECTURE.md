@@ -139,8 +139,7 @@ Cycles reads MaterialX itself.
   variant (`_float` vs `_color3`), which is the right way - see KNOWN_ISSUES
   for where the connection-based choice still misleads.
 
-The limits of this design, which [PLAN.md](PLAN.md) works around rather than
-rewrites: one Cycles node per mapping plus helpers (no general subgraph), no
+The limits of this design: one Cycles node per mapping plus helpers (no general subgraph), no
 per-nodedef type dispatch outside the four arithmetic families, and a
 coverage tool that measures prefixes, not correctness.
 

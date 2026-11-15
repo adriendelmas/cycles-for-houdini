@@ -1,7 +1,7 @@
-From 3d31a03ce9b70a14382b53bcadd86965e92e7087 Mon Sep 17 00:00:00 2001
+From 4b4f03b070f5e48ca24e2eb6e070d407b547978c Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 18:16:47 +0200
-Subject: [PATCH 014/162] hydra: take the scene lock rather than trying it, and
+Subject: [PATCH 014/180] hydra: take the scene lock rather than trying it, and
  add a GPU renderer entry
 
 The render pass only reset the session when a try_lock on the scene mutex
@@ -36,10 +36,10 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
  7 files changed, 105 insertions(+), 12 deletions(-)
 
 diff --git a/src/hydra/plugin.cpp b/src/hydra/plugin.cpp
-index c8a1f885..9e3f8c59 100644
+index c9bef480..c93f6b25 100644
 --- a/src/hydra/plugin.cpp
 +++ b/src/hydra/plugin.cpp
-@@ -59,9 +59,21 @@ HdRenderDelegate *HdCyclesPlugin::CreateRenderDelegate()
+@@ -54,9 +54,21 @@ HdRenderDelegate *HdCyclesPlugin::CreateRenderDelegate()
  
  HdRenderDelegate *HdCyclesPlugin::CreateRenderDelegate(const HdRenderSettingsMap &settingsMap)
  {
@@ -62,7 +62,7 @@ index c8a1f885..9e3f8c59 100644
  void HdCyclesPlugin::DeleteRenderDelegate(HdRenderDelegate *renderDelegate)
  {
    delete renderDelegate;
-@@ -74,6 +86,7 @@ void HdCyclesPlugin::DeleteRenderDelegate(HdRenderDelegate *renderDelegate)
+@@ -69,6 +81,7 @@ void HdCyclesPlugin::DeleteRenderDelegate(HdRenderDelegate *renderDelegate)
  TF_REGISTRY_FUNCTION(TfType)
  {
    HdRendererPluginRegistry::Define<PXR_NS::HdCyclesPlugin>();
@@ -70,8 +70,9 @@ index c8a1f885..9e3f8c59 100644
  }
  
  PXR_NAMESPACE_CLOSE_SCOPE
+\ No newline at end of file
 diff --git a/src/hydra/plugin.h b/src/hydra/plugin.h
-index 44d88de6..f002f0ba 100644
+index 5ca651f0..6b4d81da 100644
 --- a/src/hydra/plugin.h
 +++ b/src/hydra/plugin.h
 @@ -10,7 +10,7 @@
@@ -83,7 +84,7 @@ index 44d88de6..f002f0ba 100644
   public:
    HdCyclesPlugin();
    ~HdCyclesPlugin() override;
-@@ -26,6 +26,30 @@ class HdCyclesPlugin final : public PXR_NS::HdRendererPlugin {
+@@ -28,6 +28,30 @@ class HdCyclesPlugin final : public PXR_NS::HdRendererPlugin {
        const PXR_NS::HdRenderSettingsMap & /*settingsMap*/) override;
  
    void DeleteRenderDelegate(PXR_NS::HdRenderDelegate *) override;
@@ -114,6 +115,7 @@ index 44d88de6..f002f0ba 100644
  };
  
  PXR_NAMESPACE_CLOSE_SCOPE
+\ No newline at end of file
 diff --git a/src/hydra/render_delegate.cpp b/src/hydra/render_delegate.cpp
 index 821ac668..9f664ab7 100644
 --- a/src/hydra/render_delegate.cpp
@@ -233,10 +235,10 @@ index 7c2a7d94..f5862216 100644
                      },
                      "SdrCyclesDiscoveryPlugin": {
 diff --git a/src/kernel/device/cuda/CMakeLists.txt b/src/kernel/device/cuda/CMakeLists.txt
-index ac63c2cc..12d0d6d7 100644
+index 406cbde5..4ffffa04 100644
 --- a/src/kernel/device/cuda/CMakeLists.txt
 +++ b/src/kernel/device/cuda/CMakeLists.txt
-@@ -155,7 +155,16 @@ if(WITH_CYCLES_CUDA_BINARIES)
+@@ -293,7 +293,16 @@ if(WITH_CYCLES_CUDA_BINARIES)
        DEPENDS ${cuda_file})
  
      unset(_cuda_nvcc_args)

@@ -1,7 +1,7 @@
-From 98431903134ff47487de267d5f3286746d7f89d7 Mon Sep 17 00:00:00 2001
+From 38a238c2c2107e648454a0ff6f9d59933b17f25e Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 03:26:40 +0200
-Subject: [PATCH 009/162] hydra: motion blur for animated object transforms
+Subject: [PATCH 009/180] hydra: motion blur for animated object transforms
 
 Only the camera was sampled across the shutter; geometry read a single
 transform at time zero, so anything moving rendered sharp.
@@ -51,7 +51,7 @@ index 5ac38e6d..458adf2f 100644
  
  HDCYCLES_NAMESPACE_CLOSE_SCOPE
 diff --git a/src/hydra/geometry.inl b/src/hydra/geometry.inl
-index 69d96109..6d230382 100644
+index fa5e439c..b16b59a7 100644
 --- a/src/hydra/geometry.inl
 +++ b/src/hydra/geometry.inl
 @@ -120,8 +120,36 @@ void HdCyclesGeometry<Base, CyclesBase>::Sync(HdSceneDelegate *sceneDelegate,

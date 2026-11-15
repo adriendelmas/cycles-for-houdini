@@ -1,0 +1,157 @@
+From bd9716a085e8c109b2fbe49459b9c9302de3217a Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Mon, 26 Oct 2026 02:21:22 +0100
+Subject: [PATCH 150/180] hydra: display driver off by default again, the view
+ logged
+
+Under a Karma Physical Sky, Houdini's viewport (Cycles CPU and GPU)
+showed the sky and none of the geometry: a scatter of 6400 rocks,
+or an emissive sphere twenty units in front of the camera. The rays were
+traced - same render time as husk, the objects in front of the camera -
+and husk rendered the same stage correctly, as did the viewport through
+the output driver (CYCLES_DISPLAY_DRIVER=0). A plain dome or the sun
+alone displayed fine with the display driver. The cause in the display
+path is not found; the display driver is off by default as it was until
+0050, and CYCLES_DISPLAY_DRIVER=1 turns it back on (K-114).
+
+The render pass logs, at info level and on every restart, the view it is
+about to render: the camera and its motion samples, how many objects are
+visible and where their origins span, the largest object, the objects at
+the origin, each geometry's shaders and the background shader. This is
+what separated a hidden scene from a camera elsewhere.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ src/hydra/render_delegate.cpp | 17 ++++----
+ src/hydra/render_pass.cpp     | 77 +++++++++++++++++++++++++++++++++++
+ 2 files changed, 85 insertions(+), 9 deletions(-)
+
+diff --git a/src/hydra/render_delegate.cpp b/src/hydra/render_delegate.cpp
+index 40593318..9ca1bb59 100644
+--- a/src/hydra/render_delegate.cpp
++++ b/src/hydra/render_delegate.cpp
+@@ -39,16 +39,15 @@ HDCYCLES_NAMESPACE_OPEN_SCOPE
+ TF_DEFINE_PUBLIC_TOKENS(HdCyclesRenderSettingsTokens, HD_CYCLES_RENDER_SETTINGS_TOKENS);
+ 
+ // clang-format off
+-/* On by default: the display driver shares the host's GL context to blit tiles
+- * straight into a texture, which is what makes the viewport refresh as
+- * promptly as Blender's. It was off for a while - it had produced wrong pixels
+- * and crashes on teardown - but the crashes were the unbalanced lock, the
+- * context built too late and the GL calls made without a context, all three
+- * since fixed. Rendering through the output driver remains the fallback
+- * whenever there is no usable GL context, and CYCLES_DISPLAY_DRIVER=0 forces
+- * it for anyone who still sees the viewport misbehave. */
++/* Off by default (K-114): with the display driver, a scene lit by a Karma
++ * Physical Sky showed the sky and nothing else in Houdini's viewport - the
++ * geometry was traced (same render time, same buffers) but never reached the
++ * texture; through the output driver the same scene displayed correctly. The
++ * display driver blits straight into the host's texture, which is what makes
++ * the viewport refresh as promptly as Blender's; CYCLES_DISPLAY_DRIVER=1
++ * turns it back on for anyone who wants that speed and does not use the sky. */
+ TF_DEFINE_ENV_SETTING(CYCLES_DISPLAY_DRIVER,
+-                      true,
++                      false,
+                       "Use the OpenGL display driver for interactive rendering");
+ 
+ // clang-format off
+diff --git a/src/hydra/render_pass.cpp b/src/hydra/render_pass.cpp
+index da788e3d..4a7e9076 100644
+--- a/src/hydra/render_pass.cpp
++++ b/src/hydra/render_pass.cpp
+@@ -21,11 +21,17 @@
+ 
+ #include "scene/camera.h"
+ #include "scene/integrator.h"
++#include "scene/geometry.h"
++#include "scene/background.h"
++#include "scene/mesh.h"
++#include "scene/shader.h"
++#include "scene/object.h"
+ #include "scene/scene.h"
+ 
+ #include "session/session.h"
+ #include "util/log.h"
+ 
++#include <cfloat>
+ #include <chrono>
+ 
+ #include <pxr/imaging/hgi/hgi.h>
+@@ -318,6 +324,77 @@ void HdCyclesRenderPass::_Execute(const HdRenderPassStateSharedPtr &renderPassSt
+                << (settingsVersion != _lastSettingsVersion ? " settings" : "")
+                << (cameraSwitched ? " camera-switch" : "") << ".";
+       _lastSettingsVersion = settingsVersion;
++      if (LOG_IS_ON(LOG_LEVEL_INFO)) {
++        /* The view Cycles was given, and where its objects stand: a camera
++         * left elsewhere and a scene hidden look alike from the image. */
++        const Transform &ct = scene->camera->get_matrix();
++        size_t visible = 0;
++        float3 lo = make_float3(FLT_MAX, FLT_MAX, FLT_MAX), hi = -lo;
++        for (const Object *object : scene->objects) {
++          if (!object->get_visibility()) {
++            continue;
++          }
++          ++visible;
++          const Transform &ot = object->get_tfm();
++          lo = min(lo, make_float3(ot.x.w, ot.y.w, ot.z.w));
++          hi = max(hi, make_float3(ot.x.w, ot.y.w, ot.z.w));
++        }
++        /* The largest object, and the objects standing at the origin: an
++         * instance scaled to the sky, or one left there, hides a scene. */
++        const Object *largest = nullptr;
++        float largestScale = 0.0f;
++        size_t atOrigin = 0;
++        for (const Object *object : scene->objects) {
++          const Transform &ot = object->get_tfm();
++          const float scale = max(max(len(make_float3(ot.x.x, ot.y.x, ot.z.x)),
++                                      len(make_float3(ot.x.y, ot.y.y, ot.z.y))),
++                                  len(make_float3(ot.x.z, ot.y.z, ot.z.z)));
++          if (scale > largestScale) {
++            largestScale = scale;
++            largest = object;
++          }
++          if (len(make_float3(ot.x.w, ot.y.w, ot.z.w)) < 1.0f) {
++            if (atOrigin++ < 4) {
++              LOG_INFO << "Object at the origin: " << object->name << " geometry "
++                       << (object->get_geometry() ? object->get_geometry()->name.c_str() : "none")
++                       << " scale " << scale << " visibility " << object->get_visibility();
++            }
++          }
++        }
++        if (largest) {
++          LOG_INFO << "Largest object: " << largest->name << " scale " << largestScale << ", "
++                   << atOrigin << " objects within a unit of the origin.";
++        }
++        if (const Shader *bg = scene->background->get_shader()) {
++          LOG_INFO << "Background shader " << bg->name << " id " << bg->id << "; default surface id "
++                   << scene->default_surface->id << ", default background id "
++                   << scene->default_background->id << ".";
++        }
++        size_t listed = 0;
++        for (const Geometry *geom : scene->geometry) {
++          if (listed++ >= 12) {
++            break;
++          }
++          std::string shaders;
++          for (const Node *shader : geom->get_used_shaders()) {
++            shaders += " " + shader->name.string() + "#" + std::to_string(static_cast<const Shader *>(shader)->id);
++          }
++          const Mesh *mesh = geom->is_mesh() ? static_cast<const Mesh *>(geom) : nullptr;
++          LOG_INFO << "Geometry " << geom->name << " type " << geom->geometry_type << " tris "
++                   << (mesh ? mesh->num_triangles() : 0) << " bounds valid " << geom->bounds.valid()
++                   << " shaders:" << shaders;
++        }
++        for (const Transform &mt : scene->camera->get_motion()) {
++          LOG_INFO << "Camera motion sample at (" << mt.x.w << ", " << mt.y.w << ", " << mt.z.w
++                   << ").";
++        }
++        LOG_INFO << "View: camera at (" << ct.x.w << ", " << ct.y.w << ", " << ct.z.w
++                 << "), clip " << scene->camera->get_nearclip() << ".."
++                 << scene->camera->get_farclip() << ", fov " << scene->camera->get_fov() << "; "
++                 << visible << " of " << scene->objects.size() << " objects visible, origins in ("
++                 << lo.x << ", " << lo.y << ", " << lo.z << ")..(" << hi.x << ", " << hi.y << ", "
++                 << hi.z << ").";
++      }
+ 
+       // Reset convergence state of all render buffers
+       ResetConverged();

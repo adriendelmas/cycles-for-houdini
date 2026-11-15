@@ -6,8 +6,8 @@ page.
 
 ## Running anything outside Houdini
 
-All benches drive `husk.exe` and `hoiiotool.exe` from `$HFS/bin`. On this
-machine three things are needed or the plugin is not found and the images are
+All benches drive `husk.exe` and `hoiiotool.exe` from `$HFS/bin`. Three
+things are needed or the plugin is not found and the images are
 wrong:
 
 ```bash
@@ -20,20 +20,6 @@ export HFS="C:/Program Files/Side Effects Software/Houdini 22.0.368"  # only for
 Reference images are rendered at **120×90**; comparing at another resolution
 fails every scene at once. If `hserver -l` shows `Connection Error`, restart
 it with `hserver -S https://www.sidefx.com/license/sesinetd`.
-
-To read the delegate's log from a live Houdini, start it with
-`tests/houdini/launch_cycles_log.cmd [scene.hip]`: the log lands in
-`tests/scratch/cycles_viewport.log`, each line stamped with the seconds since
-the first one. The launcher also starts the houdini-mcp server on scene load
-(`tests/houdini/autostart/scripts/456.py`, put first on `HOUDINI_SCRIPT_PATH`),
-so `python tools/hou_remote.py -c "<python>"` (or a script file) runs code in
-that session at once and prints what it printed - the way to drive the
-viewport, the display driver and Solaris' scene index from a bench. Two
-things learnt driving it (2026-10-08): `hou.ui.waitUntil` is the pause that
-lets the viewport redraw between steps, and a camera set from Python
-(`setDefaultCamera` + `triggerUpdate`) reaches Hydra only when the viewport
-repaints, which it did one move in six; `frameAll`, `home`, `setCamera` and
-scene edits went through every time.
 
 To test a freshly built DLL while Houdini holds the installed one: set
 `HOUDINI_PACKAGE_SKIP=1`, point `PXR_PLUGINPATH_NAME` at a temporary plugin
@@ -66,7 +52,7 @@ after a Cycles standard attribute (`heat`, `density`, `color`, `temperature`,
 | `hython tools/bench_diff.py [--accept node\|all]` | `output/` vs `references/` | Each node matches its committed reference (off by less than `1e-3` absolute or 1 % relative on 99.5 % of pixels); lists nodes inert against `_baseline.exr`; `cycles_set_normal` is reported, not counted (A19) | - |
 | `hython tools/bench_mtlx.py [name]` | 95 cases: MaterialX nodes (+5 textured with `CYCLES_BENCH_TEXTURE`, Karma's hextiled triplanar among them), colours, closures, and the nodes expanded from their nodegraph (`exp_*`) | Rendered colour within 2 % of a value **computed from the MaterialX definition**, file named next to each formula | Anything the plane's mean cannot see: directions, volumes |
 | `hython tools/bench_hair.py` | 4 pairs | MaterialX Chiang hair equals native principled hair, error < 1e-3 | - |
-| `hython tools/mtlx_karma.py [--list] [--closures] [pattern]` | Every value nodedef (695), one unlit quad each - or with `--closures` the 45 BSDF, EDF and surface nodedefs under a white dome - rendered by Cycles and by Karma from the same file | Which nodes give Karma's value - 625 values and 38 closures on 2026-10-08, images read from a four-corner texture and compared by quarters; the rest are listed and explained in K-61, K-64 | Nodes whose value is each engine's own (noise); the shape of a lobe |
+| `hython tools/mtlx_karma.py [--list] [--closures] [pattern]` | Every value nodedef (695), one unlit quad each - or with `--closures` the 45 BSDF, EDF and surface nodedefs under a white dome - rendered by Cycles and by Karma from the same file | Which nodes give Karma's value - 625 values and 38 closures on, images read from a four-corner texture and compared by quarters; the rest are listed and explained in K-61, K-64 | Nodes whose value is each engine's own (noise); the shape of a lobe |
 | `hython tools/surface_audit.py [nodedef] [pattern]` | Every value input of a surface model (OpenPBR by default; standard_surface, glTF, `UsdPreviewSurface`), moved off its default alone on the agreement sphere | The input's effect on the sphere has Karma's sign and is within a factor of two of it; which inputs neither engine shows at that setting | Lobe shapes; the models' own differences (K-63 lists them) |
 | `hython tools/bench_volume.py` | A cube of medium in front of a white `surface_unlit` wall, no other light: MaterialX `absorption_vdf` and `anisotropic_vdf` (absorbing, scattering), native, and a `leftHanded` cube | Absorption transmits exp(-2 sigma) within 0.02 - Karma renders no volume on a mesh without a surface, so the law is the reference; a scattering `anisotropic_vdf` as Cycles' own scatter volume with the same coefficient (K-92) | Scattering against another engine |
 | `hython tools/bench_usdtex.py` | A four-corner texture on a quad: `UsdUVTexture` plain, tiled, rotated, translated, outside the image, scale/bias, an 8-bit PNG as sRGB, raw and auto, the PNG inside a usdz archive; a MaterialX `image` with and without a colour space; two UDIM tiles, `<UDIM>` and Houdini's `%(UDIM)d`; a left-handed subdivided grid with UVs per corner and per vertex; a missing file with and without `fallback` | Each quarter within 0.03 of Karma, under Houdini's OCIO config (K-66) | `useMetadata` with metadata in the file |
@@ -86,18 +72,17 @@ after a Cycles standard attribute (`heat`, `density`, `color`, `temperature`,
 | `python tools/bench_robust.py` | `tests/scenes/bad_*.usda`, 19 malformed files: unparsable attributes (mesh normals, points, point widths), NaN points, indices out of range (plain and subdivided), counts that do not add up (meshes, curves), degenerate faces, short face-varying and per-vertex primvars, primvars longer than the geometry (constant and per-vertex), crease lengths of 0 and 1, a GeomSubset past the faces, an instancer with more indices than positions, a cyclic material graph, missing textures and IES files, an IES file with no angles | husk renders every file three times, exit 0, image on disk - no crash on a malformed file, even an intermittent one (K-57, K-82) | That the image is right |
 | `hython tools/bench_agree.py [pattern]` | 7 surface materials and 5 hand-built BSDF networks (two `layer` coats among them) × 3 regions, plus the highlight's 99th percentile on the glossy ones, Cycles against Karma on the same USD | Floor within 1 %, spheres within 25 % (glass: order of magnitude), highlights within 35 % of Karma; normal, position and tangent lookups by space on a turned sphere, the whole subsurface sphere within 6 % - 67 checks | Fine shading differences: the tolerance admits the engines' own |
 | `hython tools/mtlx_coverage.py [--list]` | MaterialX library vs the table | Which nodedefs the delegate renders - by the table, by nodegraph expansion or by rewriting (796/822, `tools/mtlx_rules.py` holds the rule) | Which translate correctly |
-| `hython tools/mtlx_inputs.py [--list] [pattern]` | Every routed nodedef, all inputs authored, one husk run | Which nodedefs keep every input, output and node (543/652 on 2026-10-07); `--list` names what each one loses | Values |
+| `hython tools/mtlx_inputs.py [--list] [pattern]` | Every routed nodedef, all inputs authored, one husk run | Which nodedefs keep every input, output and node (543/652 on; `--list` names what each one loses | Values |
 | `hython tools/mtlx_defaults.py [pattern]` | standard_surface, OpenPBR, glTF, Disney, UsdPreviewSurface | A lit sphere renders the same with no input authored and with every input authored at its model's default (8x8 block means, so noise cannot pass for a difference); the sphere must be lit | Values of authored inputs |
 | `hython tools/bench_curves.py [--karma] [name]` | 5 hand-written BasisCurves | Each curve covers the plane where USD puts it and nowhere a misread curve would: Bézier, B-spline, periodic, pinned, `varying` widths; with `--karma`, its silhouette overlaps Karma's (IoU ≥ 0.85) | Shading; indexed curves (no USD attribute) |
 | `hython tools/bench_motion.py [name]` | 8 ways to move a square | The blur trail is as long as the shutter says: own transform, points, PointInstancer positions, instancer transform, a moving camera and one turning back mid-shutter; still ones stay sharp | Deformation by velocity |
 | `hython tools/bench_instances.py [name]` | 3 instanced squares, flat and nested | Each instance's `displayColor` and float primvar reach an attribute node and Object Info; an outer instancer's primvar reaches nested instances | - |
-| `hython tools/bench_wet.py [--gpu] [name]` | Wet map (addition, `WETMAP_PLAN.md`): five probe quads glowing with the AO traced behind them, a backing plane behind four of them - raycast-visible, raycast hidden (with the AO on raycast visibility, then on every object as the control), hidden from every ray type, none; then a Wet State node fed 1 − AO over eight frames under one husk run, the plane leaving on frame 4, and frame 2 rendered twice in one run | An AO on raycast visibility is occluded by the raycast-visible plane only (AO 0 vs 1 within 0.05); the all-hidden plane does not occlude on OptiX either (the zero-mask fallback); the state follows `wet = clamp(wet·e^(-dt/dry) + rate·dt·contact)` within 0.03 per frame, carries while the plane is gone, and does not advance when the same frame renders again; CPU and OptiX within 0.03 (the CPU's AO stops 0.8 % of its rays on the probe's own coplanar triangle) | The state on disk (S3), instances whose order changes between frames |
 | `hython tools/bench_implicit.py` | Sphere, Cube, Cylinder, Cone, Capsule, Plane | Each renders with the silhouette its attributes give, along its axis (6 % tolerance; 0.4 % measured) | Shading |
 | `hython tools/bench_settings.py [name]` | Render settings and per-prim properties, one small scene each | Dome opaque by default, film transparent on request, exposure, motion blur on and off, camera-invisible prims (Cycles and Karma spellings), holdout, shadow catcher, light and shadow linking, a light's diffuse multiplier at 0, Houdini `Cd` volume field read as colour, an unbound prim's `displayOpacity` and per-vertex `displayColor` (K-79, K-80), a volume hidden from the camera by its own primvar (K-85) | The live motion-blur toggle (needs a Hydra session) |
 | `hython tools/bench_aovs.py` | One product, nine render vars, the EXR header | Beauty, a Cycles pass in Cycles' convention, a Karma LPE and a Karma component in Karma's (equal to the beauty on a diffuse scene), distinct cryptomatte ids, a shader AOV through `aov_output`, two light groups adding up to the beauty, depth, a cryptomatte manifest whose hashes are the pixels' ids | - |
 | `hython tools/bench_karma_settings.py` | Houdini's Karma Render Settings LOP, twelve AOVs ticked | Each of Karma's render vars (LPEs, `ray:hit*`, `CDA`) lands on a Cycles pass with the value the diffuse scene implies | Light components other than diffuse on a scene that has them |
 | `hython tools/mtlx_pinned.py [--list] [pattern]` | Every value nodedef, two grids | A nodedef renders the same with its inputs unwritten and with them written at their MaterialX defaults (677/677 since 0099; 57 differed before) | Values |
-| `hython tools/count_nodes.py` | Sdr registry | The node counts the docs quote: 164 published, 64 hidden, 100 VOPs, 98 probed (2026-10-26, with the wet map's `wet_state`) | - |
+| `hython tools/count_nodes.py` | Sdr registry | The node counts the docs quote: 163 published, 64 hidden, 99 VOPs, 97 probed | - |
 | `python tools/karma_nodegraphs.py <kma_node> \| --list` | `$HFS/houdini/karmaNodeGraphs.json` | A Karma node's own nodegraph as a readable list, inputs named; the nodes it uses that are not in the library, which a delegate nodegraph has to replace (K-106) | - |
 | `scratchpad/audit_surface.py` (local) | 39 `standard_surface` inputs | Each input changes the image, references local and gitignored | Agreement with Karma beyond the four measured cases |
 
@@ -108,26 +93,7 @@ a wrong pass, a prim rendered where its settings hide it, a curve or an
 instance drawn in the wrong place. What it cannot see is the live viewport:
 `tests/houdini/` holds the scenes to check there.
 
-**Checks in the Houdini GUI are done by the agent, not handed to Adrien**
-(his rule, 2026-10-09: everything to test in the interface is checkable
-through the MCP). Start a session with `tests/houdini/launch_cycles_log.cmd
-<scene>` (it starts the houdini-mcp server), drive it with
-`python tools/hou_remote.py`, read `tests/scratch/cycles_viewport.log`, grab
-the viewport or the render buffer from Python, and close the session when
-done - never his own Houdini, never save his `.hip` files. A patch that
-touches the viewport, live edits (moving a light, toggling a setting while
-rendering) or the display driver is not finished until this check ran.
-`python tools/gui_capture.py NAME "<python step>"` runs a step in that
-session and grabs its window with PrintWindow, which works while the window
-sits behind others; Houdini's flipbook does not (it returned one stale image
-for every state). The tool checks the scene is under `hdCycles/tests` and
-grabs the window of the very process the MCP server runs in, so it can never
-drive or capture Adrien's own Houdini. Measure the region you need from the
-PNG (`tests/scratch/gui/`); a window resized between two steps makes the
-first grab after it stale. When another session's Houdini already holds the
-MCP port 9876, set `HDCYCLES_MCP_PORT` (9877...) before starting the session:
-the launcher's startup script and `hou_remote.py` both read it.
-`tests/houdini/lights_live.hip` (written by `tools/make_lights_live_hip.py`)
+`tests/houdini/lights_live.hip`
 is the scene for live light edits: its `edit` LOP sets the shadow colour,
 lobe multipliers and the cylinder's roll.
 
@@ -137,7 +103,7 @@ temporary-tree recipe above applies to all of them.
 
 ## The four layers of the suite
 
-Cheapest first. Layers 1 and 3 exist since 2026-10-07; layer 2 exists and
+Cheapest first. Layers 1 and 3 exist since; layer 2 exists and
 grows with every phase; layer 4 is still a one-off.
 
 ### 1. Inputs: `mtlx_inputs.py`
@@ -170,7 +136,7 @@ tests/nodes/5.3/
     output/        ignored - what the last run produced
 ```
 
-The 97 node references were re-accepted on 2026-10-08 after patch 0099: the
+The 97 node references were re-accepted on after patch 0099: the
 shared stage's glass cube (`mxGlass`, `standard_surface` with `transmission
 1` and no `transmission_color` authored) had been rendered teal, Cycles
 tinting the transmission with `base_color` where MaterialX says the default
@@ -193,7 +159,7 @@ floor, a rect light and a distant light, one material per case on the sphere
 rendered by both renderers from the same file through husk at 240×180. The
 sphere's centre and two floor patches are compared on their mean RGB; the
 ratio Cycles/Karma must stay within 1.25 (1.10 for emission, 4 for glass).
-21 checks, 0 problems on 2026-10-08; the floor agrees to the third decimal,
+21 checks, 0 problems on; the floor agrees to the third decimal,
 the sphere within 5-20 % (Cycles bounces more indirect light), emission 5 %
 over Karma. A side-by-side PNG per case lands in `tests/agreement/output/`.
 
@@ -238,7 +204,7 @@ carries:
 Every line starts with `[seconds]` since the first one, so a viewport that
 "takes long to start" reads as the gap between `Render restarted` and the
 first `Rendered 1 samples`, and a frozen UI as a `Render pass` line - no
-stopwatch needed. The live reading of 2026-10-08 (K-31) saw 0.17 s to the
+stopwatch needed. The live reading of (K-31) saw 0.17 s to the
 restart, 0.05 s more to the first sample, and no `Render pass` line at all.
 
 A viewport that "feels slow" is one of three things, told apart by these
@@ -267,7 +233,7 @@ where `check.py` prints `hou.getenv("CYCLES_ROOT")` (it must be inside the
 scratch folder), the loaded HDAs containing `cycles`
 (`hou.hda.loadedFiles()`: `cycles_vops.hda`, `hdcycles_flatten_op_textures.hda`)
 and `[p for p in UsdImagingGL.Engine.GetRendererPlugins() if "Cycles" in p]`
-(`HdCyclesPlugin`, `HdCyclesPluginGPU`). Done on 2026-10-12 for the 5.3 zip.
+(`HdCyclesPlugin`, `HdCyclesPluginGPU`). Done on for the 5.3 zip.
 This proves the package and the plugin registration, not a render and not a
 clean machine (K-102).
 

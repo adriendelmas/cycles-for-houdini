@@ -1,7 +1,7 @@
-From 232ec7e13f348fbb7cd165d6792a92fb511d6641 Mon Sep 17 00:00:00 2001
+From a077cd209722eaf10b106437c0ca4408b88933e6 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 2 Sep 2026 15:09:03 +0200
-Subject: [PATCH 034/162] hydra: shade a mesh flat unless its normals say
+Subject: [PATCH 034/180] hydra: shade a mesh flat unless its normals say
  otherwise, and refresh the UsdPreviewSurface names
 
 Smoothing was decided by displayStyle's flat shading hint alone. That hint is a
@@ -32,7 +32,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
  2 files changed, 50 insertions(+), 13 deletions(-)
 
 diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
-index 7474c6ff..d436b571 100644
+index c934310f..dab51a56 100644
 --- a/src/hydra/material.cpp
 +++ b/src/hydra/material.cpp
 @@ -1296,18 +1296,35 @@ const UsdToCyclesMapping *FindMtlxMapping(const std::string &nodeTypeId)

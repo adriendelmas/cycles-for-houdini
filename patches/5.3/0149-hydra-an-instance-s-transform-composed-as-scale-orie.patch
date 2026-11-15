@@ -1,0 +1,88 @@
+From 21c6ea3e022274f86b920ad9ebe269a59d2208fe Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Mon, 26 Oct 2026 00:29:32 +0100
+Subject: [PATCH 149/180] hydra: an instance's transform composed as scale,
+ orientation, position, then the instancer's
+
+HdInstancer composes an instance as S x R x T x X with GfMatrix4d's row
+vectors; the delegate multiplied the other way round, X x T x R x S, which
+scaled and rotated the positions: instances given orientations and scales
+landed elsewhere than in Karma (positions alone agreed), and a scatter over
+a terrain seemed to vanish. A nested instancer's placement came before its
+child's for the same reason. Both products reversed; bench_instances gains
+`placed`, each square turned and scaled, found where its position says.
+(K-113)
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ src/hydra/instancer.cpp | 38 +++++++++++++++++++++++---------------
+ 1 file changed, 23 insertions(+), 15 deletions(-)
+
+diff --git a/src/hydra/instancer.cpp b/src/hydra/instancer.cpp
+index 389e2920..40a696fd 100644
+--- a/src/hydra/instancer.cpp
++++ b/src/hydra/instancer.cpp
+@@ -120,32 +120,39 @@ VtMatrix4dArray HdCyclesInstancer::ComputeInstanceTransforms(const SdfPath &prot
+   VtMatrix4dArray transforms;
+   transforms.reserve(instanceIndices.size());
+ 
++  /* USD composes an instance as scale, then rotation, then translation,
++   * then the instancer's own transform (HdInstancer): with GfMatrix4d's row
++   * vectors that is S * R * T * X. The products ran the other way round,
++   * which scaled and rotated the translations: an instance given a scale or
++   * an orientation landed elsewhere than in Karma, and a scattered asset
++   * seemed to vanish (K-113). */
+   for (const int index : instanceIndices) {
+-    GfMatrix4d transform = instanceTransform;
++    GfMatrix4d transform(1.0);
+ 
+-    if (index < arrays.translate.size()) {
+-      GfMatrix4d translateMat(1);
+-      translateMat.SetTranslate(arrays.translate[index]);
+-      transform *= translateMat;
++    if (index < arrays.instanceTransform.size()) {
++      transform = arrays.instanceTransform[index];
++    }
++
++    if (index < arrays.scale.size()) {
++      GfMatrix4d scaleMat(1);
++      scaleMat.SetScale(arrays.scale[index]);
++      transform = transform * scaleMat;
+     }
+ 
+     if (index < arrays.rotate.size()) {
+       GfMatrix4d rotateMat(1);
+       const GfVec4f &quat = arrays.rotate[index];
+       rotateMat.SetRotate(GfQuatd(quat[0], quat[1], quat[2], quat[3]));
+-      transform *= rotateMat;
++      transform = transform * rotateMat;
+     }
+ 
+-    if (index < arrays.scale.size()) {
+-      GfMatrix4d scaleMat(1);
+-      scaleMat.SetScale(arrays.scale[index]);
+-      transform *= scaleMat;
+-    }
+-
+-    if (index < arrays.instanceTransform.size()) {
+-      transform *= arrays.instanceTransform[index];
++    if (index < arrays.translate.size()) {
++      GfMatrix4d translateMat(1);
++      translateMat.SetTranslate(arrays.translate[index]);
++      transform = transform * translateMat;
+     }
+ 
++    transform = transform * instanceTransform;
+     transforms.push_back(transform);
+   }
+ 
+@@ -162,7 +169,8 @@ VtMatrix4dArray HdCyclesInstancer::ComputeInstanceTransforms(const SdfPath &prot
+            parentInstancer->ComputeInstanceTransforms(id, time))
+       {
+         for (const GfMatrix4d &localTransform : transforms) {
+-          resultTransforms.push_back(parentTransform * localTransform);
++          /* The nested instance first, its parent instancer's placement after. */
++          resultTransforms.push_back(localTransform * parentTransform);
+         }
+       }
+       return resultTransforms;

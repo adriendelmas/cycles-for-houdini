@@ -1,7 +1,7 @@
-From d8eefd2bda114dd739ce03a9de8199395e91418c Mon Sep 17 00:00:00 2001
+From 3378b10b533762caf6f7d33904fbf4fa97caedfe Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 17:29:00 +0200
-Subject: [PATCH 029/162] hydra: MaterialX position is in object space
+Subject: [PATCH 029/180] hydra: MaterialX position is in object space
 
 Every geometric nodedef declares space as object by default, and the Cycles
 geometry node's Position is in world space. For a normal or a tangent the two
@@ -21,7 +21,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
  1 file changed, 11 insertions(+), 3 deletions(-)
 
 diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
-index 011d0f70..5cb38e7d 100644
+index 14bd94d9..194f9ed3 100644
 --- a/src/hydra/material.cpp
 +++ b/src/hydra/material.cpp
 @@ -366,9 +366,17 @@ const MtlxFacOrColor MtlxCheckerboard = {"checker_texture",

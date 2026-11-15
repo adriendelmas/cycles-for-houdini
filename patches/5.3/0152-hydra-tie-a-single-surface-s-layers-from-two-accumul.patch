@@ -1,0 +1,31 @@
+From eadeebe39becd0b2f2af7087221538b498ff2aff Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Mon, 26 Oct 2026 13:25:53 +0100
+Subject: [PATCH 152/180] hydra: tie a single surface's layers from two
+ accumulations on
+
+The ties TieSumChains puts between the layers of a Material Mixer's
+single surface (0152, K-115) asked for three accumulations before doing
+anything. A rock mixed with moss and lichen has two: it went untied, and
+with the hextiled lookups of three axes times three layers alive at once
+the SVM stack overflowed (248 of 255 slots) and the rock rendered black.
+Two accumulations are enough: that rock now peaks at 170 slots.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ src/hydra/mtlx_expand.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/hydra/mtlx_expand.cpp b/src/hydra/mtlx_expand.cpp
+index f709ea2a..09b53207 100644
+--- a/src/hydra/mtlx_expand.cpp
++++ b/src/hydra/mtlx_expand.cpp
+@@ -2030,7 +2030,7 @@ bool FoldSurfaceMix(Network &net, const mx::DocumentPtr &library)
+ bool TieSumChains(Network &net)
+ {
+   static const TfToken kSurfaceTerminal("surface"), kIn("in"), kIn1("in1"), kIn2("in2");
+-  constexpr size_t kMinLayers = 3;
++  constexpr size_t kMinLayers = 2;
+ 
+   const auto terminal = net.terminals.find(kSurfaceTerminal);
+   if (terminal == net.terminals.end()) {

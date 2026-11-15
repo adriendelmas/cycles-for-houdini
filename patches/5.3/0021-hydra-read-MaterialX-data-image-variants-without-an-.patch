@@ -1,7 +1,7 @@
-From c026db37ce5472e55cf7113b7b7a2d3751d286a4 Mon Sep 17 00:00:00 2001
+From c029d039e044e4a81537042b95d43a6575ef5a7e Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 01:15:54 +0200
-Subject: [PATCH 021/162] hydra: read MaterialX data image variants without an
+Subject: [PATCH 021/180] hydra: read MaterialX data image variants without an
  sRGB decode
 
 Cycles' image_texture defaults its colorspace to auto, which applies an sRGB
@@ -19,7 +19,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
  1 file changed, 23 insertions(+), 1 deletion(-)
 
 diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
-index b1f901ba..0692eec2 100644
+index a3776b1a..78ee1327 100644
 --- a/src/hydra/material.cpp
 +++ b/src/hydra/material.cpp
 @@ -270,6 +270,24 @@ const MtlxFacOrColor MtlxImage = {

@@ -1,0 +1,1088 @@
+From b157cc7e7ef707671e02d2503aa2cd3cbb1f3c28 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Tue, 3 Nov 2026 11:58:06 +0100
+Subject: [PATCH 160/180] hydra + kernel: Gaussian splats from USD, composited
+ without noise
+
+Houdini hands a UsdVol ParticleField3DGaussianSplat to a delegate as a
+`particleField` rprim, which the delegate did not list: Hydra dropped the
+splats without a word. It is now a point cloud rendered as Cycles 5.3
+Gaussian splats, read from the primvars usdVolImaging publishes
+(positions, scales, orientations, opacities, float or half, and
+displayColor).
+
+Cycles 5.3 hits a splat stochastically, with a probability of its opacity
+times its response. For a faint glowing haze (opacity 0.01) that leaves a
+relative noise of 10 per sample, and its bounding sphere dropped every
+splat below an opacity of 0.01. So a second mode, the default for splats
+without spherical harmonics (`cycles:gsplat:mode` = composite):
+
+- splats are never hit. After each closest-hit query the integrator
+  traces the segment up to the hit and composites every splat crossed,
+  weighted-average order independent blending of response x linear
+  colour, adds that as emission and multiplies the throughput by the
+  segment's transmittance;
+- Embree: composited splats carry only a dedicated mask bit, the
+  composite query is an rtcOccluded1 with its own user geometry callback
+  that accumulates and reports nothing;
+- OptiX: their instance mask is the volume scatter bit (camera and bounce
+  rays skip them in hardware); the composite traversal is told apart in
+  __intersection__point by ray flags no other trace uses, with p4 = 0 so
+  the any-hit programs ignore triangles and curves;
+- other BVHs (CUDA without OptiX, HIP, Metal) do not draw them;
+- bounding spheres go down to a response of 1e-4 (3 sigma at 0.01).
+
+Trained splats, with harmonics, stay stochastic (the order 0 coefficient;
+higher bands not read yet). Measured on the CPU against a numpy
+reference of the same compositing, 96x64 at 16 spp: one isotropic splat,
+one rotated anisotropic, three overlapping colours and a 400 splat
+string all match within 0.1 % in mean and 1 % per 4x4 block, with no
+noise.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/bvh/embree.cpp                        |  15 +-
+ src/device/optix/device_impl.cpp          |   7 +
+ src/hydra/geometry.h                      |   7 +
+ src/hydra/geometry.inl                    |   3 +
+ src/hydra/pointcloud.cpp                  | 237 +++++++++++++++++++++-
+ src/hydra/pointcloud.h                    |  11 +-
+ src/hydra/render_delegate.cpp             |   6 +
+ src/kernel/bvh/bvh.h                      |  18 ++
+ src/kernel/data_template.h                |   4 +
+ src/kernel/device/cpu/bvh.h               |  82 ++++++++
+ src/kernel/device/optix/bvh.h             |  89 ++++++++
+ src/kernel/geom/gsplat_intersect.h        | 111 +++++++++-
+ src/kernel/integrator/intersect_closest.h |  44 ++++
+ src/kernel/types.h                        |   9 +-
+ src/scene/geometry.cpp                    |   2 +-
+ src/scene/object.cpp                      |   8 +
+ src/scene/pointcloud.cpp                  |  12 +-
+ src/scene/pointcloud.h                    |   9 +
+ 18 files changed, 655 insertions(+), 19 deletions(-)
+
+diff --git a/src/bvh/embree.cpp b/src/bvh/embree.cpp
+index caf56aa9..162fdbc8 100644
+--- a/src/bvh/embree.cpp
++++ b/src/bvh/embree.cpp
+@@ -236,6 +236,17 @@ RTCError BVHEmbree::offload_scenes_to_gpu(const vector<RTCScene> &scenes)
+ }
+ #  endif
+ 
++/* Composited Gaussian splats answer the composite ray only: no camera, bounce or shadow ray
++ * carries their mask bit, so those rays skip them without calling the user geometry. */
++static uint embree_geometry_mask(const Object *ob)
++{
++  const Geometry *geom = ob->get_geometry();
++  if (geom->is_pointcloud() && static_cast<const PointCloud *>(geom)->is_gsplat_composite()) {
++    return PATH_RAY_VISIBILITY_GSPLAT_COMPOSITE;
++  }
++  return ob->visibility_for_tracing();
++}
++
+ void BVHEmbree::add_object(Object *ob, const int i)
+ {
+   Geometry *geom = ob->get_geometry();
+@@ -308,7 +319,7 @@ void BVHEmbree::add_instance(Object *ob, const int i)
+ #  endif
+   );
+ 
+-  rtcSetGeometryMask(geom_id, ob->visibility_for_tracing());
++  rtcSetGeometryMask(geom_id, embree_geometry_mask(ob));
+   rtcSetGeometryEnableFilterFunctionFromArguments(geom_id, true);
+ 
+   rtcCommitGeometry(geom_id);
+@@ -688,7 +699,7 @@ void BVHEmbree::add_gsplats(const Object *ob, const PointCloud *pointcloud, cons
+   rtcSetGeometryBuildQuality(geom_id, build_quality);
+ 
+   rtcSetGeometryUserData(geom_id, const_cast<PointCloud *>(pointcloud));
+-  rtcSetGeometryMask(geom_id, ob->visibility_for_tracing());
++  rtcSetGeometryMask(geom_id, embree_geometry_mask(ob));
+ 
+   rtcSetGeometryUserPrimitiveCount(geom_id, pointcloud->num_points());
+   rtcSetGeometryTimeStepCount(geom_id, num_motion_steps);
+diff --git a/src/device/optix/device_impl.cpp b/src/device/optix/device_impl.cpp
+index 3787f5e7..aa5811bd 100644
+--- a/src/device/optix/device_impl.cpp
++++ b/src/device/optix/device_impl.cpp
+@@ -1893,6 +1893,13 @@ void OptiXDevice::build_bvh(BVH *bvh, Progress &progress, bool refit)
+ 
+         /* Also skip point clouds in local trace calls. */
+         instance.visibilityMask |= 4;
++
++        /* Composited Gaussian splats get the one bit camera and bounce rays never carry, so
++         * they skip them in hardware; the composite ray traces with that bit (see
++         * GSPLAT_COMPOSITE_INSTANCE_MASK in kernel/device/optix/bvh.h). */
++        if (static_cast<const PointCloud *>(ob->get_geometry())->is_gsplat_composite()) {
++          instance.visibilityMask = PATH_RAY_VISIBILITY_VOLUME_SCATTER;
++        }
+       }
+       {
+         /* Can disable __anyhit__kernel_optix_visibility_test by default (except for thick curves,
+diff --git a/src/hydra/geometry.h b/src/hydra/geometry.h
+index 4c0e3cea..187b1e16 100644
+--- a/src/hydra/geometry.h
++++ b/src/hydra/geometry.h
+@@ -49,6 +49,13 @@ class HdCyclesGeometry : public Base, public HdCyclesTaggedPrim {
+                         PXR_NS::HdDirtyBits dirtyBits,
+                         bool &rebuild) = 0;
+ 
++  /* Gaussian splats fall back to Cycles' splat shader rather than the default surface. Known
++   * from the prim type, before the first Populate() sets the point cloud up. */
++  virtual bool IsGaussianSplats() const
++  {
++    return false;
++  }
++
+   /* Transform samples across the shutter, evenly spaced. Cycles maps a motion
+    * step index linearly onto [-1, 1], so the spacing has to be regular. */
+   static constexpr int kMotionSteps = 3;
+diff --git a/src/hydra/geometry.inl b/src/hydra/geometry.inl
+index fc152c52..0cf75b2e 100644
+--- a/src/hydra/geometry.inl
++++ b/src/hydra/geometry.inl
+@@ -139,6 +139,9 @@ void HdCyclesGeometry<Base, CyclesBase>::Sync(HdSceneDelegate *sceneDelegate,
+        * in it, so an unbound volume renders as if it were not there. */
+       usedShaders[0] = lock.scene->default_volume;
+     }
++    else if (IsGaussianSplats()) {
++      usedShaders[0] = lock.scene->default_gsplat;
++    }
+     else {
+       usedShaders[0] = lock.scene->default_surface;
+     }
+diff --git a/src/hydra/pointcloud.cpp b/src/hydra/pointcloud.cpp
+index ac30b488..27717f28 100644
+--- a/src/hydra/pointcloud.cpp
++++ b/src/hydra/pointcloud.cpp
+@@ -10,10 +10,117 @@
+ #include "hydra/geometry.inl"
+ #include "hydra/util.h"
+ #include "scene/pointcloud.h"
++#include "util/color.h"
++
++#include <pxr/base/gf/half.h>
++#include <pxr/base/gf/quatf.h>
++#include <pxr/base/gf/quath.h>
++#include <pxr/base/gf/vec3h.h>
++#include <pxr/base/vt/types.h>
+ 
+ HDCYCLES_NAMESPACE_OPEN_SCOPE
+ 
+-HdCyclesPoints::HdCyclesPoints(const SdfPath &rprimId) : HdCyclesGeometry(rprimId) {}
++/* The UsdVol particle field primvars (usdVolImaging's particle field adapter
++ * publishes the schema's attributes under these names, float or half). */
++TF_DEFINE_PRIVATE_TOKENS(_splatTokens,
++    (positions)
++    (orientations)
++    (scales)
++    (opacities)
++    ((shCoefficients, "radiance:sphericalHarmonicsCoefficients"))
++    ((shDegree, "radiance:sphericalHarmonicsDegree"))
++    ((mode, "cycles:gsplat:mode"))
++    (stochastic)
++    (composite)
++);
++
++namespace {
++
++VtVec3fArray ReadVec3Array(const HdPrimvarsSchema &primvars, const TfToken &name)
++{
++  const VtValue value = ReadPrimvar(primvars, name);
++  if (value.IsHolding<VtVec3fArray>()) {
++    return value.UncheckedGet<VtVec3fArray>();
++  }
++  VtVec3fArray result;
++  if (value.IsHolding<VtVec3hArray>()) {
++    const VtVec3hArray &half = value.UncheckedGet<VtVec3hArray>();
++    result.resize(half.size());
++    GfVec3f *out = result.data();
++    for (size_t i = 0; i < half.size(); ++i) {
++      out[i] = GfVec3f(half[i]);
++    }
++  }
++  return result;
++}
++
++VtQuatfArray ReadQuatArray(const HdPrimvarsSchema &primvars, const TfToken &name)
++{
++  const VtValue value = ReadPrimvar(primvars, name);
++  if (value.IsHolding<VtQuatfArray>()) {
++    return value.UncheckedGet<VtQuatfArray>();
++  }
++  VtQuatfArray result;
++  if (value.IsHolding<VtQuathArray>()) {
++    const VtQuathArray &half = value.UncheckedGet<VtQuathArray>();
++    result.resize(half.size());
++    GfQuatf *out = result.data();
++    for (size_t i = 0; i < half.size(); ++i) {
++      out[i] = GfQuatf(half[i]);
++    }
++  }
++  return result;
++}
++
++VtFloatArray ReadFloatArray(const HdPrimvarsSchema &primvars, const TfToken &name)
++{
++  const VtValue value = ReadPrimvar(primvars, name);
++  if (value.IsHolding<VtFloatArray>()) {
++    return value.UncheckedGet<VtFloatArray>();
++  }
++  VtFloatArray result;
++  if (value.IsHolding<VtHalfArray>()) {
++    const VtHalfArray &half = value.UncheckedGet<VtHalfArray>();
++    result.resize(half.size());
++    float *out = result.data();
++    for (size_t i = 0; i < half.size(); ++i) {
++      out[i] = float(half[i]);
++    }
++  }
++  return result;
++}
++
++/* `cycles:gsplat:mode`, a constant token or string: "composite" or "stochastic". */
++bool ReadSplatMode(const HdPrimvarsSchema &primvars, const TfToken &name, bool &composite)
++{
++  VtValue value = ReadPrimvar(primvars, name);
++  if (value.IsHolding<VtArray<TfToken>>() && value.GetArraySize() == 1) {
++    value = VtValue(value.UncheckedGet<VtArray<TfToken>>()[0]);
++  }
++  else if (value.IsHolding<VtArray<std::string>>() && value.GetArraySize() == 1) {
++    value = VtValue(value.UncheckedGet<VtArray<std::string>>()[0]);
++  }
++
++  std::string mode;
++  if (value.IsHolding<TfToken>()) {
++    mode = value.UncheckedGet<TfToken>().GetString();
++  }
++  else if (value.IsHolding<std::string>()) {
++    mode = value.UncheckedGet<std::string>();
++  }
++  else {
++    return false;
++  }
++  composite = (mode != "stochastic");
++  return true;
++}
++
++}  // namespace
++
++HdCyclesPoints::HdCyclesPoints(const SdfPath &rprimId, const bool gaussianSplats)
++    : HdCyclesGeometry(rprimId), _gaussianSplats(gaussianSplats)
++{
++}
+ 
+ HdCyclesPoints::~HdCyclesPoints() = default;
+ 
+@@ -37,6 +144,23 @@ HdDirtyBits HdCyclesPoints::_PropagateDirtyBits(HdDirtyBits bits) const
+ 
+ void HdCyclesPoints::Populate(HdSceneDelegate *sceneDelegate, HdDirtyBits dirtyBits, bool &rebuild)
+ {
++  if (_gaussianSplats) {
++    /* A particle field has neither points nor widths: positions, orientations,
++     * scales and opacities are all primvars, so any primvar change rebuilds it. */
++    if (dirtyBits & (HdChangeTracker::DirtyPoints | HdChangeTracker::DirtyPrimvar)) {
++      const size_t numPoints = _geom->num_points();
++      PopulateSplats(sceneDelegate);
++      rebuild = _geom->num_points() != numPoints;
++
++      array<int> shaders(_geom->num_points());
++      std::fill_n(shaders.data(), shaders.size(), 0);
++      _geom->set_shader(shaders);
++
++      PopulatePrimvars(sceneDelegate);
++    }
++    return;
++  }
++
+   if (dirtyBits & (HdChangeTracker::DirtyPoints | HdChangeTracker::DirtyWidths)) {
+     const size_t numPoints = _geom->num_points();
+ 
+@@ -176,6 +300,13 @@ void HdCyclesPoints::PopulatePrimvars(HdSceneDelegate *sceneDelegate)
+       if (primvarName == HdTokens->points || primvarName == HdTokens->widths) {
+         continue;
+       }
++      if (_gaussianSplats &&
++          (primvarName == _splatTokens->positions || primvarName == _splatTokens->orientations ||
++           primvarName == _splatTokens->scales || primvarName == _splatTokens->opacities ||
++           primvarName == _splatTokens->shCoefficients))
++      {
++        continue;
++      }
+ 
+       const VtValue value = ReadPrimvar(primvars, primvarName);
+       if (value.IsEmpty()) {
+@@ -234,4 +365,108 @@ void HdCyclesPoints::PopulatePrimvars(HdSceneDelegate *sceneDelegate)
+   }
+ }
+ 
++void HdCyclesPoints::PopulateSplats(HdSceneDelegate *sceneDelegate)
++{
++  const HdSceneIndexPrim prim = GetPrim(sceneDelegate, GetId());
++  const HdPrimvarsSchema primvars = HdPrimvarsSchema::GetFromParent(prim.dataSource);
++
++  const VtVec3fArray positions = ReadVec3Array(primvars, _splatTokens->positions);
++  const size_t numPoints = positions.size();
++
++  _geom->resize(int(numPoints));
++  _geom->set_render_as(PointCloud::RENDER_AS_GSPLATS);
++  if (numPoints == 0) {
++    return;
++  }
++
++  static_assert(sizeof(GfVec3f) == sizeof(packed_float3));
++  std::copy_n(reinterpret_cast<const packed_float3 *>(positions.data()),
++              numPoints,
++              _geom->get_position_for_write());
++
++  /* ponytail: no motion blur on splats - the point count of a splat field
++   * changes from frame to frame anyway. Upgrade with velocity blur if asked. */
++  if (Attribute *attr_P = _geom->attributes.find(ATTR_STD_POSITION)) {
++    if (attr_P->has_motion()) {
++      attr_P->remove_motion();
++      _geom->set_use_motion_blur(false);
++    }
++  }
++
++  const VtVec3fArray scales = ReadVec3Array(primvars, _splatTokens->scales);
++  const VtQuatfArray orientations = ReadQuatArray(primvars, _splatTokens->orientations);
++  const VtFloatArray opacities = ReadFloatArray(primvars, _splatTokens->opacities);
++  const VtVec3fArray shCoefficients = ReadVec3Array(primvars, _splatTokens->shCoefficients);
++
++  int shDegree = 3;
++  const VtValue degreeValue = ReadPrimvar(primvars, _splatTokens->shDegree);
++  if (degreeValue.CanCast<int>()) {
++    shDegree = VtValue::Cast<int>(degreeValue).UncheckedGet<int>();
++  }
++  const size_t shPerPoint = size_t(shDegree + 1) * size_t(shDegree + 1);
++  const bool hasSh = shDegree >= 0 && !shCoefficients.empty() &&
++                     shCoefficients.size() >= numPoints * shPerPoint;
++
++  /* Composited unless asked otherwise: Karma XPU draws splats without noise by
++   * default, and a stochastic hit at the low opacity of a glowing haze (0.01)
++   * keeps a relative noise of 10 per sample. Trained splats, which carry
++   * spherical harmonics and are dense, stay stochastic: blending them out of
++   * order would show what is behind them. */
++  bool composite = !hasSh;
++  ReadSplatMode(primvars, _splatTokens->mode, composite);
++  _geom->set_gsplat_composite(composite);
++
++  /* The colour: displayColor, which a SOP Import writes from Cd. */
++  const VtValue colorValue = ReadPrimvar(primvars, HdTokens->displayColor);
++  const VtVec3fArray colors = colorValue.IsHolding<VtVec3fArray>() ?
++                                  colorValue.UncheckedGet<VtVec3fArray>() :
++                                  VtVec3fArray();
++  const bool perPointColor = colors.size() >= numPoints;
++  const GfVec3f constantColor = colors.empty() ? GfVec3f(1.0f) : colors[0];
++
++  Attribute *attr_scale = _geom->attributes.add(ATTR_STD_GSPLAT_SCALE);
++  Attribute *attr_rotation = _geom->attributes.add(ATTR_STD_GSPLAT_ROTATION);
++  Attribute *attr_base = _geom->attributes.add(ATTR_STD_GSPLAT_RADIANCE_BASE);
++  packed_float3 *scale = attr_scale->data_for_write<packed_float3>();
++  Quaternion *rotation = attr_rotation->data_for_write<Quaternion>();
++  float4 *base = attr_base->data_for_write<float4>();
++
++  /* Order 0 spherical harmonics constant, to turn a linear colour into the
++   * coefficient the splat shader of Cycles expects (gsplat_radiance(): sRGB of
++   * C0 * coefficient + 0.5). ponytail: assumes a Rec.709 scene linear space;
++   * only used by stochastic splats without harmonics. */
++  constexpr float kShC0 = 0.28209479177387814f;
++
++  const bool hasScales = scales.size() >= numPoints;
++  const bool hasOrientations = orientations.size() >= numPoints;
++  const bool hasOpacities = opacities.size() >= numPoints;
++
++  for (size_t i = 0; i < numPoints; ++i) {
++    scale[i] = hasScales ? make_float3(scales[i][0], scales[i][1], scales[i][2]) :
++                           PointCloud::DEFAULT_GSPLAT_SCALE;
++
++    if (hasOrientations) {
++      const GfQuatf &q = orientations[i];
++      const GfVec3f &im = q.GetImaginary();
++      rotation[i] = make_quaternion(q.GetReal(), im[0], im[1], im[2]);
++    }
++    else {
++      rotation[i] = identity_quaternion();
++    }
++
++    const GfVec3f &c = perPointColor ? colors[i] : constantColor;
++    float3 radiance = make_float3(c[0], c[1], c[2]);
++    if (!composite) {
++      if (hasSh) {
++        const GfVec3f &dc = shCoefficients[i * shPerPoint];
++        radiance = make_float3(dc[0], dc[1], dc[2]);
++      }
++      else {
++        radiance = (color_linear_to_srgb_v3(radiance) - make_float3(0.5f)) / kShC0;
++      }
++    }
++    base[i] = make_float4(radiance, hasOpacities ? opacities[i] : 1.0f);
++  }
++}
++
+ HDCYCLES_NAMESPACE_CLOSE_SCOPE
+diff --git a/src/hydra/pointcloud.h b/src/hydra/pointcloud.h
+index 491d013c..caa79634 100644
+--- a/src/hydra/pointcloud.h
++++ b/src/hydra/pointcloud.h
+@@ -14,7 +14,7 @@ HDCYCLES_NAMESPACE_OPEN_SCOPE
+ 
+ class HdCyclesPoints final : public HdCyclesGeometry<PXR_NS::HdPoints, CCL_NS::PointCloud> {
+  public:
+-  HdCyclesPoints(const PXR_NS::SdfPath &rprimId);
++  HdCyclesPoints(const PXR_NS::SdfPath &rprimId, bool gaussianSplats = false);
+   ~HdCyclesPoints() override;
+ 
+   PXR_NS::HdDirtyBits GetInitialDirtyBitsMask() const override;
+@@ -30,6 +30,15 @@ class HdCyclesPoints final : public HdCyclesGeometry<PXR_NS::HdPoints, CCL_NS::P
+   void PopulateWidths(PXR_NS::HdSceneDelegate *sceneDelegate);
+ 
+   void PopulatePrimvars(PXR_NS::HdSceneDelegate *sceneDelegate);
++
++  /* A particle field (UsdVol Gaussian splats) rather than points. */
++  bool IsGaussianSplats() const override
++  {
++    return _gaussianSplats;
++  }
++  void PopulateSplats(PXR_NS::HdSceneDelegate *sceneDelegate);
++
++  const bool _gaussianSplats;
+ };
+ 
+ HDCYCLES_NAMESPACE_CLOSE_SCOPE
+diff --git a/src/hydra/render_delegate.cpp b/src/hydra/render_delegate.cpp
+index 9ca1bb59..6b4e49bb 100644
+--- a/src/hydra/render_delegate.cpp
++++ b/src/hydra/render_delegate.cpp
+@@ -66,6 +66,9 @@ const TfTokenVector kSupportedRPrimTypes = {
+     HdPrimTypeTokens->basisCurves,
+     HdPrimTypeTokens->mesh,
+     HdPrimTypeTokens->points,
++    /* UsdVol ParticleField3DGaussianSplat: Gaussian splats, a point cloud of
++     * their own in Cycles. Without it Hydra dropped them without a word. */
++    HdPrimTypeTokens->particleField,
+ #ifdef WITH_OPENVDB
+     HdPrimTypeTokens->volume,
+ #endif
+@@ -331,6 +334,9 @@ HdRprim *HdCyclesDelegate::CreateRprim(const TfToken &typeId, const SdfPath &rpr
+   if (typeId == HdPrimTypeTokens->points) {
+     return new HdCyclesPoints(rprimId);
+   }
++  if (typeId == HdPrimTypeTokens->particleField) {
++    return new HdCyclesPoints(rprimId, true);
++  }
+ #ifdef WITH_OPENVDB
+   if (typeId == HdPrimTypeTokens->volume) {
+     return new HdCyclesVolume(rprimId);
+diff --git a/src/kernel/bvh/bvh.h b/src/kernel/bvh/bvh.h
+index c1b81131..ac972ff7 100644
+--- a/src/kernel/bvh/bvh.h
++++ b/src/kernel/bvh/bvh.h
+@@ -181,6 +181,24 @@ ccl_device_intersect void scene_intersect_shadow_all(KernelGlobals kg,
+ }
+ #endif /* __TRANSPARENT_SHADOWS__ */
+ 
++#if defined(__GSPLATS__)
++/* Emission and transmittance of the composited Gaussian splats along the ray. Embree and OptiX
++ * only: elsewhere (CUDA, HIP and Metal BVHs) composited splats are not drawn at all. */
++ccl_device_intersect void scene_intersect_gsplat_composite(KernelGlobals kg,
++                                                           const ccl_private Ray *ray,
++                                                           const uint visibility,
++                                                           ccl_private GSplatCompositeAccum *accum)
++{
++#  if defined(__EMBREE__) && !defined(__KERNEL_ONEAPI__)
++  if (kernel_data.device_bvh && intersection_ray_valid(ray)) {
++    kernel_embree_intersect_gsplat_composite(kg, ray, visibility, accum);
++  }
++#  elif defined(__KERNEL_OPTIX__)
++  scene_intersect_gsplat_composite_optix(ray, visibility, accum);
++#  endif
++}
++#endif
++
+ // ------------------------------------------------------------------------------------------------
+ 
+ #ifdef __BVH2__
+diff --git a/src/kernel/data_template.h b/src/kernel/data_template.h
+index 6088415a..288a88cd 100644
+--- a/src/kernel/data_template.h
++++ b/src/kernel/data_template.h
+@@ -57,6 +57,10 @@ KERNEL_STRUCT_MEMBER(bvh, int, have_volumes)
+ KERNEL_STRUCT_MEMBER(bvh, int, bvh_layout)
+ KERNEL_STRUCT_MEMBER(bvh, int, use_bvh_steps)
+ KERNEL_STRUCT_MEMBER(bvh, int, curve_subdivisions)
++KERNEL_STRUCT_MEMBER(bvh, int, have_gsplat_composite)
++KERNEL_STRUCT_MEMBER(bvh, int, pad1)
++KERNEL_STRUCT_MEMBER(bvh, int, pad2)
++KERNEL_STRUCT_MEMBER(bvh, int, pad3)
+ KERNEL_STRUCT_END(KernelBVH)
+ 
+ /* Film. */
+diff --git a/src/kernel/device/cpu/bvh.h b/src/kernel/device/cpu/bvh.h
+index 0b39a165..e1d68b10 100644
+--- a/src/kernel/device/cpu/bvh.h
++++ b/src/kernel/device/cpu/bvh.h
+@@ -100,6 +100,15 @@ struct CCLVolumeContext : public RTCRayQueryContext {
+ 
+ /* Utilities. */
+ 
++#if defined(__GSPLATS__) && !defined(__KERNEL_ONEAPI__)
++struct CCLGSplatCompositeContext : public RTCRayQueryContext {
++  KernelGlobals kg;
++  /* Visibility of the path ray the segment belongs to. */
++  uint visibility;
++  GSplatCompositeAccum *accum;
++};
++#endif
++
+ ccl_device_inline void kernel_embree_setup_ray(const Ray &ray,
+                                                RTCRay &rtc_ray,
+                                                const uint visibility)
+@@ -566,6 +575,52 @@ ccl_device_forceinline void kernel_embree_filter_occluded_volume_all_func_impl(
+ #endif
+ }
+ 
++#if defined(__GSPLATS__) && !defined(__KERNEL_ONEAPI__)
++/* Composited splats are the only geometry carrying the composite mask bit; everything the ray
++ * crosses is accumulated and none of it is reported as a hit, so the traversal goes on to the
++ * end of the segment. */
++ccl_device_forceinline void kernel_embree_custom_gsplat_composite_func_impl(
++    const RTCOccludedFunctionNArguments *args)
++{
++  kernel_assert(args->N == 1);
++
++  if (!args->valid[0]) {
++    return;
++  }
++  args->valid[0] = 0;
++
++  const CCLGSplatCompositeContext *ctx = (const CCLGSplatCompositeContext *)(args->context);
++  const ThreadKernelGlobalsCPU *kg = ctx->kg;
++  const RTCRay *ray = (const RTCRay *)args->ray;
++
++  const uint object = custom_intersect_get_object(*ctx, args->geomID);
++  if ((kernel_data_fetch(objects, object).visibility & ctx->visibility) == 0) {
++    return;
++  }
++
++  const int prim_offset = kernel_data_fetch(object_prim_offset, object);
++  const int prim = args->primID + prim_offset;
++  const int primitive_type = kernel_data_fetch(objects, object).primitive_type;
++
++  gsplat_composite_accumulate(kg,
++                              *ctx->accum,
++                              make_float3(ray->org_x, ray->org_y, ray->org_z),
++                              make_float3(ray->dir_x, ray->dir_y, ray->dir_z),
++                              ray->tnear,
++                              ray->tfar,
++                              object,
++                              prim,
++                              ray->time,
++                              primitive_type);
++}
++
++ccl_device_forceinline void kernel_embree_filter_reject_func_impl(
++    const RTCFilterFunctionNArguments *args)
++{
++  *args->valid = 0;
++}
++#endif
++
+ #ifdef __KERNEL_ONEAPI__
+ /* Static wrappers so we can call the callbacks from out side the ONEAPIKernelContext class */
+ RTC_SYCL_INDIRECTLY_CALLABLE static void ccl_always_inline
+@@ -807,6 +862,33 @@ ccl_device_intersect void kernel_embree_intersect_shadow_all(KernelGlobals kg,
+ }
+ #endif
+ 
++#if defined(__GSPLATS__) && !defined(__KERNEL_ONEAPI__)
++ccl_device_intersect void kernel_embree_intersect_gsplat_composite(
++    KernelGlobals kg,
++    const ccl_private Ray *ray,
++    const uint visibility,
++    ccl_private GSplatCompositeAccum *accum)
++{
++  CCLGSplatCompositeContext ctx;
++  rtcInitRayQueryContext(&ctx);
++  ctx.kg = kg;
++  ctx.visibility = visibility;
++  ctx.accum = accum;
++
++  RTCRay rtc_ray;
++  kernel_embree_setup_ray(*ray, rtc_ray, PATH_RAY_VISIBILITY_GSPLAT_COMPOSITE);
++
++  RTCOccludedArguments args;
++  rtcInitOccludedArguments(&args);
++  args.occluded = reinterpret_cast<RTCOccludedFunctionN>(
++      kernel_embree_custom_gsplat_composite_func_impl);
++  args.filter = reinterpret_cast<RTCFilterFunctionN>(kernel_embree_filter_reject_func_impl);
++  args.feature_mask = CYCLES_EMBREE_USED_FEATURES;
++  args.context = &ctx;
++  rtcTraversableOccluded1(kernel_data.device_bvh, &rtc_ray, &args);
++}
++#endif
++
+ #ifdef __VOLUME__
+ 
+ ccl_device_intersect uint kernel_embree_intersect_volume(KernelGlobals kg,
+diff --git a/src/kernel/device/optix/bvh.h b/src/kernel/device/optix/bvh.h
+index a9d8faf3..7892f0c7 100644
+--- a/src/kernel/device/optix/bvh.h
++++ b/src/kernel/device/optix/bvh.h
+@@ -29,6 +29,22 @@ enum CustomPrimitiveHitKind {
+   CUSTOM_PRIMITIVE_HIT_KIND_POINT,
+ };
+ 
++#if defined(__GSPLATS__)
++/* The ray that composites Gaussian splats along a path segment is told apart by flags no other
++ * trace uses (back-face culling only touches triangles, which that ray ignores anyway). */
++#  define GSPLAT_COMPOSITE_RAY_FLAGS     (OPTIX_RAY_FLAG_DISABLE_CLOSESTHIT | OPTIX_RAY_FLAG_CULL_BACK_FACING_TRIANGLES)
++
++/* Instance mask of composited splats: one bit that camera and bounce rays do not carry, so they
++ * skip those instances in hardware (only volume scatter rays still reach the intersection
++ * program, which turns them away). */
++#  define GSPLAT_COMPOSITE_INSTANCE_MASK PATH_RAY_VISIBILITY_VOLUME_SCATTER
++
++ccl_device_forceinline bool gsplat_composite_ray()
++{
++  return (optixGetRayFlags() & GSPLAT_COMPOSITE_RAY_FLAGS) == GSPLAT_COMPOSITE_RAY_FLAGS;
++}
++#endif
++
+ template<typename T> ccl_device_forceinline T *get_payload_ptr_0()
+ {
+   return pointer_unpack_from_uint<T>(optixGetPayload_0(), optixGetPayload_1());
+@@ -360,6 +376,36 @@ extern "C" __global__ void __intersection__point()
+   const int object = get_object_id();
+   const int type = kernel_data_fetch(objects, object).primitive_type;
+ 
++#  if defined(__GSPLATS__)
++  /* Composited splats are never hit: the composite ray accumulates them and reports nothing,
++   * every other ray goes through them. */
++  if (kernel_data_fetch(object_flag, object) & SD_OBJECT_GSPLAT_COMPOSITE) {
++    if (gsplat_composite_ray() &&
++        (kernel_data_fetch(objects, object).visibility & optixGetPayload_5()))
++    {
++#    ifdef __OBJECT_MOTION__
++      const float time = optixGetRayTime();
++#    else
++      const float time = 0.0f;
++#    endif
++      gsplat_composite_accumulate(nullptr,
++                                  *get_payload_ptr_0<GSplatCompositeAccum>(),
++                                  optixGetObjectRayOrigin(),
++                                  optixGetObjectRayDirection(),
++                                  optixGetRayTmin(),
++                                  optixGetRayTmax(),
++                                  object,
++                                  prim,
++                                  time,
++                                  type);
++    }
++    return;
++  }
++  if (gsplat_composite_ray()) {
++    return;
++  }
++#  endif
++
+ #  ifdef __VISIBILITY_FLAG__
+   const uint visibility = optixGetPayload_4();
+   if ((kernel_data_fetch(objects, object).visibility & visibility) == 0) {
+@@ -494,6 +540,49 @@ ccl_device_intersect bool scene_intersect_shadow(KernelGlobals kg,
+   return optixHitObjectIsHit();
+ }
+ 
++#if defined(__GSPLATS__)
++ccl_device_intersect void scene_intersect_gsplat_composite_optix(
++    const ccl_private Ray *ray,
++    const uint visibility,
++    ccl_private GSplatCompositeAccum *accum)
++{
++  /* Note: some registers have hardcoded meaning.
++   * Be careful when changing the values here. See the note at the top of this file for more
++   * details.
++   *
++   * p4, the object visibility test, is 0 so that the any-hit programs ignore every triangle and
++   * curve; the visibility of the path ray goes in p5 for the splats. */
++  uint p0 = pointer_pack_to_uint_0(accum);
++  uint p1 = pointer_pack_to_uint_1(accum);
++  uint p2 = 0;
++  uint p3 = 0;
++  uint p4 = 0;
++  uint p5 = visibility;
++  uint p6 = pointer_pack_to_uint_0(ray);
++  uint p7 = pointer_pack_to_uint_1(ray);
++
++  optixTraverse(intersection_ray_valid(ray) ? kernel_data.device_bvh : 0,
++                ray->P,
++                ray->D,
++                ray->tmin,
++                ray->tmax,
++                ray->time,
++                GSPLAT_COMPOSITE_INSTANCE_MASK,
++                OPTIX_RAY_FLAG_ENFORCE_ANYHIT | GSPLAT_COMPOSITE_RAY_FLAGS,
++                0, /* SBT offset for PG_HITD */
++                0,
++                0,
++                p0,
++                p1,
++                p2,
++                p3,
++                p4,
++                p5,
++                p6,
++                p7);
++}
++#endif
++
+ #ifdef __BVH_LOCAL__
+ template<bool single_hit = false>
+ ccl_device_intersect bool scene_intersect_local(KernelGlobals kg,
+diff --git a/src/kernel/geom/gsplat_intersect.h b/src/kernel/geom/gsplat_intersect.h
+index ebfdc909..6839a579 100644
+--- a/src/kernel/geom/gsplat_intersect.h
++++ b/src/kernel/geom/gsplat_intersect.h
+@@ -77,6 +77,21 @@ ccl_device_forceinline GSplatIsectParams gsplat_intersect_get_params(
+   return params;
+ }
+ 
++/* Distance and response of the Gaussian splat at its point of maximum response along the ray.
++ * Returns false when the ray misses the splat's bounding sphere or the point is outside of the
++ * ray range. */
++ccl_device_forceinline bool gsplat_intersect_response(KernelGlobals kg,
++                                                      const float3 ray_P,
++                                                      const float3 ray_D,
++                                                      const float ray_tmin,
++                                                      const float ray_tmax,
++                                                      const int object,
++                                                      const int prim,
++                                                      const float time,
++                                                      const int primitive_type,
++                                                      ccl_private float &r_t,
++                                                      ccl_private float &r_response);
++
+ /* Intersect ray against Gaussian splat.
+  * Performs stochastic alpha test described in [sun2025]. */
+ ccl_device_forceinline bool gsplat_intersect_test(KernelGlobals kg,
+@@ -89,6 +104,41 @@ ccl_device_forceinline bool gsplat_intersect_test(KernelGlobals kg,
+                                                   const float time,
+                                                   const int primitive_type,
+                                                   ccl_private float &r_t)
++{
++  float particle_opacity;
++  if (!gsplat_intersect_response(kg,
++                                 ray_P,
++                                 ray_D,
++                                 ray_tmin,
++                                 ray_tmax,
++                                 object,
++                                 prim,
++                                 time,
++                                 primitive_type,
++                                 r_t,
++                                 particle_opacity))
++  {
++    return false;
++  }
++
++  /* Approach similar to [sun2025] who uses stateless trigonometric hash function as a source of
++   * RNG: hash the intersection point to a [0 .. 1] floating point. */
++  /* TODO(sergey): Check on using potentially cheaper PCG hash?
++   * Internally hash_float3_to_float() uses Jenkins Lookup3 hash function. */
++  return hash_float3_to_float(ray_P + r_t * ray_D) <= particle_opacity;
++}
++
++ccl_device_forceinline bool gsplat_intersect_response(KernelGlobals kg,
++                                                      const float3 ray_P,
++                                                      const float3 ray_D,
++                                                      const float ray_tmin,
++                                                      const float ray_tmax,
++                                                      const int object,
++                                                      const int prim,
++                                                      const float time,
++                                                      const int primitive_type,
++                                                      ccl_private float &r_t,
++                                                      ccl_private float &r_response)
+ {
+   const int position_offset = kernel_data_fetch(objects, object).position_offset;
+   const float4 point = (primitive_type & PRIMITIVE_MOTION) ?
+@@ -165,19 +215,56 @@ ccl_device_forceinline bool gsplat_intersect_test(KernelGlobals kg,
+ 
+   /* Particle response.
+    * [sun2025] Algorithm 1 (line 12). */
+-  const float particle_opacity = params.opacity * fast_expf(-1.0f / 2.0f * e);
++  r_response = params.opacity * fast_expf(-1.0f / 2.0f * e);
++  r_t = t;
+ 
+-  /* Approach similar to [sun2025] who uses stateless trigonometric hash function as a source of
+-   * RNG: hash the intersection point to a [0 .. 1] floating point. */
+-  /* TODO(sergey): Check on using potentially cheaper PCG hash?
+-   * Internally hash_float3_to_float() uses Jenkins Lookup3 hash function. */
+-  if (hash_float3_to_float(x) > particle_opacity) {
+-    return false;
++  return true;
++}
++
++/* Emission and transmittance of the composited Gaussian splats along one path segment.
++ *
++ * The splats are summed in no particular order, as weighted-average order independent
++ * transparency: exact for splats of one colour and, for any colours, when the opacities are low
++ * (the emissive haze this mode is for). Dense opaque splats need the stochastic mode. */
++struct GSplatCompositeAccum {
++  /* Sum of response * radiance. */
++  float3 radiance;
++  /* Sum of responses. */
++  float response;
++  /* Sum of log(1 - response): the segment's transmittance in log space. */
++  float log_transmittance;
++};
++
++ccl_device_forceinline void gsplat_composite_accumulate(KernelGlobals kg,
++                                                        ccl_private GSplatCompositeAccum &accum,
++                                                        const float3 ray_P,
++                                                        const float3 ray_D,
++                                                        const float ray_tmin,
++                                                        const float ray_tmax,
++                                                        const int object,
++                                                        const int prim,
++                                                        const float time,
++                                                        const int primitive_type)
++{
++  float t;
++  float response;
++  if (!gsplat_intersect_response(
++          kg, ray_P, ray_D, ray_tmin, ray_tmax, object, prim, time, primitive_type, t, response))
++  {
++    return;
+   }
+ 
+-  r_t = t;
++  /* An opacity of 1 would make the segment fully opaque in log space. */
++  response = fminf(response, 0.9999f);
++  if (!(response > 0.0f)) {
++    return;
++  }
+ 
+-  return true;
++  /* In composite mode the base radiance holds the splat's linear colour. */
++  const float4 radiance_base = motion_gsplat_radiance_base(kg, object, prim, time);
++  accum.radiance += response * make_float3(radiance_base);
++  accum.response += response;
++  accum.log_transmittance += logf(1.0f - response);
+ }
+ 
+ ccl_device_forceinline bool gsplat_intersect(KernelGlobals kg,
+@@ -193,6 +280,12 @@ ccl_device_forceinline bool gsplat_intersect(KernelGlobals kg,
+ {
+   kernel_assert(primitive_type & PRIMITIVE_GSPLAT);
+ 
++  /* Composited splats are never hit (see gsplat_composite_accumulate()): Embree and OptiX skip
++   * them by mask, this keeps them out of the other BVHs, which do not composite them. */
++  if (kernel_data_fetch(object_flag, object) & SD_OBJECT_GSPLAT_COMPOSITE) {
++    return false;
++  }
++
+   if (!gsplat_intersect_test(
+           kg, ray_P, ray_D, ray_tmin, ray_tmax, object, prim, time, primitive_type, isect->t))
+   {
+diff --git a/src/kernel/integrator/intersect_closest.h b/src/kernel/integrator/intersect_closest.h
+index 65a270ba..3e3653a1 100644
+--- a/src/kernel/integrator/intersect_closest.h
++++ b/src/kernel/integrator/intersect_closest.h
+@@ -16,6 +16,43 @@
+ 
+ CCL_NAMESPACE_BEGIN
+ 
++#if defined(__GSPLATS__)
++/* Composited Gaussian splats between the ray origin and what it hits: their emission is added
++ * to the path and their transmittance to its throughput, with no hit and no shading, as a
++ * volume would. They are reached by camera and bounce rays only - not light-sampled, and they
++ * cast no shadow. */
++ccl_device_forceinline void integrator_intersect_gsplat_composite(
++    KernelGlobals kg,
++    IntegratorState state,
++    const ccl_private Ray *ccl_restrict ray,
++    const float tmax,
++    const uint visibility,
++    ccl_global float *ccl_restrict render_buffer)
++{
++  Ray segment = *ray;
++  segment.tmax = tmax;
++
++  GSplatCompositeAccum accum;
++  accum.radiance = zero_float3();
++  accum.response = 0.0f;
++  accum.log_transmittance = 0.0f;
++  scene_intersect_gsplat_composite(kg, &segment, visibility, &accum);
++
++  if (!(accum.response > 0.0f)) {
++    return;
++  }
++
++  /* Weighted-average blending: the summed radiance, scaled so that the splats' combined
++   * opacity is 1 - transmittance instead of the plain sum of their opacities. */
++  const float transmittance = expf(accum.log_transmittance);
++  const float3 emission = accum.radiance * ((1.0f - transmittance) / accum.response);
++
++  const Spectrum throughput = INTEGRATOR_STATE(state, path, throughput);
++  film_write_volume_emission(kg, state, throughput * rgb_to_spectrum(emission), render_buffer);
++  INTEGRATOR_STATE_WRITE(state, path, throughput) = throughput * transmittance;
++}
++#endif
++
+ ccl_device_forceinline bool integrator_intersect_skip_lights(KernelGlobals kg,
+                                                              IntegratorState state)
+ {
+@@ -437,6 +474,13 @@ ccl_device void integrator_intersect_closest(KernelGlobals kg,
+           hit;
+   }
+ 
++#if defined(__GSPLATS__)
++  if (kernel_data.bvh.have_gsplat_composite) {
++    integrator_intersect_gsplat_composite(
++        kg, state, &ray, hit ? isect.t : ray.tmax, visibility, render_buffer);
++  }
++#endif
++
+   /* Write intersection result into global integrator state memory. */
+   integrator_state_write_isect(state, &isect);
+ 
+diff --git a/src/kernel/types.h b/src/kernel/types.h
+index d7b5f3cd..bed4e1c2 100644
+--- a/src/kernel/types.h
++++ b/src/kernel/types.h
+@@ -181,6 +181,10 @@ enum PathRayVisibilityFlag : uint32_t {
+   /* Raycast shader node rays, not part of the path. */
+   PATH_RAY_VISIBILITY_RAYCAST = (1U << 7U),
+ 
++  /* Marks the ray that composites the emission of Gaussian splats along a path segment. Only
++   * a ray flag (Embree geometry mask of composited splats); never an object visibility bit. */
++  PATH_RAY_VISIBILITY_GSPLAT_COMPOSITE = (1U << 14U),
++
+   /* Set of all flags an object can be visible to.
+    *
+    * NOTE: SHADOW_CATCHER and OSL macros below assume there are no more than 16 visibility bits. */
+@@ -1045,6 +1049,8 @@ enum ShaderDataObjectFlag : uint {
+   SD_OBJECT_HAS_VOLUME_MOTION = (1u << 11),
+   /* Geometry has per-corner normals instead of per-vertex. */
+   SD_OBJECT_HAS_CORNER_NORMALS = (1u << 12),
++  /* Gaussian splats composited along each path segment instead of hit stochastically. */
++  SD_OBJECT_GSPLAT_COMPOSITE = (1u << 13),
+ 
+   /* object is using caustics */
+   SD_OBJECT_CAUSTICS = (SD_OBJECT_CAUSTICS_CASTER | SD_OBJECT_CAUSTICS_RECEIVER),
+@@ -1053,7 +1059,8 @@ enum ShaderDataObjectFlag : uint {
+                      SD_OBJECT_NEGATIVE_SCALE | SD_OBJECT_HAS_VOLUME |
+                      SD_OBJECT_INTERSECTS_VOLUME | SD_OBJECT_SHADOW_CATCHER |
+                      SD_OBJECT_HAS_VOLUME_ATTRIBUTES | SD_OBJECT_CAUSTICS |
+-                     SD_OBJECT_HAS_VOLUME_MOTION | SD_OBJECT_HAS_CORNER_NORMALS)
++                     SD_OBJECT_HAS_VOLUME_MOTION | SD_OBJECT_HAS_CORNER_NORMALS |
++                     SD_OBJECT_GSPLAT_COMPOSITE)
+ };
+ 
+ struct ccl_align(SHADER_DATA_ALIGNMENT) ShaderData {
+diff --git a/src/scene/geometry.cpp b/src/scene/geometry.cpp
+index 5f5a06ad..876eb59b 100644
+--- a/src/scene/geometry.cpp
++++ b/src/scene/geometry.cpp
+@@ -423,7 +423,7 @@ void GeometryManager::geom_calc_offset(Scene *scene, BVHLayout bvh_layout)
+       /* Changing Render As on point cloud is likely to change its underlying BVH type (i.e. Render
+        * As Points uses hardware-accelerated point primitives, and Render As GSplats uses custom
+        * primitives). */
+-      if (pointcloud->render_as_is_modified()) {
++      if (pointcloud->render_as_is_modified() || pointcloud->gsplat_composite_is_modified()) {
+         geom->need_update_rebuild = true;
+       }
+ 
+diff --git a/src/scene/object.cpp b/src/scene/object.cpp
+index 399000d2..651f969c 100644
+--- a/src/scene/object.cpp
++++ b/src/scene/object.cpp
+@@ -62,6 +62,7 @@ struct UpdateObjectTransformState {
+   bool have_curves;
+   bool have_points;
+   bool have_volumes;
++  bool have_gsplat_composite;
+ 
+   /* ** Scheduling queue. ** */
+   Scene *scene;
+@@ -760,6 +761,11 @@ void ObjectManager::device_update_object_transform(UpdateObjectTransformState *s
+   }
+   if (geom->is_pointcloud()) {
+     state->have_points = true;
++    if (static_cast<const PointCloud *>(geom)->is_gsplat_composite()) {
++      flag |= SD_OBJECT_GSPLAT_COMPOSITE;
++      state->object_flag[ob->index] = flag;
++      state->have_gsplat_composite = true;
++    }
+   }
+   if (geom->is_volume()) {
+     state->have_volumes = true;
+@@ -823,6 +829,7 @@ void ObjectManager::device_update_transforms(DeviceScene *dscene, Scene *scene,
+   state.have_curves = false;
+   state.have_points = false;
+   state.have_volumes = false;
++  state.have_gsplat_composite = false;
+   state.scene = scene;
+   state.queue_start_object = 0;
+ 
+@@ -895,6 +902,7 @@ void ObjectManager::device_update_transforms(DeviceScene *dscene, Scene *scene,
+   dscene->data.bvh.have_curves = state.have_curves;
+   dscene->data.bvh.have_points = state.have_points;
+   dscene->data.bvh.have_volumes = state.have_volumes;
++  dscene->data.bvh.have_gsplat_composite = state.have_gsplat_composite;
+ 
+   dscene->objects.clear_modified();
+   dscene->object_motion_pass.clear_modified();
+diff --git a/src/scene/pointcloud.cpp b/src/scene/pointcloud.cpp
+index a2ed2591..ff81297b 100644
+--- a/src/scene/pointcloud.cpp
++++ b/src/scene/pointcloud.cpp
+@@ -78,6 +78,7 @@ NODE_DEFINE(PointCloud)
+   render_as_enum.insert("gaussian_splats", RENDER_AS_GSPLATS);
+ 
+   SOCKET_ENUM(render_as, "Render As", render_as_enum, RENDER_AS_POINTS);
++  SOCKET_BOOLEAN(gsplat_composite, "Gaussian Splat Composite", false);
+ 
+   return type;
+ }
+@@ -328,11 +329,14 @@ void PointCloud::update_gsplat_radii()
+ 
+   float *radius_data = get_radius_for_write();
+ 
+-  auto estimate_gsplat_radius = [](const float opacity, const float3 scale) -> float {
+-    /* Minimum response of the Gaussian splat which must be captured.
+-     * The value comes from the paper. */
+-    constexpr float ALPHA_MIN = 0.01f;
++  /* Minimum response of the Gaussian splat which must be captured.
++   * The value comes from the paper. Composited splats are a faint, bright haze: at the paper's
++   * 0.01 every splat of opacity below 0.01 would vanish and the others would be cut close to
++   * their centre (1.2 sigma at 0.02), so their sphere goes down to a response of 1e-4 (3 sigma
++   * at an opacity of 0.01). */
++  const float ALPHA_MIN = gsplat_composite ? 1e-4f : 0.01f;
+ 
++  auto estimate_gsplat_radius = [ALPHA_MIN](const float opacity, const float3 scale) -> float {
+     if (opacity < ALPHA_MIN) {
+       return 0.0f;
+     }
+diff --git a/src/scene/pointcloud.h b/src/scene/pointcloud.h
+index 01c40aa4..7ba2fc7b 100644
+--- a/src/scene/pointcloud.h
++++ b/src/scene/pointcloud.h
+@@ -102,6 +102,15 @@ class PointCloud : public Geometry {
+   void create_missing_gsplat_attributes();
+ 
+   NODE_SOCKET_API(RenderAs, render_as)
++  /* Gaussian splats composited along each path segment (emission and transmittance, no hit,
++   * no shading, no shadow) instead of being hit stochastically. The base radiance then holds a
++   * linear colour rather than a spherical harmonics coefficient. */
++  NODE_SOCKET_API(bool, gsplat_composite)
++
++  bool is_gsplat_composite() const
++  {
++    return gsplat_composite && (primitive_type() & PRIMITIVE_GSPLAT);
++  }
+ 
+  private:
+   void add_builtin_attributes();

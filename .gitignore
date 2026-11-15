@@ -55,3 +55,12 @@ docs/ENVIRONMENT.md
 
 # Folder assembled by tools/make_dist.py for users.
 dist/
+
+# Development-only material (plans, working rules, session tooling, features
+# not released yet), kept on the development machine.
+docs/internal/
+tools/internal/
+tests/internal/
+external/
+install-*/
+docs/images/

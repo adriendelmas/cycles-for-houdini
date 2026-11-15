@@ -1,0 +1,50 @@
+From c48ddd1f4ebbe003a4ae8b5aae1a60aec4533deb Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Tue, 3 Nov 2026 11:57:53 +0100
+Subject: [PATCH 159/180] rebase fixes: missing-image colour in hextile, device
+ memory in the host warning
+
+svm_image_texture() takes the colour of a missing image since upstream
+bb38d86e; the hextile node passes the former one. The host-memory warning
+lost the total and free memory upstream moved into a narrower block; it
+reads them itself, once per session.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/device/device.cpp       | 3 +++
+ src/kernel/svm/mx_hextile.h | 6 +++---
+ 2 files changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/src/device/device.cpp b/src/device/device.cpp
+index 9089e29e..a59609c1 100644
+--- a/src/device/device.cpp
++++ b/src/device/device.cpp
+@@ -856,6 +856,9 @@ GPUDevice::Mem *GPUDevice::generic_alloc(device_memory &mem, const size_t pitch_
+       static bool warned = false;
+       if (!warned && size > 1024 * 1024) {
+         warned = true;
++        size_t total = 0;
++        size_t free = 0;
++        get_device_memory_info(total, free);
+         LOG_WARNING << "Not enough device memory: " << string_human_readable_size(size) << " of '"
+                     << mem.name_ << "' went to host memory, read over the bus. " << "Only "
+                     << string_human_readable_size(free) << " of "
+diff --git a/src/kernel/svm/mx_hextile.h b/src/kernel/svm/mx_hextile.h
+index 5e94c8c5..982e9582 100644
+--- a/src/kernel/svm/mx_hextile.h
++++ b/src/kernel/svm/mx_hextile.h
+@@ -191,11 +191,11 @@ ccl_device_noinline void svm_node_tex_mx_hextiled_image(
+                    &tile_weights);
+ 
+   const float4 c1 = svm_image_texture(
+-      kg, sd, node.id, dual2(mx_hextile_from_texture_space(coords[0])), node.flags);
++      kg, sd, node.id, dual2(mx_hextile_from_texture_space(coords[0])), node.flags, IMAGE_MISSING_RGBA);
+   const float4 c2 = svm_image_texture(
+-      kg, sd, node.id, dual2(mx_hextile_from_texture_space(coords[1])), node.flags);
++      kg, sd, node.id, dual2(mx_hextile_from_texture_space(coords[1])), node.flags, IMAGE_MISSING_RGBA);
+   const float4 c3 = svm_image_texture(
+-      kg, sd, node.id, dual2(mx_hextile_from_texture_space(coords[2])), node.flags);
++      kg, sd, node.id, dual2(mx_hextile_from_texture_space(coords[2])), node.flags, IMAGE_MISSING_RGBA);
+ 
+   const float falloff_contrast_weight = falloff_contrast * 0.5f;
+   const float3 cw = interp(one_float3(),

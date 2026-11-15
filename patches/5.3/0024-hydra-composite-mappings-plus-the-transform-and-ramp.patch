@@ -1,7 +1,7 @@
-From a94d05c0766f5f024ad689e5a1ca1a9dba795240 Mon Sep 17 00:00:00 2001
+From 12513e5b0b21907033e2c6ba58b46b7260fe1f0a Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 12:59:57 +0200
-Subject: [PATCH 024/162] hydra: composite mappings, plus the transform and
+Subject: [PATCH 024/180] hydra: composite mappings, plus the transform and
  ramp nodes
 
 Some MaterialX nodes have no single Cycles equivalent: a left-to-right ramp is
@@ -22,7 +22,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
  1 file changed, 134 insertions(+), 2 deletions(-)
 
 diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
-index c6e77d6f..d01e16cb 100644
+index 7ad665f4..139f4b57 100644
 --- a/src/hydra/material.cpp
 +++ b/src/hydra/material.cpp
 @@ -105,6 +105,27 @@ class UsdToCyclesMapping {

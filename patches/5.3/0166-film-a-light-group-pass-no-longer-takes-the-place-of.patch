@@ -1,0 +1,62 @@
+From cd0e0e5d11a53111267072449e944d287ab8302d Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Tue, 3 Nov 2026 15:05:16 +0100
+Subject: [PATCH 166/180] film: a light group pass no longer takes the place of
+ the beauty with the denoiser
+
+A light group pass is a combined pass with a light group. With the
+denoiser on, two things mistook it for the plain one:
+- Film::finalize_passes() merged the unnamed noisy combined pass the
+  denoiser needs into it (same type, same mode), so nothing wrote the
+  beauty: black for an empty group, wrong otherwise;
+- BufferParams' (type, mode) offset table took the first match, and the
+  passes are sorted with 3-component passes (light groups) first.
+Both now tell light groups apart. Measured: two spheres, a key light in
+a group, denoiser on: beauty 0.0007 -> 0.0769 (0.0768 without the
+denoiser), group 0.0009 -> 0.0608. Also in the shipped build; bench_aovs
+still 9/9. Upstream code, worth reporting.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/scene/film.cpp      | 8 ++++++--
+ src/session/buffers.cpp | 6 +++++-
+ 2 files changed, 11 insertions(+), 3 deletions(-)
+
+diff --git a/src/scene/film.cpp b/src/scene/film.cpp
+index b5949db0..c99858c4 100644
+--- a/src/scene/film.cpp
++++ b/src/scene/film.cpp
+@@ -774,8 +774,12 @@ void Film::finalize_passes(Scene *scene, const bool use_denoise)
+     /* Merge duplicate passes. */
+     bool duplicate_found = false;
+     for (Pass *new_pass : new_passes) {
+-      /* If different type or denoising, don't merge. */
+-      if (new_pass->get_type() != pass->get_type() || new_pass->get_mode() != pass->get_mode()) {
++      /* If different type, denoising or light group, don't merge. A light group pass is a
++       * combined pass too: merged with it, the noisy combined pass the denoiser needs was lost,
++       * nothing wrote the beauty and it came out black or wrong (K-128). */
++      if (new_pass->get_type() != pass->get_type() || new_pass->get_mode() != pass->get_mode() ||
++          new_pass->get_lightgroup() != pass->get_lightgroup())
++      {
+         continue;
+       }
+ 
+diff --git a/src/session/buffers.cpp b/src/session/buffers.cpp
+index f0e26584..62415337 100644
+--- a/src/session/buffers.cpp
++++ b/src/session/buffers.cpp
+@@ -121,9 +121,13 @@ void BufferParams::update_passes()
+ 
+   pass_stride = 0;
+   for (const BufferPass &pass : passes) {
++    /* A light group pass is a combined pass too, but never the one a (type, mode) lookup
++     * means - the kernel reaches it through pass_lightgroup. Indexed, it could take the place
++     * of the noisy combined pass the denoiser reads (added after it), and the beauty came out
++     * as the denoised light group: black for an empty group (K-128). */
+     if (pass.offset != PASS_UNUSED) {
+       const int index = pass_to_index(pass);
+-      if (pass_offset_[index] == PASS_UNUSED) {
++      if (pass_offset_[index] == PASS_UNUSED && pass.lightgroup.empty()) {
+         pass_offset_[index] = pass_stride;
+       }
+ 

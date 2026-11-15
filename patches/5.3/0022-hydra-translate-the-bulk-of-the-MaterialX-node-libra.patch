@@ -1,7 +1,7 @@
-From 36053b65885905c51157d9db5055daeb20735ffb Mon Sep 17 00:00:00 2001
+From 80baad51d8595934bd16dffcce4e9ee60c7df2d2 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 12:37:33 +0200
-Subject: [PATCH 022/162] hydra: translate the bulk of the MaterialX node
+Subject: [PATCH 022/180] hydra: translate the bulk of the MaterialX node
  library
 
 Replaces the chain of ifs with a prefix table, longest match winning, so a
@@ -27,7 +27,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
  1 file changed, 445 insertions(+), 82 deletions(-)
 
 diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
-index 0692eec2..c3249fb2 100644
+index 78ee1327..f0d38c79 100644
 --- a/src/hydra/material.cpp
 +++ b/src/hydra/material.cpp
 @@ -4,6 +4,10 @@

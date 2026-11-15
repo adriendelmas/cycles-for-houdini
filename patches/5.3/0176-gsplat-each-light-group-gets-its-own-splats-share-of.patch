@@ -1,0 +1,134 @@
+From 88181fb2af5e0ffc5d2d72141ca9d81b2deeef00 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Tue, 3 Nov 2026 19:19:14 +0100
+Subject: [PATCH 176/180] gsplat: each light group gets its own splats' share
+ of a segment
+
+The composite gave a segment's whole emission to the light group of its
+strongest splat, so a ray crossing red strings and the dense white flux
+put white into Combined_red. The accumulator now sums response x
+radiance per light group (up to 8 per segment; more are left out of the
+group passes, not of the beauty) and writes each group its share,
+clamped as the whole. Checked: a red field crossing a white one, GPU and
+CPU: Combined_red has no green or blue; red + white = beauty minus the
+world's light (0.416 grey, in no group).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/kernel/geom/gsplat_intersect.h        | 29 +++++++++++++++++------
+ src/kernel/integrator/intersect_closest.h | 29 +++++++++++++++++++----
+ 2 files changed, 46 insertions(+), 12 deletions(-)
+
+diff --git a/src/kernel/geom/gsplat_intersect.h b/src/kernel/geom/gsplat_intersect.h
+index 4fe4003c..05f80492 100644
+--- a/src/kernel/geom/gsplat_intersect.h
++++ b/src/kernel/geom/gsplat_intersect.h
+@@ -290,6 +290,8 @@ ccl_device_forceinline bool gsplat_composite_response(KernelGlobals kg,
+  * The splats are summed in no particular order, as weighted-average order independent
+  * transparency: exact for splats of one colour and, for any colours, when the opacities are low
+  * (the emissive haze this mode is for). Dense opaque splats need the stochastic mode. */
++#define GSPLAT_COMPOSITE_MAX_LIGHTGROUPS 8
++
+ struct GSplatCompositeAccum {
+   /* Sum of response * radiance. */
+   float3 radiance;
+@@ -297,10 +299,12 @@ struct GSplatCompositeAccum {
+   float response;
+   /* Sum of log(1 - response): the segment's transmittance in log space. */
+   float log_transmittance;
+-  /* Light group of the strongest splat: the segment's emission goes to one group, right when
+-   * the splats crossed share theirs (one group per splat system). */
+-  float max_response;
+-  int lightgroup;
++  /* Sum of response * radiance per light group crossed, so that each Combined_<group> gets its
++   * own splats' share of the segment's emission. Groups past the last slot are left out of the
++   * light group passes (the beauty keeps them). */
++  int num_lightgroups;
++  int lightgroup[GSPLAT_COMPOSITE_MAX_LIGHTGROUPS];
++  float3 lightgroup_radiance[GSPLAT_COMPOSITE_MAX_LIGHTGROUPS];
+ };
+ 
+ ccl_device_forceinline void gsplat_composite_accumulate(KernelGlobals kg,
+@@ -343,9 +347,20 @@ ccl_device_forceinline void gsplat_composite_accumulate(KernelGlobals kg,
+   accum.radiance += response * radiance;
+   accum.response += response;
+   accum.log_transmittance += logf(1.0f - response);
+-  if (response > accum.max_response) {
+-    accum.max_response = response;
+-    accum.lightgroup = object_lightgroup(kg, object);
++  const int lightgroup = object_lightgroup(kg, object);
++  if (lightgroup != LIGHTGROUP_NONE) {
++    int slot = 0;
++    while (slot < accum.num_lightgroups && accum.lightgroup[slot] != lightgroup) {
++      slot++;
++    }
++    if (slot == accum.num_lightgroups && slot < GSPLAT_COMPOSITE_MAX_LIGHTGROUPS) {
++      accum.lightgroup[slot] = lightgroup;
++      accum.lightgroup_radiance[slot] = zero_float3();
++      accum.num_lightgroups++;
++    }
++    if (slot < accum.num_lightgroups) {
++      accum.lightgroup_radiance[slot] += response * radiance;
++    }
+   }
+ }
+ 
+diff --git a/src/kernel/integrator/intersect_closest.h b/src/kernel/integrator/intersect_closest.h
+index a732ebfe..03bf9541 100644
+--- a/src/kernel/integrator/intersect_closest.h
++++ b/src/kernel/integrator/intersect_closest.h
+@@ -36,8 +36,7 @@ ccl_device_forceinline void integrator_intersect_gsplat_composite(
+   accum.radiance = zero_float3();
+   accum.response = 0.0f;
+   accum.log_transmittance = 0.0f;
+-  accum.max_response = 0.0f;
+-  accum.lightgroup = LIGHTGROUP_NONE;
++  accum.num_lightgroups = 0;
+   scene_intersect_gsplat_composite(kg, &segment, visibility, &accum);
+ 
+   if (!(accum.response > 0.0f)) {
+@@ -47,7 +46,8 @@ ccl_device_forceinline void integrator_intersect_gsplat_composite(
+   /* Weighted-average blending: the summed radiance, scaled so that the splats' combined
+    * opacity is 1 - transmittance instead of the plain sum of their opacities. */
+   const float transmittance = expf(accum.log_transmittance);
+-  const float3 emission = accum.radiance * ((1.0f - transmittance) / accum.response);
++  const float blend = (1.0f - transmittance) / accum.response;
++  const float3 emission = accum.radiance * blend;
+ 
+   const Spectrum throughput = INTEGRATOR_STATE(state, path, throughput);
+   const Spectrum L = throughput * rgb_to_spectrum(emission);
+@@ -66,13 +66,32 @@ ccl_device_forceinline void integrator_intersect_gsplat_composite(
+     film_write_pass_float4(buffer + kernel_data.film.pass_gsplat_emission,
+                            make_float4(spectrum_to_rgb(contribution), 1.0f));
+     film_write_emission_or_background_pass(
+-        kg, state, contribution, buffer, kernel_data.film.pass_emission, accum.lightgroup);
++        kg, state, contribution, buffer, kernel_data.film.pass_emission);
+   }
+   else
+ #  endif
+   {
+-    film_write_volume_emission(kg, state, L, render_buffer, accum.lightgroup);
++    film_write_volume_emission(kg, state, L, render_buffer);
+   }
++
++#  ifdef __PASSES__
++  /* Each light group gets its own splats' share, clamped as the whole is. */
++  if (accum.num_lightgroups > 0 && kernel_data.film.pass_lightgroup != PASS_UNUSED &&
++      !(INTEGRATOR_STATE(state, path, flag) & PATH_RAY_SHADOW_CATCHER_HIT))
++  {
++    Spectrum clamped = L;
++    film_clamp_light(kg, &clamped, INTEGRATOR_STATE(state, path, bounce) - 1);
++    const float total = reduce_add(fabs(L));
++    const float clamp_scale = (total > 0.0f) ? reduce_add(fabs(clamped)) / total : 0.0f;
++    ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer);
++    for (int i = 0; i < accum.num_lightgroups; i++) {
++      const Spectrum share = throughput *
++                             rgb_to_spectrum(accum.lightgroup_radiance[i] * blend) * clamp_scale;
++      film_write_pass_spectrum(buffer + kernel_data.film.pass_lightgroup + 3 * accum.lightgroup[i],
++                               share);
++    }
++  }
++#  endif
+   INTEGRATOR_STATE_WRITE(state, path, throughput) = throughput * transmittance;
+ }
+ #endif

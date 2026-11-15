@@ -1,0 +1,113 @@
+From 7cc675ebbac756df20a638e4ee444efe2122c92f Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Thu, 29 Oct 2026 03:36:04 +0100
+Subject: [PATCH 156/180] hydra: authored normals are turned to the side their
+ faces wind towards
+
+The kernel flips N along with Ng when a face is seen from the back. An
+authored normal pointing against its face's winding - every face of
+mirrored geometry, some faces of a generator writing its own normals -
+then ends up pointing away from the viewer, and every diffuse lobe
+renders black; Karma orients the shading normal by the face it sees.
+Each authored normal is now turned to the side its faces wind towards
+before upload: per vertex, summed over the vertex's triangles; per
+corner, that corner's triangle. Measured on a 4x4 m plane seen from the
+side its normals point to, husk CPU 64x48, grey UsdPreviewSurface:
+Cycles 0.000 before, 0.158 after, Karma 0.126; the plane without
+normals, wound to match them, or left-handed, 0.158 throughout (K-122).
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ src/hydra/mesh.cpp | 50 +++++++++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 47 insertions(+), 3 deletions(-)
+
+diff --git a/src/hydra/mesh.cpp b/src/hydra/mesh.cpp
+index f3270389..ccf1a18e 100644
+--- a/src/hydra/mesh.cpp
++++ b/src/hydra/mesh.cpp
+@@ -242,6 +242,42 @@ void HdCyclesMesh::PopulatePoints(HdSceneDelegate *sceneDelegate)
+   _geom->tag_position_modified();
+ }
+ 
++/* The side each vertex's faces wind towards, summed over its triangles: the
++ * geometric normal the kernel will compute (triangle_normal). An authored
++ * normal is turned to that side before upload, because the kernel flips N
++ * along with Ng on a backface: a normal already facing the viewer on a face
++ * wound the other way ended up pointing away, and the face rendered black
++ * (K-122). Mirrored geometry does this to every face - a reflection reverses
++ * the winding, a normal transformed as a normal does not follow. Karma
++ * orients the shading normal by the face it sees and shows nothing of it. */
++static const packed_float3 *MeshPositions(const Mesh *geom)
++{
++  const Attribute *P = geom->attributes.find(ATTR_STD_POSITION);
++  return P ? P->data<packed_float3>() : nullptr;
++}
++
++static std::vector<float3> WindingSides(const Mesh *geom)
++{
++  const array<int> &tris = geom->get_triangles();
++  const packed_float3 *verts = MeshPositions(geom);
++  std::vector<float3> sides(geom->num_verts(), zero_float3());
++  for (size_t t = 0; verts && t + 2 < tris.size(); t += 3) {
++    const int i0 = tris[t], i1 = tris[t + 1], i2 = tris[t + 2];
++    const float3 ng = cross(float3(verts[i1]) - float3(verts[i0]),
++                            float3(verts[i2]) - float3(verts[i0]));
++    sides[i0] += ng;
++    sides[i1] += ng;
++    sides[i2] += ng;
++  }
++  return sides;
++}
++
++static float3 TowardsSide(const GfVec3f &n, const float3 side)
++{
++  const float3 N = make_float3(n[0], n[1], n[2]);
++  return dot(N, side) < 0.0f ? -N : N;
++}
++
+ void HdCyclesMesh::PopulateNormals(HdSceneDelegate *sceneDelegate)
+ {
+   _geom->attributes.remove(ATTR_STD_VERTEX_NORMAL);
+@@ -301,20 +337,22 @@ void HdCyclesMesh::PopulateNormals(HdSceneDelegate *sceneDelegate)
+   if (interpolation == HdInterpolationConstant) {
+     const GfVec3f constantNormal = normals[0];
+ 
++    const std::vector<float3> sides = WindingSides(_geom);
+     packed_normal *const N =
+         _geom->attributes.add(ATTR_STD_VERTEX_NORMAL)->data_for_write<packed_normal>();
+     for (size_t i = 0; i < _geom->num_verts(); ++i) {
+-      N[i] = packed_normal(make_float3(constantNormal[0], constantNormal[1], constantNormal[2]));
++      N[i] = packed_normal(TowardsSide(constantNormal, sides[i]));
+     }
+   }
+   else if (interpolation == HdInterpolationUniform) {
+     /* Nothing to do, face normals are computed on demand in the kernel. */
+   }
+   else if (interpolation == HdInterpolationVertex || interpolation == HdInterpolationVarying) {
++    const std::vector<float3> sides = WindingSides(_geom);
+     packed_normal *const N =
+         _geom->attributes.add(ATTR_STD_VERTEX_NORMAL)->data_for_write<packed_normal>();
+     for (size_t i = 0; i < _geom->num_verts(); ++i) {
+-      N[i] = packed_normal(make_float3(normals[i][0], normals[i][1], normals[i][2]));
++      N[i] = packed_normal(TowardsSide(normals[i], sides[i]));
+     }
+   }
+   else if (interpolation == HdInterpolationFaceVarying) {
+@@ -342,10 +380,16 @@ void HdCyclesMesh::PopulateNormals(HdSceneDelegate *sceneDelegate)
+       return;
+     }
+ 
++    const array<int> &tris = _geom->get_triangles();
++    const packed_float3 *verts = MeshPositions(_geom);
+     packed_normal *const N =
+         _geom->attributes.add(ATTR_STD_CORNER_NORMAL)->data_for_write<packed_normal>();
+     for (size_t i = 0; i < numCorners; ++i) {
+-      N[i] = packed_normal(make_float3(corners[i][0], corners[i][1], corners[i][2]));
++      const size_t t = i - i % 3;
++      const float3 ng = verts ? cross(float3(verts[tris[t + 1]]) - float3(verts[tris[t]]),
++                                      float3(verts[tris[t + 2]]) - float3(verts[tris[t]])) :
++                                zero_float3();
++      N[i] = packed_normal(TowardsSide(corners[i], ng));
+     }
+   }
+ }

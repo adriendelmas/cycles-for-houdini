@@ -1,0 +1,70 @@
+From 537cede0509f33383a302dee81d62ca2b4695b2e Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Tue, 3 Nov 2026 16:58:33 +0100
+Subject: [PATCH 169/180] hydra: light groups from Karma's LPE tags on objects
+ and C.*[<L.'tag'>O]
+
+The LPE Tag LOP's geometry tag (primvars:karma:object:lpetag) now puts an
+object in the light group of that name, as a light's LPE tag already did;
+the Cycles primvar wins when both are set. A render var sourcing Karma's
+light group expression with emissive objects, C.*[<L.'tag'>O], is that
+light group's pass (a Cycles light group always includes its emissive
+objects). Checked on GPU: an emissive sphere tagged "glow" fills
+Combined_glow, C.*[<L.'fill'>O] the fill light's contribution.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/object_properties.cpp |  3 +++
+ src/hydra/session.cpp           | 18 +++++++++++-------
+ 2 files changed, 14 insertions(+), 7 deletions(-)
+
+diff --git a/src/hydra/object_properties.cpp b/src/hydra/object_properties.cpp
+index 90406e61..a2633489 100644
+--- a/src/hydra/object_properties.cpp
++++ b/src/hydra/object_properties.cpp
+@@ -157,6 +157,9 @@ HdCyclesObjectProperties HdCyclesObjectProperties::Read(const HdPrimvarsSchema &
+   ReadBool(primvars, kCycles + "shadow_catcher", p.shadowCatcher);
+   ReadBool(primvars, kCycles + "caustics_caster", p.causticsCaster);
+   ReadBool(primvars, kCycles + "caustics_receiver", p.causticsReceiver);
++  /* Karma's LPE tag (the LPE Tag LOP's geometry tag) names the group too, as on lights; the
++   * Cycles primvar wins when both are set. */
++  ReadString(primvars, kKarma + "lpetag", p.lightgroup);
+   ReadString(primvars, kCycles + "lightgroup", p.lightgroup);
+   ReadFloat(primvars, kCycles + "shadow_terminator_shading_offset", p.terminatorShadingOffset);
+   ReadFloat(primvars, kCycles + "shadow_terminator_geometry_offset", p.terminatorGeometryOffset);
+diff --git a/src/hydra/session.cpp b/src/hydra/session.cpp
+index d2f21680..f7b8d855 100644
+--- a/src/hydra/session.cpp
++++ b/src/hydra/session.cpp
+@@ -159,7 +159,9 @@ PassType CyclesPassNamed(const std::string &name)
+  * expressions, the `st` primvar. Anything else is a shader AOV named after
+  * its source, which `aov_output` nodes of that name write. */
+ /* A light group pass: `lightgroup:<group>` as the name or the source, or
+- * Karma's light group expression `C.*<L.'<tag>'>`. Empty if not one. */
++ * Karma's light group expressions `C.*<L.'<tag>'>` and `C.*[<L.'<tag>'>O]`
++ * (emissive objects included; a Cycles light group always includes the
++ * group's emissive objects). Empty if not one. */
+ std::string LightGroupOf(const std::string &name, const std::string &source)
+ {
+   static const std::string prefix = "lightgroup:";
+@@ -168,12 +170,14 @@ std::string LightGroupOf(const std::string &name, const std::string &source)
+       return s->substr(prefix.size());
+     }
+   }
+-  static const std::string open = "C.*<L.'";
+-  static const std::string close = "'>";
+-  if (source.rfind(open, 0) == 0 && source.size() > open.size() + close.size() &&
+-      source.compare(source.size() - close.size(), close.size(), close) == 0)
+-  {
+-    return source.substr(open.size(), source.size() - open.size() - close.size());
++  static const std::pair<std::string, std::string> forms[] = {{"C.*<L.'", "'>"},
++                                                               {"C.*[<L.'", "'>O]"}};
++  for (const auto &[open, close] : forms) {
++    if (source.rfind(open, 0) == 0 && source.size() > open.size() + close.size() &&
++        source.compare(source.size() - close.size(), close.size(), close) == 0)
++    {
++      return source.substr(open.size(), source.size() - open.size() - close.size());
++    }
+   }
+   return {};
+ }

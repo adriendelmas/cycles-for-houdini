@@ -1,7 +1,7 @@
-From 0c51011d809ec95b87a19895af7df95635d8f570 Mon Sep 17 00:00:00 2001
+From 382991a0d20753255c5f834b183bb584c98d195c Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 01:21:05 +0200
-Subject: [PATCH 037/162] checkboxes, Base section, and an ignored wire is no
+Subject: [PATCH 037/180] checkboxes, Base section, and an ignored wire is no
  longer silent
 
 thin_wall is a checkbox: Cycles declares it SOCKET_IN_INT with a default
@@ -37,7 +37,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
  3 files changed, 69 insertions(+), 32 deletions(-)
 
 diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
-index d436b571..89313a65 100644
+index dab51a56..ac8bc052 100644
 --- a/src/hydra/material.cpp
 +++ b/src/hydra/material.cpp
 @@ -933,32 +933,32 @@ const std::vector<MtlxEntry> &MtlxTable()
@@ -147,10 +147,10 @@ index 9337f7c3..de23f091 100644
     * browser rather than asking for a path to be typed or pasted. */
    if (socket.type == ccl::SocketType::STRING && socket.name == ccl::ustring("filename")) {
 diff --git a/src/scene/shader_nodes.cpp b/src/scene/shader_nodes.cpp
-index 55f12f96..9581a710 100644
+index 0b8f39a0..bd98bf4b 100644
 --- a/src/scene/shader_nodes.cpp
 +++ b/src/scene/shader_nodes.cpp
-@@ -1536,8 +1536,24 @@ NODE_DEFINE(MxNoiseTextureNode)
+@@ -1548,8 +1548,24 @@ NODE_DEFINE(MxNoiseTextureNode)
  {
    NodeType *type = NodeType::add("mx_noise_texture", create, NodeType::SHADER);
  

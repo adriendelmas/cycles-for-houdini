@@ -1,0 +1,110 @@
+From 1342a036a373806f02cf3f33bbfd403c9274e877 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Tue, 3 Nov 2026 19:01:29 +0100
+Subject: [PATCH 175/180] hydra: the splats' direct emission pass gets the film
+ exposure
+
+A colour AOV pass is read without the exposure the beauty gets, so at
+exposure 2 SplatEmit and the beauty it is added back to were off. The
+output driver applies it; checked: every pass doubles, the sum holds.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/output_driver.cpp | 35 ++++++++++++++++++++++++++++++++++-
+ src/hydra/output_driver.h   |  7 +++++++
+ 2 files changed, 41 insertions(+), 1 deletion(-)
+
+diff --git a/src/hydra/output_driver.cpp b/src/hydra/output_driver.cpp
+index 696acb0e..55591d5f 100644
+--- a/src/hydra/output_driver.cpp
++++ b/src/hydra/output_driver.cpp
+@@ -6,6 +6,9 @@
+ #include "hydra/output_driver.h"
+ #include "hydra/render_buffer.h"
+ #include "hydra/session.h"
++#include "scene/film.h"
++#include "scene/scene.h"
++#include "session/session.h"
+ 
+ #include <vector>
+ 
+@@ -49,6 +52,13 @@ void HdCyclesOutputDriver::MultiplyByColor(const Tile &tile,
+   }
+ }
+ 
++/* The splats' direct emission is a colour AOV pass, which Cycles reads without the film
++ * exposure the beauty and the light passes get: applied here, so that it adds up. */
++float HdCyclesOutputDriver::GsplatScale() const
++{
++  return _renderParam->session->scene->film->get_exposure();
++}
++
+ void HdCyclesOutputDriver::AddPass(const Tile &tile,
+                                         const TfToken &aovName,
+                                         const size_t channels,
+@@ -63,9 +73,30 @@ void HdCyclesOutputDriver::AddPass(const Tile &tile,
+   if (!tile.get_pass_pixels(*add, 3, other.data())) {
+     return;
+   }
++  const float scale = GsplatScale();
++  for (size_t i = 0; i < count; ++i) {
++    for (size_t c = 0; c < 3; ++c) {
++      pixels[i * channels + c] += scale * other[i * 3 + c];
++    }
++  }
++}
++
++void HdCyclesOutputDriver::ScaleGsplat(const TfToken &aovName,
++                                       const Tile &tile,
++                                       const size_t channels,
++                                       float *pixels) const
++{
++  if (_renderParam->PassName(aovName) != "gsplat_emission" || channels < 3) {
++    return;
++  }
++  const float scale = GsplatScale();
++  if (scale == 1.0f) {
++    return;
++  }
++  const size_t count = size_t(tile.size.x) * size_t(tile.size.y);
+   for (size_t i = 0; i < count; ++i) {
+     for (size_t c = 0; c < 3; ++c) {
+-      pixels[i * channels + c] += other[i * 3 + c];
++      pixels[i * channels + c] *= scale;
+     }
+   }
+ }
+@@ -95,6 +126,7 @@ bool HdCyclesOutputDriver::update_render_tile(const Tile &tile)
+         TF_VERIFY(tile.get_pass_pixels(_renderParam->PassName(aovBinding.aovName), channels, data));
+         MultiplyByColor(tile, aovBinding.aovName, channels, data);
+         AddPass(tile, aovBinding.aovName, channels, data);
++        ScaleGsplat(aovBinding.aovName, tile, channels, data);
+         renderBuffer->Unmap();
+       }
+       else {
+@@ -104,6 +136,7 @@ bool HdCyclesOutputDriver::update_render_tile(const Tile &tile)
+         {
+           MultiplyByColor(tile, aovBinding.aovName, channels, pixels.data());
+           AddPass(tile, aovBinding.aovName, channels, pixels.data());
++          ScaleGsplat(aovBinding.aovName, tile, channels, pixels.data());
+           const bool isId = aovBinding.aovName == HdAovTokens->primId ||
+                             aovBinding.aovName == HdAovTokens->elementId ||
+                             aovBinding.aovName == HdAovTokens->instanceId;
+diff --git a/src/hydra/output_driver.h b/src/hydra/output_driver.h
+index 00792302..7a5e0f86 100644
+--- a/src/hydra/output_driver.h
++++ b/src/hydra/output_driver.h
+@@ -32,6 +32,13 @@ class HdCyclesOutputDriver final : public CCL_NS::OutputDriver {
+                size_t channels,
+                float *pixels) const;
+ 
++  /* The film exposure, which Cycles leaves off colour AOV passes such as the splats'. */
++  float GsplatScale() const;
++  void ScaleGsplat(const PXR_NS::TfToken &aovName,
++                   const Tile &tile,
++                   size_t channels,
++                   float *pixels) const;
++
+   HdCyclesSession *const _renderParam;
+ };
+ 

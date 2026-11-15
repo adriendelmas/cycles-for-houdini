@@ -1,0 +1,37 @@
+From 5298c84123d94c03c67d739e26ef770a73e671d6 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Tue, 3 Nov 2026 18:36:25 +0100
+Subject: [PATCH 173/180] hydra: the viewport shows render settings' vars, not
+ depth (K-129)
+
+GetDefaultAovDescriptor() answered color, depth, normal and the ids only.
+Houdini's viewport, on a stage with render settings, binds the product's
+render vars and drops those without a descriptor: with Karma's `C` as the
+beauty (Cycles Render Settings LOP) it asked for depth, primId and
+instanceId alone and displayed depth. Any other name now gets a float4
+descriptor; the session resolves it as husk does. Checked in the viewport:
+C, Emit and Combined_key bound, the image in colour.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/render_delegate.cpp | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/src/hydra/render_delegate.cpp b/src/hydra/render_delegate.cpp
+index b8e19f30..b15a6bbb 100644
+--- a/src/hydra/render_delegate.cpp
++++ b/src/hydra/render_delegate.cpp
+@@ -525,6 +525,13 @@ HdAovDescriptor HdCyclesDelegate::GetDefaultAovDescriptor(const TfToken &name) c
+   {
+     return HdAovDescriptor(HdFormatInt32, false, VtValue(-1));
+   }
++  /* Any other name is a render var the session resolves (session.cpp: `C`, Cycles and Karma
++   * pass names, light groups, shader AOVs). Houdini's viewport drops every render var of the
++   * render settings it gets no descriptor for: with Karma's `C` as the beauty it asked for
++   * depth alone and showed it as the image. */
++  if (!name.IsEmpty()) {
++    return HdAovDescriptor(HdFormatFloat32Vec4, false, VtValue(GfVec4f(0.0f)));
++  }
+ 
+   return HdAovDescriptor();
+ }

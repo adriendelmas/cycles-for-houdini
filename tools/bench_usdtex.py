@@ -199,7 +199,7 @@ def write_textures():
         buf = oiio.ImageBuf(oiio.ImageSpec(8, 8, 3, oiio.FLOAT))
         oiio.ImageBufAlgo.fill(buf, colour)
         buf.write(os.path.join(OUT, "tile.%d.exr" % tile))
-    # The PNG inside a usdz archive, as every MEGALIB asset ships its textures
+    # The PNG inside a usdz archive, as an asset packaged as usdz ships its textures
     # (K-111): read through USD's resolver, not by path.
     subprocess.run([os.path.join(HFS, "usdzip.exe"), "tex.usdz", "corners.png"],
                    capture_output=True, text=True, cwd=OUT)

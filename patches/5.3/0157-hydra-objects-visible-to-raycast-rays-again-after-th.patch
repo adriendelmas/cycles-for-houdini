@@ -1,0 +1,56 @@
+From db2a5234d5071133b0a30fda6fb5a4f674862bd2 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Tue, 3 Nov 2026 11:02:26 +0100
+Subject: [PATCH 157/180] hydra: objects visible to raycast rays again after
+ the 5.3 visibility split
+
+Cycles 5.3 took the raycast bit out of PATH_RAY_VISIBILITY_ALL and added
+PATH_RAY_VISIBILITY_OBJECT_ALL for the flags an object may carry. The
+per-object properties still started from the old full mask, so every
+object would have been invisible to the Raycast node and to raycast AO.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/object_properties.cpp | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/src/hydra/object_properties.cpp b/src/hydra/object_properties.cpp
+index 8f50fb5f..90406e61 100644
+--- a/src/hydra/object_properties.cpp
++++ b/src/hydra/object_properties.cpp
+@@ -22,7 +22,7 @@ const std::string kKarma = "karma:object:";
+ uint KarmaRay(const std::string &name)
+ {
+   if (name == "*") {
+-    return PATH_RAY_VISIBILITY_ALL;
++    return PATH_RAY_VISIBILITY_OBJECT_ALL;
+   }
+   if (name == "primary" || name == "camera") {
+     return PATH_RAY_VISIBILITY_CAMERA;
+@@ -94,7 +94,7 @@ uint HdCyclesObjectProperties::ParseKarmaVisibility(const std::string &expressio
+    * leading `-`. Empty: seen by nothing. */
+   uint result = 0;
+   for (const std::string &term : TfStringSplit(expression, "|")) {
+-    uint bits = PATH_RAY_VISIBILITY_ALL;
++    uint bits = PATH_RAY_VISIBILITY_OBJECT_ALL;
+     bool any = false;
+     for (std::string factor : TfStringSplit(term, "&")) {
+       factor = TfStringTrim(factor);
+@@ -119,7 +119,7 @@ uint HdCyclesObjectProperties::ParseKarmaVisibility(const std::string &expressio
+ HdCyclesObjectProperties HdCyclesObjectProperties::Read(const HdPrimvarsSchema &primvars)
+ {
+   HdCyclesObjectProperties p;
+-  p.visibility = PATH_RAY_VISIBILITY_ALL;
++  p.visibility = PATH_RAY_VISIBILITY_OBJECT_ALL;
+   if (!primvars) {
+     return p;
+   }
+@@ -166,7 +166,7 @@ HdCyclesObjectProperties HdCyclesObjectProperties::Read(const HdPrimvarsSchema &
+ 
+ void HdCyclesObjectProperties::Apply(Object *object, const bool visible) const
+ {
+-  object->set_visibility(visible ? (visibility & PATH_RAY_VISIBILITY_ALL) : 0);
++  object->set_visibility(visible ? (visibility & PATH_RAY_VISIBILITY_OBJECT_ALL) : 0);
+   object->set_use_holdout(holdout);
+   object->set_is_shadow_catcher(shadowCatcher);
+   object->set_is_caustics_caster(causticsCaster);

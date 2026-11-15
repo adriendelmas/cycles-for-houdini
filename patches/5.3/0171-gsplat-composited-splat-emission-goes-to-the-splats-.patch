@@ -1,0 +1,69 @@
+From f5d03a87ace8a726b7def2e859cba16d68ea30ed Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Tue, 3 Nov 2026 17:17:32 +0100
+Subject: [PATCH 171/180] gsplat: composited splat emission goes to the splats'
+ light group
+
+film_write_volume_emission() was called without a light group, so a
+splat object in a group (Cycles primvar or Karma LPE tag) left its
+Combined_<group> pass black. The accumulator now keeps the light group of
+the strongest splat crossed; a segment's emission goes to that group,
+exact when the crossed splats share one (one group per splat system).
+A production frame, splats tagged "splats", GPU: Combined_splats 0 -> 0.01145
+(beauty 0.01147, the splats are its only emitters).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/kernel/geom/gsplat_intersect.h        | 8 ++++++++
+ src/kernel/integrator/intersect_closest.h | 5 ++++-
+ 2 files changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/src/kernel/geom/gsplat_intersect.h b/src/kernel/geom/gsplat_intersect.h
+index 06dc699e..4fe4003c 100644
+--- a/src/kernel/geom/gsplat_intersect.h
++++ b/src/kernel/geom/gsplat_intersect.h
+@@ -297,6 +297,10 @@ struct GSplatCompositeAccum {
+   float response;
+   /* Sum of log(1 - response): the segment's transmittance in log space. */
+   float log_transmittance;
++  /* Light group of the strongest splat: the segment's emission goes to one group, right when
++   * the splats crossed share theirs (one group per splat system). */
++  float max_response;
++  int lightgroup;
+ };
+ 
+ ccl_device_forceinline void gsplat_composite_accumulate(KernelGlobals kg,
+@@ -339,6 +343,10 @@ ccl_device_forceinline void gsplat_composite_accumulate(KernelGlobals kg,
+   accum.radiance += response * radiance;
+   accum.response += response;
+   accum.log_transmittance += logf(1.0f - response);
++  if (response > accum.max_response) {
++    accum.max_response = response;
++    accum.lightgroup = object_lightgroup(kg, object);
++  }
+ }
+ 
+ ccl_device_forceinline bool gsplat_intersect(KernelGlobals kg,
+diff --git a/src/kernel/integrator/intersect_closest.h b/src/kernel/integrator/intersect_closest.h
+index 3e3653a1..06e6fd31 100644
+--- a/src/kernel/integrator/intersect_closest.h
++++ b/src/kernel/integrator/intersect_closest.h
+@@ -36,6 +36,8 @@ ccl_device_forceinline void integrator_intersect_gsplat_composite(
+   accum.radiance = zero_float3();
+   accum.response = 0.0f;
+   accum.log_transmittance = 0.0f;
++  accum.max_response = 0.0f;
++  accum.lightgroup = LIGHTGROUP_NONE;
+   scene_intersect_gsplat_composite(kg, &segment, visibility, &accum);
+ 
+   if (!(accum.response > 0.0f)) {
+@@ -48,7 +50,8 @@ ccl_device_forceinline void integrator_intersect_gsplat_composite(
+   const float3 emission = accum.radiance * ((1.0f - transmittance) / accum.response);
+ 
+   const Spectrum throughput = INTEGRATOR_STATE(state, path, throughput);
+-  film_write_volume_emission(kg, state, throughput * rgb_to_spectrum(emission), render_buffer);
++  film_write_volume_emission(
++      kg, state, throughput * rgb_to_spectrum(emission), render_buffer, accum.lightgroup);
+   INTEGRATOR_STATE_WRITE(state, path, throughput) = throughput * transmittance;
+ }
+ #endif

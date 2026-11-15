@@ -1,7 +1,7 @@
-From aa813d8b44c43d91db12a48328adb8b07f81469d Mon Sep 17 00:00:00 2001
+From aa121a96f35a7139e93b9f2ef12ae0a5900893ea Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 17:40:16 +0200
-Subject: [PATCH 030/162] hydra: standard_surface specular weight, and image
+Subject: [PATCH 030/180] hydra: standard_surface specular weight, and image
  wrapping
 
 MaterialX's specular is a weight whose neutral value is 1; the Cycles level it
@@ -28,7 +28,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
  1 file changed, 69 insertions(+), 13 deletions(-)
 
 diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
-index 5cb38e7d..a27a300d 100644
+index 194f9ed3..3ec06b95 100644
 --- a/src/hydra/material.cpp
 +++ b/src/hydra/material.cpp
 @@ -273,13 +273,25 @@ class MtlxFacOrColor : public UsdToCyclesMapping {

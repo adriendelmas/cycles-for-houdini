@@ -1,0 +1,44 @@
+From e685955cdb83cd182163ae820eaf6fa6c2913cde Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Tue, 27 Oct 2026 01:53:01 +0100
+Subject: [PATCH 155/180] hydra: a MaterialX bump's scale is the Cycles bump
+ node's distance
+
+ND_bump's scale multiplies the height, in scene units. It was mapped to
+the Cycles bump node's strength, a 0..1 blend between the perturbed and
+the flat normal, and the node's distance - the real scale of the height
+- kept its default of 0.1: every bump came out ten times weaker than
+Karma's, and a terrain whose relief was a sum of noises in metres
+through a bump looked flat. scale now maps to distance. Measured on a
+sphere with a noise height, the bump's own effect (bumped minus flat):
+Karma 0.0141, Cycles 0.0140 at scale 1; 0.0018 and 0.0014 at scale 0.1,
+which is what Cycles gave at scale 1 before (K-117).
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ src/hydra/material.cpp | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
+index 2d1d975a..4385a3a6 100644
+--- a/src/hydra/material.cpp
++++ b/src/hydra/material.cpp
+@@ -1796,13 +1796,16 @@ const std::vector<MtlxEntry> &MtlxTable()
+ 
+   /* Utilities. */
+   /* Cycles' bump builds its own frame from the surface: the tangent and
+-   * bitangent MaterialX hands it are consumed, not warned about. */
++   * bitangent MaterialX hands it are consumed, not warned about. MaterialX's
++   * scale multiplies the height, in scene units: that is Cycles' distance,
++   * not its strength (a 0..1 blend towards the flat normal), whose default
++   * distance of 0.1 left the bump ten times too weak (K-117). */
+   static const UsdToCyclesMapping kBump = {
+       "bump",
+       {
+           {TfToken("height"), ustring("height")},
+           {TfToken("in"), ustring("height")},
+-          {TfToken("scale"), ustring("strength")},
++          {TfToken("scale"), ustring("distance")},
+           {TfToken("normal"), ustring("normal")},
+           {TfToken("tangent"), ustring("")},
+           {TfToken("bitangent"), ustring("")},

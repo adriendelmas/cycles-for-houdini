@@ -14,7 +14,7 @@ Houdini and a **Cycles Material Builder** to wire them in.
 Cycles' own delegate renders geometry, lights and cameras; the shading side is
 where the work went.
 
-- **164 Cycles shader nodes published to USD**, discovered from Cycles' node
+- **163 Cycles shader nodes published to USD**, discovered from Cycles' node
   registry at runtime, so the node set always matches the linked Cycles version.
 - **A Cycles Material Builder** — a dedicated LOP context holding every Cycles
   node in Blender's own categories, with Blender's parameter groupings, and
@@ -54,6 +54,16 @@ where the work went.
   multipliers and `shadow:color`, which Cycles cannot carry on one light, by
   splitting the light into twins (8 cases alike Karma); **cylinder lights as
   emissive tubes** that light all around.
+- **3D Gaussian splats** (`ParticleField3DGaussianSplat`), with a composite
+  mode that renders faint emissive splats without noise, their own light
+  groups and passes - see [docs/GSPLAT.md](docs/GSPLAT.md).
+- **A Cycles Render Settings LOP** gathering the render settings, the Cycles
+  passes as render vars (with Auto Fill for light groups and shader AOVs) and
+  the list of AOVs to denoise; a **Cycles (Setup)** tool lays it out with a
+  Render Pass and a USD Render ROP.
+- **A world shader**: a material bound to a Dome Light becomes Cycles' world -
+  its surface the background, its volume the world volume. A dome without a
+  bound material keeps its colour, its texture or Karma's Physical Sky.
 - Displacement, render settings surfaced in Solaris, and a long list of crash
   and correctness fixes to the delegate. Every claim here comes from a bench:
   see [docs/TESTING.md](docs/TESTING.md).
@@ -81,14 +91,8 @@ in the viewport — `CYCLES_DISPLAY_DRIVER=0` falls back to the output driver.
 
 ## Cycles versions
 
-One engine is maintained: Cycles 5.3, built from the series in `patches/5.3/`.
-An earlier build on Cycles 5.2 was retired on 2026-10-12: it had stopped at
-38 patches, never had most of what is described here, and its patches are no
-longer published (K-103).
-
-| | Cycles | Base commit | Notes |
-|---|---|---|---|
-| `install-53` | 5.3 dev | `8424ed53` (`main`) | the engine; adds dispersion |
+The delegate is built on **Cycles 5.3.0** (tag `v5.3.0`), from the series in
+`patches/5.3/`.
 
 5.3 brings **dispersion** on the Principled BSDF: two sliders in the Transmission
 section, an amount and an Abbe number, from which the per-wavelength IOR is
@@ -169,8 +173,9 @@ upstream delegate and are candidates for contribution back to Blender.
 | [docs/GOALS.md](docs/GOALS.md) | what "working correctly" means, and what is out of scope |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | the four layers, every file's role, the data path, the MaterialX mapping machinery |
 | [docs/PROGRESS.md](docs/PROGRESS.md) | the feature matrix: works / partial / missing / wrong, with how each was verified |
-| [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) | numbered defects with the file and line |
-| [docs/PLAN.md](docs/PLAN.md) | the phases that take the project to its goals, each with its acceptance test |
+| [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) | what is open, and the limits of Cycles itself |
+| [docs/ISSUE_LOG.md](docs/ISSUE_LOG.md) | the numbered record of what was fixed, with the measurements |
+| [docs/GSPLAT.md](docs/GSPLAT.md) | Gaussian splats: modes, devices, passes |
 | [docs/TESTING.md](docs/TESTING.md) | the benches, what each proves, and the regression suite to build |
 
 ## Testing
@@ -187,13 +192,13 @@ compare with Karma, rendering the same USD with both: seventeen materials
 region by region (`hython tools/bench_agree.py`, 67 checks, floor within
 1 %), and every MaterialX node one quad each (`hython tools/mtlx_karma.py`:
 633 of 704 value nodes and 38 of 45 closures the same, the rest explained in
-docs/KNOWN_ISSUES.md, K-61 and K-64), and every input of the surface models
+docs/ISSUE_LOG.md, K-61 and K-64), and every input of the surface models
 (`hython tools/surface_audit.py`, K-63). What each bench does and does not prove is set out in
 [docs/TESTING.md](docs/TESTING.md).
 
 ## Known gaps
 
-The complete list, with line numbers, is [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md).
+The complete list is [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md).
 The ones a user meets first:
 
 - MaterialX: 805 of the library's 822 shading nodedefs are rendered - 651
@@ -214,7 +219,7 @@ The ones a user meets first:
   background); light filters are not supported.
 - Implicit surfaces carry no UVs.
 
-- GPU rendering is NVIDIA only (CUDA, OptiX); AMD (HIP), Intel (oneAPI) and Apple (Metal) devices are not built yet, and the CUDA kernels for generations other than the RTX 30 series are built but untested on hardware. See K-98 and K-99 in [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md).
+- GPU rendering is NVIDIA only (CUDA, OptiX); AMD (HIP), Intel (oneAPI) and Apple (Metal) devices are not built yet, and the CUDA kernels for generations other than the RTX 30 series are built but untested on hardware. See K-99 in [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md).
 
 ## Credits
 

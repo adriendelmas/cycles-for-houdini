@@ -1,7 +1,7 @@
-From 1f651c0bca27774b15d3c6038e747b48dd6a9750 Mon Sep 17 00:00:00 2001
+From 80715f53d33df712b86549349b2037f774a9bacb Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 01:38:53 +0200
-Subject: [PATCH 001/162] cmake: add missing USD libraries for the Houdini
+Subject: [PATCH 001/180] cmake: add missing USD libraries for the Houdini
  build
 
 FindUSDHoudini.cmake did not list hdsi, which src/hydra/file_reader.cpp
@@ -19,14 +19,14 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
  create mode 100644 src/hydra/sdr_cycles.h
 
 diff --git a/src/cmake/Modules/FindUSDHoudini.cmake b/src/cmake/Modules/FindUSDHoudini.cmake
-index 6c8f631f..c5f6c129 100644
+index 7c50030a..c5f6c129 100644
 --- a/src/cmake/Modules/FindUSDHoudini.cmake
 +++ b/src/cmake/Modules/FindUSDHoudini.cmake
 @@ -31,7 +31,7 @@ if(HOUDINI_ROOT AND EXISTS ${HOUDINI_ROOT})
    string(REGEX MATCHALL "[0-9]+" HOUDINI_VERSION_MAJOR ${_houdini_version_major})
  
    # USD
--  set(USD_LIBRARIES hd hgi hgiGL gf arch garch plug tf trace vt work sdf cameraUtil hf pxOsd usd usdImaging usdGeom python)
+-  set(USD_LIBRARIES hd hdsi hgi hgiGL gf arch garch plug tf trace vt work sdf cameraUtil hf pxOsd usd usdImaging usdGeom python)
 +  set(USD_LIBRARIES hd hdsi hgi hgiGL sdr gf arch garch plug tf trace vt work sdf cameraUtil hf pxOsd usd usdImaging usdGeom python)
  
    foreach(lib ${USD_LIBRARIES})

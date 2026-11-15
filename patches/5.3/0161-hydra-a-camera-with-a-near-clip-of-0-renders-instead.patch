@@ -1,0 +1,43 @@
+From 29dbcc0501958f9a7e806378a56941d149706c86 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Tue, 3 Nov 2026 13:17:40 +0100
+Subject: [PATCH 161/180] hydra: a camera with a near clip of 0 renders instead
+ of staying black
+
+USD allows a clipping range starting at 0, and Karma renders it. Cycles'
+perspective matrix is then singular: its inverse, which makes the camera
+rays, is all NaN, and the render stays black and stuck at 0:00. Found on
+a production's shot cameras, (0, 100000). The near clip is floored
+at Cycles' own default, 1e-5.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/camera.cpp | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/src/hydra/camera.cpp b/src/hydra/camera.cpp
+index 654bab89..0b820d95 100644
+--- a/src/hydra/camera.cpp
++++ b/src/hydra/camera.cpp
+@@ -4,6 +4,9 @@
+  * SPDX-License-Identifier: Apache-2.0 */
+ 
+ #include "hydra/camera.h"
++
++#include <algorithm>
++
+ #include "hydra/session.h"
+ #include "hydra/util.h"
+ #include "scene/camera.h"
+@@ -244,7 +247,10 @@ void HdCyclesCamera::ApplyCameraSettings(HdRenderParam *renderParam,
+   cam->set_sensorwidth(data.GetHorizontalAperture() * GfCamera::APERTURE_UNIT * metersPerUnit);
+   cam->set_sensorheight(data.GetVerticalAperture() * GfCamera::APERTURE_UNIT * metersPerUnit);
+ 
+-  cam->set_nearclip(data.GetClippingRange().GetMin() * metersPerUnit);
++  /* A near clip of 0 (allowed by USD, rendered by Karma) makes Cycles' perspective matrix
++   * singular: its inverse, which makes the camera rays, is all NaN, and the render stays black.
++   * Cycles' own default near clip is the floor (K-126). */
++  cam->set_nearclip(std::max(float(data.GetClippingRange().GetMin() * metersPerUnit), 1e-5f));
+   cam->set_farclip(data.GetClippingRange().GetMax() * metersPerUnit);
+ 
+   cam->set_viewplane_left(viewplane.GetMin()[0]);

@@ -1,7 +1,7 @@
-From ba2dbc7d23680845b45fdd0460711b7ddb46e3ce Mon Sep 17 00:00:00 2001
+From 3552a1459c95ffd5c96c3a4f5de7e5b94a90a789 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 23:33:48 +0200
-Subject: [PATCH 032/162] hydra: MaterialX displacement has no midlevel
+Subject: [PATCH 032/180] hydra: MaterialX displacement has no midlevel
 
 The Cycles displacement node computes (height - midlevel) * scale and defaults
 midlevel to 0.5, which is the convention for a heightfield read from an image
@@ -26,7 +26,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
  2 files changed, 32 insertions(+), 9 deletions(-)
 
 diff --git a/src/hydra/material.cpp b/src/hydra/material.cpp
-index 9450975b..22ab45ac 100644
+index f5bc986a..eff8ddcf 100644
 --- a/src/hydra/material.cpp
 +++ b/src/hydra/material.cpp
 @@ -481,14 +481,31 @@ const UsdToCyclesMapping MtlxMix = {"mix_color",

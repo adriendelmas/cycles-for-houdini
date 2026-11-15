@@ -1,0 +1,274 @@
+From 11ec07b9cefe2587ac59709c9d7b703784f092e5 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Tue, 3 Nov 2026 14:18:33 +0100
+Subject: [PATCH 165/180] integrator: Light Optimize, the render sampled as if
+ the lights were brighter
+
+The trick of multiplying every light and emission by k and dividing the
+image by k afterwards changes the result only through Cycles' absolute
+thresholds: the adaptive sampling criterion (error over the square root
+of the intensity, so a k times brighter image looks sqrt(k) times
+noisier and dark areas keep sampling) and the sample clamps. Use Light
+Optimize / Light Optimize Factor (default 10) scale exactly those - the
+intensity the criterion sees (KernelFilm.adaptive_exposure, in the film
+padding) and the clamps - and leave the lights alone. A section of its
+own in the Render Settings Cycles tab (regenerated; it also picks up
+release/5.3's Filter Glossy default of 1).
+
+Measured on a production frame, 960x640, 128 spp: same mean (0.01166 vs
+0.01162), bright-area noise 0.113 -> 0.106, time +6 %. It only acts past
+the adaptive minimum (64 samples at the default threshold).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../resources/HdCyclesPluginGPU_Global.ds     | 51 ++++++++++++++++++-
+ src/hydra/resources/HdCyclesPlugin_Global.ds  | 51 ++++++++++++++++++-
+ src/kernel/data_template.h                    |  5 +-
+ src/kernel/film/adaptive_sampling.h           |  2 +-
+ src/scene/film.cpp                            |  1 +
+ src/scene/integrator.cpp                      | 17 +++++--
+ src/scene/integrator.h                        |  8 +++
+ 7 files changed, 127 insertions(+), 8 deletions(-)
+
+diff --git a/src/hydra/resources/HdCyclesPluginGPU_Global.ds b/src/hydra/resources/HdCyclesPluginGPU_Global.ds
+index dfba804b..b348f7e1 100644
+--- a/src/hydra/resources/HdCyclesPluginGPU_Global.ds
++++ b/src/hydra/resources/HdCyclesPluginGPU_Global.ds
+@@ -968,7 +968,7 @@
+         label   "Filter Glossy"
+         type    float
+         size    1
+-        default { 0.0 }
++        default { 1.0 }
+         parmtag { "spare_category" "Cycles" }
+         parmtag { "usdvaluetype" "float" }
+         disablewhen  R"({ xn__cyclesintegratorfilter_glossy_control_c1bk == block } { xn__cyclesintegratorfilter_glossy_control_c1bk == none })"
+@@ -1362,6 +1362,55 @@
+         disablewhen  R"({ xn__cyclesintegratorao_additive_factor_control_h9bk == block } { xn__cyclesintegratorao_additive_factor_control_h9bk == none })"
+     }
+     }
++    groupcollapsible {
++        name "cycles_light_optimize"
++        label "Light Optimize"
++        grouptag { "group_default" "1" }
++    parm {
++        name    "xn__cyclesintegratoruse_light_optimize_control_h9bk"
++        label   "Use Light Optimize"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'bool')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__cyclesintegratoruse_light_optimize_gwbk"
++        label   "Use Light Optimize"
++        type    toggle
++        size    1
++        default { 0 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "bool" }
++        disablewhen  R"({ xn__cyclesintegratoruse_light_optimize_control_h9bk == block } { xn__cyclesintegratoruse_light_optimize_control_h9bk == none })"
++    }
++    parm {
++        name    "xn__cyclesintegratorlight_optimize_factor_control_dfck"
++        label   "Light Optimize Factor"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'float')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__cyclesintegratorlight_optimize_factor_c1bk"
++        label   "Light Optimize Factor"
++        type    float
++        size    1
++        default { 10.0 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "float" }
++        disablewhen  R"({ xn__cyclesintegratorlight_optimize_factor_control_dfck == block } { xn__cyclesintegratorlight_optimize_factor_control_dfck == none })"
++    }
++    }
+     groupcollapsible {
+         name "cycles_advanced"
+         label "Advanced"
+diff --git a/src/hydra/resources/HdCyclesPlugin_Global.ds b/src/hydra/resources/HdCyclesPlugin_Global.ds
+index dfba804b..b348f7e1 100644
+--- a/src/hydra/resources/HdCyclesPlugin_Global.ds
++++ b/src/hydra/resources/HdCyclesPlugin_Global.ds
+@@ -968,7 +968,7 @@
+         label   "Filter Glossy"
+         type    float
+         size    1
+-        default { 0.0 }
++        default { 1.0 }
+         parmtag { "spare_category" "Cycles" }
+         parmtag { "usdvaluetype" "float" }
+         disablewhen  R"({ xn__cyclesintegratorfilter_glossy_control_c1bk == block } { xn__cyclesintegratorfilter_glossy_control_c1bk == none })"
+@@ -1362,6 +1362,55 @@
+         disablewhen  R"({ xn__cyclesintegratorao_additive_factor_control_h9bk == block } { xn__cyclesintegratorao_additive_factor_control_h9bk == none })"
+     }
+     }
++    groupcollapsible {
++        name "cycles_light_optimize"
++        label "Light Optimize"
++        grouptag { "group_default" "1" }
++    parm {
++        name    "xn__cyclesintegratoruse_light_optimize_control_h9bk"
++        label   "Use Light Optimize"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'bool')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__cyclesintegratoruse_light_optimize_gwbk"
++        label   "Use Light Optimize"
++        type    toggle
++        size    1
++        default { 0 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "bool" }
++        disablewhen  R"({ xn__cyclesintegratoruse_light_optimize_control_h9bk == block } { xn__cyclesintegratoruse_light_optimize_control_h9bk == none })"
++    }
++    parm {
++        name    "xn__cyclesintegratorlight_optimize_factor_control_dfck"
++        label   "Light Optimize Factor"
++        type    string
++        default { "none" }
++        menujoin {
++            [ "import loputils" ]
++            [ "return loputils.createEditPropertiesControlMenu(kwargs, 'float')" ]
++            language python
++        }
++        parmtag { "sidefx::look" "icon" }
++    }
++    parm {
++        name    "xn__cyclesintegratorlight_optimize_factor_c1bk"
++        label   "Light Optimize Factor"
++        type    float
++        size    1
++        default { 10.0 }
++        parmtag { "spare_category" "Cycles" }
++        parmtag { "usdvaluetype" "float" }
++        disablewhen  R"({ xn__cyclesintegratorlight_optimize_factor_control_dfck == block } { xn__cyclesintegratorlight_optimize_factor_control_dfck == none })"
++    }
++    }
+     groupcollapsible {
+         name "cycles_advanced"
+         label "Advanced"
+diff --git a/src/kernel/data_template.h b/src/kernel/data_template.h
+index 288a88cd..816e383e 100644
+--- a/src/kernel/data_template.h
++++ b/src/kernel/data_template.h
+@@ -157,8 +157,9 @@ KERNEL_STRUCT_MEMBER(film, int, use_approximate_shadow_catcher)
+ KERNEL_STRUCT_MEMBER(film, int, pass_guiding_color)
+ KERNEL_STRUCT_MEMBER(film, int, pass_guiding_probability)
+ KERNEL_STRUCT_MEMBER(film, int, pass_guiding_avg_roughness)
+-/* Padding. */
+-KERNEL_STRUCT_MEMBER(film, int, pad1)
++/* Exposure as the adaptive sampling criterion sees it: the film exposure, times the light
++ * optimize factor when it is on (Integrator::get_light_optimize_scale()). */
++KERNEL_STRUCT_MEMBER(film, float, adaptive_exposure)
+ KERNEL_STRUCT_END(KernelFilm)
+ 
+ /* Integrator. */
+diff --git a/src/kernel/film/adaptive_sampling.h b/src/kernel/film/adaptive_sampling.h
+index 07b9e68d..a4f6f54f 100644
+--- a/src/kernel/film/adaptive_sampling.h
++++ b/src/kernel/film/adaptive_sampling.h
+@@ -56,7 +56,7 @@ ccl_device bool film_adaptive_sampling_convergence_check(KernelGlobals kg,
+   const float4 I = kernel_read_pass_float4(buffer + kernel_data.film.pass_combined);
+ 
+   const float sample = __float_as_uint(buffer[kernel_data.film.pass_sample_count]);
+-  const float intensity_scale = kernel_data.film.exposure / sample;
++  const float intensity_scale = kernel_data.film.adaptive_exposure / sample;
+ 
+   /* The per pixel error as seen in section 2.1 of
+    * "A hierarchical automatic stopping condition for Monte Carlo global illumination" */
+diff --git a/src/scene/film.cpp b/src/scene/film.cpp
+index 0cac88b6..b5949db0 100644
+--- a/src/scene/film.cpp
++++ b/src/scene/film.cpp
+@@ -159,6 +159,7 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
+ 
+   /* update data */
+   kfilm->exposure = exposure;
++  kfilm->adaptive_exposure = exposure * scene->integrator->get_light_optimize_scale();
+   kfilm->pass_alpha_threshold = pass_alpha_threshold;
+   kfilm->pass_flag = 0;
+   kfilm->denoising_pass_flag = 0;
+diff --git a/src/scene/integrator.cpp b/src/scene/integrator.cpp
+index 7fbf9e5a..73d87198 100644
+--- a/src/scene/integrator.cpp
++++ b/src/scene/integrator.cpp
+@@ -131,6 +131,12 @@ NODE_DEFINE(Integrator)
+ 
+   SOCKET_FLOAT(sample_clamp_direct, "Sample Clamp Direct", 0.0f);
+   SOCKET_FLOAT(sample_clamp_indirect, "Sample Clamp Indirect", 10.0f);
++  /* Light optimize: the render sampled as if every light and emission were Factor times
++   * brighter and the image divided by Factor afterwards. Only the absolute thresholds see the
++   * difference - the adaptive sampling criterion, which then samples dark areas longer, and the
++   * clamps - so those are what it scales; the lights themselves are left alone. */
++  SOCKET_BOOLEAN(use_light_optimize, "Use Light Optimize", false);
++  SOCKET_FLOAT(light_optimize_factor, "Light Optimize Factor", 10.0f);
+   SOCKET_BOOLEAN(motion_blur, "Motion Blur", false);
+ 
+   SOCKET_INT(aa_samples, "AA Samples", 0);
+@@ -316,11 +322,16 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
+   kintegrator->guiding_directional_sampling_type = guiding_params.sampling_type;
+   kintegrator->guiding_roughness_threshold = guiding_params.roughness_threshold;
+ 
+-  kintegrator->sample_clamp_direct = (sample_clamp_direct == 0.0f) ? FLT_MAX :
+-                                                                     sample_clamp_direct * 3.0f;
++  /* With light optimize the clamps cut where they would on Factor times brighter light. */
++  const float light_optimize_scale = get_light_optimize_scale();
++  kintegrator->sample_clamp_direct = (sample_clamp_direct == 0.0f) ?
++                                         FLT_MAX :
++                                         sample_clamp_direct * 3.0f / light_optimize_scale;
+   kintegrator->sample_clamp_indirect = (sample_clamp_indirect == 0.0f) ?
+                                            FLT_MAX :
+-                                           sample_clamp_indirect * 3.0f;
++                                           sample_clamp_indirect * 3.0f / light_optimize_scale;
++  /* Also written by the film, whichever of the two updates last. */
++  dscene->data.film.adaptive_exposure = scene->film->get_exposure() * light_optimize_scale;
+ 
+   const int clamped_aa_samples = min(aa_samples, MAX_SAMPLES);
+ 
+diff --git a/src/scene/integrator.h b/src/scene/integrator.h
+index 5a838557..4bc04dcb 100644
+--- a/src/scene/integrator.h
++++ b/src/scene/integrator.h
+@@ -92,6 +92,8 @@ class Integrator : public Node {
+ 
+   NODE_SOCKET_API(float, sample_clamp_direct)
+   NODE_SOCKET_API(float, sample_clamp_indirect)
++  NODE_SOCKET_API(bool, use_light_optimize)
++  NODE_SOCKET_API(float, light_optimize_factor)
+   NODE_SOCKET_API(bool, motion_blur)
+ 
+   /* Maximum number of samples, beyond which we are likely to run into
+@@ -121,6 +123,12 @@ class Integrator : public Node {
+   int pixel_jitter_frame = 0;
+ 
+   NODE_SOCKET_API(bool, use_denoise);
++
++  /* The factor the light optimize option samples with, 1 when it is off. */
++  float get_light_optimize_scale() const
++  {
++    return use_light_optimize ? max(light_optimize_factor, 1e-6f) : 1.0f;
++  }
+   NODE_SOCKET_API(DenoiserType, denoiser_type);
+   NODE_SOCKET_API(int, denoise_start_sample);
+   NODE_SOCKET_API(DenoiserPassMask, denoiser_passes);

@@ -1,6 +1,6 @@
 # Progress
 
-The current state, feature by feature, as the code stands on 2026-10-07 -
+The current state, feature by feature, as the code stands -
 established by reading the sources, not the earlier claims. Each line says
 how it was verified; "code read" means nobody has rendered it yet.
 
@@ -11,9 +11,9 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | Feature | State | Verified by | Notes |
 |---|---|---|---|
 | Polygon meshes, triangulation, primvars | ✅ | 97-node bench, user scenes | |
-| Per-vertex colours and vector primvars | ✅ | `geomcolor` bench case exact | Garbage until 2026-10-07 (K-19, patch 0075) |
+| Per-vertex colours and vector primvars | ✅ | `geomcolor` bench case exact | Garbage until (K-19, patch 0075) |
 | Face-varying (corner) normals | ✅ | bit-identical vs per-point normals | |
-| Authored normals facing against the winding | ✅ | plane probe, 5 cases 0.158 vs Karma | Turned to the winding's side before upload; black in Cycles before (K-122, 0162) |
+| Authored normals facing against the winding | ✅ | plane probe, 5 cases 0.158 vs Karma | Turned to the winding's side before upload; black in Cycles before (K-122, 0157) |
 | Smooth/flat from authored normals | ✅ | measured | |
 | Catmull-Clark subdivision, creases, corners, boundary rules | ✅ | `bench_subdiv.py` 7/7 vs Karma | Always for `catmullClark`, capped by `cycles:max_subdivisions` (K-30, 0084); the tags were never read before 0115 (K-72) |
 | Adaptive dicing rate, dicing camera | ✅ | 10.3 M → expected triangle counts | Setting `cycles:dicing_rate`, clamped ≥ 0.1 |
@@ -41,7 +41,7 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | Feature | State | Verified by | Notes |
 |---|---|---|---|
 | Rect, disk, sphere, spot, distant, dome | ✅ | `bench_lights.py` 24/24 vs Karma | Units measured per type; spot softness converted from USD's angle to Cycles' cosine (K-69, 0112) |
-| Agreement with Karma on materials | ✅ | `bench_agree.py` 21/21 | Diffuse, dielectric, metal, glass, coat, emission, preview surface: floor to 1 %, spheres to 25 %, glass loose (2026-10-08) |
+| Agreement with Karma on materials | ✅ | `bench_agree.py` 21/21 | Diffuse, dielectric, metal, glass, coat, emission, preview surface: floor to 1 %, spheres to 25 %, glass loose |
 | Cylinder light | ✅ | `bench_lights.py` 0.98-1.04 of Karma | An emissive tube mesh, lights all around (K-89, 0129); no lobe multipliers or shadow colour on it |
 | IES profiles | ✅ | `bench_lights.py` | Read along the emission direction, in candelas, `normalize` and `angleScale` (K-70, 0113) - blurred and 30x off before |
 | Colour temperature, emission focus and tint | ✅ | `bench_lights.py` | Focus in the light shader (K-69, 0112) |
@@ -53,13 +53,13 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | `shadow:color`, `diffuse`/`specular` multipliers, `shadow:enable` | ✅ | `bench_light_split.py` 8/8 vs Karma | The light is split over twins (K-87, 0127); a dome keeps 0 or 1 |
 | Light filters | ❌ | code read | No Cycles counterpart |
 | World shader (material on the Dome Light, surface + volume) | ❌ | code read | The delegate builds the dome shader from the light's parameters only (K-119, planned, phase 10) |
-| Dome `textureFormat` | ⏸ | Karma, 2026-10-09 | Lat-long only. Not done on purpose: Karma itself reads `mirroredBall` and `angular` maps as lat-long (measured), so there is no reference for their orientation, which the HDRShop pages USD cites leave ambiguous |
+| Dome `textureFormat` | ⏸ | Karma, | Lat-long only. Not done on purpose: Karma itself reads `mirroredBall` and `angular` maps as lat-long (measured), so there is no reference for their orientation, which the HDRShop pages USD cites leave ambiguous |
 | Camera: perspective, ortho, DoF, apertures, lens shift, aspect conform | ✅ | `bench_camera.py` 7/7 vs Karma | |
 | Camera exposure | ✅ | `bench_camera.py` | Times the render settings' film exposure (K-71, 0114) |
 | Crop (`dataWindowNDC`), pixel aspect | ✅ | `bench_camera.py` | Under husk, from its render settings (K-77, 0119) |
 | `disableDepthOfField`, `aspectRatioConformPolicy` | ✅ | `bench_camera.py` | Policy from the render settings under husk (K-78, 0120) |
 | Orthographic camera on a stage in centimetres | ✅ | `bench_camera.py` `orthographic_cm` | Window scaled by `metersPerUnit` like the rest (K-107, 0146) |
-| Camera motion blur | ✅ | `bench_motion.py` camera cases, 2026-10-09 | Every sample the scene gives inside the shutter, not only two: a camera turning back mid-shutter blurs back and forth. Cycles spaces the steps evenly over the shutter, so keys spaced unevenly inside it shift where the blur is densest, not how far it reaches |
+| Camera motion blur | ✅ | `bench_motion.py` camera cases, | Every sample the scene gives inside the shutter, not only two: a camera turning back mid-shutter blurs back and forth. Cycles spaces the steps evenly over the shutter, so keys spaced unevenly inside it shift where the blur is densest, not how far it reaches |
 | Camera switch without manual restart | ✅ | phase 25 | |
 
 ## Rendering and output
@@ -72,23 +72,23 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | `samples`, `time_limit`, `sample_offset`, `dicing_rate` | ✅ | measured | |
 | Shutter from settings, motion blur toggle | ✅ | `bench_settings.py` (batch) | Both flags, resync when blur returns (K-34, 0086); live toggle unmeasured |
 | AOVs: color, depth, normal, primId, instanceId, P | ✅ | phase 6 | Houdini names `C`, `N`, `P`, `Pz` |
-| Light passes, AO, mist, motion vectors, cryptomatte, shader AOVs | ✅ | `bench_aovs.py` 7/7 | Every Cycles pass by name, Karma names and LPEs in Karma's convention, cryptomatte layers, `aov_output` as a pass-through (K-25, 0087). cryptomatte manifest in the EXR header (0094), light groups (0092). Blender's View Layer page as a LOP, **Cycles AOVs** (`hdcycles_aovs.hda`, `gsplat-53`, 2026-11-03), Blender's EXR names; light group beauty with the denoiser fixed (K-128) |
+| Light passes, AO, mist, motion vectors, cryptomatte, shader AOVs | ✅ | `bench_aovs.py` 7/7 | Every Cycles pass by name, Karma names and LPEs in Karma's convention, cryptomatte layers, `aov_output` as a pass-through (K-25, 0087). cryptomatte manifest in the EXR header (0094), light groups (0092). Blender's View Layer page as a LOP, **Cycles AOVs** (`hdcycles_aovs.hda`), Blender's EXR names; light group beauty with the denoiser fixed (K-128) |
 | Transparent background | ✅ | `bench_settings.py` | `cycles:background:transparent`, or a dome hidden from camera rays (K-26, 0086) |
 | Film exposure, pixel filter | ✅ | `bench_settings.py` (exposure) | Any film/background socket as `cycles:film:*`, `cycles:background:*` (0086) |
 | Denoising (OIDN/OptiX) | ✅ | integrator sockets | |
 | Per-object ray visibility, holdout, shadow catcher, light groups, caustics flags | ✅ | `bench_settings.py` | `primvars:cycles:object:*` and Karma's visibility/holdout (K-27, 0088); light group passes since 0092 |
 | Stencil maps (`karma:object:stencilmap`, `stencilthresh`) | ❌ | code read | Ignored; would be a Transparent BSDF mix in the object's shader (K-120, planned, phase 10) |
-| 3D Gaussian splats (`ParticleField3DGaussianSplat`, Hydra `particleField`) | ❌ | husk probe, 3 splats | Skipped silently; Cycles 5.3 has the primitive, stochastic and noisy at low opacity (K-123, study in `docs/GSPLAT.md`) |
+| 3D Gaussian splats (`ParticleField3DGaussianSplat`, Hydra `particleField`) | ✅ | CPU and OptiX renders, light group and pass checks | Composite mode for faint emissive splats, Cycles' stochastic mode for trained ones; see [GSPLAT.md](GSPLAT.md) |
 | Render tags / purposes | ✅ | checked in Houdini | Honoured live (K-28, 0090) |
 | Batch mode under husk | ✅ | measured | `background = true` brings nothing (K-29); crop, pixel aspect, conform policy read from husk's settings (K-77, K-78) |
-| GL display driver | ⚠️ | agent's MCP session, 2026-10-26 | Off by default again (K-114): under a Karma Physical Sky it showed the sky and no geometry; the output driver shows the scene. `CYCLES_DISPLAY_DRIVER=1` turns it on. Houdini 22's viewport is Vulkan but ships only `hgiGL`, so a delegate always gets an OpenGL Hgi (0050, 0151) |
-| Viewport interactivity | ✅ | timestamped live log | K-31 closed 2026-10-08: 871 restarts by hand, first sample 19 ms median, no host-thread pass over 50 ms |
+| GL display driver | ⚠️ | live viewport | Off by default again (K-114): under a Karma Physical Sky it showed the sky and no geometry; the output driver shows the scene. `CYCLES_DISPLAY_DRIVER=1` turns it on. Houdini 22's viewport is Vulkan but ships only `hgiGL`, so a delegate always gets an OpenGL Hgi (0050, 0151) |
+| Viewport interactivity | ✅ | timestamped live log | K-31 closed: 871 restarts by hand, first sample 19 ms median, no host-thread pass over 50 ms |
 
 ## Materials - native Cycles
 
 | Feature | State | Verified by | Notes |
 |---|---|---|---|
-| 164 nodes published to Sdr, 101 VOPs | ✅ | CYCLES_VOPS.md | `convert_*` hidden; the 164th is the wet map's `wet_state` |
+| 163 nodes published to Sdr, 100 VOPs | ✅ | `count_nodes.py` | `convert_*` hidden |
 | Material Builder, three terminals, properties node | ✅ | phase 15, 20 | |
 | Ramps and curves (Houdini encoding → table) | ✅ | phase 10 | |
 | UDIM (`<UDIM>`, `%(UDIM)d`) | ✅ | code and render | |
@@ -97,11 +97,11 @@ Legend: ✅ works and verified · 🟡 partial or approximate · ❌ missing · 
 | Material settings (`displacement_method`...) | ✅ | phase 20 | |
 | Enum validation | ✅ | phase 14 | |
 | 8-bit sRGB auto-detection under ACES | ✅ | `bench_usdtex.py` | `auto` picks the config's sRGB texture space (K-66, 0110) |
-| Instance scale and orientation | ✅ | `bench_instances.py` `placed`, six MEGALIB cones vs Karma | Composed scale, orientation, position, instancer; the positions were scaled before (K-113, 0150) |
-| Material Mixer, single-surface mode (add chains) | ✅ | Gauge terrain, ten layers, sphere vs Karma CPU | Each layer's lookups tied to the previous accumulation; 172 stack slots instead of an overflow (K-115, 0152); a bumped chain's ties depend on the base colour's accumulation, which keeps bumps from nesting (0160) |
-| Textures inside a usdz archive (`asset.usdz[textures/x.jpg]`, every MEGALIB asset) | ✅ | `bench_usdtex.py` `mtlx_usdz` | Read through USD's resolver, decoded from memory (K-111, 0149) |
+| Instance scale and orientation | ✅ | `bench_instances.py` `placed`, six cones vs Karma | Composed scale, orientation, position, instancer; the positions were scaled before (K-113, 0150) |
+| Material Mixer, single-surface mode (add chains) | ✅ | a ten-layer terrain, sphere vs Karma CPU | Each layer's lookups tied to the previous accumulation; 172 stack slots instead of an overflow (K-115, 0152); a bumped chain's ties depend on the base colour's accumulation, which keeps bumps from nesting (0155) |
+| Textures inside a usdz archive (`asset.usdz[textures/x.jpg]`) | ✅ | `bench_usdtex.py` `mtlx_usdz` | Read through USD's resolver, decoded from memory (K-111, 0149) |
 | `material:binding:full` (Assign Material with a purpose) | ✅ | `bench_mtlx.py` `binding_full` | A binding-resolving scene index, `full` then all-purpose (K-112, 0149) |
-| 8-bit sRGB without an OCIO config (husk outside the packages) | ✅ | grey PNG/JPG vs Karma, 2026-10-25 | Decoded by the kernel like under a config; was encoded, 3x too bright (K-108, 0147) |
+| 8-bit sRGB without an OCIO config (husk outside the packages) | ✅ | grey PNG/JPG vs Karma, | Decoded by the kernel like under a config; was encoded, 3x too bright (K-108, 0147) |
 | Viewport preview from the Cycles graph | 🟡 | `bench_preview.py` 6/6 | One image per input, followed through mixes (the side the factor favours) and colour nodes; mixes of constants computed (K-42, 0130); procedurals show the default |
 
 ## Materials - UsdPreviewSurface
@@ -133,34 +133,34 @@ surface models keep their own defaults for unauthored inputs
 (`mtlx_defaults.py`). Against Karma on the same file: 633 of 704 value nodes
 and 38 of 45 closures alike (`mtlx_karma.py`, the rest explained in K-61 and
 K-64), hand-built BSDF networks (`bench_agree.py`), and every input of the
-surface models (`surface_audit.py`, K-63). On 2026-10-07 the numbers were
+surface models (`surface_audit.py`, K-63). On the numbers were
 652, 543 and 36. This table says what renders right.
 
 | Family | State | Notes |
 |---|---|---|
 | `standard_surface` | ✅ | 29 of 39 inputs measured; separate glass lobe when `transmission_color` is authored |
-| `open_pbr_surface`, `disney_principled`, `gltf_pbr` | ✅ | Own tables since 2026-10-07 (K-05); defaults verified by `mtlx_defaults.py`; each lists its dropped inputs |
+| `open_pbr_surface`, `disney_principled`, `gltf_pbr` | ✅ | Own tables since (K-05); defaults verified by `mtlx_defaults.py`; each lists its dropped inputs |
 | Unauthored inputs of every surface | ✅ | MaterialX / USD defaults pinned (K-55) |
 | `image`, `tiledimage`, `hextiledimage`, `gltf_image` | ✅ | `constant` wrap only exact for black |
-| `normalmap`, `bump`, `displacement` | ✅ | `bench_normalmap.py`, `bench_displace.py`; per-vertex UVs broke the tangent space before 0116 (K-73); bump `scale` is Cycles' `distance`, ten times too weak before 0161 (K-117) |
+| `normalmap`, `bump`, `displacement` | ✅ | `bench_normalmap.py`, `bench_displace.py`; per-vertex UVs broke the tangent space before 0116 (K-73); bump `scale` is Cycles' `distance`, ten times too weak before 0156 (K-117) |
 | `heighttonormal` | ✅ | Tangent-space map from the delegate's own nodegraph (K-12, 0108) |
 | `texcoord`, `position`, `normal`, `tangent` | ✅ | `index`, `space` as Karma (K-18, 0106); `mtlx_karma.py` |
-| `geomcolor` | ✅ | Exact since 2026-10-07 (K-06, K-19); `index` not carried |
+| `geomcolor` | ✅ | Exact since (K-06, K-19); `index` not carried |
 | `geompropvalue` | ✅ | Colour and vector outputs (0128); a missing primvar reads the `default`, as Karma (K-90, 0131) |
 | MaterialX noises (perlin, fractal, cell, worley, unified) | ✅ | Exact kernel from PR 158054 |
 | `checkerboard`, `randomcolor`, `ramplr` | ✅ / 🟡 | `ramptb` is the diagonal gradient |
-| `mix` | ✅ | Exact since 2026-10-07 (K-01) |
+| `mix` | ✅ | Exact since (K-01) |
 | `plus`, `minus`, `difference`, `burn`, `dodge`, `screen`, `overlay` | ✅ | Orientation fixed (K-02); all compared with Karma (`mtlx_karma.py`); `dodge` differs where Karma departs from the library (K-64) |
-| `mix`/`add`/`multiply` of BSDF, EDF, VDF, surfaceshader | ✅ | Exact since 2026-10-07 (K-03); four bench cases |
+| `mix`/`add`/`multiply` of BSDF, EDF, VDF, surfaceshader | ✅ | Exact since (K-03); four bench cases |
 | `mix`/`add`/`multiply`/`dot` of displacementshader | ✅ | Vector nodes |
-| `surface` | ✅ | Added 2026-09-10 |
-| `volume` | ✅ | Added 2026-10-07 (K-04); same as Karma (`mtlx_karma.py --closures`) |
+| `surface` | ✅ | Added |
+| `volume` | ✅ | Added (K-04); same as Karma (`mtlx_karma.py --closures`) |
 | `layer` | ✅ / 🟡 | top + base * (1 - F), F at the top dielectric's IOR: coats within 10 % of Karma (K-09, 0135, `bench_agree.py`); approximate for a top that is not a dielectric |
 | add/sub/mul/div, scalar and vector | ✅ | Split by type suffix |
-| Other math on colour/vector (`absval`, `floor`, `min`, `max`, `power`, `clamp`, `remap`, `smoothstep`...) | ✅ | Vector twins since 2026-10-07 (K-07); 15 bench cases |
+| Other math on colour/vector (`absval`, `floor`, `min`, `max`, `power`, `clamp`, `remap`, `smoothstep`...) | ✅ | Vector twins since (K-07); 15 bench cases |
 | `ln`, `modulo`, `atan2` (scalar) | ✅ | Were wrong: base 0.5, truncated modulo, operands unmapped (K-07) |
 | `contrast` scalar and vector | ✅ | |
-| `saturate` | ✅ | MaterialX nodegraph, ACEScg luma, exact since 2026-10-07 (K-08) |
+| `saturate` | ✅ | MaterialX nodegraph, ACEScg luma, exact since (K-08) |
 | `invert`, `luminance` | ✅ | `amount - in`; ACEScg `lumacoeffs` |
 | `rgbtohsv`, `hsvtorgb` | ✅ | Same as Karma (`mtlx_karma.py`) |
 | `ifgreater`, `ifgreatereq`, `ifequal` | ✅ | Per type |
@@ -194,7 +194,7 @@ surface models (`surface_audit.py`, K-63). On 2026-10-07 the numbers were
 | Preview translator | 🟡 | See above |
 | `op:` textures in husk / on a farm | ✅ | An output processor on every new USD Render ROP cooks them to files as it saves (K-40, 0126); `bench_cop_rop.py` |
 | COP cache eviction | ✅ | On material finalize, capped by bytes (K-41, 0096) |
-| Karma Material Builder (`kma`) | ✅ | Read after `mtlx` since 2026-10-07 (K-16) |
+| Karma Material Builder (`kma`) | ✅ | Read after `mtlx` since (K-16) |
 
 ## Distribution and devices
 
@@ -204,33 +204,20 @@ surface models (`surface_audit.py`, K-63). On 2026-10-07 the numbers were
 | `tools/make_dist.py` (folder, zip, drive-letter scan) | ✅ | zip 66.8 MB; not tried on a second machine (K-102) |
 | Install section for non-builders in the README | ✅ | No GitHub Release published yet |
 | CPU rendering | ✅ | |
-| CUDA kernels, every NVIDIA generation Maxwell to Blackwell | 🟡 | Defaults in `bootstrap.py` since 2026-10-12; all ten kernels built with CUDA 12.9 and installed on 2026-10-14; only `sm_86` ever run (K-98) |
+| CUDA kernels, every NVIDIA generation Maxwell to Blackwell | 🟡 | Defaults in `bootstrap.py` since; all ten kernels built with CUDA 12.9 and installed on; only `sm_86` ever run (K-98) |
 | OptiX | ✅ | PTX kernels, any RTX card in principle; run on an RTX 3090 only |
 | Build time with ten CUDA architectures | 🟡 | One kernel 93 s with split compile, 458 s without; full build estimated 25-30 min, not run (K-100) |
 | AMD HIP | ❌ | Not built; needs the HIP SDK 6.0+ (K-99) |
 | Intel oneAPI | ❌ | Not built; toolchain already in `lib/windows_x64/dpcpp` (K-99) |
 | Apple Metal | ❌ | macOS only, no macOS pipeline (K-99) |
-| Cycles 5.2 engine | ❌ | Retired 2026-10-12: incomplete, never validated; not published any more (K-103) |
+| Cycles 5.2 engine | ❌ | Retired: incomplete, never validated; not published any more (K-103) |
 
 ## Repository and process
 
 | Item | State | Notes |
 |---|---|---|
 | Patch series regenerable from the worktree | ✅ | 74 patches |
-| Bootstrap from a clean clone | ✅ | Re-run: 14 min 20 s (ENVIRONMENT.md) |
+| Bootstrap from a clean clone | ✅ | Re-run: 14 min 20 s |
 | Regression tests on images | ✅ | `references/` tracked, `output/` ignored, `bench_diff.py --accept` (K-50) |
 | Code and messages in English | ✅ | Translated (K-53, 0097) |
-| README numbers reproducible | ✅ | `count_nodes.py`: 164 / 64 / 100 / 98 (K-54; 2026-10-26, with the wet map's node) |
-
-## Wet map (addition)
-
-Not part of hdCycles proper: an addition scoped by name, file and patch
-prefix (`wetmap:`), planned and tracked in [WETMAP_PLAN.md](WETMAP_PLAN.md).
-
-| Item | State | Notes |
-|---|---|---|
-| The delegate follows the stage's frame (S0) | ✅ | `HdCyclesWetState`, patch 0153; `currentFrame` arrives under husk, one delegate across the frames |
-| AO traced against raycast-visible objects only (S1) | ✅ | `raycast_visibility` on the AO node, `cycles:object:visibility:raycast` ("Raycast Rays"), patch 0154; `bench_wet.py --gpu` 10/10 on CPU and OptiX |
-| Per-object state kept across frames (S2) | ✅ | `cycles_wet_state` node, `WetStateManager`, commit on frame change, patches 0155-0156; `bench_wet.py` 8-frame sequence within 0.03 of the formula on CPU and OptiX, no advance on a re-rendered frame. 0156: a reset no longer raises a scene update (it restarted the session on every redraw of a 442 000-instance scene and crashed the GPU viewport) - the gauge re-test is the other session's |
-| State on disk per frame (S3) | ❌ | - |
-| Houdini finish, MaterialX bridge (S4, S5) | ❌ | - |
+| README numbers reproducible | ✅ | `count_nodes.py`: 163 / 64 / 99 / 97 (K-54) |

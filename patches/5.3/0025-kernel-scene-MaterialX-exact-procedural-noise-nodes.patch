@@ -1,7 +1,7 @@
-From 881a25477bb087a5dd81a8a5b478acff6f7dfdc5 Mon Sep 17 00:00:00 2001
+From 710bad35d514ff178fddb5c5391e5b199655c2f2 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 16:49:43 +0200
-Subject: [PATCH 025/162] kernel/scene: MaterialX-exact procedural noise nodes
+Subject: [PATCH 025/180] kernel/scene: MaterialX-exact procedural noise nodes
 
 Imported from Blender PR #158054 (materialx-noise-nodes), Cycles side only -
 the Blender node, RNA and EEVEE parts are left out, as is blender/shader.cpp
@@ -31,10 +31,10 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
  create mode 100644 src/kernel/svm/mx_noise.h
 
 diff --git a/src/kernel/osl/shaders/CMakeLists.txt b/src/kernel/osl/shaders/CMakeLists.txt
-index 29977b3f..c0dd3e67 100644
+index 0e0887b8..f4bf0e61 100644
 --- a/src/kernel/osl/shaders/CMakeLists.txt
 +++ b/src/kernel/osl/shaders/CMakeLists.txt
-@@ -63,6 +63,7 @@ set(SRC_OSL
+@@ -66,6 +66,7 @@ set(SRC_OSL
    node_mix_float.osl
    node_mix_vector.osl
    node_mix_vector_non_uniform.osl
@@ -1232,10 +1232,10 @@ index 00000000..d1c798d5
 +
 +CCL_NAMESPACE_END
 diff --git a/src/kernel/svm/node_types.h b/src/kernel/svm/node_types.h
-index a8c5ea15..866d5c4f 100644
+index bb145314..3482023e 100644
 --- a/src/kernel/svm/node_types.h
 +++ b/src/kernel/svm/node_types.h
-@@ -715,6 +715,55 @@ struct SVMNodeTexWhiteNoise {
+@@ -739,6 +739,55 @@ struct SVMNodeTexWhiteNoise {
  static_assert(alignof(SVMNodeTexWhiteNoise) <= alignof(uint));
  static_assert(sizeof(SVMNodeTexWhiteNoise) % sizeof(uint) == 0);
  
@@ -1292,10 +1292,10 @@ index a8c5ea15..866d5c4f 100644
  struct SVMNodeTexGradient {
    NodeGradientType gradient_type;
 diff --git a/src/kernel/svm/node_types_template.h b/src/kernel/svm/node_types_template.h
-index d855af0f..cf156b28 100644
+index fe2ea3e8..8dba15ec 100644
 --- a/src/kernel/svm/node_types_template.h
 +++ b/src/kernel/svm/node_types_template.h
-@@ -72,6 +72,8 @@ SHADER_NODE_TYPE(NODE_TEX_MAGIC)
+@@ -73,6 +73,8 @@ SHADER_NODE_TYPE(NODE_TEX_MAGIC)
  SHADER_NODE_TYPE(NODE_TEX_CHECKER)
  SHADER_NODE_TYPE(NODE_TEX_BRICK)
  SHADER_NODE_TYPE(NODE_TEX_WHITE_NOISE)
@@ -1305,10 +1305,10 @@ index d855af0f..cf156b28 100644
  SHADER_NODE_TYPE(NODE_LIGHT_FALLOFF)
  SHADER_NODE_TYPE(NODE_IES)
 diff --git a/src/kernel/svm/svm.h b/src/kernel/svm/svm.h
-index 52372951..607e7124 100644
+index 9fd2fcf1..09afda42 100644
 --- a/src/kernel/svm/svm.h
 +++ b/src/kernel/svm/svm.h
-@@ -60,6 +60,8 @@
+@@ -62,6 +62,8 @@
  #include "kernel/svm/mapping.h"
  #include "kernel/svm/math.h"
  #include "kernel/svm/mix.h"
@@ -1317,8 +1317,8 @@ index 52372951..607e7124 100644
  #include "kernel/svm/noisetex.h"
  #include "kernel/svm/normal.h"
  #include "kernel/svm/radial_tiling.h"
-@@ -299,6 +301,17 @@ ccl_device void svm_eval_nodes(KernelGlobals kg,
-             kg, sd, stack, svm_node_get<SVMNodeTexImageBox>(kg, &offset));
+@@ -320,6 +322,17 @@ ccl_device void svm_eval_nodes(KernelGlobals kg,
+         }
        }
        break;
 +      SVM_CASE(NODE_TEX_MX_HEXTILED_IMAGE)
@@ -1335,7 +1335,7 @@ index 52372951..607e7124 100644
        SVM_CASE(NODE_TEX_NOISE)
        svm_node_tex_noise(stack, svm_node_get<SVMNodeTexNoise>(kg, &offset));
        break;
-@@ -476,6 +489,9 @@ ccl_device void svm_eval_nodes(KernelGlobals kg,
+@@ -515,6 +528,9 @@ ccl_device void svm_eval_nodes(KernelGlobals kg,
        SVM_CASE(NODE_TEX_WHITE_NOISE)
        svm_node_tex_white_noise(stack, svm_node_get<SVMNodeTexWhiteNoise>(kg, &offset));
        break;
@@ -1346,10 +1346,10 @@ index 52372951..607e7124 100644
        svm_node_normal(stack, svm_node_get<SVMNodeNormal>(kg, &offset));
        break;
 diff --git a/src/scene/shader_nodes.cpp b/src/scene/shader_nodes.cpp
-index 32584ed5..55f12f96 100644
+index 5a73284c..0b8f39a0 100644
 --- a/src/scene/shader_nodes.cpp
 +++ b/src/scene/shader_nodes.cpp
-@@ -1530,6 +1530,218 @@ void WhiteNoiseTextureNode::compile(OSLCompiler &compiler)
+@@ -1542,6 +1542,218 @@ void WhiteNoiseTextureNode::compile(OSLCompiler &compiler)
    compiler.add(this, "node_white_noise_texture");
  }
  
@@ -1569,10 +1569,10 @@ index 32584ed5..55f12f96 100644
  
  NODE_DEFINE(WaveTextureNode)
 diff --git a/src/scene/shader_nodes.h b/src/scene/shader_nodes.h
-index ec0f48e3..4e4e4c41 100644
+index 7fc2f140..efc6b59d 100644
 --- a/src/scene/shader_nodes.h
 +++ b/src/scene/shader_nodes.h
-@@ -410,6 +410,63 @@ class WhiteNoiseTextureNode : public ShaderNode {
+@@ -414,6 +414,63 @@ class WhiteNoiseTextureNode : public ShaderNode {
    NODE_SOCKET_API(float, w)
  };
  

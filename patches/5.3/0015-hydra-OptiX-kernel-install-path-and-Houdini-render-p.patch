@@ -1,7 +1,7 @@
-From 1aa942a0e6909118bc6236668d413ac135711cea Mon Sep 17 00:00:00 2001
+From 8330e84d84a3eab552ea6d6826fe5aac857082f9 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 19:36:49 +0200
-Subject: [PATCH 015/162] hydra: OptiX kernel install path, and Houdini render
+Subject: [PATCH 015/180] hydra: OptiX kernel install path, and Houdini render
  property definitions
 
 Install the OptiX kernels inside the Houdini tree, same as the CUDA ones -
@@ -2769,10 +2769,10 @@ index 00000000..dc23f248
 +    }
 +}
 diff --git a/src/kernel/device/optix/CMakeLists.txt b/src/kernel/device/optix/CMakeLists.txt
-index fb97a9a4..a7ea2268 100644
+index 4095d8eb..df4780ba 100644
 --- a/src/kernel/device/optix/CMakeLists.txt
 +++ b/src/kernel/device/optix/CMakeLists.txt
-@@ -102,7 +102,14 @@ if(WITH_CYCLES_CUDA_BINARIES AND WITH_CYCLES_DEVICE_OPTIX)
+@@ -100,7 +100,14 @@ if(WITH_CYCLES_CUDA_BINARIES AND WITH_CYCLES_DEVICE_OPTIX)
      list(APPEND optix_ptx ${output_compressed})
      set(optix_ptx "${optix_ptx}" PARENT_SCOPE)
  

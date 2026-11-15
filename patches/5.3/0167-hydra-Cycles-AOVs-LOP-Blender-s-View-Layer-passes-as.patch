@@ -1,0 +1,259 @@
+From 25e9edf793e955d96373667923d498ff250136da Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Tue, 3 Nov 2026 15:13:32 +0100
+Subject: [PATCH 167/180] hydra: Cycles AOVs LOP, Blender's View Layer passes
+ as render vars
+
+A digital asset laid out like Blender's View Layer page (Data, Light,
+Cryptomatte, Shader AOVs, Light Groups). Each checked pass becomes a
+UsdRenderVar named and written as Blender names it (DiffDir, IndexOB,
+CryptoObject00, Combined_<group>...), sourcing the Cycles pass the
+delegate resolves, and is appended to the render products: the ones
+named on the node, or those of the stage's render settings. The vars go
+next to the first product, since Karma's /Render may be deactivated.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/hydra/CMakeLists.txt                   |   3 +
+ src/hydra/resources/cycles_aovs.py         | 150 +++++++++++++++++++++
+ src/hydra/resources/otls/hdcycles_aovs.hda | Bin 0 -> 9412 bytes
+ 3 files changed, 153 insertions(+)
+ create mode 100644 src/hydra/resources/cycles_aovs.py
+ create mode 100644 src/hydra/resources/otls/hdcycles_aovs.hda
+
+diff --git a/src/hydra/CMakeLists.txt b/src/hydra/CMakeLists.txt
+index b4f1a63c..e0a4022c 100644
+--- a/src/hydra/CMakeLists.txt
++++ b/src/hydra/CMakeLists.txt
+@@ -254,6 +254,9 @@ if(WITH_CYCLES_HYDRA_RENDER_DELEGATE)
+     # module it calls. Houdini picks both up from the package's HOUDINI_PATH.
+     delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources/otls" "hdcycles_flatten_op_textures.hda" "${CYCLES_INSTALL_PATH}/houdini/otls")
+     delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources" "flatten_op_textures.py" "${CYCLES_INSTALL_PATH}/houdini/python${HOUDINI_PYTHON_VERSION}libs")
++    # The Cycles AOVs LOP: Blender's View Layer passes as render vars.
++    delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources/otls" "hdcycles_aovs.hda" "${CYCLES_INSTALL_PATH}/houdini/otls")
++    delayed_install("${CMAKE_CURRENT_SOURCE_DIR}/resources" "cycles_aovs.py" "${CYCLES_INSTALL_PATH}/houdini/python${HOUDINI_PYTHON_VERSION}libs")
+     # The Cycles Material Builder. A builder is not a node type but a
+     # configured subnet, assembled by a tool of the tab menu: so it needs the
+     # module that assembles it and the shelf that calls it. Without them, the
+diff --git a/src/hydra/resources/cycles_aovs.py b/src/hydra/resources/cycles_aovs.py
+new file mode 100644
+index 00000000..d3ae4a96
+--- /dev/null
++++ b/src/hydra/resources/cycles_aovs.py
+@@ -0,0 +1,150 @@
++"""The Cycles AOVs LOP: Blender's View Layer passes as render vars.
++
++Each checked pass becomes a UsdRenderVar under the vars location, named and
++written to the image under Blender's own name (DiffDir, GlossInd, IndexOB...),
++sourcing the Cycles pass of that name, which the delegate resolves
++(hydra/session.cpp). The vars are appended to the render products: the ones
++the node names, or those of the stage's render settings.
++
++The node body is `import cycles_aovs; cycles_aovs.run(hou.pwd())`; the
++parameters live on the digital asset around it (tools/build_aovs_hda.py).
++"""
++
++import hou
++from pxr import Sdf, Tf, UsdRender
++
++# (parameter, EXR name, Cycles pass, data type, format)
++DATA = [
++    ("z", "Depth", "depth", "float", "float"),
++    ("mist", "Mist", "mist", "float", "float"),
++    ("position", "Position", "position", "point3f", "point3f"),
++    ("normal", "Normal", "normal", "normal3f", "normal3f"),
++    ("vector", "Vector", "motion", "float4", "float4"),
++    ("uv", "UV", "uv", "float3", "float3"),
++    ("roughness", "Roughness", "roughness", "float", "float"),
++    ("objectindex", "IndexOB", "object_id", "float", "float"),
++    ("materialindex", "IndexMA", "material_id", "float", "float"),
++    ("samplecount", "Debug Sample Count", "sample_count", "float", "float"),
++]
++DENOISING = [
++    ("Denoising Albedo", "denoising_albedo", "color3f", "color3h"),
++    ("Denoising Normal", "denoising_normal", "normal3f", "normal3f"),
++]
++LIGHT = [
++    ("diffusedirect", "DiffDir", "diffuse_direct"),
++    ("diffuseindirect", "DiffInd", "diffuse_indirect"),
++    ("diffusecolor", "DiffCol", "diffuse_color"),
++    ("glossydirect", "GlossDir", "glossy_direct"),
++    ("glossyindirect", "GlossInd", "glossy_indirect"),
++    ("glossycolor", "GlossCol", "glossy_color"),
++    ("transmissiondirect", "TransDir", "transmission_direct"),
++    ("transmissionindirect", "TransInd", "transmission_indirect"),
++    ("transmissioncolor", "TransCol", "transmission_color"),
++    ("volumedirect", "VolumeDir", "volume_direct"),
++    ("volumeindirect", "VolumeInd", "volume_indirect"),
++    ("emission", "Emit", "emission"),
++    ("environment", "Env", "background"),
++    ("ao", "AO", "ao"),
++    ("shadowcatcher", "Shadow Catcher", "shadow_catcher"),
++]
++CRYPTOMATTE = [
++    ("cryptoobject", "CryptoObject"),
++    ("cryptomaterial", "CryptoMaterial"),
++    ("cryptoasset", "CryptoAsset"),
++]
++
++
++def _prim_name(name):
++    return Tf.MakeValidIdentifier(name.replace(" ", ""))
++
++
++def _define_var(stage, location, aov_name, source_name, data_type, aov_format):
++    path = Sdf.Path(location).AppendChild(_prim_name(aov_name))
++    var = UsdRender.Var.Define(stage, path)
++    var.CreateSourceNameAttr(source_name)
++    var.CreateSourceTypeAttr(UsdRender.Tokens.raw)
++    var.CreateDataTypeAttr(data_type)
++    prim = var.GetPrim()
++    prim.CreateAttribute("driver:parameters:aov:name", Sdf.ValueTypeNames.String).Set(aov_name)
++    prim.CreateAttribute("driver:parameters:aov:format", Sdf.ValueTypeNames.Token).Set(aov_format)
++    return path
++
++
++def requested(node):
++    """(EXR name, source, data type, format) for every pass the node asks for."""
++    out = []
++    for parm, name, source, data_type, aov_format in DATA:
++        if node.evalParm(parm):
++            out.append((name, source, data_type, aov_format))
++    if node.evalParm("denoisingdata"):
++        out.extend(DENOISING)
++    for parm, name, source in LIGHT:
++        if node.evalParm(parm):
++            out.append((name, source, "color3f", "color3h"))
++
++    # Two ranks per layer: Levels 6 is three layers, as in Blender.
++    layers = max(1, (node.evalParm("cryptolevels") + 1) // 2)
++    for parm, prefix in CRYPTOMATTE:
++        if node.evalParm(parm):
++            for i in range(layers):
++                name = "%s%02d" % (prefix, i)
++                out.append((name, name, "color4f", "color4f"))
++
++    for i in range(1, node.evalParm("lightgroups") + 1):
++        group = node.evalParm("lightgroup%d" % i).strip()
++        if group:
++            out.append(("Combined_" + group, "lightgroup:" + group, "color3f", "color3h"))
++
++    for i in range(1, node.evalParm("shaderaovs") + 1):
++        name = node.evalParm("shaderaov%d" % i).strip()
++        if not name:
++            continue
++        if node.parm("shaderaovtype%d" % i).evalAsString() == "value":
++            out.append((name, name, "float", "float"))
++        else:
++            out.append((name, name, "color3f", "color3h"))
++    return out
++
++
++def _target_products(stage, node):
++    paths = node.evalParm("products").split()
++    if paths:
++        return [Sdf.Path(p) for p in paths]
++    settings_path = stage.GetMetadata("renderSettingsPrimPath")
++    settings = UsdRender.Settings(stage.GetPrimAtPath(settings_path)) if settings_path else None
++    if not settings:
++        for prim in stage.Traverse():
++            if prim.IsA(UsdRender.Settings):
++                settings = UsdRender.Settings(prim)
++                break
++    if not settings:
++        return []
++    return settings.GetProductsRel().GetForwardedTargets()
++
++
++def run(node):
++    """Author the render vars on the stage of `node`, a Python LOP inside the
++    asset, from the asset's parameters."""
++    asset = node.parent()
++    stage = node.editableStage()
++    aovs = requested(asset)
++    if not aovs:
++        return
++
++    products = _target_products(stage, asset)
++    if not products:
++        raise hou.NodeError(
++            "No render product to add the AOVs to: name one in Render Products, or put a "
++            "Render Settings with a product above this node.")
++    # Next to the product by default: /Render may be deactivated (Karma's settings, set aside
++    # for Cycles), and nothing can be defined under an inactive prim.
++    location = asset.evalParm("location") or str(products[0].GetParentPath().AppendChild("Vars"))
++    var_paths = [_define_var(stage, location, *aov) for aov in aovs]
++
++    for path in products:
++        product = UsdRender.Product(stage.GetPrimAtPath(path))
++        if not product:
++            raise hou.NodeError("%s is not a render product." % path)
++        rel = product.GetOrderedVarsRel()
++        targets = list(rel.GetTargets())
++        rel.SetTargets(targets + [p for p in var_paths if p not in targets])
+diff --git a/src/hydra/resources/otls/hdcycles_aovs.hda b/src/hydra/resources/otls/hdcycles_aovs.hda
+new file mode 100644
+index 0000000000000000000000000000000000000000..7eeddb7e1bc47275b2aaccf7309e4d9b77119a58
+GIT binary patch
+literal 9412
+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
+X)-HSh^08yj{5WiF<ojEHhE@GPAOrL@
+
+literal 0
+HcmV?d00001
+

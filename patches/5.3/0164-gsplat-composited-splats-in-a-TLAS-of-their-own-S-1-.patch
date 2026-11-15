@@ -1,0 +1,465 @@
+From d4e87c599e9d13c52e4792f35ee4c4262d377c6f Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Tue, 3 Nov 2026 14:18:33 +0100
+Subject: [PATCH 164/180] gsplat: composited splats in a TLAS of their own,
+ S^-1 R^T precomputed
+
+- OptiX: composited splat instances leave the scene's TLAS for one of
+  their own (its handle in the padding after device_bvh), which the
+  composite ray traverses alone.
+- Each splat's ray-space transform S^-1 R^T is computed once per update
+  (PointCloud::pack_gsplat_inverse(), a gsplat_inverse kernel array)
+  instead of from the rotation and scale at every ray; opacity and
+  radiance are read once. Moving splats keep the general path.
+
+A production frame, 4.3 M splats, 3840x2560, 128 spp, RTX 3090:
+138 s -> 131 s, image identical (0.1 % per block). Without splats the
+frame takes 55 s: the splats' cost is the number of splats each ray
+evaluates, which neither change touches. CPU and OptiX still match the
+numpy reference.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/device/optix/device_impl.cpp   | 55 +++++++++++++++++---
+ src/device/optix/device_impl.h     |  3 ++
+ src/kernel/data_arrays.h           |  2 +
+ src/kernel/device/optix/bvh.h      | 10 ++--
+ src/kernel/geom/gsplat_intersect.h | 82 ++++++++++++++++++++++++++++--
+ src/kernel/types.h                 |  6 +++
+ src/scene/devicescene.cpp          |  1 +
+ src/scene/devicescene.h            |  1 +
+ src/scene/geometry.cpp             |  4 ++
+ src/scene/geometry_mesh.cpp        | 20 ++++++++
+ src/scene/pointcloud.cpp           | 25 +++++++++
+ src/scene/pointcloud.h             |  4 ++
+ 12 files changed, 194 insertions(+), 19 deletions(-)
+
+diff --git a/src/device/optix/device_impl.cpp b/src/device/optix/device_impl.cpp
+index bcd4700f..01a579ee 100644
+--- a/src/device/optix/device_impl.cpp
++++ b/src/device/optix/device_impl.cpp
+@@ -109,6 +109,8 @@ OptiXDevice::~OptiXDevice()
+   /* Make CUDA context current. */
+   const CUDAContextScope scope(this);
+ 
++  /* Before the delayed-free list it releases into goes away. */
++  gsplat_tlas.reset();
+   free_bvh_memory_delayed();
+ 
+   sbt_data.free();
+@@ -1810,6 +1812,7 @@ void OptiXDevice::build_bvh(BVH *bvh, Progress &progress, bool refit)
+     /* Fill instance descriptions. */
+     device_vector<OptixInstance> instances(this, "optix tlas instances", MEM_READ_ONLY);
+     instances.alloc(bvh->objects.size());
++    vector<bool> composite_instance;
+ 
+     /* Calculate total motion transform size and allocate memory for them. */
+     size_t motion_transform_offset = 0;
+@@ -1842,6 +1845,9 @@ void OptiXDevice::build_bvh(BVH *bvh, Progress &progress, bool refit)
+         continue;
+       }
+ 
++      composite_instance.push_back(
++          ob->get_geometry()->is_pointcloud() &&
++          static_cast<const PointCloud *>(ob->get_geometry())->is_gsplat_composite());
+       OptixInstance &instance = instances[num_instances++];
+       memset(&instance, 0, sizeof(instance));
+ 
+@@ -1892,13 +1898,6 @@ void OptiXDevice::build_bvh(BVH *bvh, Progress &progress, bool refit)
+ 
+         /* Also skip point clouds in local trace calls. */
+         instance.visibilityMask |= 4;
+-
+-        /* Composited Gaussian splats get the one bit camera and bounce rays never carry, so
+-         * they skip them in hardware; the composite ray traces with that bit (see
+-         * GSPLAT_COMPOSITE_INSTANCE_MASK in kernel/device/optix/bvh.h). */
+-        if (static_cast<const PointCloud *>(ob->get_geometry())->is_gsplat_composite()) {
+-          instance.visibilityMask = PATH_RAY_VISIBILITY_VOLUME_SCATTER;
+-        }
+       }
+       {
+         /* Can disable __anyhit__kernel_optix_visibility_test by default (except for thick curves,
+@@ -1991,6 +1990,46 @@ void OptiXDevice::build_bvh(BVH *bvh, Progress &progress, bool refit)
+       }
+     }
+ 
++    /* Composited Gaussian splats go to a TLAS of their own: no other ray ever hits them, and the
++     * ray that composites them then traverses them alone, not the whole scene. */
++    device_vector<OptixInstance> gsplat_instances(
++        this, "optix gsplat tlas instances", MEM_READ_ONLY);
++    unsigned int num_gsplat_instances = 0;
++    for (unsigned int i = 0; i < num_instances; ++i) {
++      num_gsplat_instances += composite_instance[i];
++    }
++    if (num_gsplat_instances) {
++      gsplat_instances.alloc(num_gsplat_instances);
++      unsigned int kept = 0, moved = 0;
++      for (unsigned int i = 0; i < num_instances; ++i) {
++        if (composite_instance[i]) {
++          gsplat_instances[moved] = instances[i];
++          gsplat_instances[moved++].visibilityMask = 0xFF;
++        }
++        else {
++          instances[kept++] = instances[i];
++        }
++      }
++      num_instances = kept;
++    }
++
++    /* Its memory is freed with a delay, as any BVH (~BVHOptiX()). */
++    gsplat_tlas.reset();
++    gsplat_tlas_handle = 0;
++    if (num_gsplat_instances) {
++      gsplat_instances.copy_to_device();
++      gsplat_tlas = make_unique<BVHOptiX>(
++          bvh->params, vector<Geometry *>(), vector<Object *>(), this);
++      OptixBuildInput gsplat_input = {};
++      gsplat_input.type = OPTIX_BUILD_INPUT_TYPE_INSTANCES;
++      gsplat_input.instanceArray.instances = gsplat_instances.device_pointer;
++      gsplat_input.instanceArray.numInstances = num_gsplat_instances;
++      if (!build_optix_bvh(gsplat_tlas.get(), OPTIX_BUILD_OPERATION_BUILD, gsplat_input, 0)) {
++        progress.set_error("Failed to build OptiX acceleration structure");
++      }
++      gsplat_tlas_handle = gsplat_tlas->traversable_handle;
++    }
++
+     /* Upload instance descriptions. */
+     instances.resize(num_instances);
+     instances.copy_to_device();
+@@ -2037,6 +2076,8 @@ void OptiXDevice::const_copy_to(const char *name, void *host, const size_t size)
+     /* Update traversable handle (since it is different for each device on multi devices). */
+     KernelData *const data = (KernelData *)host;
+     *(OptixTraversableHandle *)&data->device_bvh = tlas_handle;
++    static_assert(offsetof(KernelData, pad3) == offsetof(KernelData, pad2) + sizeof(int));
++    *(OptixTraversableHandle *)&data->pad2 = gsplat_tlas_handle;
+ 
+     update_launch_params(offsetof(KernelParamsOptiX, data), host, size);
+     return;
+diff --git a/src/device/optix/device_impl.h b/src/device/optix/device_impl.h
+index 7cc00c6c..d4cc1ee4 100644
+--- a/src/device/optix/device_impl.h
++++ b/src/device/optix/device_impl.h
+@@ -121,6 +121,9 @@ class OptiXDevice : public CUDADevice {
+ 
+  private:
+   OptixTraversableHandle tlas_handle = 0;
++  /* Composited Gaussian splats alone: the ray that composites them traverses nothing else. */
++  unique_ptr<BVHOptiX> gsplat_tlas;
++  OptixTraversableHandle gsplat_tlas_handle = 0;
+   vector<unique_ptr<device_only_memory<char>>> delayed_free_bvh_memory;
+   thread_mutex delayed_free_bvh_mutex;
+ 
+diff --git a/src/kernel/data_arrays.h b/src/kernel/data_arrays.h
+index 82587f15..bfb5aca0 100644
+--- a/src/kernel/data_arrays.h
++++ b/src/kernel/data_arrays.h
+@@ -44,6 +44,8 @@ KERNEL_DATA_ARRAY(KernelCurveSegment, curve_segments)
+ /* pointclouds */
+ KERNEL_DATA_ARRAY(float4, points)
+ KERNEL_DATA_ARRAY(uint, points_shader)
++/* Gaussian splats without motion: S^-1 R^T, three rows per point, by global point index. */
++KERNEL_DATA_ARRAY(float4, gsplat_inverse)
+ 
+ /* attributes */
+ KERNEL_DATA_ARRAY(AttributeMap, attributes_map)
+diff --git a/src/kernel/device/optix/bvh.h b/src/kernel/device/optix/bvh.h
+index e7204f6a..aeff4561 100644
+--- a/src/kernel/device/optix/bvh.h
++++ b/src/kernel/device/optix/bvh.h
+@@ -36,11 +36,6 @@ enum CustomPrimitiveHitKind {
+  * the closest-hit ones. */
+ #  define GSPLAT_COMPOSITE_MARKER 0x5a1a7c0du
+ 
+-/* Instance mask of composited splats: one bit that camera and bounce rays do not carry, so they
+- * skip those instances in hardware (only volume scatter rays still reach the intersection
+- * program, which turns them away). */
+-#  define GSPLAT_COMPOSITE_INSTANCE_MASK PATH_RAY_VISIBILITY_VOLUME_SCATTER
+-
+ ccl_device_forceinline bool gsplat_composite_ray()
+ {
+   return optixGetPayload_2() == GSPLAT_COMPOSITE_MARKER &&
+@@ -564,13 +559,14 @@ ccl_device_intersect void scene_intersect_gsplat_composite_optix(
+   uint p6 = pointer_pack_to_uint_0(ray);
+   uint p7 = pointer_pack_to_uint_1(ray);
+ 
+-  optixTraverse(intersection_ray_valid(ray) ? kernel_data.device_bvh : 0,
++  /* The TLAS of composited splats alone (OptiXDevice::build_bvh()). */
++  optixTraverse(intersection_ray_valid(ray) ? kernel_data.device_bvh_gsplat : 0,
+                 ray->P,
+                 ray->D,
+                 ray->tmin,
+                 ray->tmax,
+                 ray->time,
+-                GSPLAT_COMPOSITE_INSTANCE_MASK,
++                0xFF,
+                 OPTIX_RAY_FLAG_ENFORCE_ANYHIT,
+                 0, /* SBT offset for PG_HITD */
+                 0,
+diff --git a/src/kernel/geom/gsplat_intersect.h b/src/kernel/geom/gsplat_intersect.h
+index d29537c2..06dc699e 100644
+--- a/src/kernel/geom/gsplat_intersect.h
++++ b/src/kernel/geom/gsplat_intersect.h
+@@ -221,6 +221,70 @@ ccl_device_forceinline bool gsplat_intersect_response(KernelGlobals kg,
+   return true;
+ }
+ 
++/* The response of a composited splat, read once: for a splat that does not move, its S^-1 R^T
++ * comes precomputed (PointCloud::pack_gsplat_inverse()) instead of being rebuilt from the
++ * rotation and the scale, and the radiance comes with the opacity. Same result as
++ * gsplat_intersect_response(). */
++ccl_device_forceinline bool gsplat_composite_response(KernelGlobals kg,
++                                                      const float3 ray_P,
++                                                      const float3 ray_D,
++                                                      const float ray_tmin,
++                                                      const float ray_tmax,
++                                                      const int object,
++                                                      const int prim,
++                                                      const float time,
++                                                      const int primitive_type,
++                                                      ccl_private float &r_response,
++                                                      ccl_private float3 &r_radiance)
++{
++  if (primitive_type & PRIMITIVE_MOTION) {
++    float t;
++    if (!gsplat_intersect_response(kg,
++                                   ray_P,
++                                   ray_D,
++                                   ray_tmin,
++                                   ray_tmax,
++                                   object,
++                                   prim,
++                                   time,
++                                   primitive_type,
++                                   t,
++                                   r_response))
++    {
++      return false;
++    }
++    r_radiance = make_float3(motion_gsplat_radiance_base(kg, object, prim, time));
++    return true;
++  }
++
++  const int position_offset = kernel_data_fetch(objects, object).position_offset;
++  const float4 point = kernel_data_fetch(points, position_offset + prim);
++  float sphere_t;
++  if (!point_intersect_test<false>(point, ray_P, ray_D, ray_tmin, ray_tmax, &sphere_t)) {
++    return false;
++  }
++
++  const float3 M0 = make_float3(kernel_data_fetch(gsplat_inverse, prim * 3 + 0));
++  const float3 M1 = make_float3(kernel_data_fetch(gsplat_inverse, prim * 3 + 1));
++  const float3 M2 = make_float3(kernel_data_fetch(gsplat_inverse, prim * 3 + 2));
++
++  const float3 o = ray_P - make_float3(point);
++  const float3 o_g = make_float3(dot(M0, o), dot(M1, o), dot(M2, o));
++  const float3 d_g = make_float3(dot(M0, ray_D), dot(M1, ray_D), dot(M2, ray_D));
++  const float t = -dot(o_g, d_g) / dot(d_g, d_g);
++  if (!(t >= ray_tmin && t <= ray_tmax)) {
++    return false;
++  }
++
++  /* M (x - mu) with x = P + t D, by linearity. */
++  const float3 e_g = o_g + t * d_g;
++  const float4 base = kernel_data_fetch(attributes_float4,
++                                        gsplat_attr_radiance_base_offset(kg, object) + prim);
++  r_response = base.w * fast_expf(-0.5f * dot(e_g, e_g));
++  r_radiance = make_float3(base);
++  return true;
++}
++
+ /* Emission and transmittance of the composited Gaussian splats along one path segment.
+  *
+  * The splats are summed in no particular order, as weighted-average order independent
+@@ -246,10 +310,19 @@ ccl_device_forceinline void gsplat_composite_accumulate(KernelGlobals kg,
+                                                         const float time,
+                                                         const int primitive_type)
+ {
+-  float t;
+   float response;
+-  if (!gsplat_intersect_response(
+-          kg, ray_P, ray_D, ray_tmin, ray_tmax, object, prim, time, primitive_type, t, response))
++  float3 radiance;
++  if (!gsplat_composite_response(kg,
++                                 ray_P,
++                                 ray_D,
++                                 ray_tmin,
++                                 ray_tmax,
++                                 object,
++                                 prim,
++                                 time,
++                                 primitive_type,
++                                 response,
++                                 radiance))
+   {
+     return;
+   }
+@@ -263,8 +336,7 @@ ccl_device_forceinline void gsplat_composite_accumulate(KernelGlobals kg,
+   response = fminf(response, 0.9999f);
+ 
+   /* In composite mode the base radiance holds the splat's linear colour. */
+-  const float4 radiance_base = motion_gsplat_radiance_base(kg, object, prim, time);
+-  accum.radiance += response * make_float3(radiance_base);
++  accum.radiance += response * radiance;
+   accum.response += response;
+   accum.log_transmittance += logf(1.0f - response);
+ }
+diff --git a/src/kernel/types.h b/src/kernel/types.h
+index bed4e1c2..2576113e 100644
+--- a/src/kernel/types.h
++++ b/src/kernel/types.h
+@@ -1456,7 +1456,13 @@ struct ccl_align(16) KernelData {
+   int device_bvh, pad1;
+ #  endif
+ #endif
++#ifdef __KERNEL_OPTIX__
++  /* Composited Gaussian splats alone, for the ray that composites them (0: none). The host
++   * writes it over pad2 and pad3 (OptiXDevice::const_copy_to()). */
++  OptixTraversableHandle device_bvh_gsplat;
++#else
+   int pad2, pad3;
++#endif
+ };
+ static_assert_align(KernelData, 16);
+ 
+diff --git a/src/scene/devicescene.cpp b/src/scene/devicescene.cpp
+index 56a0956b..ca79c5f7 100644
+--- a/src/scene/devicescene.cpp
++++ b/src/scene/devicescene.cpp
+@@ -25,6 +25,7 @@ DeviceScene::DeviceScene(Device *device)
+       curve_segments(device, "curve_segments", MEM_GLOBAL),
+       points(device, "points", MEM_GLOBAL),
+       points_shader(device, "points_shader", MEM_GLOBAL),
++      gsplat_inverse(device, "gsplat_inverse", MEM_GLOBAL),
+       objects(device, "objects", MEM_GLOBAL),
+       object_motion_pass(device, "object_motion_pass", MEM_GLOBAL),
+       object_motion(device, "object_motion", MEM_GLOBAL),
+diff --git a/src/scene/devicescene.h b/src/scene/devicescene.h
+index 0979d028..48f391f1 100644
+--- a/src/scene/devicescene.h
++++ b/src/scene/devicescene.h
+@@ -37,6 +37,7 @@ class DeviceScene {
+   /* point-cloud */
+   device_vector<float4> points;
+   device_vector<uint> points_shader;
++  device_vector<float4> gsplat_inverse;
+ 
+   /* objects */
+   device_vector<KernelObject> objects;
+diff --git a/src/scene/geometry.cpp b/src/scene/geometry.cpp
+index 876eb59b..a0fcc941 100644
+--- a/src/scene/geometry.cpp
++++ b/src/scene/geometry.cpp
+@@ -649,6 +649,7 @@ void GeometryManager::device_update_preprocess(Device *device, Scene *scene, Pro
+ 
+     if (device_update_flags & DEVICE_POINT_DATA_NEEDS_REALLOC) {
+       dscene->points_shader.tag_realloc();
++      dscene->gsplat_inverse.tag_realloc();
+     }
+   }
+ 
+@@ -736,6 +737,7 @@ void GeometryManager::device_update_preprocess(Device *device, Scene *scene, Pro
+ 
+   if (device_update_flags & DEVICE_POINT_DATA_MODIFIED) {
+     dscene->points_shader.tag_modified();
++    dscene->gsplat_inverse.tag_modified();
+   }
+ 
+   need_flags_update = false;
+@@ -1253,6 +1255,7 @@ void GeometryManager::device_update(Device *device,
+   dscene->curve_segments.clear_modified();
+   dscene->points.clear_modified();
+   dscene->points_shader.clear_modified();
++  dscene->gsplat_inverse.clear_modified();
+   dscene->attributes_map.clear_modified();
+   dscene->attributes_float.clear_modified();
+   dscene->attributes_float2.clear_modified();
+@@ -1282,6 +1285,7 @@ void GeometryManager::device_free(Device *device, DeviceScene *dscene, bool forc
+   dscene->curve_segments.free_if_need_realloc(force_free);
+   dscene->points.free_if_need_realloc(force_free);
+   dscene->points_shader.free_if_need_realloc(force_free);
++  dscene->gsplat_inverse.free_if_need_realloc(force_free);
+   dscene->attributes_map.free_if_need_realloc(force_free);
+   dscene->attributes_float.free_if_need_realloc(force_free);
+   dscene->attributes_float2.free_if_need_realloc(force_free);
+diff --git a/src/scene/geometry_mesh.cpp b/src/scene/geometry_mesh.cpp
+index a5620b62..42d83f61 100644
+--- a/src/scene/geometry_mesh.cpp
++++ b/src/scene/geometry_mesh.cpp
+@@ -139,6 +139,26 @@ void GeometryManager::device_update_mesh(Device * /*unused*/,
+     }
+ 
+     dscene->points_shader.copy_to_device();
++
++    /* The ray-space transform of each Gaussian splat, S^-1 R^T, so that the kernel reads it
++     * instead of rebuilding it from the rotation and the scale at every ray it tests
++     * (gsplat_composite_response()). Splats whose scale or rotation move keep the general path. */
++    bool have_gsplats = false;
++    for (Geometry *geom : scene->geometry) {
++      have_gsplats |= geom->is_pointcloud() &&
++                      (static_cast<PointCloud *>(geom)->primitive_type() & PRIMITIVE_GSPLAT);
++    }
++    if (have_gsplats) {
++      float4 *inverse = dscene->gsplat_inverse.alloc(point_size * 3);
++      std::fill_n(inverse, point_size * 3, zero_float4());
++      for (Geometry *geom : scene->geometry) {
++        if (geom->is_pointcloud()) {
++          static_cast<PointCloud *>(geom)->pack_gsplat_inverse(
++              &inverse[static_cast<PointCloud *>(geom)->prim_offset * 3]);
++        }
++      }
++      dscene->gsplat_inverse.copy_to_device();
++    }
+   }
+ }
+ 
+diff --git a/src/scene/pointcloud.cpp b/src/scene/pointcloud.cpp
+index 75d57486..3b25fe01 100644
+--- a/src/scene/pointcloud.cpp
++++ b/src/scene/pointcloud.cpp
+@@ -330,6 +330,31 @@ void PointCloud::bounds_grow_gsplat(const size_t i,
+   bounds.grow(P + half);
+ }
+ 
++void PointCloud::pack_gsplat_inverse(float4 *rows) const
++{
++  if ((primitive_type() & PRIMITIVE_GSPLAT) == 0) {
++    return;
++  }
++  const Attribute *attr_scale = attributes.find(ATTR_STD_GSPLAT_SCALE);
++  const Attribute *attr_rotation = attributes.find(ATTR_STD_GSPLAT_ROTATION);
++  if (!attr_scale || !attr_rotation || attr_scale->has_motion() || attr_rotation->has_motion()) {
++    return;
++  }
++  const packed_float3 *scale = attr_scale->data<packed_float3>();
++  const Quaternion *rotation = attr_rotation->data<Quaternion>();
++
++  parallel_for(blocked_range<size_t>(0, num_points(), 1024), [&](const blocked_range<size_t> &r) {
++    for (size_t i = r.begin(); i != r.end(); i++) {
++      /* Row k of S^-1 R^T is column k of R over scale k (gsplat_intersect_response()). */
++      const float3x3 R = quaternion_to_rotation(rotation[i]);
++      const float3 inv_scale = one_float3() / float3(scale[i]);
++      rows[i * 3 + 0] = make_float4(make_float3(R.x.x, R.y.x, R.z.x) * inv_scale.x, 0.0f);
++      rows[i * 3 + 1] = make_float4(make_float3(R.x.y, R.y.y, R.z.y) * inv_scale.y, 0.0f);
++      rows[i * 3 + 2] = make_float4(make_float3(R.x.z, R.y.z, R.z.z) * inv_scale.z, 0.0f);
++    }
++  });
++}
++
+ void PointCloud::update_gsplat_radii()
+ {
+   /* Calculate radius attribute to bound the Gaussian splats based on the splat scale, allowing
+diff --git a/src/scene/pointcloud.h b/src/scene/pointcloud.h
+index 5a02b8fe..f2931529 100644
+--- a/src/scene/pointcloud.h
++++ b/src/scene/pointcloud.h
+@@ -112,6 +112,10 @@ class PointCloud : public Geometry {
+     return gsplat_composite && (primitive_type() & PRIMITIVE_GSPLAT);
+   }
+ 
++  /* S^-1 R^T of every splat, three float4 rows each (gsplat_composite_response()); untouched
++   * for points and for splats whose scale or rotation move. */
++  void pack_gsplat_inverse(float4 *rows) const;
++
+   /* Bounds of point i for a BVH: for a Gaussian splat, the axis-aligned box of its ellipsoid
+    * cut where its bounding sphere was (radius = k * max sigma, semi-axes k * sigma); a stretched
+    * splat's box is several times thinner than the sphere's, and every ray crossing the sphere
