@@ -79,15 +79,10 @@ The device is fixed when the render session is built, so it cannot come from a
 Render Settings node — and it describes the machine rather than the scene, so it
 is a per-installation preference the `.hip` does not carry.
 
-The GL display driver is on **when Houdini hands the delegate an OpenGL
-Hgi** - which Houdini 22 does even in its Vulkan viewport ("Houdini VK", the
-default), shipping no other Hgi: Cycles then writes straight into a texture
-the host owns, which is what makes the viewport refresh as promptly as
-Blender's. Under husk, rendering goes through the output driver and the
-buffer is read back on every refresh. The display driver misbehaved in Houdini's viewport in four
-distinct ways; three were crashes, all fixed and documented in the patch
-series. The fourth, wrong pixels, has never been confirmed fixed and only shows
-in the viewport — `CYCLES_DISPLAY_DRIVER=0` falls back to the output driver.
+Pixels reach the viewport through Cycles' output driver. The GL display
+driver, which writes straight into a texture the host owns, is off by
+default: under a Karma Physical Sky it showed the sky and no geometry.
+`CYCLES_DISPLAY_DRIVER=1` turns it on.
 
 ## Cycles versions
 
@@ -157,7 +152,7 @@ It writes `dist/CyclesForHoudini-5.3/`, holding `cycles.json` and a `CyclesForHo
 
 | | |
 |---|---|
-| `patches/5.3/` | our changes to Cycles, one commit per subject |
+| `patches/5.3/` | the changes to Cycles, one commit per subject |
 | `tools/` | the Material Builder generator, the test benches, bootstrap |
 | `tests/` | the node bench and its references, the MaterialX scenes, the feature scenes — see [tests/README.md](tests/README.md) |
 | `docs/` | the project map — start at [docs/README.md](docs/README.md) |

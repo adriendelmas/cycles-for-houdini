@@ -36,7 +36,7 @@ Writing a scene by hand: a `DistantLight` needs `inputs:normalize = 1` to
 light anything. Unnormalized, USD reads its intensity as the radiance of the
 sun disk, so the illuminance is intensity × the disk's solid angle - about
 7e-5 at the default 0.53°. Karma and the delegate agree on both (measured
-2026-10-07, white plane: 0.318 vs 0.317 normalized, 0.0019 vs 0.0019 at 5°);
+white plane: 0.318 vs 0.317 normalized, 0.0019 vs 0.0019 at 5°);
 Houdini's Distant Light LOP turns it on. `tests/scenes/smoke.usda` predates
 this and its sun contributes nothing. Also give the stage `metersPerUnit = 1`:
 without it a camera aperture is read in centimetres. Do not name a primvar
@@ -84,7 +84,7 @@ after a Cycles standard attribute (`heat`, `density`, `color`, `temperature`,
 | `hython tools/mtlx_pinned.py [--list] [pattern]` | Every value nodedef, two grids | A nodedef renders the same with its inputs unwritten and with them written at their MaterialX defaults (677/677 since 0099; 57 differed before) | Values |
 | `hython tools/count_nodes.py` | Sdr registry | The node counts the docs quote: 163 published, 64 hidden, 99 VOPs, 97 probed | - |
 | `python tools/karma_nodegraphs.py <kma_node> \| --list` | `$HFS/houdini/karmaNodeGraphs.json` | A Karma node's own nodegraph as a readable list, inputs named; the nodes it uses that are not in the library, which a delegate nodegraph has to replace (K-106) | - |
-| `scratchpad/audit_surface.py` (local) | 39 `standard_surface` inputs | Each input changes the image, references local and gitignored | Agreement with Karma beyond the four measured cases |
+| `tools/surface_audit.py` | 39 `standard_surface` inputs | Each input changes the image, references local and gitignored | Agreement with Karma beyond the four measured cases |
 
 Taken together: the suite catches a node that stops rendering, a socket
 rename, a dead parameter, a dropped input (`mtlx_inputs.py`), a wrong value
@@ -125,7 +125,7 @@ never from the renderer. Colour cases use a non-grey input so a collapse to
 grey fails. A case may add lines to the mesh (`geomcolor` writes a vertex
 colour) or widen its tolerance (`facingratio`, 0.04 for the perspective
 spread). To add: every `_color3`/`_vector3` variant of each math family
-(phase 3), the six other blends, the closures through a second template.
+(`plus`), the six other blends, the closures through a second template.
 
 ### 3. Image: `bench_render.py` + `bench_diff.py`
 

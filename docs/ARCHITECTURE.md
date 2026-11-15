@@ -16,13 +16,13 @@
     src/hydra/*.cpp               render pass, drivers, COP reader
  ───────────────────────────────────────────────────────────────────────
  1. Cycles                        scene, kernels, devices - upstream, plus
-    external/cycles-53            74 patches (patches/5.3)
+    external/cycles-53            the patch series (patches/5.3)
 ```
 
 Layers 2 and 3 are upstream code (Blender ships this delegate under
 `src/hydra`) carrying our patches. Layer 4 is entirely ours and lives in
-`src/hydra/resources/`. Everything below `external/` is a git worktree on the
-branch `houdini-fixes-53`; the repository tracks the *patches*, not the tree.
+`src/hydra/resources/`. `external/` holds the Cycles clone `tools/bootstrap.py` makes; the
+repository tracks the *patches*, not the tree.
 
 ## Where each file is, and what it does
 
@@ -165,7 +165,7 @@ two builds at once: the second links stale objects.
 Regenerate the patch series after any commit on the worktree:
 
 ```
-cd external/cycles-53 && git format-patch --no-signature -o ../../patches/5.3 8424ed53..HEAD
+cd external/cycles-53 && git format-patch --no-signature -o ../../patches/5.3 v5.3.0..HEAD
 ```
 
 ## Environment variables
