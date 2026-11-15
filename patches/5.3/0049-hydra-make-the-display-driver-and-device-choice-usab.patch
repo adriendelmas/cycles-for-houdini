@@ -1,7 +1,7 @@
 From e5a9fd0953bb541b691f4176151abb8d91859876 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 23:19:44 +0200
-Subject: [PATCH 049/180] hydra: make the display driver and device choice
+Subject: [PATCH 049/181] hydra: make the display driver and device choice
  usable
 
 Three things, all around viewport responsiveness and the choice of device.

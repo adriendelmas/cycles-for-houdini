@@ -1,7 +1,7 @@
 From 15454aeba7a36cf6c447af5d2f7390f019a5f8e3 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 9 Oct 2026 02:48:50 +0200
-Subject: [PATCH 117/180] hydra: left-handed subdivided meshes the right way
+Subject: [PATCH 117/181] hydra: left-handed subdivided meshes the right way
  round
 
 Hydra triangulates a leftHanded polygon mesh the right way round, but a

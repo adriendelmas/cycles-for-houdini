@@ -1,7 +1,7 @@
 From b28182000f364f5dd74b3dc1a3e96dd28d0f3263 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 22:24:33 +0200
-Subject: [PATCH 081/180] hydra: blurred instances, per-instance and scalar
+Subject: [PATCH 081/181] hydra: blurred instances, per-instance and scalar
  constant primvars
 
 Instance blur: the instancer read its positions, rotations, scales and its own

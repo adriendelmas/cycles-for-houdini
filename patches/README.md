@@ -4,7 +4,7 @@ Cycles is not copied here: it has its own repository, and the changes live on a
 branch of it, as commits separated by topic. This series is that branch exported
 through `git format-patch`.
 
-    patches/5.3/   180 patches, base v5.3.0 (b3f62626)
+    patches/5.3/   181 patches, base v5.3.0 (b3f62626)
 
 `tools/bootstrap.py` does the whole path - clone, `git am`, build. By hand, on a
 clone of Cycles checked out at `v5.3.0`:
@@ -201,3 +201,4 @@ upstream.
 | `0178` | hydra: menus for Denoise AOVs and light group names |
 | `0179` | hydra: world shader from a material bound to the dome (K-119) |
 | `0180` | hydra: Cycles Render Settings HDA rebuilt on the 5.3.0 settings |
+| `0181` | hydra: the atmosphere's world volume as Volume Scatter and Volume Absorption nodes |

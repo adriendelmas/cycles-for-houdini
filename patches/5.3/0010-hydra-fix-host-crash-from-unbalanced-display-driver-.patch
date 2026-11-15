@@ -1,7 +1,7 @@
 From 52b5236de94c03d6ea9f4a63042efbcc54480257 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 03:31:45 +0200
-Subject: [PATCH 010/180] hydra: fix host crash from unbalanced display driver
+Subject: [PATCH 010/181] hydra: fix host crash from unbalanced display driver
  locking
 
 gl_context_enable() takes mutex_ on success but returns false *without*

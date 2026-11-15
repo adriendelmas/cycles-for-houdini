@@ -1,0 +1,100 @@
+From d45fa8d0255eebc85e5db42b0f877f09f6a2f625 Mon Sep 17 00:00:00 2001
+From: Adrien Delmas <adrien@adriendelmas.com>
+Date: Sun, 15 Nov 2026 18:29:08 +0100
+Subject: [PATCH 181/181] hydra: the atmosphere's world volume as Volume
+ Scatter and Volume Absorption nodes
+
+Rayleigh and Mie scattering are two Volume Scatter nodes (Rayleigh phase,
+Henyey-Greenstein at the atmosphere's miephase), Mie absorption a Volume
+Absorption node, in place of Volume Coefficients nodes. Each takes the
+largest sea-level coefficient times the altitude falloff as its density and
+the coefficients over it as its colour: the same medium.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+---
+ src/hydra/light.cpp | 50 ++++++++++++++++++++++++++++-----------------
+ 1 file changed, 31 insertions(+), 19 deletions(-)
+
+diff --git a/src/hydra/light.cpp b/src/hydra/light.cpp
+index 4e810b6b..9e2dd564 100644
+--- a/src/hydra/light.cpp
++++ b/src/hydra/light.cpp
+@@ -1286,7 +1286,8 @@ ShaderOutput *HdCyclesLight::SkyColor(ShaderGraph *graph, const float3 &strength
+ }
+ 
+ /* A Karma atmosphere's air and aerosols as the world volume, unless the
+- * world material has a volume of its own: Rayleigh and Mie coefficients at
++ * world material has a volume of its own, as Volume Scatter and Volume
++ * Absorption nodes: Rayleigh and Mie coefficients at
+  * sea level, each thinning exponentially with the altitude over the planet
+  * (Karma's planet centre and sea-level radius) by its own scale height. Cycles
+  * bounds a world volume that varies in space to 10 km around the origin
+@@ -1314,8 +1315,10 @@ void HdCyclesLight::AddAtmosphereVolume(ShaderGraph *graph)
+   aboveNode->set_value2(0.0f);
+   graph->connect(altitudeNode->output("Value"), aboveNode->input("Value1"));
+ 
+-  /* exp(-altitude / scale height), times the sea-level coefficients. */
+-  auto coefficients = [&](const float scaleHeight, const float3 &sigma) {
++  /* A Volume Scatter or Volume Absorption node carries a colour and a
++   * density: the density is the largest sea-level coefficient times
++   * exp(-altitude / scale height), the colour the coefficients over it. */
++  auto density = [&](const float scaleHeight, const float peak) {
+     MathNode *rateNode = graph->create_node<MathNode>();
+     rateNode->set_math_type(NODE_MATH_MULTIPLY);
+     rateNode->set_value2(-1.0f / scaleHeight);
+@@ -1323,30 +1326,39 @@ void HdCyclesLight::AddAtmosphereVolume(ShaderGraph *graph)
+     MathNode *expNode = graph->create_node<MathNode>();
+     expNode->set_math_type(NODE_MATH_EXPONENT);
+     graph->connect(rateNode->output("Value"), expNode->input("Value1"));
+-    VectorMathNode *scaleNode = graph->create_node<VectorMathNode>();
+-    scaleNode->set_math_type(NODE_VECTOR_MATH_SCALE);
+-    scaleNode->set_vector1(sigma);
+-    graph->connect(expNode->output("Value"), scaleNode->input("Scale"));
+-    return scaleNode->output("Vector");
++    MathNode *scaleNode = graph->create_node<MathNode>();
++    scaleNode->set_math_type(NODE_MATH_MULTIPLY);
++    scaleNode->set_value2(peak);
++    graph->connect(expNode->output("Value"), scaleNode->input("Value1"));
++    return scaleNode->output("Value");
++  };
++  auto scatter = [&](const float3 &sigma, const float scaleHeight) {
++    const float peak = max(reduce_max(sigma), 1e-12f);
++    ScatterVolumeNode *node = graph->create_node<ScatterVolumeNode>();
++    node->set_color(sigma / peak);
++    graph->connect(density(scaleHeight, peak), node->input("Density"));
++    return node;
+   };
+ 
+-  VolumeCoefficientsNode *airNode = graph->create_node<VolumeCoefficientsNode>();
++  ScatterVolumeNode *airNode = scatter(_sky.rayleigh, _sky.rayleighDist);
+   airNode->set_phase(CLOSURE_VOLUME_RAYLEIGH_ID);
+-  airNode->set_absorption_coeffs(zero_float3());
+-  graph->connect(coefficients(_sky.rayleighDist, _sky.rayleigh),
+-                 airNode->input("Scatter Coefficients"));
+ 
+-  VolumeCoefficientsNode *aerosolNode = graph->create_node<VolumeCoefficientsNode>();
++  ScatterVolumeNode *aerosolNode = scatter(_sky.mieScatter, _sky.mieDist);
+   aerosolNode->set_phase(CLOSURE_VOLUME_HENYEY_GREENSTEIN_ID);
+   aerosolNode->set_anisotropy(clamp(_sky.miePhase, -0.99f, 0.99f));
+-  graph->connect(coefficients(_sky.mieDist, _sky.mieScatter),
+-                 aerosolNode->input("Scatter Coefficients"));
+-  graph->connect(coefficients(_sky.mieDist, _sky.mieAbsorb),
+-                 aerosolNode->input("Absorption Coefficients"));
+ 
++  /* Volume Absorption absorbs (1 - colour) x density. */
++  const float absorbPeak = max(reduce_max(_sky.mieAbsorb), 1e-12f);
++  AbsorptionVolumeNode *absorbNode = graph->create_node<AbsorptionVolumeNode>();
++  absorbNode->set_color(one_float3() - _sky.mieAbsorb / absorbPeak);
++  graph->connect(density(_sky.mieDist, absorbPeak), absorbNode->input("Density"));
++
++  AddClosureNode *scatterNode = graph->create_node<AddClosureNode>();
++  graph->connect(airNode->output("Volume"), scatterNode->input("Closure1"));
++  graph->connect(aerosolNode->output("Volume"), scatterNode->input("Closure2"));
+   AddClosureNode *addNode = graph->create_node<AddClosureNode>();
+-  graph->connect(airNode->output("Volume"), addNode->input("Closure1"));
+-  graph->connect(aerosolNode->output("Volume"), addNode->input("Closure2"));
++  graph->connect(scatterNode->output("Closure"), addNode->input("Closure1"));
++  graph->connect(absorbNode->output("Volume"), addNode->input("Closure2"));
+   graph->connect(addNode->output("Closure"), graph->output()->input("Volume"));
+ }
+ 

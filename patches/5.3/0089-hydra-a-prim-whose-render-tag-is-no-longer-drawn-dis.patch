@@ -1,7 +1,7 @@
 From 75513e245554d07c01bb5d811068432984d5cd13 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 01:01:33 +0200
-Subject: [PATCH 089/180] hydra: a prim whose render tag is no longer drawn
+Subject: [PATCH 089/181] hydra: a prim whose render tag is no longer drawn
  disappears from the render
 
 Render tags (the purposes displayed in Solaris) decide which prims Hydra

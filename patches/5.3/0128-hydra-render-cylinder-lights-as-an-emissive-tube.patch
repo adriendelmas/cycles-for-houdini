@@ -1,7 +1,7 @@
 From 28d0b5b2949b6ae8c8fde6b8b9cb1d22674c325d Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sat, 10 Oct 2026 09:22:54 +0200
-Subject: [PATCH 128/180] hydra: render cylinder lights as an emissive tube
+Subject: [PATCH 128/181] hydra: render cylinder lights as an emissive tube
 
 Cycles has no cylinder light, and the rectangle that stood in lit one side
 only: a cylinder light turned over left the floor dark. The light is now a

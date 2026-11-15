@@ -1,7 +1,7 @@
 From 8330e84d84a3eab552ea6d6826fe5aac857082f9 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 19:36:49 +0200
-Subject: [PATCH 015/180] hydra: OptiX kernel install path, and Houdini render
+Subject: [PATCH 015/181] hydra: OptiX kernel install path, and Houdini render
  property definitions
 
 Install the OptiX kernels inside the Houdini tree, same as the CUDA ones -

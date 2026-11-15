@@ -1,7 +1,7 @@
 From 6d708850bcaa2ab4e058136664e6c5069d157b72 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 16:58:33 +0100
-Subject: [PATCH 170/180] hydra: Cycles Render Settings LOP, Cycles (Setup)
+Subject: [PATCH 170/181] hydra: Cycles Render Settings LOP, Cycles (Setup)
  tool, AOV Auto Fill
 
 - Cycles Render Settings: Karma Render Settings' counterpart. One node

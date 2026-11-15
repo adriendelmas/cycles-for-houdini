@@ -1,7 +1,7 @@
 From 7f3bcdee26f39c769c8f3f086f1a23c05c51d207 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 4 Sep 2026 04:07:57 +0200
-Subject: [PATCH 051/180] hydra: terminals whose output is not named BSDF were
+Subject: [PATCH 051/181] hydra: terminals whose output is not named BSDF were
  never connected
 
 A native Cycles displacement did nothing. No relief, not even the bump that

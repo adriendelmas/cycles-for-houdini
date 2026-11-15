@@ -1,7 +1,7 @@
 From 61411e4774be70b041d044da1cc1b547b14b4d15 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 02:59:29 +0200
-Subject: [PATCH 090/180] hydra: turning motion blur off no longer makes
+Subject: [PATCH 090/181] hydra: turning motion blur off no longer makes
  objects vanish
 
 In the viewport, disabling the blur made the animated object disappear until the

@@ -1,7 +1,7 @@
 From 3c248ac8b59dcde2f7fafa55542303ace477c431 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 03:26:55 +0200
-Subject: [PATCH 092/180] hydra: diffuse and specular multipliers on USD lights
+Subject: [PATCH 092/181] hydra: diffuse and specular multipliers on USD lights
 
 inputs:diffuse and inputs:specular were ignored: a light at 0 specular still
 drew its reflections. Cycles cannot scale a light per lobe but can exclude it

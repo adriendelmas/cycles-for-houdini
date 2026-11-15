@@ -1,7 +1,7 @@
 From 0fe9732067487d0cfea270b03152d6195f4b72ca Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 9 Sep 2026 22:24:33 +0200
-Subject: [PATCH 069/180] hydra: subdivision dicing rate in the render settings
+Subject: [PATCH 069/181] hydra: subdivision dicing rate in the render settings
 
 With the dicing camera given, the rate remained to be given. `cycles:dicing_rate`
 - how many pixels a micropolygon is worth - arrives in the Session tab, next to

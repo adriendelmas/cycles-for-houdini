@@ -1,7 +1,7 @@
 From bd9716a085e8c109b2fbe49459b9c9302de3217a Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 26 Oct 2026 02:21:22 +0100
-Subject: [PATCH 150/180] hydra: display driver off by default again, the view
+Subject: [PATCH 150/181] hydra: display driver off by default again, the view
  logged
 
 Under a Karma Physical Sky, Houdini's viewport (Cycles CPU and GPU)

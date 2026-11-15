@@ -1,7 +1,7 @@
 From 47a8a1b67c9765137690f56ed16df8612e83bb03 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 17:06:18 +0200
-Subject: [PATCH 028/180] hydra: eleven more MaterialX families, and a general
+Subject: [PATCH 028/181] hydra: eleven more MaterialX families, and a general
  composite mechanism
 
 The helper node a mapping can ask for now takes several wires into the main

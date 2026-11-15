@@ -1,7 +1,7 @@
 From 3cbd59429c4977ef9ab89e866892356ea4b7a6e9 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 04:22:23 +0200
-Subject: [PATCH 096/180] hydra: comments and log messages in English
+Subject: [PATCH 096/181] hydra: comments and log messages in English
 
 The French comments of src/hydra and the four French log lines (Affichage, Rendu
 relance, Passe de rendu) switch to English: Display, Render restarted, Render

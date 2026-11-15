@@ -1,7 +1,7 @@
 From 88181fb2af5e0ffc5d2d72141ca9d81b2deeef00 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 19:19:14 +0100
-Subject: [PATCH 176/180] gsplat: each light group gets its own splats' share
+Subject: [PATCH 176/181] gsplat: each light group gets its own splats' share
  of a segment
 
 The composite gave a segment's whole emission to the light group of its

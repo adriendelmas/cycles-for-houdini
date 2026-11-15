@@ -1,7 +1,7 @@
 From dfd751146edfc37c0749b426fc16d7d62fd96c4a Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 18:32:39 +0200
-Subject: [PATCH 105/180] hydra: position, normal and tangent according to
+Subject: [PATCH 105/181] hydra: position, normal and tangent according to
  their space
 
 The table had a single translation per geometric lookup node, whatever its

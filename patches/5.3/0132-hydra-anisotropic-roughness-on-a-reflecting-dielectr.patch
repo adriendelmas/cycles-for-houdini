@@ -1,7 +1,7 @@
 From 8a7f116df6d3411ce159d0d99600d0405ab9a091 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sat, 10 Oct 2026 11:12:00 +0200
-Subject: [PATCH 132/180] hydra: anisotropic roughness on a reflecting
+Subject: [PATCH 132/181] hydra: anisotropic roughness on a reflecting
  dielectric_bsdf
 
 A dielectric_bsdf in scatter mode R is a principled in Cycles, whose

@@ -1,7 +1,7 @@
 From b157cc7e7ef707671e02d2503aa2cd3cbb1f3c28 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 11:58:06 +0100
-Subject: [PATCH 160/180] hydra + kernel: Gaussian splats from USD, composited
+Subject: [PATCH 160/181] hydra + kernel: Gaussian splats from USD, composited
  without noise
 
 Houdini hands a UsdVol ParticleField3DGaussianSplat to a delegate as a

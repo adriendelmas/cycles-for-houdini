@@ -1,7 +1,7 @@
 From 31fdaddc4e5d5496c5dd67ddeedbbed9996bf424 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 09:12:31 +0200
-Subject: [PATCH 101/180] hydra: check sizes before reading, no segfault on an
+Subject: [PATCH 101/181] hydra: check sizes before reading, no segfault on an
  unreadable attribute
 
 An attribute whose value USD could not read - a misspelled type, normal[]

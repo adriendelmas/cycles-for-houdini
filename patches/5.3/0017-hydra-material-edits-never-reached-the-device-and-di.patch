@@ -1,7 +1,7 @@
 From 5e8e58f20d894fbf13539822b0827cd2ec5dcd2f Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 23:08:52 +0200
-Subject: [PATCH 017/180] hydra: material edits never reached the device, and
+Subject: [PATCH 017/181] hydra: material edits never reached the device, and
  displacement was bump-only
 
 Shader::set_graph() does not mark the shader modified, so the branch that

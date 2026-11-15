@@ -1,7 +1,7 @@
 From 772df0c468af7cc275fb9a11d6758a9a1d4b5121 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sat, 10 Oct 2026 12:20:08 +0200
-Subject: [PATCH 134/180] hydra: layer as top plus attenuated base, at the
+Subject: [PATCH 134/181] hydra: layer as top plus attenuated base, at the
  coat's IOR
 
 `layer` was a mix weighted by a Fresnel term, which counted a dielectric

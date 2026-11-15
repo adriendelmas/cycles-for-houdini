@@ -1,7 +1,7 @@
 From 06be58d0c03c4ffb3fc6e3f351e8127e6ff147e1 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sun, 11 Oct 2026 04:08:59 +0200
-Subject: [PATCH 139/180] hydra: nodes inside a nested nodegraph keep their
+Subject: [PATCH 139/181] hydra: nodes inside a nested nodegraph keep their
  path
 
 A node placed in a NodeGraph (which is what every Houdini material subnetwork

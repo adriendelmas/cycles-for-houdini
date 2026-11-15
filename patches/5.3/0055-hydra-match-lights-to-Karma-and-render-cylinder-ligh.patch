@@ -1,7 +1,7 @@
 From c1c8131d1da0692943efa828a958fde654f2846d Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 4 Sep 2026 16:02:22 +0200
-Subject: [PATCH 055/180] hydra: match lights to Karma, and render cylinder
+Subject: [PATCH 055/181] hydra: match lights to Karma, and render cylinder
  lights
 
 The same Houdini light rendered much stronger under Cycles. Measured, diffuse

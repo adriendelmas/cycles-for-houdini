@@ -1,7 +1,7 @@
 From 833179fea687b01523536cfda3f8448a766e8652 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 21:52:48 +0200
-Subject: [PATCH 080/180] hydra: USD curves where USD places them, as tubes,
+Subject: [PATCH 080/181] hydra: USD curves where USD places them, as tubes,
  and Curve Shape
 
 Cycles reads every curve as a Catmull-Rom passing through all its keys, or as a

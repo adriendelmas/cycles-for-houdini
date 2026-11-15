@@ -1,7 +1,7 @@
 From ad034b766c5ff716706611753cd24f211f8a14d7 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 01:38:53 +0200
-Subject: [PATCH 003/180] hydra: apply constant primvars to every instance
+Subject: [PATCH 003/181] hydra: apply constant primvars to every instance
 
 A constant displayColor describes the whole prim, so it applies to all of
 its instances. Setting only _instances[0] left every instance of a point

@@ -1,7 +1,7 @@
 From 607c355d62f7b848f9c8b8230490b466f921cb70 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 26 Oct 2026 00:04:01 +0100
-Subject: [PATCH 148/180] hydra + util: textures inside a usdz archive;
+Subject: [PATCH 148/181] hydra + util: textures inside a usdz archive;
  material:binding:full resolved
 
 An asset library whose every asset is a usdz with its textures inside, so a texture's

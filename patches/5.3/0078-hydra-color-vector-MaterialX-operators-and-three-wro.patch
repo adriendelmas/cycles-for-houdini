@@ -1,7 +1,7 @@
 From 661145a7c7d19345daf9ee76ffaf902f7925c8d1 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 17:39:22 +0200
-Subject: [PATCH 078/180] hydra: color/vector MaterialX operators, and three
+Subject: [PATCH 078/181] hydra: color/vector MaterialX operators, and three
  wrong scalar ones
 
 Cycles' math node is scalar: a color that goes into it is averaged.

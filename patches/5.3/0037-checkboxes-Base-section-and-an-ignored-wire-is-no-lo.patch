@@ -1,7 +1,7 @@
 From 382991a0d20753255c5f834b183bb584c98d195c Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 01:21:05 +0200
-Subject: [PATCH 037/180] checkboxes, Base section, and an ignored wire is no
+Subject: [PATCH 037/181] checkboxes, Base section, and an ignored wire is no
  longer silent
 
 thin_wall is a checkbox: Cycles declares it SOCKET_IN_INT with a default

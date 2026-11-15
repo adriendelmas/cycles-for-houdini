@@ -1,7 +1,7 @@
 From 7501278cab8786502b749b66655e859dc50f599f Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 00:26:50 +0200
-Subject: [PATCH 087/180] hydra: per-object properties - ray visibility,
+Subject: [PATCH 087/181] hydra: per-object properties - ray visibility,
  holdout, shadow catcher
 
 Nothing could be set per object: visibility was all or nothing. The constant

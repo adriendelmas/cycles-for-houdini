@@ -1,7 +1,7 @@
 From 34c3f600e3f7bc616d9398313686c3a28c791c22 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 19:54:38 +0200
-Subject: [PATCH 047/180] hydra: standard_surface dispersion now reaches the
+Subject: [PATCH 047/181] hydra: standard_surface dispersion now reaches the
  principled bsdf
 
 Cycles just gained dispersion on its principled bsdf (0038, ported from Blender

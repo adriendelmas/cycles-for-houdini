@@ -1,7 +1,7 @@
 From 12513e5b0b21907033e2c6ba58b46b7260fe1f0a Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 12:59:57 +0200
-Subject: [PATCH 024/180] hydra: composite mappings, plus the transform and
+Subject: [PATCH 024/181] hydra: composite mappings, plus the transform and
  ramp nodes
 
 Some MaterialX nodes have no single Cycles equivalent: a left-to-right ramp is

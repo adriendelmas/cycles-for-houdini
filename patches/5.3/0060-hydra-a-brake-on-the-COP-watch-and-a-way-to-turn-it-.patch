@@ -1,7 +1,7 @@
 From 077c5341b9e04b12f033142ca4956ff2ae952617 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 4 Sep 2026 21:09:33 +0200
-Subject: [PATCH 060/180] hydra: a brake on the COP watch, and a way to turn it
+Subject: [PATCH 060/181] hydra: a brake on the COP watch, and a way to turn it
  off
 
 The watch re-read as soon as a COP declared itself as needing to cook. Dragging
