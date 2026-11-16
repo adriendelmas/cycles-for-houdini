@@ -152,7 +152,7 @@ It writes `dist/CyclesForHoudini-5.3/`, holding `cycles.json` and a `CyclesForHo
 
 | | |
 |---|---|
-| `patches/5.3/` | the changes to Cycles, one commit per subject |
+| `patches/5.3/` | the changes to Cycles, one commit per subject — the export of the branch [`houdini`](https://projects.blender.org/starforge/cycles/src/branch/houdini) of the Cycles fork, where they live as commits |
 | `tools/` | the Material Builder generator, the test benches, bootstrap |
 | `tests/` | the node bench and its references, the MaterialX scenes, the feature scenes — see [tests/README.md](tests/README.md) |
 | `docs/` | the project map — start at [docs/README.md](docs/README.md) |
@@ -233,6 +233,14 @@ The MaterialX translation is built on the map drawn by **Ben Houston**:
 
 Cycles itself, and the Hydra delegate this project extends, are the Blender
 Foundation's and its contributors'.
+
+## How it is made
+
+This project is developed with AI assistance (Claude Code). Each change is
+built, run in Houdini and checked against the benches of `tools/` by the author,
+who reviews it and answers for it. Following Blender's
+[AI contributions policy](https://developer.blender.org/docs/handbook/contributing/ai_contributions/),
+commits name human authors only, here and on the Cycles branch.
 
 ## Licence
 

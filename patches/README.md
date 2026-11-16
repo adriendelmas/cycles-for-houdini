@@ -6,6 +6,12 @@ through `git format-patch`.
 
     patches/5.3/   181 patches, base v5.3.0 (b3f62626)
 
+The branch is [`houdini`](https://projects.blender.org/starforge/cycles/src/branch/houdini)
+of the fork on projects.blender.org: pull requests on the Cycles side go there.
+`patches/5.3/BRANCH` names the commit the series was exported from, and
+`tools/publish_cycles.py` is the only thing that writes the series
+(`--check` tells whether the fork and the series are the same).
+
 `tools/bootstrap.py` does the whole path - clone, `git am`, build. By hand, on a
 clone of Cycles checked out at `v5.3.0`:
 
