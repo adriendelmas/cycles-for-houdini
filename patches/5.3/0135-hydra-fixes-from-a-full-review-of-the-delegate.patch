@@ -1,4 +1,4 @@
-From b170a543a4abdbf12c2f55615e3d00c5035fa315 Mon Sep 17 00:00:00 2001
+From b160f03748b11d64b73e108f5bf37eb80653eaa1 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sat, 10 Oct 2026 18:38:09 +0200
 Subject: [PATCH 135/181] hydra: fixes from a full review of the delegate
@@ -22,8 +22,6 @@ Read end to end (19k lines, C++ and Python) and checked by scenes:
 - geometry: a prototype left with no instance no longer reads _instances[0].
 - houdini_cop: Capture read `_gpu` from the Python dictionary after
   releasing it (K-96).
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 ---
  src/hydra/curves.cpp      | 13 ++++++++-----
  src/hydra/geometry.inl    |  2 +-

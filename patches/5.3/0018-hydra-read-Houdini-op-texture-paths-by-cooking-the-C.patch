@@ -1,4 +1,4 @@
-From e59974e657bdb29840cf01e2f9ae7f77b0e3a3b2 Mon Sep 17 00:00:00 2001
+From 6835a72407f8566090a7681af7972f72541d572a Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 00:25:09 +0200
 Subject: [PATCH 018/181] hydra: read Houdini op: texture paths by cooking the
@@ -16,8 +16,6 @@ loading runs on Cycles' worker threads, and cooking a Houdini node from one of
 those would take the host down. Results are cached per path, and the call is
 guarded so a batch render - which has no hou module at all - reports a plain
 warning naming the path instead of raising.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/cmake/Modules/FindUSDHoudini.cmake        |   4 +
  src/hydra/CMakeLists.txt                      |  14 +++

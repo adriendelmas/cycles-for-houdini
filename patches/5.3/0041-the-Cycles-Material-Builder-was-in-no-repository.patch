@@ -1,4 +1,4 @@
-From 3049984160355e8b25cdfe6da8c12e80d86b6a78 Mon Sep 17 00:00:00 2001
+From d196522784f9b142cef8be7cf29807ad3eb548ab Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 14:24:47 +0200
 Subject: [PATCH 041/181] the Cycles Material Builder was in no repository
@@ -13,8 +13,6 @@ They join the other Houdini resources, with their install rule.
 While at it, a stale cycles_vops.hda was lying around in the sources. Nothing
 installed it and nothing read it: the VOP library is generated from the Sdr
 registry, by tools/build_cycles_vops.py, and is not versioned.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/CMakeLists.txt              |   7 ++
  src/hydra/resources/CyclesTools.shelf |  16 ++++

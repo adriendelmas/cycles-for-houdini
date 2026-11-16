@@ -1,4 +1,4 @@
-From 3cbd59429c4977ef9ab89e866892356ea4b7a6e9 Mon Sep 17 00:00:00 2001
+From 82024e5541628e22e85c2323af54ed90ed0cc291 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 04:22:23 +0200
 Subject: [PATCH 096/181] hydra: comments and log messages in English
@@ -8,8 +8,6 @@ relance, Passe de rendu) switch to English: Display, Render restarted, Render
 pass. The project's rule is English in the code; the repository is public and
 the series is aimed upstream. A comparison of the sources without their comments
 against the previous revision shows no code change; all benches pass.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/CMakeLists.txt      |  35 ++-
  src/hydra/curves.cpp          |   4 +-

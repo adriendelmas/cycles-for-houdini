@@ -1,4 +1,4 @@
-From cd89a8d19f6dab0fb7ebcec6ff7f901b3563864e Mon Sep 17 00:00:00 2001
+From 9d586a0cfddd2980da031dd8612e1de06bf85d79 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 4 Sep 2026 13:10:02 +0200
 Subject: [PATCH 053/181] scene: displacement was added to itself on every
@@ -32,8 +32,6 @@ frame rendered alone:
 
     before   mean 0.03047   max 1.06470
     after    mean 0.00000   max 0.00049
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/mesh.cpp          |  7 +++++++
  src/scene/mesh.cpp          |  6 +++++-

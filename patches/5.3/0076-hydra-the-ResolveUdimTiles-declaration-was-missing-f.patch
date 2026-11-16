@@ -1,4 +1,4 @@
-From 9f5901722b3982afce122f7010bd93e9ebd4afee Mon Sep 17 00:00:00 2001
+From 337af29dfeecee7670ef9fb5a2973beb2cca5ede Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 16:49:20 +0200
 Subject: [PATCH 076/181] hydra: the ResolveUdimTiles declaration was missing
@@ -7,8 +7,6 @@ Subject: [PATCH 076/181] hydra: the ResolveUdimTiles declaration was missing
 material.cpp defines it and calls it from the UDIM tiles fix, but material.h was
 never committed: the working tree compiled, a series replayed by bootstrap.py
 would not have compiled.
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 ---
  src/hydra/material.h | 4 ++++
  1 file changed, 4 insertions(+)

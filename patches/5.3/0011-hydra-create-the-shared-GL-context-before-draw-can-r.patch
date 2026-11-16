@@ -1,4 +1,4 @@
-From 4bdff107a56b7c5c3890990f8925065effc23f65 Mon Sep 17 00:00:00 2001
+From 5f6ca1273eb632cfb7e6f5907c9fb35c676d122a Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 13:33:28 +0200
 Subject: [PATCH 011/181] hydra: create the shared GL context before draw() can
@@ -15,8 +15,6 @@ draw() runs on the thread the host makes its GL context current on, which is
 the only place a shareable context can be built - doing it from the display
 driver constructor does not work, as the render pass is not necessarily
 constructed on that thread.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/display_driver.cpp | 9 +++++++--
  1 file changed, 7 insertions(+), 2 deletions(-)

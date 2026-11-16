@@ -1,4 +1,4 @@
-From 9cba9c1f8cdaeef6db7efb597a66042af6f9ac86 Mon Sep 17 00:00:00 2001
+From 3e104c89e03ebb7f43d593c6b7bb39183258e3e7 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 26 Oct 2026 20:55:28 +0100
 Subject: [PATCH 153/181] hydra: randomfloat and randomcolor from the library's
@@ -12,8 +12,6 @@ removed; the two expand from the library's own nodegraphs, a cellnoise2d
 of `in` and `seed` ranged to min..max, as Karma evaluates them. Production
 procedural materials, which draw per-instance randomness from them, now
 match Karma within 1 % (K-116).
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp | 5 +++--
  1 file changed, 3 insertions(+), 2 deletions(-)

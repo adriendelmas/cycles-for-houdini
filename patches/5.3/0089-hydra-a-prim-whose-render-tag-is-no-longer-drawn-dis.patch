@@ -1,4 +1,4 @@
-From 75513e245554d07c01bb5d811068432984d5cd13 Mon Sep 17 00:00:00 2001
+From eda0dfb8192afc6a7aae3afc4df4abb4fb485270 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 01:01:33 +0200
 Subject: [PATCH 089/181] hydra: a prim whose render tag is no longer drawn
@@ -9,8 +9,6 @@ synchronizes, but an already built prim stayed in the Cycles scene when its tag
 was turned off. The render pass compares the tags on every execution and hides
 or reshows the prims concerned. Under husk, measured: neither proxy nor guide are
 rendered, as before; the live toggle can only be measured in Houdini.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/geometry.h      | 14 +++++++++++++-
  src/hydra/geometry.inl    | 17 ++++++++++++++++-

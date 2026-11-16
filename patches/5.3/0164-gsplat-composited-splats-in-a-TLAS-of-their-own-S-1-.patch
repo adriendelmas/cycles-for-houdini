@@ -1,4 +1,4 @@
-From d4e87c599e9d13c52e4792f35ee4c4262d377c6f Mon Sep 17 00:00:00 2001
+From 7c78e5cd72f8e8a7c7ff48846e8e3bf5225475a2 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 14:18:33 +0100
 Subject: [PATCH 164/181] gsplat: composited splats in a TLAS of their own,
@@ -17,8 +17,6 @@ A production frame, 4.3 M splats, 3840x2560, 128 spp, RTX 3090:
 frame takes 55 s: the splats' cost is the number of splats each ray
 evaluates, which neither change touches. CPU and OptiX still match the
 numpy reference.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/device/optix/device_impl.cpp   | 55 +++++++++++++++++---
  src/device/optix/device_impl.h     |  3 ++

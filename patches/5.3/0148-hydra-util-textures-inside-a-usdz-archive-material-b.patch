@@ -1,4 +1,4 @@
-From 607c355d62f7b848f9c8b8230490b466f921cb70 Mon Sep 17 00:00:00 2001
+From de94660e91a00da04d80ee8eda1838a1793acd47 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 26 Oct 2026 00:04:01 +0100
 Subject: [PATCH 148/181] hydra + util: textures inside a usdz archive;
@@ -23,8 +23,6 @@ the all-purpose one. (K-112)
 The SVM compiler's virtual stack of 0148 is dropped; the report of the live
 values at an overflow and the per-shader peak stay. Cycles nodes keep their
 Hydra names.
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 ---
  src/cmake/Modules/FindUSDHoudini.cmake |   2 +-
  src/hydra/CMakeLists.txt               |   2 +

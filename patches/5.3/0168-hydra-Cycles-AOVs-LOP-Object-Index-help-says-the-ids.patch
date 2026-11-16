@@ -1,10 +1,9 @@
-From 252f738693c5dc3e9d5a699328e573b41de4ea26 Mon Sep 17 00:00:00 2001
+From 80fd2dc1502f4297d3513215773a2e03bf0e9257 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 15:40:45 +0100
 Subject: [PATCH 168/181] hydra: Cycles AOVs LOP, Object Index help says the
  ids change between renders
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/resources/otls/hdcycles_aovs.hda | Bin 9412 -> 9572 bytes
  1 file changed, 0 insertions(+), 0 deletions(-)

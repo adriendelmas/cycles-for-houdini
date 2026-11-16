@@ -1,4 +1,4 @@
-From b8003925ff3c02fbc5a43c465006cd8b5cc27d43 Mon Sep 17 00:00:00 2001
+From 70468d305082fac95d4598e1010aa50126b52f05 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 00:50:49 +0200
 Subject: [PATCH 088/181] hydra: light linking and shadow linking
@@ -16,8 +16,6 @@ forgotten.
 Measured: a light linked to only one of two spheres leaves the other to the
 dome's light alone; a sphere excluded from the shadowLink no longer casts a
 shadow. The old DLL fails both.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/geometry.inl |  24 ++++++++-
  src/hydra/light.cpp    |  15 ++++++

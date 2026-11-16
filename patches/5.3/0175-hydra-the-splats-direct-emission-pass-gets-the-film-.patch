@@ -1,4 +1,4 @@
-From 1342a036a373806f02cf3f33bbfd403c9274e877 Mon Sep 17 00:00:00 2001
+From 00fdeffa431e2b44b62c89ac7105ea258803927a Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 19:01:29 +0100
 Subject: [PATCH 175/181] hydra: the splats' direct emission pass gets the film
@@ -7,8 +7,6 @@ Subject: [PATCH 175/181] hydra: the splats' direct emission pass gets the film
 A colour AOV pass is read without the exposure the beauty gets, so at
 exposure 2 SplatEmit and the beauty it is added back to were off. The
 output driver applies it; checked: every pass doubles, the sum holds.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/output_driver.cpp | 35 ++++++++++++++++++++++++++++++++++-
  src/hydra/output_driver.h   |  7 +++++++

@@ -1,4 +1,4 @@
-From 71851871e5b9711f6e697198a1b55a837d67f091 Mon Sep 17 00:00:00 2001
+From 0f039b7567a90fd585b1a48fc89670b0f90684c1 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 19:27:16 +0100
 Subject: [PATCH 178/181] hydra: menus for Denoise AOVs and light group names
@@ -9,8 +9,6 @@ those on the input stage. Light group names (Cycles AOVs, Cycles Render
 Settings, Render Geometry Settings' Cycles tab) offer the groups already
 set on the input stage's prims and lights; typed text still works. The
 menu scripts reload cycles_aovs when Houdini loaded an older one.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  .../resources/HdCyclesPluginGPU_Geometry.ds   |   8 ++++
  .../resources/HdCyclesPlugin_Geometry.ds      |   8 ++++

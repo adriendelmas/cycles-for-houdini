@@ -1,4 +1,4 @@
-From 0792e6155af7ac8ef6244fe32a0fc479f7be3c4e Mon Sep 17 00:00:00 2001
+From 38f798c27b442a16484c0963691872500e1a52eb Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 9 Oct 2026 19:37:52 +0200
 Subject: [PATCH 124/181] hydra: alpha compositing nodes, hextilednormalmap,
@@ -14,8 +14,6 @@ the red channel before. The eight compositing nodes match Karma (K-84).
 A volume's initial dirty bits left out primvars, so it read none of its
 own. It now reads cycles:object:* like any geometry, and three volume
 settings: cycles:volume:step_size, object_space and velocity_scale (K-85).
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/mtlx_expand.cpp   |  38 +++++
  src/hydra/mtlx_nodegraphs.h | 321 ++++++++++++++++++++++++++++++++++++

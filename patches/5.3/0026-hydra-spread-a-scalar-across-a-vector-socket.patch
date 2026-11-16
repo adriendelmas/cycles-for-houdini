@@ -1,4 +1,4 @@
-From bb0c3a38c8f7c44c9fc5111f8ec3d2a58a685026 Mon Sep 17 00:00:00 2001
+From 1d515fa2e417361e1a66c0a26b979f85c94962e0 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 16:49:43 +0200
 Subject: [PATCH 026/181] hydra: spread a scalar across a vector socket
@@ -12,8 +12,6 @@ the coordinate it was meant to scale.
 The failure was silent: the warning goes through TF_WARN, which husk swallows.
 Found by rendering a cell noise whose texture coordinates were scaled by eight
 and getting the unscaled image back, byte for byte.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/node_util.cpp | 31 +++++++++++++++++++++++++++++++
  1 file changed, 31 insertions(+)

@@ -1,4 +1,4 @@
-From 4b4f03b070f5e48ca24e2eb6e070d407b547978c Mon Sep 17 00:00:00 2001
+From ebe5b23fc13c2eeb3ca8df49eb5da872257bc1ba Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 18:16:47 +0200
 Subject: [PATCH 014/181] hydra: take the scene lock rather than trying it, and
@@ -23,8 +23,6 @@ Install precompiled GPU kernels inside the Houdini tree. The delegate roots
 Cycles there, so kernels installed beside it were never found, and rendering
 fell back to compiling them at runtime - which needs nvcc *and* a host
 compiler on PATH, and failed with 'Cannot find compiler cl.exe'.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/plugin.cpp                  | 15 +++++++++++++-
  src/hydra/plugin.h                    | 26 +++++++++++++++++++++++-

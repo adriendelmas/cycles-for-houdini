@@ -1,4 +1,4 @@
-From 0479c75c24a82a681def344be2f05c7ffa07a4c0 Mon Sep 17 00:00:00 2001
+From 9f693ea94b9c030c7c278474c847f438b14685aa Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 26 Oct 2026 23:37:32 +0100
 Subject: [PATCH 154/181] hydra: a bumped chain's layer ties depend on the base
@@ -17,8 +17,6 @@ that is not the normal); the others keep their own. The displacement, a
 program of its own, is no longer tied. Probes in husk CPU: the hextiled
 terrain 107 slots, the procedural terrain 117 slots and 86 614 words, the
 procedural rock 47 (K-115).
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 ---
  src/hydra/mtlx_expand.cpp | 80 +++++++++++++++++++++++++++------------
  1 file changed, 55 insertions(+), 25 deletions(-)

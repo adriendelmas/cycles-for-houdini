@@ -1,4 +1,4 @@
-From 772df0c468af7cc275fb9a11d6758a9a1d4b5121 Mon Sep 17 00:00:00 2001
+From f294a7b0c798759636869a666c264c8133e572fe Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sat, 10 Oct 2026 12:20:08 +0200
 Subject: [PATCH 134/181] hydra: layer as top plus attenuated base, at the

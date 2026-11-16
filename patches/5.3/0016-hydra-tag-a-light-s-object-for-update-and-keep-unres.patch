@@ -1,4 +1,4 @@
-From e309e4d8acdf4250a68ed250f60c5e0845c7d35d Mon Sep 17 00:00:00 2001
+From 22a3df0b3e070fe9396369af322244b13efe9884 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 19:54:57 +0200
 Subject: [PATCH 016/181] hydra: tag a light's object for update, and keep
@@ -15,8 +15,6 @@ Also fall back to the authored asset path when the resolver returns nothing,
 the way volume fields and light textures already do. Returning the empty string
 turned an unresolvable texture into a silently missing one, with no hint of
 which path had failed.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/light.cpp     | 8 ++++++++
  src/hydra/node_util.cpp | 7 ++++++-

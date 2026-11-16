@@ -1,4 +1,4 @@
-From 0a1856e170d7722a1ba7d361e3c17205073a017b Mon Sep 17 00:00:00 2001
+From 5b58f28e39f7837ca11a9d43e4c08c59f2ce93a8 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 23:29:29 +0200
 Subject: [PATCH 111/181] hydra: rect light texture, spot cone softness and
@@ -17,8 +17,6 @@ shaping:focus and focusTint: the light shader multiplies the emission by
 lerp(focusTint, 1, |direction . axis| ^ focus), the axis baked and the
 graph rebuilt when the light moves (K-69, tools/bench_lights.py: 15 cases
 against Karma).
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/light.cpp | 84 ++++++++++++++++++++++++++++++++++++++-------
  1 file changed, 72 insertions(+), 12 deletions(-)

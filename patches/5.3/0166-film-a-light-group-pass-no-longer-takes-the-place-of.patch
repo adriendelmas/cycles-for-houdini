@@ -1,4 +1,4 @@
-From cd0e0e5d11a53111267072449e944d287ab8302d Mon Sep 17 00:00:00 2001
+From c619beb35eacbb503901eb9b709575b55fcad238 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 15:05:16 +0100
 Subject: [PATCH 166/181] film: a light group pass no longer takes the place of
@@ -15,8 +15,6 @@ Both now tell light groups apart. Measured: two spheres, a key light in
 a group, denoiser on: beauty 0.0007 -> 0.0769 (0.0768 without the
 denoiser), group 0.0009 -> 0.0608. Also in the shipped build; bench_aovs
 still 9/9. Upstream code, worth reporting.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/scene/film.cpp      | 8 ++++++--
  src/session/buffers.cpp | 6 +++++-

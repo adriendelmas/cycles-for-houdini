@@ -1,4 +1,4 @@
-From 833179fea687b01523536cfda3f8448a766e8652 Mon Sep 17 00:00:00 2001
+From 546201260b1b0c6cff828f03231793cf2b9d2e45 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 21:52:48 +0200
 Subject: [PATCH 080/181] hydra: USD curves where USD places them, as tubes,
@@ -23,8 +23,6 @@ recompiling and redoes the curves already synchronized. Points (pointcloud) read
 `varying` widths as per-point widths.
 
 tools/bench_curves.py, on the repo side, guards the five cases.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/curves.cpp                          | 380 ++++++++++++++++--
  src/hydra/curves.h                            |  23 ++

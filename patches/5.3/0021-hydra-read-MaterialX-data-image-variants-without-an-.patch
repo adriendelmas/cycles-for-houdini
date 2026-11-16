@@ -1,4 +1,4 @@
-From c029d039e044e4a81537042b95d43a6575ef5a7e Mon Sep 17 00:00:00 2001
+From cc76a0a06472dbd06937a8871ccb6d174e201da5 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 01:15:54 +0200
 Subject: [PATCH 021/181] hydra: read MaterialX data image variants without an
@@ -12,8 +12,6 @@ difference against Karma on the same texture.
 MaterialX draws the distinction in the nodedef name: ND_image_color3 carries
 colour, ND_image_vector3 carries data. Honour it and read the float and vector
 variants as data.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp | 24 +++++++++++++++++++++++-
  1 file changed, 23 insertions(+), 1 deletion(-)

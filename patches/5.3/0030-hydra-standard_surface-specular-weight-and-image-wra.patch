@@ -1,4 +1,4 @@
-From aa121a96f35a7139e93b9f2ef12ae0a5900893ea Mon Sep 17 00:00:00 2001
+From 8e0833b82f273e5086a850299d7a962b74018432 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 17:40:16 +0200
 Subject: [PATCH 030/181] hydra: standard_surface specular weight, and image
@@ -21,8 +21,6 @@ UsdUVTexture's wrapS and wrapT already had.
 
 Drops the image node's default mapping: it pointed at color, which is an output
 of image_texture rather than an input, so it could only ever warn.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp | 82 +++++++++++++++++++++++++++++++++++-------
  1 file changed, 69 insertions(+), 13 deletions(-)

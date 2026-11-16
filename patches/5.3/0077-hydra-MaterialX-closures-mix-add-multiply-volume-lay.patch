@@ -1,4 +1,4 @@
-From e977dd206429cfd60cc2b8e25a9ffbe645fdfc17 Mon Sep 17 00:00:00 2001
+From fcd9a53befcaf3a84034823222a24a274e2eba6d Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 17:13:13 +0200
 Subject: [PATCH 077/181] hydra: MaterialX closures - mix, add, multiply,
@@ -29,8 +29,6 @@ BSDF, a glTF image as `outcolor` on a vector helper. `dielectric_bsdf` takes
 Measured: five closure cases on the MaterialX bench, all exact (mix, add,
 multiply and mix of surfaces to within 2 %, layer not black); mtlx_inputs goes
 from 511 to 528 nodedefs without loss, 0 outputs not found, 0 missing nodes.
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp | 221 ++++++++++++++++++++++++++++++++++++++---
  1 file changed, 208 insertions(+), 13 deletions(-)

@@ -1,4 +1,4 @@
-From 16bcb5d99bc44b9052046c4bc8ff17bcdb8baff4 Mon Sep 17 00:00:00 2001
+From c0d133912d11f47c809257dc97602ac605d8a1f0 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sat, 5 Sep 2026 00:53:45 +0200
 Subject: [PATCH 062/181] hydra: the COP watch puts the image back itself
@@ -15,8 +15,6 @@ where cooking a Houdini node is safe.
 
 A material that rebuilds its graph erases its registrations before putting new
 ones: otherwise the watch would go and write onto destroyed nodes.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/houdini_cop.cpp | 186 ++++++++++++++++++++------------------
  src/hydra/houdini_cop.h   |  16 ++--

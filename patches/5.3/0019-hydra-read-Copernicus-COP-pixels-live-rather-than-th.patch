@@ -1,4 +1,4 @@
-From b3997a0642bf254d978ad584dab7a7996e3ee1bf Mon Sep 17 00:00:00 2001
+From 88fb575bd9c51c5a1130eb50ecd464b8895cc0ae Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 00:45:16 +0200
 Subject: [PATCH 019/181] hydra: read Copernicus COP pixels live rather than
@@ -13,8 +13,6 @@ scene and no output node has to be wired up.
 
 Measured on a Copernicus node: 1024x1024, Float32, 4194304 bytes, exactly
 width * height * channels * 4.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/houdini_cop.cpp | 20 +++++++++++++++++---
  src/hydra/houdini_cop.h   |  3 +++

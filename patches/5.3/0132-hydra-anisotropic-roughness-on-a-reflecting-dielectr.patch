@@ -1,4 +1,4 @@
-From 8a7f116df6d3411ce159d0d99600d0405ab9a091 Mon Sep 17 00:00:00 2001
+From 80d6c59866d101d73b5f15d4656d37907b04d7ab Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sat, 10 Oct 2026 11:12:00 +0200
 Subject: [PATCH 132/181] hydra: anisotropic roughness on a reflecting

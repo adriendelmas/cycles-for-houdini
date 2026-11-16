@@ -1,4 +1,4 @@
-From db2a5234d5071133b0a30fda6fb5a4f674862bd2 Mon Sep 17 00:00:00 2001
+From 7beb48224473bf1b2fe056f68bf5d2ddbdd8dc36 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 11:02:26 +0100
 Subject: [PATCH 157/181] hydra: objects visible to raycast rays again after
@@ -8,8 +8,6 @@ Cycles 5.3 took the raycast bit out of PATH_RAY_VISIBILITY_ALL and added
 PATH_RAY_VISIBILITY_OBJECT_ALL for the flags an object may carry. The
 per-object properties still started from the old full mask, so every
 object would have been invisible to the Raycast node and to raycast AO.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/object_properties.cpp | 8 ++++----
  1 file changed, 4 insertions(+), 4 deletions(-)

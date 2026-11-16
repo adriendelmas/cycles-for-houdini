@@ -1,4 +1,4 @@
-From 11ec07b9cefe2587ac59709c9d7b703784f092e5 Mon Sep 17 00:00:00 2001
+From 871b5d5b8af3263034bd2a511c26641e6eae7db2 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 14:18:33 +0100
 Subject: [PATCH 165/181] integrator: Light Optimize, the render sampled as if
@@ -18,8 +18,6 @@ release/5.3's Filter Glossy default of 1).
 Measured on a production frame, 960x640, 128 spp: same mean (0.01166 vs
 0.01162), bright-area noise 0.113 -> 0.106, time +6 %. It only acts past
 the adaptive minimum (64 samples at the default threshold).
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  .../resources/HdCyclesPluginGPU_Global.ds     | 51 ++++++++++++++++++-
  src/hydra/resources/HdCyclesPlugin_Global.ds  | 51 ++++++++++++++++++-

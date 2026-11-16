@@ -1,4 +1,4 @@
-From d45fa8d0255eebc85e5db42b0f877f09f6a2f625 Mon Sep 17 00:00:00 2001
+From d74d1e9048d9002a3c7be7a88299aa4b713e326c Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sun, 15 Nov 2026 18:29:08 +0100
 Subject: [PATCH 181/181] hydra: the atmosphere's world volume as Volume
@@ -9,8 +9,6 @@ Henyey-Greenstein at the atmosphere's miephase), Mie absorption a Volume
 Absorption node, in place of Volume Coefficients nodes. Each takes the
 largest sea-level coefficient times the altitude falloff as its density and
 the coefficients over it as its colour: the same medium.
-
-Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
 ---
  src/hydra/light.cpp | 50 ++++++++++++++++++++++++++++-----------------
  1 file changed, 31 insertions(+), 19 deletions(-)

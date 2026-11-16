@@ -1,4 +1,4 @@
-From 15454aeba7a36cf6c447af5d2f7390f019a5f8e3 Mon Sep 17 00:00:00 2001
+From 4aa27a4df978160816c0c1937dada472a28e00ae Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 9 Oct 2026 02:48:50 +0200
 Subject: [PATCH 117/181] hydra: left-handed subdivided meshes the right way
@@ -12,8 +12,6 @@ where the right-handed one renders 0.56). Houdini writes its meshes
 left-handed. Each face's corners are now reversed (the first kept) and its
 corner primvars permuted the same way (K-76, tools/bench_subdiv.py and
 tools/bench_usdtex.py).
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/mesh.cpp | 36 +++++++++++++++++++++++++++++++++++-
  src/hydra/mesh.h   |  5 +++++

@@ -1,4 +1,4 @@
-From 1cab59a1f81edd60bff5973d4b73e5299111ab55 Mon Sep 17 00:00:00 2001
+From 2f91efa053b68aa5d1e9236295de0de23aebb4ec Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 26 Oct 2026 06:20:02 +0100
 Subject: [PATCH 151/181] hydra: tie a single surface's accumulated layers for
@@ -17,8 +17,6 @@ normalize for the normal) and ties each layer's own geometry lookups to
 the previous accumulation. The ties FoldSurfaceMix used are lifted into
 LayerTies, shared by both. Ten layers: 172 slots, and the sphere at 0.068
 against Karma's 0.069 (K-115).
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 ---
  src/hydra/mtlx_expand.cpp | 312 +++++++++++++++++++++++++++-----------
  1 file changed, 223 insertions(+), 89 deletions(-)

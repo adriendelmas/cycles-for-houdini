@@ -1,4 +1,4 @@
-From 29dbcc0501958f9a7e806378a56941d149706c86 Mon Sep 17 00:00:00 2001
+From 5a56793d46ff659466294918d464844cb34fb927 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 13:17:40 +0100
 Subject: [PATCH 161/181] hydra: a camera with a near clip of 0 renders instead
@@ -9,8 +9,6 @@ perspective matrix is then singular: its inverse, which makes the camera
 rays, is all NaN, and the render stays black and stuck at 0:00. Found on
 a production's shot cameras, (0, 100000). The near clip is floored
 at Cycles' own default, 1e-5.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/camera.cpp | 8 +++++++-
  1 file changed, 7 insertions(+), 1 deletion(-)

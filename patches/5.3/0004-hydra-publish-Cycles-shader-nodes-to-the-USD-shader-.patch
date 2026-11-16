@@ -1,4 +1,4 @@
-From 1680c562a1df34c1934557fcea3b1b0ce3e19c14 Mon Sep 17 00:00:00 2001
+From dad559773cdad6e6c9d178d74925b2ca62681cb2 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 01:38:54 +0200
 Subject: [PATCH 004/181] hydra: publish Cycles shader nodes to the USD shader
@@ -13,8 +13,6 @@ Cycles version.
 
 Registered in the existing hdCycles library so the Cycles static libraries
 and their node registry are not duplicated in the process.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/CMakeLists.txt          |  2 ++
  src/hydra/resources/plugInfo.json | 12 ++++++++++++

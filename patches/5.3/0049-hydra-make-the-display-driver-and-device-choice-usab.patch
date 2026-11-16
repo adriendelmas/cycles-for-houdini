@@ -1,4 +1,4 @@
-From e5a9fd0953bb541b691f4176151abb8d91859876 Mon Sep 17 00:00:00 2001
+From 38ed01b161b5ed54e4e02bd13eff4f48b82fb39c Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 23:19:44 +0200
 Subject: [PATCH 049/181] hydra: make the display driver and device choice
@@ -38,8 +38,6 @@ it.
 Bench: 97 exported, 97 rendered, 0 problems; 96 images out of 97 identical to
 the pixel, the only different one being cycles_set_normal, already open (A19)
 and unrelated.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/plugin.cpp          | 12 +++++--
  src/hydra/render_delegate.cpp | 59 +++++++++++++++++++++++++++++++----

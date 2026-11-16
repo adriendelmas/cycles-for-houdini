@@ -1,4 +1,4 @@
-From b68c617b3d5ac421b7f6eae96bcce0cd06ddf703 Mon Sep 17 00:00:00 2001
+From b8d6769e5181864384063d11fbf73a1769b2eb27 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 16:46:27 +0200
 Subject: [PATCH 075/181] hydra: mix, fades, saturate, facingratio,
@@ -32,8 +32,6 @@ camera, to name the call next time one of these items weighs four seconds.
 
 MaterialX bench: 11 cases, 0 problems; the five that failed before pass to
 within 2 % of the MaterialX value.
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp    | 269 +++++++++++++++++++++++++++++++++-----
  src/hydra/render_pass.cpp |  20 ++-

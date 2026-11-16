@@ -1,4 +1,4 @@
-From 545f7c41f9d4140d4aaa39d7eac3971f69e90279 Mon Sep 17 00:00:00 2001
+From 7f95ca59d04adf17280178ab85b3363aaad899bf Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 16:37:32 +0200
 Subject: [PATCH 013/181] hydra: restart the render on scene edits, and
@@ -15,8 +15,6 @@ A mapping can now carry fixed socket values, which is how one Cycles math node
 stands in for every MaterialX arithmetic node through its mode enum, and
 MtlxFacOrColor picks between a texture node's scalar and colour outputs based
 on what the connection feeds.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp        | 184 ++++++++++++++++++++++++++++++----
  src/hydra/render_delegate.cpp |  24 +++++

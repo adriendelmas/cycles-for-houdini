@@ -1,4 +1,4 @@
-From 6d708850bcaa2ab4e058136664e6c5069d157b72 Mon Sep 17 00:00:00 2001
+From 9997a63901b694974d75b6ba53d3063746f2d95c Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 16:58:33 +0100
 Subject: [PATCH 170/181] hydra: Cycles Render Settings LOP, Cycles (Setup)
@@ -18,8 +18,6 @@ Subject: [PATCH 170/181] hydra: Cycles Render Settings LOP, Cycles (Setup)
   stage uses; each light group and shader AOV has an enable toggle.
 - Both nodes carry Blender's icon (see CREDITS.md in the outer repo for
   its terms) and sit under Rendering/Cycles.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/CMakeLists.txt                      |   3 +
  src/hydra/resources/CyclesTools.shelf         |  34 +++++

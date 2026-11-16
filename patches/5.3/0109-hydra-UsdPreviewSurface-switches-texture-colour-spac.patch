@@ -1,4 +1,4 @@
-From d050fbe988d4e9ac841b8d335772b64c153b8253 Mon Sep 17 00:00:00 2001
+From ffe02bba803e66d406f583435636753645a17d2d Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 22:26:06 +0200
 Subject: [PATCH 109/181] hydra: UsdPreviewSurface switches, texture colour
@@ -19,8 +19,6 @@ Translated image nodes start in auto instead of the constructor's
 scene_linear, and auto picks the config's sRGB texture space for a file
 tagged sRGB. wrapS/wrapT translate to Cycles' extension names (repeat ->
 periodic, useMetadata -> black).
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp  | 151 +++++++++++++++++++++++++++++++++++-----
  src/util/colorspace.cpp |  70 +++++++++++++++++++

@@ -1,4 +1,4 @@
-From d5769a79417b6f8bdcebcde02dad0d44891fa6fa Mon Sep 17 00:00:00 2001
+From fe53806faa15119f4990a15dc2f4bba80efb33b9 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sat, 10 Oct 2026 08:19:59 +0200
 Subject: [PATCH 126/181] hydra: split lights for lobe multipliers, shadow

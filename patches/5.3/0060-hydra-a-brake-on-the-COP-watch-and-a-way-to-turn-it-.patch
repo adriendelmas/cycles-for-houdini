@@ -1,4 +1,4 @@
-From 077c5341b9e04b12f033142ca4956ff2ae952617 Mon Sep 17 00:00:00 2001
+From 679f3e9efaf9c4d8dbedb61534d801e3c401fc9d Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 4 Sep 2026 21:09:33 +0200
 Subject: [PATCH 060/181] hydra: a brake on the COP watch, and a way to turn it
@@ -30,8 +30,6 @@ cookCount 4 and needsToCook true; after refresh, cookCount 5 and needsToCook
 false. That is indeed what the watch expects.
 
 Bench: 97 renders, 0 problems.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/houdini_cop.cpp | 101 +++++++++++++++++++++++++++++---------
  1 file changed, 79 insertions(+), 22 deletions(-)

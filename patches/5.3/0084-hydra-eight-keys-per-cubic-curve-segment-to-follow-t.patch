@@ -1,4 +1,4 @@
-From 38b0c1801449442fc792f2e230c78a39c393b2ec Mon Sep 17 00:00:00 2001
+From e5c79042af0eb3adcc14b90e88171f4984977af1 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 22:52:44 +0200
 Subject: [PATCH 084/181] hydra: eight keys per cubic curve segment, to follow
@@ -9,8 +9,6 @@ straight strokes: Cycles traces a Catmull-Rom through its keys, and at three per
 segment it does not follow the cubic. Its silhouette only overlapped Karma's at
 28 %. Eight keys per Bezier or B-spline segment: 89 %, the rest being the
 anti-aliasing of a four-pixel stroke. tools/bench_curves.py --karma measures it.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/curves.cpp | 17 ++++++++++++-----
  1 file changed, 12 insertions(+), 5 deletions(-)

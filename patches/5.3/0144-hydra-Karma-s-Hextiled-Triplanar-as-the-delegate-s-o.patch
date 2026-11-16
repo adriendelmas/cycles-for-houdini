@@ -1,4 +1,4 @@
-From 4e7690fb6bb49b0e1cf5b843b8ac19af9cf5140f Mon Sep 17 00:00:00 2001
+From 50835542400eec285306beffd71b2901c9de085a Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sun, 25 Oct 2026 05:14:37 +0100
 Subject: [PATCH 144/181] hydra: Karma's Hextiled Triplanar as the delegate's
@@ -22,8 +22,6 @@ orientation. The expansion takes these ids besides ND_.
 transformvector, transformnormal and transformpoint between object and world
 space join the table, on Cycles' vector transform node; `tospace` picks the
 direction. (K-106)
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp      |  50 ++-
  src/hydra/mtlx_expand.cpp   |  15 +-

@@ -1,4 +1,4 @@
-From 41a7e9b6d6b8f305ce447625fac4ab5309e61fd0 Mon Sep 17 00:00:00 2001
+From 28dcc595bc5443d553880ee9a813e7722948b393 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 4 Sep 2026 23:05:58 +0200
 Subject: [PATCH 061/181] hydra: a texture that changes, and a camera one
@@ -37,8 +37,6 @@ and the session restarts from zero indefinitely - same symptom.
 
 standard_surface audit: 48 scenes, 48 identical to the pixel. Bench: 97
 renders, 0 problems.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp    | 37 +++++++++++++++++++++++++++++++++++++
  src/hydra/material.h      |  4 ++++

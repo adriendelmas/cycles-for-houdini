@@ -1,4 +1,4 @@
-From b8a24e9e201cb42d7a7ee8ae27bac10b018af46b Mon Sep 17 00:00:00 2001
+From ff91452928ba5d69bec79faeac9fc2e53aa2122a Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 23:33:59 +0200
 Subject: [PATCH 085/181] hydra: motion blur back, Houdini volume fields, and
@@ -25,8 +25,6 @@ it did not arrive, and a dome is now visible to the camera by default, as in
 Karma.
 
 tools/bench_settings.py, on the repo side, guards the six cases.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/geometry.inl                        |   3 +-
  src/hydra/light.cpp                           |   7 +-

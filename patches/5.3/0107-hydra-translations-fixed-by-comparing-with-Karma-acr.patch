@@ -1,4 +1,4 @@
-From 6ce31b3105595ef7211bc02c3c22b310d0647215 Mon Sep 17 00:00:00 2001
+From 778fa144d7d452ba6ac9e6fcacda0e55923a821f Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 20:14:25 +0200
 Subject: [PATCH 107/181] hydra: translations fixed by comparing with Karma
@@ -18,8 +18,6 @@ normalmap equals bump to the pixel (K-12). And in closure mode: MaterialX's
 emission kept the intensity 10 of Cycles' node, generalized_schlick_edf passes
 its base through. The nodegraphs header is cut in two literals (MSVC's 16 KB
 limit). 563 -> 599 values and 35 -> 38 closures identical to Karma.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp      | 251 ++++++++++++++++++++++++++------
  src/hydra/mtlx_nodegraphs.h | 281 +++++++++++++++++++++++++++++++++++-

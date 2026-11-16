@@ -1,4 +1,4 @@
-From 77044c599dcbd420102953647af8280967ea950d Mon Sep 17 00:00:00 2001
+From 36b3584310684717a28fd4e15fe4d11156ee444b Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 00:46:00 +0200
 Subject: [PATCH 036/181] node interface: connectors, file pickers, checkboxes
@@ -23,8 +23,6 @@ throws everything left outside a folder into an Other tab, which is not
 Blender's layout.
 
 Bench replayed: 97 nodes, 0 problems, 96 change the image.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/sdr_cycles.cpp | 11 +++++++++++
  1 file changed, 11 insertions(+)

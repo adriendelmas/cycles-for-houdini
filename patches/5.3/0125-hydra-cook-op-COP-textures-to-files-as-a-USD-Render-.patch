@@ -1,4 +1,4 @@
-From 5c9152ef573d78ec7f82c4c047618b38926db348 Mon Sep 17 00:00:00 2001
+From 32aedfda46968820332f5d89d29c1a84d93ef3fe Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 9 Oct 2026 19:46:27 +0200
 Subject: [PATCH 125/181] hydra: cook op: COP textures to files as a USD Render

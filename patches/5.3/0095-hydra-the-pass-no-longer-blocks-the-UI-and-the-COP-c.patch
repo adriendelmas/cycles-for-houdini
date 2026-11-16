@@ -1,4 +1,4 @@
-From a35afd0e4e81e2380c8a9a127ffb885091fcc1dc Mon Sep 17 00:00:00 2001
+From 9b22af4d0b3e1c3acc601823eede36953011f326 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 03:59:54 +0200
 Subject: [PATCH 095/181] hydra: the pass no longer blocks the UI, and the COP
@@ -21,8 +21,6 @@ an image from a render in progress.
 
 No regression (97 nodes, all benches). Neither can be measured under husk: to be
 checked in Houdini.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/houdini_cop.cpp | 61 +++++++++++++++++++++++++++++++++++++--
  src/hydra/render_pass.cpp | 25 ++++++++++++----

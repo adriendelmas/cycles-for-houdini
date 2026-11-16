@@ -1,4 +1,4 @@
-From 30bb68ee7a20fde0fc4a6001c4408bf4ca867154 Mon Sep 17 00:00:00 2001
+From e82752d6d8695d2957cc271e8cb126ad598e3161 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 9 Oct 2026 16:18:38 +0200
 Subject: [PATCH 120/181] hydra: displayOpacity on prims without a material
@@ -9,8 +9,6 @@ opaque where Karma lets the rest through. The constant opacity, on the prim
 or per instance on a PointInstancer, now goes to the object's alpha (which
 Cycles starts at 0: instances now start at 1), and the default surface
 mixes a transparent closure by it (K-79, tools/bench_settings.py).
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/curves.cpp     | 13 +++++++++++++
  src/hydra/geometry.inl   |  6 ++++++

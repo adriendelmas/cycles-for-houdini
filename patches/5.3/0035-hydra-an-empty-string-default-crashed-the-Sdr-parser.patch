@@ -1,4 +1,4 @@
-From 431b106b6ab2b25939d0afe4d38293e0307fbf81 Mon Sep 17 00:00:00 2001
+From 68682903b31eced84e3e3320e6f05cabea547ab9 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 2 Sep 2026 16:09:32 +0200
 Subject: [PATCH 035/181] hydra: an empty string default crashed the Sdr parser
@@ -11,8 +11,6 @@ anything wants the node's parameters.
 
 Found while generating VOP node types from the registry: hython segfaulted
 inside this plugin on the first node it parsed. All 163 Cycles nodes now parse.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  .../resources/otls/backup/cycles_vops_bak1.hda  | Bin 0 -> 3439 bytes
  .../resources/otls/backup/cycles_vops_bak10.hda | Bin 0 -> 24980 bytes

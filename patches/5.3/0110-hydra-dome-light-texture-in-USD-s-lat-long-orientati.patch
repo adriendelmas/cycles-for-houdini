@@ -1,4 +1,4 @@
-From 42ae10510681621b09bd526faa698206c1c68b3e Mon Sep 17 00:00:00 2001
+From f2a65702d1dd37d4af1364dbc4656b2d334df7ae Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 22:57:55 +0200
 Subject: [PATCH 110/181] hydra: dome light texture in USD's lat-long
@@ -12,8 +12,6 @@ A fixed axis permutation now follows the transform. DomeLight_1's
 poleAxis, handed over by UsdImaging as the light's domeOffset, is applied
 under the transform (K-67, tools/bench_dome.py: 11 directions, Y-up and
 Z-up, match Karma).
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/light.cpp | 13 +++++++++++++
  1 file changed, 13 insertions(+)

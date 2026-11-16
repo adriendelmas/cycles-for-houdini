@@ -1,4 +1,4 @@
-From b28182000f364f5dd74b3dc1a3e96dd28d0f3263 Mon Sep 17 00:00:00 2001
+From 95cad3a6e8a8bbca45a2fc3fddbe69d4452dfb5c Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 22:24:33 +0200
 Subject: [PATCH 081/181] hydra: blurred instances, per-instance and scalar
@@ -26,8 +26,6 @@ Everything is brought down to an array of floats.
 
 tools/bench_motion.py and tools/bench_instances.py, on the repo side, guard the
 first two (6 and 5 cases, all failing on the old DLL for instances).
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/geometry.inl  |  84 +++++++++++++-
  src/hydra/instancer.cpp | 236 +++++++++++++++++++++++++++++++++-------

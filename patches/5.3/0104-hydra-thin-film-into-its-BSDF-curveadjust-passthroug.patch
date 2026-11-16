@@ -1,4 +1,4 @@
-From 6fb13bab7848ee4093cc4e6e429e743ef8dce2ce Mon Sep 17 00:00:00 2001
+From 2f92a668bd4fb19aee6c5ddc57f6922ed17c224e Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 18:14:11 +0200
 Subject: [PATCH 104/181] hydra: thin film into its BSDF, curveadjust
@@ -13,8 +13,6 @@ of an image read by separate4.outa (extract 3 and swizzle a y lead to it) is
 rewired to the image node's alpha output, where the fourth channel was lost
 (K-17, its common case: a cutout to opacity). The parameters set on a node coming
 from Hydra go through a shared function, AddParams.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp    |   5 ++
  src/hydra/mtlx_expand.cpp | 156 +++++++++++++++++++++++++++++++++++---

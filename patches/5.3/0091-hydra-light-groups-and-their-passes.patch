@@ -1,4 +1,4 @@
-From 5aabbfd4f184a5d7be3370e44837ff272d08126b Mon Sep 17 00:00:00 2001
+From 198a1eeefbaa88fa5c16dcfe65097291c0808cb5 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 03:16:40 +0200
 Subject: [PATCH 091/181] hydra: light groups and their passes
@@ -10,8 +10,6 @@ background's. A variable named or sourced `lightgroup:<group>`, or Karma's
 expression `C.*<L.'<tag>'>`, gives the combined pass of that group alone - apart
 from the one-pass-per-type rule. Measured: two lights in two groups, by both
 spellings, add up to the beauty to within one ten-thousandth.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/light.cpp   | 28 ++++++++++++++++++++++++++++
  src/hydra/session.cpp | 38 +++++++++++++++++++++++++++++++++++++-

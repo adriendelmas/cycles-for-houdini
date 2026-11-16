@@ -1,4 +1,4 @@
-From 0734a8e45a5bfc1e25f604fd277c9372956a2716 Mon Sep 17 00:00:00 2001
+From 8992a3be02093757ee66cbc0599598006e4f9d1c Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 18:20:24 +0200
 Subject: [PATCH 045/181] kernel: Random Walk (Legacy) was missing from the
@@ -18,8 +18,6 @@ and reaching one of these paths made the rest of the SVM stream read garbage.
 A bug independent of Houdini, in the kernel itself -- present as is on
 Blender's main branch at the time of the rebase. One-line fix: add the missing
 case to the group of the other three.
-
-Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
 ---
  src/kernel/svm/closure.h | 6 ++++++
  1 file changed, 6 insertions(+)

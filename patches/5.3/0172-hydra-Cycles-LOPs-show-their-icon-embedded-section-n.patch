@@ -1,4 +1,4 @@
-From 701005804443f6cc5b3e002ebf25f5a1a9849d34 Mon Sep 17 00:00:00 2001
+From e51bbbdc38ead9b0244a839f3b34d977ee6d590c Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 17:48:40 +0100
 Subject: [PATCH 172/181] hydra: Cycles LOPs show their icon - embedded section
@@ -6,8 +6,6 @@ Subject: [PATCH 172/181] hydra: Cycles LOPs show their icon - embedded section
 
 Houdini resolves an embedded icon only when the section name carries the
 image's extension: IconImage was reported as an icon that does not exist.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/resources/CyclesTools.shelf         |   2 +-
  src/hydra/resources/otls/hdcycles_aovs.hda    | Bin 16095 -> 16073 bytes

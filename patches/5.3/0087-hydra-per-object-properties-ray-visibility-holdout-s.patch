@@ -1,4 +1,4 @@
-From 7501278cab8786502b749b66655e859dc50f599f Mon Sep 17 00:00:00 2001
+From a2861cb3b9deb0c730104315016186b9a2a2d19b Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 00:26:50 +0200
 Subject: [PATCH 087/181] hydra: per-object properties - ray visibility,
@@ -20,8 +20,6 @@ approximately into the beauty, as Blender does.
 
 HdCyclesPlugin_Geometry.ds, generated with the global settings, shows them in
 Houdini's Render Geometry Settings node.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/CMakeLists.txt                      |   5 +
  src/hydra/geometry.h                          |   2 +

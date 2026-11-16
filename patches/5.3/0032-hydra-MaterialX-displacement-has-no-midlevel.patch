@@ -1,4 +1,4 @@
-From 3552a1459c95ffd5c96c3a4f5de7e5b94a90a789 Mon Sep 17 00:00:00 2001
+From 79ae55b2a4814ff2be6d2bd4019da06fa488a596 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 23:33:48 +0200
 Subject: [PATCH 032/181] hydra: MaterialX displacement has no midlevel
@@ -18,8 +18,6 @@ all.
 
 Also adds Houdini's kma render context alongside mtlx, which is what a Karma
 Material Builder writes its network under.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp        | 33 +++++++++++++++++++++++++--------
  src/hydra/render_delegate.cpp |  8 +++++++-

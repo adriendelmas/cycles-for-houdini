@@ -1,4 +1,4 @@
-From 4032c98ec903c40112e27ba104c148aa2291e4ab Mon Sep 17 00:00:00 2001
+From c7c759dafd54c68bd2075289e2322fc869d3e515 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 9 Oct 2026 18:16:59 +0200
 Subject: [PATCH 122/181] hydra: motion blur turned back on in a live viewport
@@ -17,8 +17,6 @@ live through the MCP with tools/gui_capture.py).
 Mesh topology is checked as it is read: face vertex counts that do not add
 up to the indices, or negative ones, crashed Cycles' render threads now and
 then (two runs in five); such a mesh is dropped with a warning (K-82).
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/geometry.h      |  15 +++
  src/hydra/geometry.inl    | 275 ++++++++++++++++++++++----------------

@@ -1,4 +1,4 @@
-From d9a8a225abdb6a2c722875523c0fd22d156ace27 Mon Sep 17 00:00:00 2001
+From 3535c9c6241bed03eeb0ce78d54182e56aa94cd4 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 14:24:24 +0200
 Subject: [PATCH 039/181] hydra: a Houdini ramp finally fills the table Cycles
@@ -21,8 +21,6 @@ size and Cycles gives up again.
 
 These parameters are removed from the ordinary loop, otherwise the key count,
 an integer, would land on the array socket itself.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp                   | 171 +++++++++++++++++++++++
  src/hydra/resources/otls/cycles_vops.hda | Bin 41222 -> 0 bytes

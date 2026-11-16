@@ -1,4 +1,4 @@
-From f4d84939dd4051939455628fb59249c60281ec40 Mon Sep 17 00:00:00 2001
+From e4aabb1770dcafdd5502c9faf438deecff55c7fb Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sun, 11 Oct 2026 02:38:48 +0200
 Subject: [PATCH 137/181] hydra: leave a nodegraph's value defaults to
@@ -17,8 +17,6 @@ from CompleteMaterialXDefaults, unchanged in what reaches the Cycles nodes.
 Measured: MtlX Text renders with 0 warnings (were 13 to 40 per material);
 bench_mtlx 92 nodes, 0 problems, the exp_* (expanded) cases included;
 bench_hair 4 pairs, 0 problems.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/mtlx_expand.cpp | 14 +++++++++-----
  1 file changed, 9 insertions(+), 5 deletions(-)

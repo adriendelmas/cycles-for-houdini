@@ -1,4 +1,4 @@
-From eb9494f02fb913b63385a5cfc93c2f83b95cc332 Mon Sep 17 00:00:00 2001
+From d914b06f63e9c7665eb04c46b2240b0a156c6cac Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 23:55:09 +0200
 Subject: [PATCH 112/181] hydra: IES profiles read along the emission
@@ -18,8 +18,6 @@ intensity, each patch's corners weighed by its solid angle over the solid
 angle the profile covers (IESFile::mean_intensity, as Karma measures).
 shaping:ies:angleScale remaps the angle off the axis as USD says (K-70,
 tools/bench_lights.py: four IES cases within 5 % of Karma).
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/light.cpp | 98 +++++++++++++++++++++++++++++++++++++++++++--
  src/util/ies.cpp    | 17 ++++++++

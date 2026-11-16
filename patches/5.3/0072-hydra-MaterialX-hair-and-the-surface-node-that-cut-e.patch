@@ -1,4 +1,4 @@
-From 104a3fc83e9eb40698bc111360cde5c42a2995b0 Mon Sep 17 00:00:00 2001
+From 9e18d5442f27cc68739373c02dd511d80ea6e896 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 10 Sep 2026 14:40:16 +0200
 Subject: [PATCH 072/181] hydra: MaterialX hair, and the surface node that cut
@@ -30,8 +30,6 @@ to the test scene.
 In passing, a connection can target several sockets as a value already could: an
 azimuthal roughness plugged in must reach the five terms of the absorption
 polynomial, not just the first.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp | 450 +++++++++++++++++++++++++++++++++++------
  1 file changed, 390 insertions(+), 60 deletions(-)

@@ -1,4 +1,4 @@
-From b92ffe019c6fbef6b2aa87634e55e721170384f0 Mon Sep 17 00:00:00 2001
+From 08fc1f8d063fa8f50e729401f233d1618f2632da Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 09:34:52 +0200
 Subject: [PATCH 102/181] hydra: basic BSDF roughness as alpha, dielectric_bsdf
@@ -13,8 +13,6 @@ ended up as glass whatever its scatter_mode, whose default "R" is a reflection
 only - the varnish of a stack: sphere 12 times too bright. One node per mode now:
 R a principled without diffuse or transmission, T a refraction_bsdf, RT the
 glass. tools/bench_agree.py: peaks at 0.96 and 1.00 of Karma (K-58).
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp | 100 ++++++++++++++++++++++++++++++++++-------
  1 file changed, 83 insertions(+), 17 deletions(-)

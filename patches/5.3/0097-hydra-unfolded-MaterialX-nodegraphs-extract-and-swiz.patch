@@ -1,4 +1,4 @@
-From 02231fe400dd48545f0f5224135488caa28d5d8c Mon Sep 17 00:00:00 2001
+From d34bd33f382b8b01326c08ad7ba239b3ec267ee9 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 05:31:56 +0200
 Subject: [PATCH 097/181] hydra: unfolded MaterialX nodegraphs, extract and
@@ -36,8 +36,6 @@ name that was never defined.
 Measured (tools/mtlx_coverage.py, mtlx_inputs.py, bench_mtlx.py): 762 of 822
 nodedefs rendered versus 652, 636 keeping all their inputs versus 543, 49 value
 cases versus 36; 97 native nodes and all the other benches without regression.
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 ---
  src/cmake/Modules/FindUSDHoudini.cmake |   5 +-
  src/hydra/CMakeLists.txt               |   2 +

@@ -1,4 +1,4 @@
-From 20fb9cb16211ea5f2093e41dff7cfb59f88494f5 Mon Sep 17 00:00:00 2001
+From ff802458f85be1e3c924bb5275337cc64c16cee3 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 19:09:57 +0200
 Subject: [PATCH 106/181] hydra: absorbing volumes, subsurface at the right
@@ -13,8 +13,6 @@ against Karma, 4 % after; it also carries its anisotropy. Ambient occlusion take
 maxdistance for distance, plus the cone angle (K-14). And surface_unlit, which
 fell on the ND_surface prefix without emission_color and came out black, gets its
 translation (K-60).
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp | 95 +++++++++++++++++++++++++++++++++++-------
  1 file changed, 80 insertions(+), 15 deletions(-)

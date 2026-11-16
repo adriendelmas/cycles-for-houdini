@@ -1,4 +1,4 @@
-From 38a238c2c2107e648454a0ff6f9d59933b17f25e Mon Sep 17 00:00:00 2001
+From 6300262c54c1136da4d8760377150e748cfb9004 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 03:26:40 +0200
 Subject: [PATCH 009/181] hydra: motion blur for animated object transforms
@@ -16,8 +16,6 @@ centred.
 
 Cycles also only interpolates motion when the integrator asks for it, see
 Scene::need_motion(), so set Integrator::motion_blur alongside the shutter.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/geometry.h          |  6 +++++
  src/hydra/geometry.inl        | 48 +++++++++++++++++++++++++++++++----

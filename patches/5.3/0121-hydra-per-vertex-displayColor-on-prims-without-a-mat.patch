@@ -1,4 +1,4 @@
-From 718aede5b571cb1cd3326bf25227dff13929da68 Mon Sep 17 00:00:00 2001
+From 949e7c6c2d66ade4ed066e02995d41efce27bd41 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 9 Oct 2026 16:48:14 +0200
 Subject: [PATCH 121/181] hydra: per-vertex displayColor on prims without a
@@ -10,8 +10,6 @@ rendered grey. It now reads displayColor as an attribute; every instance
 carries a grey (0.8) object attribute of that name as the fallback, which
 a displayColor on the geometry, or one per PointInstancer instance,
 overrides (K-80, tools/bench_settings.py).
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/geometry.inl | 10 ++++++++--
  src/hydra/session.cpp  |  8 +++++++-

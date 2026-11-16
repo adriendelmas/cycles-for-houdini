@@ -1,4 +1,4 @@
-From c1c8131d1da0692943efa828a958fde654f2846d Mon Sep 17 00:00:00 2001
+From 3c4a778c33106464808e3a62ef0cde4e4cef25fd Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 4 Sep 2026 16:02:22 +0200
 Subject: [PATCH 055/181] hydra: match lights to Karma, and render cylinder
@@ -39,8 +39,6 @@ gap is that of the two engines on the same scene, not a unit.
 
 None of this touches the USD: a stage exported to Blender carries the same
 intensities as before.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/light.cpp           | 45 +++++++++++++++++++++++++++++++----
  src/hydra/render_delegate.cpp |  4 +++-

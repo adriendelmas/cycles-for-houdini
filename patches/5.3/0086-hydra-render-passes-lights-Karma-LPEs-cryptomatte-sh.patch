@@ -1,4 +1,4 @@
-From e59defcfdc6ddadbd869cefe2db1308f400598e3 Mon Sep 17 00:00:00 2001
+From c5af33f21d70f9e6eded59b890a979f7dadf9bf0 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 00:07:30 +0200
 Subject: [PATCH 086/181] hydra: render passes - lights, Karma LPEs,
@@ -32,8 +32,6 @@ material output like Karma's AOVs; the terminal knows how to follow an output
 carried by a helper node.
 
 tools/bench_aovs.py, on the repo side, verifies the seven cases.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/geometry.inl      |   6 +
  src/hydra/material.cpp      |  35 ++++-

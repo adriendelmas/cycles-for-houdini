@@ -1,4 +1,4 @@
-From 06be58d0c03c4ffb3fc6e3f351e8127e6ff147e1 Mon Sep 17 00:00:00 2001
+From 9f1e99f92d9abce810f75dc3ebf042020afbbf8b Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sun, 11 Oct 2026 04:08:59 +0200
 Subject: [PATCH 139/181] hydra: nodes inside a nested nodegraph keep their
@@ -16,8 +16,6 @@ outputs wrong on 100 % of pixels; after, test_render 0 pixels off the numpy
 reference, test_lop 0, test_features at most 0.09 % (edges). bench_mtlx: 93
 cases, 0 problems (new nodegraph_nested case, failing before); bench_hair: 4
 pairs, 0 problems.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp | 6 ++++++
  1 file changed, 6 insertions(+)

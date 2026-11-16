@@ -1,4 +1,4 @@
-From 24b9d66d496c2d9211df1aad57513c1fdb24c257 Mon Sep 17 00:00:00 2001
+From 31759996882f2ec55d3dca50dd7478af4011d283 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 17:45:07 +0200
 Subject: [PATCH 103/181] hydra: shipped nodegraphs, constant transformmatrix,
@@ -16,8 +16,6 @@ table defects found by the value cases (K-59): the mix with a color factor
 averaged its factor (now mix_vector_non_uniform), and magnitude, distance,
 dotproduct were read on the vector output instead of value - black. Fixed values
 know how to set a boolean. 774 -> 789 nodedefs out of 822, 64 value cases.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/CMakeLists.txt    |   1 +
  src/hydra/material.cpp      |  71 ++++++++++-

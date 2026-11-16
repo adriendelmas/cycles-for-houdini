@@ -1,4 +1,4 @@
-From 9760d2541c8089af4bf017a5479d37d639938c28 Mon Sep 17 00:00:00 2001
+From 6bee41540838903a2574c1d46562ca789e8c8b7b Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 4 Sep 2026 17:00:45 +0200
 Subject: [PATCH 057/181] hydra: a texture coming from a COP came out flipped
@@ -22,8 +22,6 @@ viewport.
 What it was not, verified in passing: five UV paths measured, all upright,
 including the exact mesh of the reported scene - a `leftHanded` quad with a
 faceVarying `st` - which Karma and we render identically.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/houdini_cop.cpp | 8 +++++++-
  1 file changed, 7 insertions(+), 1 deletion(-)

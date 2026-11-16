@@ -1,4 +1,4 @@
-From 95b1ebdde2a15ccb0f6bb861db277d848b5a181c Mon Sep 17 00:00:00 2001
+From c268ecad3ffb15328d7050a1649c83c898c8694e Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 13:36:45 +0100
 Subject: [PATCH 162/181] hydra: one tile at any resolution - 4K renders no
@@ -10,8 +10,6 @@ drive: husk hung at the first tile of a 3840x2560 render, and the
 viewport failed with "Error writing tile to file" (the tile files went
 to Houdini's working directory, not writable when Houdini is started from
 Explorer). A 4K buffer fits any GPU this runs on.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/render_delegate.cpp | 6 ++++++
  1 file changed, 6 insertions(+)

@@ -1,4 +1,4 @@
-From 555ddd5466426bee3118b523b2ed2c2bf8c34364 Mon Sep 17 00:00:00 2001
+From 385d29922ecff9ad68ee76d37ab727c2b67f5763 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 9 Oct 2026 18:51:10 +0200
 Subject: [PATCH 123/181] hydra: UsdUVTexture fallback for a file that cannot
@@ -9,8 +9,6 @@ by default); Cycles showed its missing-image magenta. When the resolver
 cannot find the file (and the path is no UDIM pattern nor a COP), the
 texture's scale-and-bias step outputs rgb * 0 + fallback, the single
 channels taken after it; alpha stays 1 (K-83, tools/bench_usdtex.py).
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp | 43 +++++++++++++++++++++++++++++++++++++++---
  1 file changed, 40 insertions(+), 3 deletions(-)

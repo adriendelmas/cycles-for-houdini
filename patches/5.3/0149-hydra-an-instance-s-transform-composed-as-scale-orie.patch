@@ -1,4 +1,4 @@
-From 21c6ea3e022274f86b920ad9ebe269a59d2208fe Mon Sep 17 00:00:00 2001
+From 971f43a42f23f2a4eaa395a1853ad2bf720f63f1 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 26 Oct 2026 00:29:32 +0100
 Subject: [PATCH 149/181] hydra: an instance's transform composed as scale,
@@ -12,8 +12,6 @@ a terrain seemed to vanish. A nested instancer's placement came before its
 child's for the same reason. Both products reversed; bench_instances gains
 `placed`, each square turned and scaled, found where its position says.
 (K-113)
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 ---
  src/hydra/instancer.cpp | 38 +++++++++++++++++++++++---------------
  1 file changed, 23 insertions(+), 15 deletions(-)

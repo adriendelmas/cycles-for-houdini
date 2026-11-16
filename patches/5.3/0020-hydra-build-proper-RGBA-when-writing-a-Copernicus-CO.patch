@@ -1,4 +1,4 @@
-From 3fd572e3bc237a672bcf17050c4ae2e54632f1a9 Mon Sep 17 00:00:00 2001
+From ff6a4efdaadf9f9e6cbb7b708552ff257e05f755 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 00:59:49 +0200
 Subject: [PATCH 020/181] hydra: build proper RGBA when writing a Copernicus
@@ -17,8 +17,6 @@ interleaved, verified by reading a constant with distinct per-channel values.
 
 Verified on the written file rather than on its existence: a source of 0.35
 reads back as 0.350000 0.350000 0.350000 1.000000.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/houdini_cop.cpp | 27 +++++++++++++++++++++++++--
  1 file changed, 25 insertions(+), 2 deletions(-)

@@ -1,4 +1,4 @@
-From 9726dd4517b94819eb99382f774a8595eeaf0f42 Mon Sep 17 00:00:00 2001
+From 71b15fec10be0ea4a4f32b7044e525f04e1cef5c Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 4 Sep 2026 19:40:15 +0200
 Subject: [PATCH 059/181] hydra: watch COPs, which nobody reports as changed
@@ -24,8 +24,6 @@ has nothing to poll.
 
 Bench: 97 renders, 0 problems. An `op:` that designates nothing: a warning that
 names it, and the render goes through to the end.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/houdini_cop.cpp | 177 ++++++++++++++++++++++++++++++++++----
  src/hydra/houdini_cop.h   |  22 ++++-

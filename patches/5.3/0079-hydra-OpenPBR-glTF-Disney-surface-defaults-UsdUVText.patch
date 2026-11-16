@@ -1,4 +1,4 @@
-From 7a04be859353a4bb0c7f566c17b7930b8a4a435b Mon Sep 17 00:00:00 2001
+From 87e9d91d54349ca2250247970b78543601dff5b7 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 17:53:25 +0200
 Subject: [PATCH 079/181] hydra: OpenPBR, glTF, Disney, surface defaults,
@@ -33,8 +33,6 @@ anomaly A17, blamed on Houdini by the log.
 Benches: MaterialX 36/36 (five new texture and kma cases, four failing on the
 previous DLL), defaults 5/5, mtlx_inputs 543 without loss, 97 nodes without
 regression, hair 4/0.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp | 416 +++++++++++++++++++++++++++++++++++++++--
  1 file changed, 400 insertions(+), 16 deletions(-)

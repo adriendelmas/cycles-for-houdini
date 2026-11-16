@@ -1,4 +1,4 @@
-From 785b33edfc70c69734882f3a0b6637fe8270267b Mon Sep 17 00:00:00 2001
+From fad6f35f2ea973ddf2a51a48158a777be567e064 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 10 Sep 2026 14:40:15 +0200
 Subject: [PATCH 071/181] hydra: a full card says so, and COPs only weigh their
@@ -24,8 +24,6 @@ On the COP side, two things of ours:
 
 Progressive rendering (`use_resolution_divider`) was tried twice and discarded
 on usage; the comment keeps the reason, so as not to replay it.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/device/device.cpp         | 18 ++++++++++++++++++
  src/hydra/houdini_cop.cpp     | 34 ++++++++++++++++++++++++++++------

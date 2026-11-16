@@ -1,4 +1,4 @@
-From f98c9885eda1defbf7d2ecf134d60ef2f5d7de42 Mon Sep 17 00:00:00 2001
+From 88e297a5a7e70caa02245760dd2afbf2237434ae Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sat, 5 Sep 2026 00:53:45 +0200
 Subject: [PATCH 063/181] hydra: an image on a scalar input, and subsurface
@@ -21,8 +21,6 @@ closure evaluated in the same pass as the diffuse. Only a separate closure would
 distinguish it.
 
 Audit replayed: 28 inputs honored out of 39.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp | 46 +++++++++++++++---------------------------
  1 file changed, 16 insertions(+), 30 deletions(-)

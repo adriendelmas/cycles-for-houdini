@@ -1,4 +1,4 @@
-From e5a87c7c85900c64aa628057ccccc1756047a888 Mon Sep 17 00:00:00 2001
+From 9ea5c78b2a445d6a1479f30abf67027a9113cfd1 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 19:19:14 +0100
 Subject: [PATCH 177/181] hydra: cycles:denoise_aovs, OIDN on the render vars
@@ -14,8 +14,6 @@ write; it now leaves a denoised AOV alone. Measured against 2048 spp,
 64 spp: a light group lit by bounces 0.00736 -> 0.00206 RMSE; one made
 of fine direct splat emission 0.00347 -> 0.00442 (OIDN takes the detail
 for noise), so the list is the user's choice per pass.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/CMakeLists.txt                      |   2 +
  src/hydra/output_driver.cpp                   |  80 ++++++++++++++++++

@@ -1,4 +1,4 @@
-From 47a8a1b67c9765137690f56ed16df8612e83bb03 Mon Sep 17 00:00:00 2001
+From 4f9dc9dceb5e108b2f6f8a2bc277c5e1d0bec825 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 17:06:18 +0200
 Subject: [PATCH 028/181] hydra: eleven more MaterialX families, and a general
@@ -21,8 +21,6 @@ branch read through mix_float comes out black.
 Also routes separate2 and separate4 on vectors to separate_xyz; they were
 falling through to separate_color, which has no x output, and the connection
 was being dropped.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp | 205 ++++++++++++++++++++++++++++++++++++-----
  src/hydra/material.h   |   4 +

@@ -1,4 +1,4 @@
-From dfd751146edfc37c0749b426fc16d7d62fd96c4a Mon Sep 17 00:00:00 2001
+From a1a6f9bc950580276ae11ca5140973d1acfffa2e Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 18:32:39 +0200
 Subject: [PATCH 105/181] hydra: position, normal and tangent according to
@@ -12,8 +12,6 @@ space. Measured against Karma on a sphere rotated by a quarter turn: gaps of
 `space` (SpaceOf): object normal through the texture_coordinate node, world
 position through the geometry node, object tangent through a vector_transform.
 Remaining gaps of 5 to 9 % (K-18).
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp | 52 ++++++++++++++++++++++++++++++++++++++++++
  1 file changed, 52 insertions(+)

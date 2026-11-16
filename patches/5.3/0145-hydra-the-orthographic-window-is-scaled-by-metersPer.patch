@@ -1,4 +1,4 @@
-From daca63c76ae6d371ae8d6bf8fe6b40e535d16992 Mon Sep 17 00:00:00 2001
+From a3fd9f04c0e9474eeb4de47ca2d316bb0c50a0eb Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sun, 25 Oct 2026 05:22:00 +0100
 Subject: [PATCH 145/181] hydra: the orthographic window is scaled by
@@ -7,8 +7,6 @@ Subject: [PATCH 145/181] hydra: the orthographic window is scaled by
 Everything sent to Cycles is in metres but the orthographic window was not:
 on a stage without metersPerUnit (0.01 by USD's default) a 4-unit window
 covered 400 units. bench_camera.py gains orthographic_cm. (K-107)
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 ---
  src/hydra/camera.cpp | 6 ++++++
  1 file changed, 6 insertions(+)

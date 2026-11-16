@@ -1,4 +1,4 @@
-From 59be60ca867c350b0c591e4a003b5db425693016 Mon Sep 17 00:00:00 2001
+From e46d8a9d522436d0eb7336c2cc64a8ea52c2dda4 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sun, 25 Oct 2026 06:53:04 +0100
 Subject: [PATCH 146/181] util + hydra: 8-bit sRGB textures decoded without an
@@ -18,8 +18,6 @@ it when the config lacks the space. Under Houdini's config nothing changes
 The MaterialX image nodes' `default` - the colour outside the image under
 constant wrapping, which Cycles has no socket for - is consumed without a
 warning; every glTF image's nodegraph bound it. (K-109)
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp  | 12 ++++++++++++
  src/util/colorspace.cpp | 17 ++++++++++++++++-

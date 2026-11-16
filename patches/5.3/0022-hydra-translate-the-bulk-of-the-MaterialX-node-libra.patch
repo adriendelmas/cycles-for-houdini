@@ -1,4 +1,4 @@
-From 80baad51d8595934bd16dffcce4e9ee60c7df2d2 Mon Sep 17 00:00:00 2001
+From a06383502a7a30296eae4a77123d68840ef5c3d9 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 12:37:33 +0200
 Subject: [PATCH 022/181] hydra: translate the bulk of the MaterialX node
@@ -20,8 +20,6 @@ map, or a connection dropped for a missing output, was completely silent.
 Voronoi was one such case: it has no fac output, its scalar result is
 distance, and the dropped connection left a material flat with no indication
 why.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp | 527 ++++++++++++++++++++++++++++++++++-------
  1 file changed, 445 insertions(+), 82 deletions(-)

@@ -1,4 +1,4 @@
-From 40fa14b76c94d6d7b70104cd80dd20876719f1e6 Mon Sep 17 00:00:00 2001
+From 3bc642bfc972162a8892bec4cf9e29f66ec862ee Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sat, 5 Sep 2026 01:13:51 +0200
 Subject: [PATCH 064/181] hydra: a transmission lobe of its own, for MaterialX
@@ -38,8 +38,6 @@ another instead of being copied.
 
 standard_surface audit: 29 inputs honored out of 39, versus 28.
 Bench: 97 renders, 0 problems.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp | 137 ++++++++++++++++++++++++++++++++++++++++-
  src/hydra/material.h   |   4 ++

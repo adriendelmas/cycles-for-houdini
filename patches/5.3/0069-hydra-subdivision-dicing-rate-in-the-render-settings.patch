@@ -1,4 +1,4 @@
-From 0fe9732067487d0cfea270b03152d6195f4b72ca Mon Sep 17 00:00:00 2001
+From 3e5ccae2ce9f74714bdae658e6151cba8b2c7548 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 9 Sep 2026 22:24:33 +0200
 Subject: [PATCH 069/181] hydra: subdivision dicing rate in the render settings
@@ -24,8 +24,6 @@ otherwise it would only have applied to what arrives after it. The log now says,
 per subdivided mesh, the rate and the maximum level retained - without which a
 dicing into millions of triangles can only be seen in the device's memory, where
 nobody thinks of looking.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/mesh.cpp                            | 17 ++++++++-
  src/hydra/render_delegate.cpp                 | 36 +++++++++++++++++++

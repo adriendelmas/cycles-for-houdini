@@ -1,4 +1,4 @@
-From fa5cf05d6ceac71c2423fece7222e4504cca3a4d Mon Sep 17 00:00:00 2001
+From 83f8b9e77ff4b33185d932626026ad453a66ffa6 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 13:52:54 +0200
 Subject: [PATCH 012/181] hydra: fix GL teardown crash, and stop using the
@@ -17,8 +17,6 @@ viewport - unbalanced locking, a context created too late, wrong pixels, and
 this teardown crash - while the output driver path is what every batch render
 already uses and is correct. CYCLES_DISPLAY_DRIVER=1 opts back in for anyone
 working on it.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/display_driver.cpp  | 28 +++++++++++++++++++++++-----
  src/hydra/render_delegate.cpp |  7 ++++++-

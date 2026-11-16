@@ -1,4 +1,4 @@
-From 5298c84123d94c03c67d739e26ef770a73e671d6 Mon Sep 17 00:00:00 2001
+From 947bc436aabf248d50c7fa19da1bdc0917ae5fc3 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 18:36:25 +0100
 Subject: [PATCH 173/181] hydra: the viewport shows render settings' vars, not
@@ -11,8 +11,6 @@ beauty (Cycles Render Settings LOP) it asked for depth, primId and
 instanceId alone and displayed depth. Any other name now gets a float4
 descriptor; the session resolves it as husk does. Checked in the viewport:
 C, Emit and Combined_key bound, the image in colour.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/render_delegate.cpp | 7 +++++++
  1 file changed, 7 insertions(+)

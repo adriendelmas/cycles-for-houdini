@@ -1,4 +1,4 @@
-From f87b1dc875759f6f718238d8dc8074c566aa0fe1 Mon Sep 17 00:00:00 2001
+From 152ee41ace2072ce9407133bb73c3a4f80b567e0 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 4 Sep 2026 16:02:52 +0200
 Subject: [PATCH 056/181] hydra: transmission and subsurface colors, finally
@@ -40,8 +40,6 @@ principled and the mix that tints its color.
 standard_surface audit replayed without reference images, each input against
 the same scene stripped of that line: 29 honored out of 39, versus 27 before.
 Bench: 97 renders, 0 problems.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp | 180 +++++++++++++++++++++++++++++++----------
  1 file changed, 136 insertions(+), 44 deletions(-)

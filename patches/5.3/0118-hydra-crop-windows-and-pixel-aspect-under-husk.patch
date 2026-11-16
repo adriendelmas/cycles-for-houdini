@@ -1,4 +1,4 @@
-From aba86ddd4ef647e4964448b746b0dac8e9c4fafe Mon Sep 17 00:00:00 2001
+From 3e0a8f9c643a26af6291c772da0f97c36da67a4b Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 9 Oct 2026 03:41:10 +0200
 Subject: [PATCH 118/181] hydra: crop windows and pixel aspect under husk
@@ -13,8 +13,6 @@ full_x/full_y, counted from the bottom (the data window had gone into the
 buffer's window, Cycles' overscan), and the camera's window conforms to
 the width times the pixel aspect. The viewport keeps its framing as before
 (K-77, tools/bench_camera.py: crop, corner crop, pixel aspect 2).
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/camera.cpp          |  5 ++-
  src/hydra/render_delegate.cpp | 11 ++++++

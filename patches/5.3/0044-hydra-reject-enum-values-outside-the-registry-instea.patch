@@ -1,4 +1,4 @@
-From c2852eca376c85c13e410c8979e09eed3cf4707a Mon Sep 17 00:00:00 2001
+From 4dfe95da55f430a37331db03dfb4bfbdd8aac519 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 18:20:13 +0200
 Subject: [PATCH 044/181] hydra: reject enum values outside the registry
@@ -26,8 +26,6 @@ nodes were affected.
 Verified after the fix: subsurface_method=0 and distribution=1 (also outside
 the registry) now render bit for bit like their valid equivalents. Bench: 97
 renders, 0 problems, no reference image moved.
-
-Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
 ---
  src/hydra/node_util.cpp | 29 +++++++++++++++++++++++++++--
  1 file changed, 27 insertions(+), 2 deletions(-)

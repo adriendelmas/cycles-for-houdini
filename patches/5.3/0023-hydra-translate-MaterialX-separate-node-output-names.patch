@@ -1,4 +1,4 @@
-From 5e15a0bdf6e106b5cf95455424f5d997aa029937 Mon Sep 17 00:00:00 2001
+From 93c12a3ef2aa5a060de7f7e8d0b26ef00882ec8e Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 12:47:20 +0200
 Subject: [PATCH 023/181] hydra: translate MaterialX separate node output names
@@ -10,8 +10,6 @@ a separate node simply had no effect.
 
 Found by the translation warnings now going through Cycles' logger, which is
 what made the dropped connection visible at all.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp | 17 +++++++++++++++--
  1 file changed, 15 insertions(+), 2 deletions(-)

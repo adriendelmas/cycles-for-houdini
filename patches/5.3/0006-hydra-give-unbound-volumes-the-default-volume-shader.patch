@@ -1,4 +1,4 @@
-From 64aa570c4275b2eb613c4ad48ee1ddcbd05846a1 Mon Sep 17 00:00:00 2001
+From 6a80dc506b31e8a60d9d7366f70d3ca8b9e8506d Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 02:14:06 +0200
 Subject: [PATCH 006/181] hydra: give unbound volumes the default volume shader
@@ -10,8 +10,6 @@ and the memory shows up in the stats - but nothing to scatter in it, and
 rendered as if it were not there at all.
 
 Pick default_volume for Volume geometry instead.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/geometry.inl | 9 +++++++++
  1 file changed, 9 insertions(+)

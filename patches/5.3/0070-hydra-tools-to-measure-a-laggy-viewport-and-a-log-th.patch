@@ -1,4 +1,4 @@
-From a3134a61b0ae6a50f71c5253482724fd5314678a Mon Sep 17 00:00:00 2001
+From d8f09c64cbe5dece28996af4a30cc25a355939db Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 9 Sep 2026 23:49:11 +0200
 Subject: [PATCH 070/181] hydra: tools to measure a laggy viewport, and a log
@@ -31,8 +31,6 @@ A defect found along the way, in the COP watch: re-reading a COP cooks it,
 read. The next poll compared the state after to the one before, concluded the COP
 had moved, and re-read a second time: one more 4K to read on the host's thread,
 to re-upload, and a graph to recompile, for nothing, on every edit.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/houdini_cop.cpp | 10 +++++++
  src/hydra/plugin.cpp      | 51 +++++++++++++++++++++++++++++++++

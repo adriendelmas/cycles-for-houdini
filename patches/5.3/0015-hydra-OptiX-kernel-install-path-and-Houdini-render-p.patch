@@ -1,4 +1,4 @@
-From 8330e84d84a3eab552ea6d6826fe5aac857082f9 Mon Sep 17 00:00:00 2001
+From a574932b5659da482b519c7136a47cb82fc29876 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 19:36:49 +0200
 Subject: [PATCH 015/181] hydra: OptiX kernel install path, and Houdini render
@@ -13,8 +13,6 @@ integrator socket declarations by tools/gen_render_properties.py rather than
 kept by hand, so the exposed settings follow the linked Cycles version. 59
 properties across 9 tabs, each with the set/block/none control parameter
 Houdini's own definitions use.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/CMakeLists.txt                      |    5 +
  .../resources/HdCyclesPluginGPU_Global.ds     | 1358 +++++++++++++++++

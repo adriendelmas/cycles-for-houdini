@@ -1,4 +1,4 @@
-From 661145a7c7d19345daf9ee76ffaf902f7925c8d1 Mon Sep 17 00:00:00 2001
+From ac353c7f03c87c8f578435f391815afb24e329c5 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 17:39:22 +0200
 Subject: [PATCH 078/181] hydra: color/vector MaterialX operators, and three
@@ -25,8 +25,6 @@ MaterialX bench: fifteen new cases, values computed from the definitions; on the
 previous DLL clamp, max and sqrt came out gray, ln and modulo black, invert and
 atan2 lost an input. All exact now, 31 cases out of 31. mtlx_inputs: 542 nodedefs
 without loss, versus 528. The 97-node bench without regression, hair 4/0.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp | 221 +++++++++++++++++++++++++++++++++++++----
  1 file changed, 204 insertions(+), 17 deletions(-)

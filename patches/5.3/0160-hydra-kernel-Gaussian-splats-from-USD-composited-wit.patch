@@ -1,4 +1,4 @@
-From b157cc7e7ef707671e02d2503aa2cd3cbb1f3c28 Mon Sep 17 00:00:00 2001
+From 3088e7f42bb1f28fd9eec7ae78ad5f17a0e16a0b Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 11:58:06 +0100
 Subject: [PATCH 160/181] hydra + kernel: Gaussian splats from USD, composited
@@ -38,8 +38,6 @@ reference of the same compositing, 96x64 at 16 spp: one isotropic splat,
 one rotated anisotropic, three overlapping colours and a 400 splat
 string all match within 0.1 % in mean and 1 % per 4x4 block, with no
 noise.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/bvh/embree.cpp                        |  15 +-
  src/device/optix/device_impl.cpp          |   7 +

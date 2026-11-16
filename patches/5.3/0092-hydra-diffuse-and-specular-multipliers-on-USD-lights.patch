@@ -1,4 +1,4 @@
-From 3c248ac8b59dcde2f7fafa55542303ace477c431 Mon Sep 17 00:00:00 2001
+From 2d1a8f05c1bb3e65d348484a40ad69b2723cc55f Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 03:26:55 +0200
 Subject: [PATCH 092/181] hydra: diffuse and specular multipliers on USD lights
@@ -9,8 +9,6 @@ from one: 0 removes the lobe (diffuse, or glossy and transmission), 1 keeps it,
 a value in between is rendered as 1 and the log says so. shadow:color, which
 Cycles cannot tint, is reported likewise. Measured: a sun at diffuse 0 leaves a
 diffuse sphere lit by the dome's light alone.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/light.cpp | 33 +++++++++++++++++++++++++++++++++
  1 file changed, 33 insertions(+)

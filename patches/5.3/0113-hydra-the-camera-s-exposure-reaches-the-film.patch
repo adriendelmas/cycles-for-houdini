@@ -1,4 +1,4 @@
-From 0e23d92557f38f821b59aa1d7d156e4e1ee27065 Mon Sep 17 00:00:00 2001
+From b512f150b11fb036fe67e94e1842d31f756bda75 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 9 Oct 2026 00:23:00 +0200
 Subject: [PATCH 113/181] hydra: the camera's exposure reaches the film
@@ -8,8 +8,6 @@ a linear exposure scale) did not reach the image. The film's exposure is
 now the render settings' (cycles:film:exposure) times the camera's scale,
 each side keeping its own value so neither overwrites the other; the free
 view counts 1 (K-71, tools/bench_camera.py: 7 cases against Karma).
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/camera.cpp          | 12 ++++++++++++
  src/hydra/render_delegate.cpp |  3 +++

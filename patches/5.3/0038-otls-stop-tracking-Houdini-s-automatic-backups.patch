@@ -1,4 +1,4 @@
-From d747d962cf03745c151295a395d69e14c6502111 Mon Sep 17 00:00:00 2001
+From a22895aa6efaaa0ca72ea18f4f62ca69b5bc52a4 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 13:33:36 +0200
 Subject: [PATCH 038/181] otls: stop tracking Houdini's automatic backups
@@ -6,8 +6,6 @@ Subject: [PATCH 038/181] otls: stop tracking Houdini's automatic backups
 Houdini writes a timestamped copy of each HDA on every save. Thirty-nine of
 them had slipped into tracking, pure generation noise, worthless to anyone
 reading the history.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/resources/otls/.gitignore             |   1 +
  .../resources/otls/backup/cycles_vops_bak1.hda  | Bin 3439 -> 0 bytes

@@ -1,4 +1,4 @@
-From b73187e6cf2c44b7ac15ebf4f09745a7239f4a54 Mon Sep 17 00:00:00 2001
+From 5669714fd08ad5bd260e838df564e2624138caa6 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 9 Sep 2026 17:24:38 +0200
 Subject: [PATCH 065/181] hydra: give Cycles the camera used to dice
@@ -22,8 +22,6 @@ only at load time.
 
 `copy_value` copies without raising a modification flag, and that is intended: a
 mesh is only re-diced on its own changes, not on every view movement.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/render_pass.cpp | 14 ++++++++++++++
  1 file changed, 14 insertions(+)

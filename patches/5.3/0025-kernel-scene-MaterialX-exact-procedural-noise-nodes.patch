@@ -1,4 +1,4 @@
-From 710bad35d514ff178fddb5c5391e5b199655c2f2 Mon Sep 17 00:00:00 2001
+From c7c6c36409dc91329f30a2030f63d35122038564 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 16:49:43 +0200
 Subject: [PATCH 025/181] kernel/scene: MaterialX-exact procedural noise nodes
@@ -13,8 +13,6 @@ reference; these nodes are an exact target instead.
 Two changes against the original: compile_begin takes the owning node in this
 branch, and the Vector input now falls back to texture coordinates the way the
 other procedural textures do rather than evaluating everywhere at the origin.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/kernel/osl/shaders/CMakeLists.txt         |   1 +
  .../osl/shaders/node_mx_noise_texture.osl     | 312 +++++++++

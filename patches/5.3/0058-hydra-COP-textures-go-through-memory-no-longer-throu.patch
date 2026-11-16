@@ -1,4 +1,4 @@
-From ad9041140f2ea6e3a7b5bddff305f5d9c189835e Mon Sep 17 00:00:00 2001
+From 7373e8305d73fc3141e0c8fb12176f180548fa5d Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 4 Sep 2026 18:54:49 +0200
 Subject: [PATCH 058/181] hydra: COP textures go through memory, no longer
@@ -35,8 +35,6 @@ already been read.
 
 Verified: an `op:` that designates nothing is now only a warning that names it,
 and the render goes through to the end. Bench: 97 renders, 0 problems.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/houdini_cop.cpp | 377 +++++++++++++++++++++++++++-----------
  src/hydra/houdini_cop.h   |  37 ++--

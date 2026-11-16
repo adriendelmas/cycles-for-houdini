@@ -1,4 +1,4 @@
-From 31fdaddc4e5d5496c5dd67ddeedbbed9996bf424 Mon Sep 17 00:00:00 2001
+From dabd10ba76ed6caa02df52c2a65b46c1d8b4ff92 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 09:12:31 +0200
 Subject: [PATCH 101/181] hydra: check sizes before reading, no segfault on an
@@ -12,8 +12,6 @@ where Karma ignores the attribute (K-57). The mesh normals, its points and the
 widths of a point cloud now check the count that their interpolation requires,
 warn and ignore the attribute. tools/bench_robust.py: three damaged files, three
 crashes before, three renders after.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/mesh.cpp       | 51 +++++++++++++++++++++++++++++++++-------
  src/hydra/pointcloud.cpp | 15 ++++++++----

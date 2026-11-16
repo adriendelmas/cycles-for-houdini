@@ -1,4 +1,4 @@
-From 9ee1dee924f4ba8cd7c223c78347fd273aa35c6e Mon Sep 17 00:00:00 2001
+From dfcd66fb459996623189686b1a7401547818b25b Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 11:57:53 +0100
 Subject: [PATCH 158/181] cmake: a standalone build gets Embree again
@@ -8,8 +8,6 @@ WITH_CYCLES_EMBREE to Blender's WITH_EMBREE, which only Blender's build
 sets. A standalone build then compiled without WITH_EMBREE: the CPU device
 offered only BVH2, slower, and everything resting on Embree (ray masks,
 per-query user geometry callbacks) silently did nothing.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/cmake/external_libs.cmake | 5 +++++
  1 file changed, 5 insertions(+)

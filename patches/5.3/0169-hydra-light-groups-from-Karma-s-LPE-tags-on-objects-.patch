@@ -1,4 +1,4 @@
-From 537cede0509f33383a302dee81d62ca2b4695b2e Mon Sep 17 00:00:00 2001
+From 5d9239bb1f9431dc7dbfe312302ba128ae66602e Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 16:58:33 +0100
 Subject: [PATCH 169/181] hydra: light groups from Karma's LPE tags on objects
@@ -11,8 +11,6 @@ light group expression with emissive objects, C.*[<L.'tag'>O], is that
 light group's pass (a Cycles light group always includes its emissive
 objects). Checked on GPU: an emissive sphere tagged "glow" fills
 Combined_glow, C.*[<L.'fill'>O] the fill light's contribution.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/object_properties.cpp |  3 +++
  src/hydra/session.cpp           | 18 +++++++++++-------

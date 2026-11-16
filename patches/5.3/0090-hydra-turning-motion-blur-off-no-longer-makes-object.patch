@@ -1,4 +1,4 @@
-From 61411e4774be70b041d044da1cc1b547b14b4d15 Mon Sep 17 00:00:00 2001
+From 071e8c3c840fa2cdf98e8f919f69bdc4a2491961 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 02:59:29 +0200
 Subject: [PATCH 090/181] hydra: turning motion blur off no longer makes
@@ -13,8 +13,6 @@ Houdini (tests/houdini/motion_toggle.hip).
 Cycles' batch mode under husk is measured and discarded: 13.2 s versus 13.6 s
 over five pairs, within the gap between two renders, images identical bit for
 bit. The session stays interactive.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/render_delegate.cpp |  5 +++++
  src/hydra/session.h           | 12 +++++++++---

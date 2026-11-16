@@ -1,4 +1,4 @@
-From 25e9edf793e955d96373667923d498ff250136da Mon Sep 17 00:00:00 2001
+From e1dfd314874109b9cb2622d512375596ea0c846f Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 15:13:32 +0100
 Subject: [PATCH 167/181] hydra: Cycles AOVs LOP, Blender's View Layer passes
@@ -11,8 +11,6 @@ CryptoObject00, Combined_<group>...), sourcing the Cycles pass the
 delegate resolves, and is appended to the render products: the ones
 named on the node, or those of the stage's render settings. The vars go
 next to the first product, since Karma's /Render may be deactivated.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/CMakeLists.txt                   |   3 +
  src/hydra/resources/cycles_aovs.py         | 150 +++++++++++++++++++++

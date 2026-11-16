@@ -1,4 +1,4 @@
-From 00897ffbfdc890b2af726e20281b96176fb1fdb7 Mon Sep 17 00:00:00 2001
+From 431a54286281c1a54e52a0f6e6ed4bc1dc51dc22 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 9 Oct 2026 01:27:15 +0200
 Subject: [PATCH 115/181] hydra: per-vertex texture coordinates go to Cycles
@@ -12,8 +12,6 @@ tilt along v averaged out and mirrored UVs kept their tilt. Texture lookups
 read the element right, which is why it went unseen. Per-vertex texture
 coordinates are now expanded to corners (K-73, tools/bench_normalmap.py:
 12 cases against Karma).
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/mesh.cpp | 32 +++++++++++++++++++++++++++++---
  1 file changed, 29 insertions(+), 3 deletions(-)

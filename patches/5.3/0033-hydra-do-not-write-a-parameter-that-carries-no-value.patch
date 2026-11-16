@@ -1,4 +1,4 @@
-From e52c7fd4abec94f8b38bc4f37b5baee4ea616e98 Mon Sep 17 00:00:00 2001
+From e563358c769697029a083f5d9bb7beb4319c2d6c Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 2 Sep 2026 14:17:15 +0200
 Subject: [PATCH 033/181] hydra: do not write a parameter that carries no value
@@ -14,8 +14,6 @@ Not verified by render: husk reports no available license with Houdini closed,
 so this rests on reading the exported USD and the conversion path rather than on
 a measurement. The change can only ever prevent a write that had nothing to
 write.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp | 9 +++++++++
  1 file changed, 9 insertions(+)

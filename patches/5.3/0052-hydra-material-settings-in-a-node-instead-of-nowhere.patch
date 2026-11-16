@@ -1,4 +1,4 @@
-From edf9c4c7985cea41b49c4b0f199c38a5ccd6cdfe Mon Sep 17 00:00:00 2001
+From f9c5291871e45b678b88af094972f304fa8f03f0 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 4 Sep 2026 04:08:28 +0200
 Subject: [PATCH 052/181] hydra: material settings in a node instead of nowhere
@@ -42,8 +42,6 @@ image without the setting:
     displacement_method = "true"    0.01376
     nonexistent socket              0.00000 + "No Cycles material setting
                                     'cycles:pas_de_socket', value ignored."
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/CMakeLists.txt                      |   6 +
  src/hydra/material.cpp                        |  54 +++++++-

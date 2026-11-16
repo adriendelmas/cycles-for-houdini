@@ -1,4 +1,4 @@
-From bd9716a085e8c109b2fbe49459b9c9302de3217a Mon Sep 17 00:00:00 2001
+From cfb5c2ac18fe568d5b6473dded6bdf15a49786fe Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 26 Oct 2026 02:21:22 +0100
 Subject: [PATCH 150/181] hydra: display driver off by default again, the view
@@ -19,8 +19,6 @@ about to render: the camera and its motion samples, how many objects are
 visible and where their origins span, the largest object, the objects at
 the origin, each geometry's shaders and the background shader. This is
 what separated a hidden scene from a camera elsewhere.
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 ---
  src/hydra/render_delegate.cpp | 17 ++++----
  src/hydra/render_pass.cpp     | 77 +++++++++++++++++++++++++++++++++++

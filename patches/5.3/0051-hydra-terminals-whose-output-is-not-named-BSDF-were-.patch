@@ -1,4 +1,4 @@
-From 7f3bcdee26f39c769c8f3f086f1a23c05c51d207 Mon Sep 17 00:00:00 2001
+From bceede1c188fe47a1677de30efe40eebf5066afc Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 4 Sep 2026 04:07:57 +0200
 Subject: [PATCH 051/181] hydra: terminals whose output is not named BSDF were
@@ -34,8 +34,6 @@ noise -> displacement -> displacement terminal:
 And the two messages move to the Cycles log: as TF_RUNTIME_ERROR, husk
 swallowed them, which is exactly how a displacement could disappear without
 anything saying so.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp | 54 +++++++++++++++++++++++++++++++-----------
  1 file changed, 40 insertions(+), 14 deletions(-)

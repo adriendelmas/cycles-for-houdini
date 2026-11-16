@@ -1,4 +1,4 @@
-From 3378b10b533762caf6f7d33904fbf4fa97caedfe Mon Sep 17 00:00:00 2001
+From 68b0df12c00e99339cbbb9fc6e10ff76addc024b Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 17:29:00 +0200
 Subject: [PATCH 029/181] hydra: MaterialX position is in object space
@@ -14,8 +14,6 @@ The texture coordinate node's Object output is the object-space position.
 Checked against Karma on the same USD with a purely emissive material, so the
 comparison does not depend on lighting: the two renderers now agree to within
 sampling noise, where the red channel used to come out negative.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp | 14 +++++++++++---
  1 file changed, 11 insertions(+), 3 deletions(-)

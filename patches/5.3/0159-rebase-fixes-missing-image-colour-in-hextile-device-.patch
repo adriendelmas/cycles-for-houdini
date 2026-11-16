@@ -1,4 +1,4 @@
-From c48ddd1f4ebbe003a4ae8b5aae1a60aec4533deb Mon Sep 17 00:00:00 2001
+From 74f358d09f4f0b6382d7799059d844119cdbe071 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 11:57:53 +0100
 Subject: [PATCH 159/181] rebase fixes: missing-image colour in hextile, device
@@ -8,8 +8,6 @@ svm_image_texture() takes the colour of a missing image since upstream
 bb38d86e; the hextile node passes the former one. The host-memory warning
 lost the total and free memory upstream moved into a narrower block; it
 reads them itself, once per session.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/device/device.cpp       | 3 +++
  src/kernel/svm/mx_hextile.h | 6 +++---

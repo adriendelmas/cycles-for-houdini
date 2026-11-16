@@ -1,4 +1,4 @@
-From 34c3f600e3f7bc616d9398313686c3a28c791c22 Mon Sep 17 00:00:00 2001
+From b9fb62d85733cb95e17f3721f45edf11e329d5bf Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 19:54:38 +0200
 Subject: [PATCH 047/181] hydra: standard_surface dispersion now reaches the
@@ -39,8 +39,6 @@ Side note, unrelated and not investigated: a hand-placed USD Sphere lost its
 material binding (fell back to default_surface) in one of the throwaway test
 scenarios of this investigation - to check some day, perhaps an artifact of
 bypassing Houdini's usual authoring pipeline rather than a real delegate bug.
-
-Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp | 21 ++++++++++++++++++++-
  1 file changed, 20 insertions(+), 1 deletion(-)

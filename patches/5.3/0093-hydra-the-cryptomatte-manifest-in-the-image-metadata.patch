@@ -1,4 +1,4 @@
-From 8d0ed3528fb3e1f7c3d288dad8ac5e20d6c80c89 Mon Sep 17 00:00:00 2001
+From bb05c155deb990c99b5f8e33669f0cc057d56192 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 03:36:58 +0200
 Subject: [PATCH 093/181] hydra: the cryptomatte manifest in the image metadata
@@ -11,8 +11,6 @@ GetRenderStats() adds there cryptomatte/<id>/name, hash, conversion and manifest
 for each active type, built under the scene lock when it is free, otherwise the
 last ones built. Measured: the hash of the manifest of /world/a, read as a
 float, is the identifier of its pixels.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/render_delegate.cpp | 58 +++++++++++++++++++++++++++++------
  src/hydra/render_delegate.h   |  5 +++

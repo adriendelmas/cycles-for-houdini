@@ -1,4 +1,4 @@
-From 025f745f143342e18c31de03b32bbcdd39f077c6 Mon Sep 17 00:00:00 2001
+From 0910e0458eaa142c92ed7ee921aa87d7593cc08e Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 9 Oct 2026 00:55:55 +0200
 Subject: [PATCH 114/181] hydra, scene: subdivision creases, corners, boundary
@@ -18,8 +18,6 @@ neighbours with them, as USD's holes mean.
 
 Mesh::clear now also clears the vertex creases, which piled up on every
 topology rebuild (K-72, tools/bench_subdiv.py: 7 cases against Karma).
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/mesh.cpp | 69 ++++++++++++++++++++++++++++++++++++----------
  src/scene/mesh.cpp |  5 ++++

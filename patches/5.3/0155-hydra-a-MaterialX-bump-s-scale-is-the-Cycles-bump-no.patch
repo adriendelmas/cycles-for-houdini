@@ -1,4 +1,4 @@
-From e685955cdb83cd182163ae820eaf6fa6c2913cde Mon Sep 17 00:00:00 2001
+From 27a3242c4e29553802d20964fe4862388c9a02cd Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 27 Oct 2026 01:53:01 +0100
 Subject: [PATCH 155/181] hydra: a MaterialX bump's scale is the Cycles bump
@@ -13,8 +13,6 @@ through a bump looked flat. scale now maps to distance. Measured on a
 sphere with a noise height, the bump's own effect (bumped minus flat):
 Karma 0.0141, Cycles 0.0140 at scale 1; 0.0018 and 0.0014 at scale 0.1,
 which is what Cycles gave at scale 1 before (K-117).
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp | 7 +++++--
  1 file changed, 5 insertions(+), 2 deletions(-)

@@ -1,4 +1,4 @@
-From 9a027927253e7f168338d40071af06484ffcd2fa Mon Sep 17 00:00:00 2001
+From 6594e048208111e2d183683ce2ffb4e8b3357b87 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 01:38:53 +0200
 Subject: [PATCH 002/181] hydra: accept Houdini AOV naming conventions
@@ -9,8 +9,6 @@ beauty pass "C", so a render var authored normally in Solaris arrived
 unmapped, its binding was dropped, and the render pass was left with no
 bindings at all - IsConverged() iterating an empty list returns true, so
 husk wrote out an empty frame with no warning.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/session.cpp | 17 +++++++++++++++++
  1 file changed, 17 insertions(+)

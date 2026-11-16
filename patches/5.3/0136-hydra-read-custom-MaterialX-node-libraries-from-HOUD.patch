@@ -1,4 +1,4 @@
-From b72114a7e18e04052c8aba0c9f00f76060ec247c Mon Sep 17 00:00:00 2001
+From 7a556211d2a9352cc7ad9cc65424524359aadec9 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sun, 11 Oct 2026 02:38:48 +0200
 Subject: [PATCH 136/181] hydra: read custom MaterialX node libraries from
@@ -19,8 +19,6 @@ Measured: the MtlX Text node (1064 nodes, a multi-output nodegraph) renders
 in Cycles and matches its numpy reference on every pixel away from edges
 (0 of 375 875); bench_mtlx 92 nodes, 0 problems; bench_hair 4 pairs, 0
 problems.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/mtlx_expand.cpp | 58 +++++++++++++++++++++++++++++++++++++++
  1 file changed, 58 insertions(+)

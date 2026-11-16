@@ -1,4 +1,4 @@
-From a077cd209722eaf10b106437c0ca4408b88933e6 Mon Sep 17 00:00:00 2001
+From 9d3764a09e8353a06384942da2bcbac867c3a477 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 2 Sep 2026 15:09:03 +0200
 Subject: [PATCH 034/181] hydra: shade a mesh flat unless its normals say
@@ -24,8 +24,6 @@ is the emission - so the strength is pinned to one and the colour defaulted to
 black, leaving a material that emits nothing dark.
 
 Not verified by render: husk reports no available license with Houdini closed.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp | 41 +++++++++++++++++++++++++++++------------
  src/hydra/mesh.cpp     | 22 +++++++++++++++++++++-

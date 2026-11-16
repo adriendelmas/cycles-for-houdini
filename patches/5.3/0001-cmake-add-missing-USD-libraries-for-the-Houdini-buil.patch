@@ -1,4 +1,4 @@
-From 80715f53d33df712b86549349b2037f774a9bacb Mon Sep 17 00:00:00 2001
+From 810d66f40bb201068f5cac9ecea6f17f7eaf50aa Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 01:38:53 +0200
 Subject: [PATCH 001/181] cmake: add missing USD libraries for the Houdini
@@ -8,8 +8,6 @@ FindUSDHoudini.cmake did not list hdsi, which src/hydra/file_reader.cpp
 needs for HdSiExtComputationPrimvarPruningSceneIndex, breaking the link of
 the standalone cycles executable and therefore the install target. sdr is
 needed by the shader node registry plugin. Houdini ships both.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/cmake/Modules/FindUSDHoudini.cmake |   2 +-
  src/hydra/sdr_cycles.cpp               | 270 +++++++++++++++++++++++++

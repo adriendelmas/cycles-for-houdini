@@ -1,4 +1,4 @@
-From 5e8e58f20d894fbf13539822b0827cd2ec5dcd2f Mon Sep 17 00:00:00 2001
+From 3744f7ab5e725666f9651dc7b22126da49a93ca8 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 23:08:52 +0200
 Subject: [PATCH 017/181] hydra: material edits never reached the device, and
@@ -19,8 +19,6 @@ equivalents.
 
 Also drop leftover debug output that printed every render setting to the host's
 console.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp                        | 38 +++++++++++++++++++
  src/hydra/material.h                          |  4 ++

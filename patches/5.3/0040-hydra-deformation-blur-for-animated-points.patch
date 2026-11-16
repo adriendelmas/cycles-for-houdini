@@ -1,4 +1,4 @@
-From c7c1762d29b82429c5e705d07fa58176ac5db72e Mon Sep 17 00:00:00 2001
+From 7fd340f436b380abe7c2698fe6769bd0dde87507 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 14:24:37 +0200
 Subject: [PATCH 040/181] hydra: deformation blur for animated points
@@ -21,8 +21,6 @@ One case is deliberately set aside: a point count that changes from one instant
 to the next. Geometry created or destroyed mid-shot has no correspondence to
 interpolate, so we stick to the center instant rather than mix unrelated
 points.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/curves.cpp     | 30 +++++++++++++++++++--
  src/hydra/geometry.h     |  7 +++++

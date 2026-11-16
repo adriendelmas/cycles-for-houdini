@@ -1,4 +1,4 @@
-From f7d3164ee847c8f202a2eb89037919beda847455 Mon Sep 17 00:00:00 2001
+From 4f078eaceb79514da7e26317665e8f4a398cf7b4 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 22:46:04 +0200
 Subject: [PATCH 082/181] hydra: USD implicit surfaces rendered, as fine meshes
@@ -17,8 +17,6 @@ normals, no subdivision.
 
 tools/bench_implicit.py, on the repo side, compares the silhouette of each to the
 one its attributes give: 6/6, to within 0.4 %.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/cmake/Modules/FindUSDHoudini.cmake |   2 +-
  src/cmake/Modules/FindUSDPixar.cmake   |   2 +-

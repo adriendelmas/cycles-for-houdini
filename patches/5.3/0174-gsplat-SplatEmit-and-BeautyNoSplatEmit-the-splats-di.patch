@@ -1,4 +1,4 @@
-From 5169b3d79a7c32847a5101a5d5479021c2331c67 Mon Sep 17 00:00:00 2001
+From 15995e8a8381188b1a0f7ed95e62398e98c6ba66 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 18:59:28 +0100
 Subject: [PATCH 174/181] gsplat: SplatEmit and BeautyNoSplatEmit, the splats'
@@ -21,8 +21,6 @@ a scene with lights and an emissive mesh, no splats: SplatEmit 0,
 BeautyNoSplatEmit = C. Toggles in the Cycles AOVs and Cycles Render
 Settings LOPs (Light, Gaussian Splats). KernelFilm grows by 16 bytes:
 a Houdini started on an older build must restart before a GPU render.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/output_driver.cpp                   |  23 ++++++
  src/hydra/output_driver.h                     |   5 ++

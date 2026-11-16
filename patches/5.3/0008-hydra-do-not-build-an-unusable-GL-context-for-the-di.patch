@@ -1,4 +1,4 @@
-From 1b37c69642370e2ba023b0879479cd3fcaa8443a Mon Sep 17 00:00:00 2001
+From b4587e7411f0157a26875bdb6dc49921e3151465 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 03:26:39 +0200
 Subject: [PATCH 008/181] hydra: do not build an unusable GL context for the
@@ -16,8 +16,6 @@ Also add a CYCLES_DISPLAY_DRIVER environment setting to turn the display
 driver off entirely. Hosts differ in when and on which thread a GL context is
 current, and rendering through the output driver instead is slower to refresh
 but has no GL requirements at all.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/display_driver.cpp | 17 ++++++++++++++++-
  1 file changed, 16 insertions(+), 1 deletion(-)

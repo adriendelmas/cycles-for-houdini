@@ -1,4 +1,4 @@
-From 5f28e4283b6b003471a5b242886fabb4b3988459 Mon Sep 17 00:00:00 2001
+From f370ce775a90534aff6543cd8b75b025d7088c84 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 9 Oct 2026 02:02:02 +0200
 Subject: [PATCH 116/181] hydra: fallback widths for points and curves,
@@ -13,8 +13,6 @@ Cycles displacement node (height along the normal, object space, midlevel
 0) that the material's displacement terminal reads; since the surface's
 displacement output shares the input's name, the terminal takes the
 helper's output of its own type (K-75, tools/bench_displace.py).
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/curves.cpp     | 10 ++++++++--
  src/hydra/material.cpp   | 25 +++++++++++++++++++++++--

@@ -1,4 +1,4 @@
-From fffe2228333dcf08a8afcd539531f0fae4eb1210 Mon Sep 17 00:00:00 2001
+From 2165c2ee8f329834118bebd7102f2ec96d82ecd0 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 05:40:14 +0200
 Subject: [PATCH 098/181] hydra: write MaterialX defaults on every unwritten
@@ -14,8 +14,6 @@ every unwritten MaterialX input now receives the default of its nodedef, read
 from the library, for only the inputs that the translation accepts; geometric
 defaults stay with the Cycles node. After: 677 out of 677 identical, the 49 value
 cases and the five surfaces unchanged.
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp    | 15 ++++++++++
  src/hydra/mtlx_expand.cpp | 61 +++++++++++++++++++++++++++++++++++++++

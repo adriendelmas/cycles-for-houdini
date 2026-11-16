@@ -1,4 +1,4 @@
-From f5d03a87ace8a726b7def2e859cba16d68ea30ed Mon Sep 17 00:00:00 2001
+From 02ddd01371aa7cb10fbdc00bd254a56154402c18 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 17:17:32 +0100
 Subject: [PATCH 171/181] gsplat: composited splat emission goes to the splats'
@@ -11,8 +11,6 @@ the strongest splat crossed; a segment's emission goes to that group,
 exact when the crossed splats share one (one group per splat system).
 A production frame, splats tagged "splats", GPU: Combined_splats 0 -> 0.01145
 (beauty 0.01147, the splats are its only emitters).
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/kernel/geom/gsplat_intersect.h        | 8 ++++++++
  src/kernel/integrator/intersect_closest.h | 5 ++++-

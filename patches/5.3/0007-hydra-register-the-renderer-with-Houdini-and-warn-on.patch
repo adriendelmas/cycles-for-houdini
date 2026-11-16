@@ -1,4 +1,4 @@
-From c1f6a4852af931f93c4d01e3487129e710b966a7 Mon Sep 17 00:00:00 2001
+From 1e5088e19d562dff185d7c22eb4ba441a6eff1a7 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 02:25:21 +0200
 Subject: [PATCH 007/181] hydra: register the renderer with Houdini and warn on
@@ -12,8 +12,6 @@ Also warn when a cycles:integrator:<socket> setting names a socket that does
 not exist. Dropping it silently is a trap - a misspelled name is
 indistinguishable from a setting that had no effect. Note husk swallows
 TF_WARN, so this surfaces in Solaris rather than in batch renders.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ---
  src/hydra/CMakeLists.txt              |  4 ++++
  src/hydra/render_delegate.cpp         |  6 ++++++

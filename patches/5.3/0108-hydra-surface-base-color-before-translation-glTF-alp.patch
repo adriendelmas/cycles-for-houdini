@@ -1,4 +1,4 @@
-From 421f96f9743c36387a181bc9370d2985b27dd1f9 Mon Sep 17 00:00:00 2001
+From 9a95a913b1a91df22b38b530919e4d3fd68ec4b4 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 21:18:01 +0200
 Subject: [PATCH 108/181] hydra: surface base color before translation, glTF
@@ -16,8 +16,6 @@ Images (K-64), on a four-corner texture compared by quarters: tiledimage, the
 glTF images, latlongimage and place2d unfold from their library nodegraphs
 instead of going to an image or mapping node that lost repetition, offset,
 pivot, order and degrees; image_float reads its first channel.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/hydra/material.cpp      | 139 +++++++++++++++++++++--------
  src/hydra/mtlx_expand.cpp   |  82 ++++++++++++++++-
