@@ -75,14 +75,6 @@ again), and so do fewer, larger splats.
   group lit through the splats; it softens passes made of fine direct splat
   emission, which are clean already.
 
-## Light Optimize
-
-Render Settings > Light Optimize (`use_light_optimize`,
-`light_optimize_factor`, default 10): adaptive sampling judges noise as if the
-lights were `factor` times brighter, and the clamps are divided by it - the
-habit of rendering with lights ten times brighter and a film ten times darker,
-without touching the scene. It only acts past the adaptive minimum samples.
-
 ## Limits
 
 - Motion blur on splats whose count changes between frames is impossible, as
