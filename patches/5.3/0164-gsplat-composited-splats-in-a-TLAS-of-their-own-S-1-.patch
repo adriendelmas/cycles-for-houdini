@@ -1,7 +1,7 @@
 From 7c78e5cd72f8e8a7c7ff48846e8e3bf5225475a2 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 14:18:33 +0100
-Subject: [PATCH 164/181] gsplat: composited splats in a TLAS of their own,
+Subject: [PATCH 164/182] gsplat: composited splats in a TLAS of their own,
  S^-1 R^T precomputed
 
 - OptiX: composited splat instances leave the scene's TLAS for one of

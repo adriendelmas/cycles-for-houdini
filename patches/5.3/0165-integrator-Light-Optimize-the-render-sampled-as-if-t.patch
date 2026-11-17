@@ -1,7 +1,7 @@
 From 871b5d5b8af3263034bd2a511c26641e6eae7db2 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 14:18:33 +0100
-Subject: [PATCH 165/181] integrator: Light Optimize, the render sampled as if
+Subject: [PATCH 165/182] integrator: Light Optimize, the render sampled as if
  the lights were brighter
 
 The trick of multiplying every light and emission by k and dividing the

@@ -1,7 +1,7 @@
 From 74f358d09f4f0b6382d7799059d844119cdbe071 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 11:57:53 +0100
-Subject: [PATCH 159/181] rebase fixes: missing-image colour in hextile, device
+Subject: [PATCH 159/182] rebase fixes: missing-image colour in hextile, device
  memory in the host warning
 
 svm_image_texture() takes the colour of a missing image since upstream

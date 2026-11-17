@@ -1,7 +1,7 @@
 From 3e104c89e03ebb7f43d593c6b7bb39183258e3e7 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 26 Oct 2026 20:55:28 +0100
-Subject: [PATCH 153/181] hydra: randomfloat and randomcolor from the library's
+Subject: [PATCH 153/182] hydra: randomfloat and randomcolor from the library's
  nodegraphs
 
 ND_randomfloat and ND_randomcolor were mapped to the white noise texture,

@@ -1,7 +1,7 @@
 From 9a95a913b1a91df22b38b530919e4d3fd68ec4b4 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 21:18:01 +0200
-Subject: [PATCH 108/181] hydra: surface base color before translation, glTF
+Subject: [PATCH 108/182] hydra: surface base color before translation, glTF
  alpha, nodegraph images
 
 Input-by-input audit against Karma (tools/surface_audit.py, K-63):

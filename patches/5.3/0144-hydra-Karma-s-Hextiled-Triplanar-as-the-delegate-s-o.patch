@@ -1,7 +1,7 @@
 From 50835542400eec285306beffd71b2901c9de085a Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sun, 25 Oct 2026 05:14:37 +0100
-Subject: [PATCH 144/181] hydra: Karma's Hextiled Triplanar as the delegate's
+Subject: [PATCH 144/182] hydra: Karma's Hextiled Triplanar as the delegate's
  own nodegraphs
 
 kma_hextiled_triplanar_color and kma_hextiled_triplanar_normal, the ids the

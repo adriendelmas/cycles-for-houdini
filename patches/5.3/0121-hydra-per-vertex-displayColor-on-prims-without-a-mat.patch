@@ -1,7 +1,7 @@
 From 949e7c6c2d66ade4ed066e02995d41efce27bd41 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 9 Oct 2026 16:48:14 +0200
-Subject: [PATCH 121/181] hydra: per-vertex displayColor on prims without a
+Subject: [PATCH 121/182] hydra: per-vertex displayColor on prims without a
  material
 
 The default surface took its colour from Object Info, which only ever

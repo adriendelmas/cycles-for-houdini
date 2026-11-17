@@ -1,7 +1,7 @@
 From 00fdeffa431e2b44b62c89ac7105ea258803927a Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 19:01:29 +0100
-Subject: [PATCH 175/181] hydra: the splats' direct emission pass gets the film
+Subject: [PATCH 175/182] hydra: the splats' direct emission pass gets the film
  exposure
 
 A colour AOV pass is read without the exposure the beauty gets, so at

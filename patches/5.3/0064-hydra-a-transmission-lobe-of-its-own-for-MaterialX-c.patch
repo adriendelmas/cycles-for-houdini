@@ -1,7 +1,7 @@
 From 3bc642bfc972162a8892bec4cf9e29f66ec862ee Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sat, 5 Sep 2026 01:13:51 +0200
-Subject: [PATCH 064/181] hydra: a transmission lobe of its own, for MaterialX
+Subject: [PATCH 064/182] hydra: a transmission lobe of its own, for MaterialX
  color and roughness
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8

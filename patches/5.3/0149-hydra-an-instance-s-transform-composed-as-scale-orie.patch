@@ -1,7 +1,7 @@
 From 971f43a42f23f2a4eaa395a1853ad2bf720f63f1 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 26 Oct 2026 00:29:32 +0100
-Subject: [PATCH 149/181] hydra: an instance's transform composed as scale,
+Subject: [PATCH 149/182] hydra: an instance's transform composed as scale,
  orientation, position, then the instancer's
 
 HdInstancer composes an instance as S x R x T x X with GfMatrix4d's row

@@ -1,7 +1,7 @@
 From 5d9239bb1f9431dc7dbfe312302ba128ae66602e Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 16:58:33 +0100
-Subject: [PATCH 169/181] hydra: light groups from Karma's LPE tags on objects
+Subject: [PATCH 169/182] hydra: light groups from Karma's LPE tags on objects
  and C.*[<L.'tag'>O]
 
 The LPE Tag LOP's geometry tag (primvars:karma:object:lpetag) now puts an

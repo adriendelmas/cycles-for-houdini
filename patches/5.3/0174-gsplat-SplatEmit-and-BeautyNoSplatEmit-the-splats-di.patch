@@ -1,7 +1,7 @@
 From 15995e8a8381188b1a0f7ed95e62398e98c6ba66 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 18:59:28 +0100
-Subject: [PATCH 174/181] gsplat: SplatEmit and BeautyNoSplatEmit, the splats'
+Subject: [PATCH 174/182] gsplat: SplatEmit and BeautyNoSplatEmit, the splats'
  direct emission apart
 
 Two render var sources for compositing:

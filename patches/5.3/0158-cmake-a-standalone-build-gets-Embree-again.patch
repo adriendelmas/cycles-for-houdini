@@ -1,7 +1,7 @@
 From dfcd66fb459996623189686b1a7401547818b25b Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 11:57:53 +0100
-Subject: [PATCH 158/181] cmake: a standalone build gets Embree again
+Subject: [PATCH 158/182] cmake: a standalone build gets Embree again
 
 Upstream 30201123 (in release/5.3) switched the sources from
 WITH_CYCLES_EMBREE to Blender's WITH_EMBREE, which only Blender's build

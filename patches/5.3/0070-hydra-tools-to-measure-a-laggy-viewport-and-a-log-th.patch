@@ -1,7 +1,7 @@
 From d8f09c64cbe5dece28996af4a30cc25a355939db Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 9 Sep 2026 23:49:11 +0200
-Subject: [PATCH 070/181] hydra: tools to measure a laggy viewport, and a log
+Subject: [PATCH 070/182] hydra: tools to measure a laggy viewport, and a log
  that goes somewhere
 
 Reported: Karma renders instantly when the view moves, Cycles takes four to five

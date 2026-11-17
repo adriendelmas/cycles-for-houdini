@@ -1,7 +1,7 @@
 From e5c79042af0eb3adcc14b90e88171f4984977af1 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 22:52:44 +0200
-Subject: [PATCH 084/181] hydra: eight keys per cubic curve segment, to follow
+Subject: [PATCH 084/182] hydra: eight keys per cubic curve segment, to follow
  the shape
 
 A Bezier arch sampled at three keys per segment came out as three nearly

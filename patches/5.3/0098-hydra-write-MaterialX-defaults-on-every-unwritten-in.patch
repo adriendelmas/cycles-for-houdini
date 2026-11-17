@@ -1,7 +1,7 @@
 From 2165c2ee8f329834118bebd7102f2ec96d82ecd0 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 05:40:14 +0200
-Subject: [PATCH 098/181] hydra: write MaterialX defaults on every unwritten
+Subject: [PATCH 098/182] hydra: write MaterialX defaults on every unwritten
  input
 
 Hydra only passes what Houdini wrote, and Houdini only writes what the user

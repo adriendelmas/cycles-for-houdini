@@ -1,7 +1,7 @@
 From e563358c769697029a083f5d9bb7beb4319c2d6c Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 2 Sep 2026 14:17:15 +0200
-Subject: [PATCH 033/181] hydra: do not write a parameter that carries no value
+Subject: [PATCH 033/182] hydra: do not write a parameter that carries no value
 
 Houdini's material builders declare a shader input without authoring an opinion
 on it - `float inputs:specular` with no value at all, which is what the exported

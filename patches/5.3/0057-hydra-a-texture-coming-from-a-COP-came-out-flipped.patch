@@ -1,7 +1,7 @@
 From 6bee41540838903a2574c1d46562ca789e8c8b7b Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 4 Sep 2026 17:00:45 +0200
-Subject: [PATCH 057/181] hydra: a texture coming from a COP came out flipped
+Subject: [PATCH 057/182] hydra: a texture coming from a COP came out flipped
 
 The V inversion reported for several days came neither from the UVs nor from
 the MaterialX translation: it only affects textures read through an `op:` path,

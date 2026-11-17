@@ -1,7 +1,7 @@
 From 8e0833b82f273e5086a850299d7a962b74018432 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 17:40:16 +0200
-Subject: [PATCH 030/181] hydra: standard_surface specular weight, and image
+Subject: [PATCH 030/182] hydra: standard_surface specular weight, and image
  wrapping
 
 MaterialX's specular is a weight whose neutral value is 1; the Cycles level it

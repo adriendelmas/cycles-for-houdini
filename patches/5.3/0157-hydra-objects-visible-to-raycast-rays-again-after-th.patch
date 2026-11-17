@@ -1,7 +1,7 @@
 From 7beb48224473bf1b2fe056f68bf5d2ddbdd8dc36 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 11:02:26 +0100
-Subject: [PATCH 157/181] hydra: objects visible to raycast rays again after
+Subject: [PATCH 157/182] hydra: objects visible to raycast rays again after
  the 5.3 visibility split
 
 Cycles 5.3 took the raycast bit out of PATH_RAY_VISIBILITY_ALL and added

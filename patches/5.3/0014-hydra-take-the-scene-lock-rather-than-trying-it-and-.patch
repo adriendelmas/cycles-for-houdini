@@ -1,7 +1,7 @@
 From ebe5b23fc13c2eeb3ca8df49eb5da872257bc1ba Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 18:16:47 +0200
-Subject: [PATCH 014/181] hydra: take the scene lock rather than trying it, and
+Subject: [PATCH 014/182] hydra: take the scene lock rather than trying it, and
  add a GPU renderer entry
 
 The render pass only reset the session when a try_lock on the scene mutex

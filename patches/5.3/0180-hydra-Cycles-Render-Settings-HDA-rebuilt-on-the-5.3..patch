@@ -1,7 +1,7 @@
 From c064485a1f907e4fe2d772479cbdc7a127545b08 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sun, 15 Nov 2026 17:28:11 +0100
-Subject: [PATCH 180/181] hydra: Cycles Render Settings HDA rebuilt on the
+Subject: [PATCH 180/182] hydra: Cycles Render Settings HDA rebuilt on the
  5.3.0 settings
 
 ---

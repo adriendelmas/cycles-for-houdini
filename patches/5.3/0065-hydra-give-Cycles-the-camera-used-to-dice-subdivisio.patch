@@ -1,7 +1,7 @@
 From 5669714fd08ad5bd260e838df564e2624138caa6 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 9 Sep 2026 17:24:38 +0200
-Subject: [PATCH 065/181] hydra: give Cycles the camera used to dice
+Subject: [PATCH 065/182] hydra: give Cycles the camera used to dice
  subdivisions
 
 Cycles creates a `dicing_camera` and nobody filled it in: it stayed at identity,

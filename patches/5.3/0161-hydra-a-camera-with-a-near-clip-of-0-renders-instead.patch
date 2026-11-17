@@ -1,7 +1,7 @@
 From 5a56793d46ff659466294918d464844cb34fb927 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 13:17:40 +0100
-Subject: [PATCH 161/181] hydra: a camera with a near clip of 0 renders instead
+Subject: [PATCH 161/182] hydra: a camera with a near clip of 0 renders instead
  of staying black
 
 USD allows a clipping range starting at 0, and Karma renders it. Cycles'

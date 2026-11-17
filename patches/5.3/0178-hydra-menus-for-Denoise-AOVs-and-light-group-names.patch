@@ -1,7 +1,7 @@
 From 0f039b7567a90fd585b1a48fc89670b0f90684c1 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 19:27:16 +0100
-Subject: [PATCH 178/181] hydra: menus for Denoise AOVs and light group names
+Subject: [PATCH 178/182] hydra: menus for Denoise AOVs and light group names
 
 Denoise AOVs (Cycles Render Settings) toggles render var names in and out
 of its list, as Karma's denoiser AOV field: those the node declares and

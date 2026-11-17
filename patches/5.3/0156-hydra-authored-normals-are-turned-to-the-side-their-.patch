@@ -1,7 +1,7 @@
 From 2550eb1437d0364550405a70ab24d5c19629aad2 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 29 Oct 2026 03:36:04 +0100
-Subject: [PATCH 156/181] hydra: authored normals are turned to the side their
+Subject: [PATCH 156/182] hydra: authored normals are turned to the side their
  faces wind towards
 
 The kernel flips N along with Ng when a face is seen from the back. An

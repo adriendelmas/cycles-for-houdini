@@ -1,7 +1,7 @@
 From 83f8b9e77ff4b33185d932626026ad453a66ffa6 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 13:52:54 +0200
-Subject: [PATCH 012/181] hydra: fix GL teardown crash, and stop using the
+Subject: [PATCH 012/182] hydra: fix GL teardown crash, and stop using the
  display driver by default
 
 The destructor issued glDeleteBuffers() with no current GL context. It runs on

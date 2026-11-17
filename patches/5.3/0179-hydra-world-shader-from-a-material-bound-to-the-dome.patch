@@ -1,7 +1,7 @@
 From fbd63a0ebeb3ffceca7ae06392635ca2b1c68bb1 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 10 Nov 2026 03:34:11 +0100
-Subject: [PATCH 179/181] hydra: world shader from a material bound to the dome
+Subject: [PATCH 179/182] hydra: world shader from a material bound to the dome
  (K-119)
 
 A material bound to a dome light becomes Cycles' world shader: its surface,

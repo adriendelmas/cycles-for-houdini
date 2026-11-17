@@ -1,7 +1,7 @@
 From c268ecad3ffb15328d7050a1649c83c898c8694e Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 13:36:45 +0100
-Subject: [PATCH 162/181] hydra: one tile at any resolution - 4K renders no
+Subject: [PATCH 162/182] hydra: one tile at any resolution - 4K renders no
  longer hang or fail
 
 Cycles cuts an image over 2048 pixels into tiles written to disk and

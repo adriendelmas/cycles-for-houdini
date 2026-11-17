@@ -1,7 +1,7 @@
 From 22a3df0b3e070fe9396369af322244b13efe9884 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 19:54:57 +0200
-Subject: [PATCH 016/181] hydra: tag a light's object for update, and keep
+Subject: [PATCH 016/182] hydra: tag a light's object for update, and keep
  unresolvable asset paths
 
 Moving or rotating a light modified its object's transform but nothing tagged

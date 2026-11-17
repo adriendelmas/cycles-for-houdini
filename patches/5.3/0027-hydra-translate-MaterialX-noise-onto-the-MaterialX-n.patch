@@ -1,7 +1,7 @@
 From 8d57d9d427d4c27965565c1b0a99235d313271d8 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 16:49:43 +0200
-Subject: [PATCH 027/181] hydra: translate MaterialX noise onto the MaterialX
+Subject: [PATCH 027/182] hydra: translate MaterialX noise onto the MaterialX
  noise node
 
 The ten noise families now reach mx_noise_texture instead of being approximated

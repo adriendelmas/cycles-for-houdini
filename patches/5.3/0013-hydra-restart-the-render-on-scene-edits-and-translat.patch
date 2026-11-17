@@ -1,7 +1,7 @@
 From 7f95ca59d04adf17280178ab85b3363aaad899bf Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 16:37:32 +0200
-Subject: [PATCH 013/181] hydra: restart the render on scene edits, and
+Subject: [PATCH 013/182] hydra: restart the render on scene edits, and
  translate more MaterialX nodes
 
 Implement IsStopSupported/Stop/Restart. Hosts stop the render before applying

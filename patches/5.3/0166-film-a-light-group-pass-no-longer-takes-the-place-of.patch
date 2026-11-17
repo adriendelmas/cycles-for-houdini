@@ -1,7 +1,7 @@
 From c619beb35eacbb503901eb9b709575b55fcad238 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 15:05:16 +0100
-Subject: [PATCH 166/181] film: a light group pass no longer takes the place of
+Subject: [PATCH 166/182] film: a light group pass no longer takes the place of
  the beauty with the denoiser
 
 A light group pass is a combined pass with a light group. With the

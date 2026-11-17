@@ -1,7 +1,7 @@
 From 431a54286281c1a54e52a0f6e6ed4bc1dc51dc22 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Fri, 9 Oct 2026 01:27:15 +0200
-Subject: [PATCH 115/181] hydra: per-vertex texture coordinates go to Cycles
+Subject: [PATCH 115/182] hydra: per-vertex texture coordinates go to Cycles
  per corner
 
 Cycles' tangent space (mikktspace) reads a UV map by corner whatever its

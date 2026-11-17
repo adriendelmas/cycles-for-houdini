@@ -1,7 +1,7 @@
 From e46d8a9d522436d0eb7336c2cc64a8ea52c2dda4 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Sun, 25 Oct 2026 06:53:04 +0100
-Subject: [PATCH 146/181] util + hydra: 8-bit sRGB textures decoded without an
+Subject: [PATCH 146/182] util + hydra: 8-bit sRGB textures decoded without an
  OCIO config; image `default` consumed
 
 Without $OCIO (husk outside Houdini's packages) OpenColorIO has its raw

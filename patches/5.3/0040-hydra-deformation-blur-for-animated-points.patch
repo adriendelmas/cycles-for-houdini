@@ -1,7 +1,7 @@
 From 7fd340f436b380abe7c2698fe6769bd0dde87507 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 3 Sep 2026 14:24:37 +0200
-Subject: [PATCH 040/181] hydra: deformation blur for animated points
+Subject: [PATCH 040/182] hydra: deformation blur for animated points
 
 Motion blur only covered what moves as a whole. Geometry whose points are
 animated -- a simulation, a deformer, particles, hair -- rendered sharp even

@@ -1,7 +1,7 @@
 From c5af33f21d70f9e6eded59b890a979f7dadf9bf0 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Thu, 8 Oct 2026 00:07:30 +0200
-Subject: [PATCH 086/181] hydra: render passes - lights, Karma LPEs,
+Subject: [PATCH 086/182] hydra: render passes - lights, Karma LPEs,
  cryptomatte, shader AOVs
 
 The delegate only knew five passes and their Houdini spellings; any other render

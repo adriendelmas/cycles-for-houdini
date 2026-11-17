@@ -1,7 +1,7 @@
 From e51bbbdc38ead9b0244a839f3b34d977ee6d590c Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 17:48:40 +0100
-Subject: [PATCH 172/181] hydra: Cycles LOPs show their icon - embedded section
+Subject: [PATCH 172/182] hydra: Cycles LOPs show their icon - embedded section
  named IconImage.png
 
 Houdini resolves an embedded icon only when the section name carries the

@@ -1,7 +1,7 @@
 From d5428dbb74efb9fab090d2064ee2ae7673730db1 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 31 Aug 2026 01:39:06 +0200
-Subject: [PATCH 005/181] hydra: translate MaterialX networks to Cycles nodes
+Subject: [PATCH 005/182] hydra: translate MaterialX networks to Cycles nodes
 
 Declares mtlx as a material render context and remaps MaterialX nodedef
 identifiers onto native Cycles nodes using the same mapping machinery as

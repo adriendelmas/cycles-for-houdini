@@ -1,7 +1,7 @@
 From 059da9b5d7a139e452ab3becad429176a238e7dd Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 3 Nov 2026 13:36:45 +0100
-Subject: [PATCH 163/181] gsplat: ellipsoid bounds, composite marker that works
+Subject: [PATCH 163/182] gsplat: ellipsoid bounds, composite marker that works
  on OptiX
 
 - Splats are bounded by the axis-aligned box of their ellipsoid, cut where

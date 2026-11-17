@@ -1,7 +1,7 @@
 From 9f693ea94b9c030c7c278474c847f438b14685aa Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Mon, 26 Oct 2026 23:37:32 +0100
-Subject: [PATCH 154/181] hydra: a bumped chain's layer ties depend on the base
+Subject: [PATCH 154/182] hydra: a bumped chain's layer ties depend on the base
  colour's accumulation
 
 TieSumChains tied each layer's lookups to the previous accumulation of

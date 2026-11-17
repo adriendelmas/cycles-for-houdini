@@ -1,7 +1,7 @@
 From 4f078eaceb79514da7e26317665e8f4a398cf7b4 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Wed, 7 Oct 2026 22:46:04 +0200
-Subject: [PATCH 082/181] hydra: USD implicit surfaces rendered, as fine meshes
+Subject: [PATCH 082/182] hydra: USD implicit surfaces rendered, as fine meshes
 
 Sphere, Cube, Cylinder, Cone, Capsule and Plane reached the delegate under their
 own type, which it does not declare: they disappeared without a word. A scene

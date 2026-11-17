@@ -1,7 +1,7 @@
 From cc76a0a06472dbd06937a8871ccb6d174e201da5 Mon Sep 17 00:00:00 2001
 From: Adrien Delmas <adrien@adriendelmas.com>
 Date: Tue, 1 Sep 2026 01:15:54 +0200
-Subject: [PATCH 021/181] hydra: read MaterialX data image variants without an
+Subject: [PATCH 021/182] hydra: read MaterialX data image variants without an
  sRGB decode
 
 Cycles' image_texture defaults its colorspace to auto, which applies an sRGB
