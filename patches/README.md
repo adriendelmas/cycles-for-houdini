@@ -208,3 +208,4 @@ upstream.
 | `0179` | hydra: world shader from a material bound to the dome (K-119) |
 | `0180` | hydra: Cycles Render Settings HDA rebuilt on the 5.3.0 settings |
 | `0181` | hydra: the atmosphere's world volume as Volume Scatter and Volume Absorption nodes |
+| `0182` | integrator: Light Optimize removed, it is not a Cycles feature (undoes `0165`) |
