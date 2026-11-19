@@ -4,6 +4,14 @@ Blender's [Cycles](https://projects.blender.org/blender/cycles) as a Hydra rende
 delegate for **Houdini 22 / Solaris**, with its shading nodes exposed natively in
 Houdini and a **Cycles Material Builder** to wire them in.
 
+> **Development is moving to [hcycles](https://projects.blender.org/cjhosken/hcycles).**
+> The Houdini plugin is now developed there, together with Christopher Hosken, on
+> top of the official Cycles sources, and the fixes made here are being sent
+> upstream to [blender/cycles](https://projects.blender.org/blender/cycles/pulls).
+> New work, issues and pull requests go to hcycles. This repository stays online
+> with what it already provides, and may still get updates until hcycles covers
+> the same ground.
+
 > Not to be confused with [boberfly/hdcycles](https://github.com/boberfly/hdcycles),
 > a separate and older Hydra delegate for Cycles. This project builds on the
 > delegate that ships **inside Cycles itself**, under `src/hydra`, which already
